@@ -6,10 +6,11 @@
 //! minecraftservices login → entitlements check → profile. The refresh token
 //! gives silent re-login; see `refresh_session`.
 //!
-//! NOTE: the Azure app behind `AuthConfig` must be approved for Minecraft
-//! services API access (otherwise login_with_xbox returns 403). The client_id
-//! ships with the app (`auth_flow::SHIPPED_CLIENT_ID`) and can be overridden
-//! per-install via settings or the `DUSK_CLIENT_ID` env var.
+//! Two sign-in identities ship: the official Minecraft title ID on the
+//! legacy login.live.com endpoints (default; needs no Azure app and no
+//! Microsoft approval) and DuskLauncher's own Azure app on the v2
+//! `/consumers` endpoints (needs Microsoft AppID approval — otherwise Xbox
+//! rejects the token with an opaque HTTP 400). See [`AuthMode`].
 
 use crate::{Error, Result};
 use rand::Rng;
@@ -38,8 +39,14 @@ pub const LIVE_DEVICE_CODE_URL: &str = "https://login.live.com/oauth20_connect.s
 /// auth mode. Same approach as RaphiMC's MinecraftAuth and the wider tool
 /// ecosystem.
 pub const OFFICIAL_TITLE_CLIENT_ID: &str = "00000000402b5328";
-/// live.com v1 flavor of the offline scope (v2's `offline_access` equivalent).
-pub const LIVE_SCOPES: &str = "XboxLive.signin XboxLive.offline_access";
+/// Title-auth scope for the official Minecraft title ID — exactly what
+/// MinecraftAuth pairs with `JAVA_TITLE_ID`. It yields an RPS *title ticket*,
+/// which `user.auth.xboxlive.com` only accepts with the `t=` prefix.
+/// Requesting `XboxLive.signin` instead yields a `d=`-style token, and mixing
+/// the scope and prefix is an instant Xbox 400. The v1 endpoint issues
+/// refresh tokens implicitly for public clients, so no offline_access-style
+/// scope is requested.
+pub const LIVE_SCOPES: &str = "service::user.auth.xboxlive.com::MBI_SSL";
 
 /// Which Microsoft identity the launcher signs in with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,15 +88,6 @@ impl AuthMode {
         match self {
             Self::AzureApp => MSA_SCOPES,
             Self::OfficialTitle => LIVE_SCOPES,
-        }
-    }
-
-    /// RPS ticket prefix for `user.auth.xboxlive.com`: title-ID tokens take
-    /// `t=`, Azure v2 tokens take `d=`. Mixing them up yields the opaque 400.
-    pub fn rps_prefix(self) -> &'static str {
-        match self {
-            Self::AzureApp => "d=",
-            Self::OfficialTitle => "t=",
         }
     }
 }
@@ -208,18 +206,15 @@ fn device_poll_outcome(status: u16, body: &str) -> Result<Option<(String, String
             .get("access_token")
             .and_then(|v| v.as_str())
             .ok_or_else(|| Error::Auth("device-code response had no access_token".into()))?;
+        // The v1 endpoint issues refresh tokens implicitly; if one is absent
+        // anyway, sign in with an empty one — the session just loses silent
+        // re-login and the next launch asks for a fresh code.
         let refresh = parsed
             .get("refresh_token")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                Error::Auth(
-                    "Microsoft did not return a refresh token (the XboxLive.offline_access \
-                     permission was not consented) — start the sign-in again and approve the \
-                     permissions."
-                        .into(),
-                )
-            })?;
-        return Ok(Some((access.to_owned(), refresh.to_owned())));
+            .unwrap_or("")
+            .to_owned();
+        return Ok(Some((access.to_owned(), refresh)));
     }
     match err {
         "authorization_pending" | "slow_down" => Ok(None),
@@ -459,23 +454,31 @@ pub fn parse_auth_callback(target: &str, expected_state: &str) -> Result<String>
 
 /// Map an XBL failure to a human message. XBL rarely returns structured
 /// errors, so the raw body is included (truncated) for diagnosis instead of
-/// surfacing a bare `400 Bad Request`.
-pub fn map_xbl_error(status: u16, body: &str) -> String {
+/// surfacing a bare `400 Bad Request`. Mode-aware: the plausible causes of a
+/// 400 differ between the title flow and the Azure flow.
+pub fn map_xbl_error(status: u16, body: &str, mode: AuthMode) -> String {
     let snippet: String = body.chars().take(300).collect();
     let detail = if snippet.trim().is_empty() {
         String::new()
     } else {
         format!(" Server said: {snippet}")
     };
-    match status {
-        400 => format!(
+    match (status, mode) {
+        (400, AuthMode::OfficialTitle) => format!(
+            "Xbox rejected the Microsoft sign-in (HTTP 400). In Official mode this is an \
+             account-side rejection: Xbox Live needs a personal Microsoft account (not a \
+             work/school account) that has signed in to xbox.com at least once, and the code \
+             at microsoft.com/link must be entered with the account that owns \
+             Minecraft.{detail}"
+        ),
+        (400, AuthMode::AzureApp) => format!(
             "Xbox rejected the Microsoft sign-in (HTTP 400). Usual causes: the Azure app behind \
              the Client ID has not been approved by Microsoft (submit it at https://aka.ms/mce-reviewappid, \
              or switch Settings → Microsoft sign-in → Sign-in method to Official, which needs no approval), \
              the Microsoft token has no XboxLive.signin grant (fix it with the in-app Re-consent sign-in), \
              or this is a work/school account — Xbox Live needs a personal Microsoft account.{detail}"
         ),
-        401 | 403 => format!(
+        (401 | 403, _) => format!(
             "Xbox rejected the Microsoft sign-in (HTTP {status}): the Microsoft token was not \
              accepted. Sign out of other Microsoft sessions in the browser, sign in with the \
              account that owns Minecraft, and retry.{detail}"
@@ -565,26 +568,46 @@ pub async fn authenticate(
     mode: AuthMode,
 ) -> Result<McAuth> {
     // 1. XBL (body-aware errors: a bare 400 hides the real cause, so the
-    // response body is captured and mapped like XSTS below)
-    let xbl_resp = client
-        .post(XBL_AUTH_URL)
-        .header(reqwest::header::ACCEPT, "application/json")
-        .header("X-Xbl-Contract-Version", "1")
-        .json(&serde_json::json!({
-            "AuthMethod": "RPS",
-            "SiteName": "user.auth.xboxlive.com",
-            "RpsTicket": format!("{}{}", mode.rps_prefix(), ms_access_token),
-            "RelyingParty": "http://auth.xboxlive.com",
-            "TokenType": "JWT"
-        }))
-        .send()
-        .await?;
-    if !xbl_resp.status().is_success() {
-        let status = xbl_resp.status().as_u16();
-        let body = xbl_resp.text().await.unwrap_or_default();
-        return Err(Error::Auth(map_xbl_error(status, &body)));
+    // response body is captured and mapped like XSTS below). `t=` is the RPS
+    // title-ticket prefix (MBI_SSL scope, Official mode), `d=` the v2/Azure
+    // prefix — the two ticket types are not interchangeable. Official mode
+    // retries once with the other prefix so an unexpectedly-issued ticket
+    // type can't dead-end the login.
+    let prefixes: &[&str] = match mode {
+        AuthMode::OfficialTitle => &["t=", "d="],
+        AuthMode::AzureApp => &["d="],
+    };
+    let mut xbl: Option<XblResponse> = None;
+    let mut failure: Option<(u16, String)> = None;
+    for prefix in prefixes {
+        let resp = client
+            .post(XBL_AUTH_URL)
+            .header(reqwest::header::ACCEPT, "application/json")
+            .header("X-Xbl-Contract-Version", "1")
+            .json(&serde_json::json!({
+                "AuthMethod": "RPS",
+                "SiteName": "user.auth.xboxlive.com",
+                "RpsTicket": format!("{prefix}{ms_access_token}"),
+                "RelyingParty": "http://auth.xboxlive.com",
+                "TokenType": "JWT"
+            }))
+            .send()
+            .await?;
+        if resp.status().is_success() {
+            xbl = Some(resp.json().await?);
+            break;
+        }
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+        failure = Some((status, body));
     }
-    let xbl: XblResponse = xbl_resp.json().await?;
+    let xbl = match xbl {
+        Some(x) => x,
+        None => {
+            let (status, body) = failure.expect("no success implies a captured failure");
+            return Err(Error::Auth(map_xbl_error(status, &body, mode)));
+        }
+    };
     let uhs = xbl_uhs(&xbl)?;
 
     // 2. XSTS (body-aware errors: XErr codes carry the real reason)
@@ -705,6 +728,11 @@ pub async fn exchange_code(
 
 /// Refresh MSA tokens silently.
 pub async fn refresh(client: &reqwest::Client, config: &AuthConfig, refresh_token: &str) -> Result<(String, String)> {
+    if refresh_token.trim().is_empty() {
+        return Err(Error::Auth(
+            "This session cannot be renewed silently (no refresh token was issued) — sign in again.".into(),
+        ));
+    }
     if config.mode == AuthMode::AzureApp {
         validate_client_id(&config.client_id)?;
     }
@@ -865,11 +893,12 @@ mod tests {
         let url = authorize_url(&title_config(), "state123").unwrap();
         assert!(url.starts_with(LIVE_AUTHORIZE_URL));
         assert!(url.contains(&format!("client_id={OFFICIAL_TITLE_CLIENT_ID}")));
-        // v1 flavor of the offline scope, not the v2 one: "XboxLive.offline_access"
-        // must appear, while a space-delimited bare "offline_access" must not.
-        assert!(url.contains("XboxLive.offline_access"));
-        assert!(!url.contains("+offline_access"));
-        assert!(!url.contains("%20offline_access"));
+        // Title-auth scope: the MBI_SSL RPS ticket that pairs with the `t=`
+        // prefix at user.auth.xboxlive.com, not the v2 signin scope.
+        assert!(url.contains("MBI_SSL"));
+        assert!(url.contains("user.auth.xboxlive.com"));
+        assert!(!url.contains("XboxLive.signin"));
+        assert!(!url.contains("offline_access"));
         assert!(url.contains("state=state123"));
         assert!(url.contains("prompt=select_account"));
     }
@@ -880,8 +909,10 @@ mod tests {
         assert_eq!(AuthMode::from_setting(" Official "), AuthMode::OfficialTitle);
         assert_eq!(AuthMode::from_setting("azure"), AuthMode::AzureApp);
         assert_eq!(AuthMode::from_setting("garbage"), AuthMode::AzureApp);
-        assert_eq!(AuthMode::AzureApp.rps_prefix(), "d=");
-        assert_eq!(AuthMode::OfficialTitle.rps_prefix(), "t=");
+        // The scope and the RpsTicket prefix must stay paired: MBI_SSL
+        // yields the `t=` title ticket, XboxLive.signin the `d=` ticket.
+        assert!(AuthMode::OfficialTitle.scopes().contains("MBI_SSL"));
+        assert_eq!(AuthMode::AzureApp.scopes(), MSA_SCOPES);
         assert_eq!(AuthMode::AzureApp.token_url(), MSA_TOKEN_URL);
         assert_eq!(AuthMode::OfficialTitle.token_url(), LIVE_TOKEN_URL);
     }
@@ -906,7 +937,11 @@ mod tests {
     #[test]
     fn device_poll_maps_real_errors() {
         assert!(device_poll_outcome(400, r#"{"error":"expired_token"}"#).is_err());
-        assert!(device_poll_outcome(200, r#"{"access_token":"at"}"#).is_err());
+        // A missing refresh token degrades to a non-refreshable session
+        // instead of failing a sign-in that just succeeded.
+        let (access, refresh) =
+            device_poll_outcome(200, r#"{"access_token":"at"}"#).unwrap().unwrap();
+        assert_eq!((access.as_str(), refresh.as_str()), ("at", ""));
     }
 
     #[test]
@@ -954,10 +989,14 @@ mod tests {
 
     #[test]
     fn xbl_errors_carry_guidance_and_body() {
-        assert!(map_xbl_error(400, "").contains("XboxLive.signin"));
-        assert!(map_xbl_error(400, "some server text").contains("some server text"));
-        assert!(map_xbl_error(403, "").contains("owns Minecraft"));
-        assert!(map_xbl_error(500, "").contains("500"));
+        assert!(map_xbl_error(400, "", AuthMode::AzureApp).contains("XboxLive.signin"));
+        // Official-mode 400s must not point users at the Azure review form.
+        let official = map_xbl_error(400, "", AuthMode::OfficialTitle);
+        assert!(official.contains("xbox.com"));
+        assert!(!official.contains("aka.ms/mce-reviewappid"));
+        assert!(map_xbl_error(400, "some server text", AuthMode::AzureApp).contains("some server text"));
+        assert!(map_xbl_error(403, "", AuthMode::AzureApp).contains("owns Minecraft"));
+        assert!(map_xbl_error(500, "", AuthMode::OfficialTitle).contains("500"));
     }
 
     #[test]
