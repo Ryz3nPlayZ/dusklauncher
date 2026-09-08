@@ -31,6 +31,13 @@ pub struct Settings {
     /// Azure native-app client_id override. Empty = use the ID shipped with the app.
     #[serde(default)]
     pub auth_client_id: String,
+    /// Which Microsoft identity signs in: "official" (default; the official
+    /// Minecraft launcher's Xbox title ID on login.live.com — no Azure app or
+    /// approval needed) or "azure" (our own registration, which requires
+    /// Microsoft's AppID approval). Switching methods invalidates the stored
+    /// session's refresh token, so the next sign-in must be interactive.
+    #[serde(default = "default_auth_mode")]
+    pub auth_mode: String,
     /// Custom background override (image or video file path). Empty = animated scene.
     #[serde(default)]
     pub custom_background: String,
@@ -38,6 +45,10 @@ pub struct Settings {
 
 fn default_resolution() -> u32 {
     1280
+}
+
+fn default_auth_mode() -> String {
+    "official".into()
 }
 
 impl Default for Settings {
@@ -59,6 +70,7 @@ impl Default for Settings {
             width: 1280,
             height: 720,
             auth_client_id: String::new(),
+            auth_mode: default_auth_mode(),
             custom_background: String::new(),
         }
     }

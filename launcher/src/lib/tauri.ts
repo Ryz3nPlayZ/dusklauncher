@@ -65,6 +65,7 @@ export interface SettingsDto {
   width: number;
   height: number;
   authClientId: string; // override for the shipped Azure client_id; '' = use shipped default
+  authMode: 'official' | 'azure'; // official = Minecraft title ID (no Azure app needed); azure = our own registration
   customBackground: string; // '' = animated scene; otherwise image/video path
 }
 
@@ -81,7 +82,8 @@ export interface AccountDto {
 }
 
 // Events emitted without a command round-trip:
-// - 'auth-state' { state: 'waitingForBrowser' | 'finishing' | 'signedIn' } during login
+// - 'auth-state' { state: 'waitingForBrowser' | 'deviceCode' | 'finishing' | 'signedIn' } during login;
+//   'deviceCode' also carries { userCode, verificationUri } for the official-mode device-code flow
 
 export interface ProfileModDto {
   filename: string;
@@ -228,6 +230,7 @@ let mockSettings: SettingsDto = {
   width: 1280,
   height: 720,
   authClientId: '',
+  authMode: 'official',
   customBackground: '',
 };
 

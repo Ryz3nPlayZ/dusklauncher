@@ -698,10 +698,7 @@ pub async fn get_current_account(state: State<'_, AppState>) -> Result<Option<Ac
     // Opportunistic silent refresh so the UI never shows a stale identity.
     if let Some(session) = auth_store::load_session(&state.data_dir) {
         if session.needs_refresh() {
-            let config = fasterlauncher_core::auth::AuthConfig {
-                client_id: auth_flow::resolve_client_id(&state),
-                redirect_uri: String::new(),
-            };
+            let config = auth_flow::resolve_auth_config(&state);
             if let Ok(fresh) =
                 fasterlauncher_core::auth::refresh_session(&state.client, &config, &session).await
             {
@@ -793,10 +790,7 @@ async fn ensure_play_session(state: &AppState) -> Result<Session, String> {
         if !session.needs_refresh() {
             return Ok(session);
         }
-        let config = fasterlauncher_core::auth::AuthConfig {
-            client_id: auth_flow::resolve_client_id(state),
-            redirect_uri: String::new(),
-        };
+        let config = auth_flow::resolve_auth_config(state);
         return fasterlauncher_core::auth::refresh_session(&state.client, &config, &session)
             .await
             .map(|fresh| {

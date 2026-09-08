@@ -155,23 +155,44 @@ function GeneralTab() {
   return (
     <div className="settings-grid">
       <SettingsCard title="MICROSOFT SIGN-IN">
-        <Row label="AUTH CLIENT ID" hint="Azure app ID — empty uses the shipped default">
-          <div className="path-row">
-            <input
-              className="pinput mono"
-              style={{ flex: 1, minWidth: 0 }}
-              placeholder="default (shipped)"
-              spellCheck={false}
-              value={settings.authClientId}
-              onChange={(e) => update({ authClientId: e.target.value })}
-            />
-            {settings.authClientId && (
-              <button className="pbtn" onClick={() => update({ authClientId: '' })}>
-                RESET
-              </button>
-            )}
+        <Row
+          label="SIGN-IN METHOD"
+          hint="official works out of the box; azure needs Microsoft approval"
+        >
+          <div className="theme-picker">
+            <button
+              className={`theme-chip ${settings.authMode !== 'azure' ? 'is-on' : ''}`}
+              onClick={() => update({ authMode: 'official' })}
+            >
+              OFFICIAL
+            </button>
+            <button
+              className={`theme-chip ${settings.authMode === 'azure' ? 'is-on' : ''}`}
+              onClick={() => update({ authMode: 'azure' })}
+            >
+              AZURE APP
+            </button>
           </div>
         </Row>
+        {settings.authMode === 'azure' && (
+          <Row label="AUTH CLIENT ID" hint="Azure app ID — empty uses the shipped default">
+            <div className="path-row">
+              <input
+                className="pinput mono"
+                style={{ flex: 1, minWidth: 0 }}
+                placeholder="default (shipped)"
+                spellCheck={false}
+                value={settings.authClientId}
+                onChange={(e) => update({ authClientId: e.target.value })}
+              />
+              {settings.authClientId && (
+                <button className="pbtn" onClick={() => update({ authClientId: '' })}>
+                  RESET
+                </button>
+              )}
+            </div>
+          </Row>
+        )}
         <Row label="RE-CONSENT" hint="fixes Xbox 400s: re-approves XboxLive.signin">
           <button className="pbtn" disabled={reconsenting} onClick={() => void reconsent()}>
             <PixelIcon name="refresh" size={11} />
@@ -180,9 +201,11 @@ function GeneralTab() {
         </Row>
         <p className="text-3 settings-hint">
           Use a personal Microsoft account that owns Minecraft: Java Edition
-          (work/school accounts are rejected by Xbox Live). If sign-in fails
-          with an Xbox 400, run Re-consent and approve the permissions — a
-          plain retry reuses the old grants.
+          (work/school accounts are rejected by Xbox Live). Official signs in
+          as the official Minecraft launcher's app and needs no setup; Azure
+          App uses our own registration and must be approved by Microsoft
+          (aka.ms/mce-reviewappid) or Xbox rejects it with a 400. Switching
+          methods signs you out — sign in again after changing this.
         </p>
       </SettingsCard>
 
@@ -506,7 +529,7 @@ function DebugTab() {
       `Memory: ${settings.memoryMb} MB`,
       `JVM args: ${settings.defaultJvmArgs}`,
       `Java paths: ${JSON.stringify(settings.javaPaths)}`,
-      `Auth client: ${settings.authClientId ? `custom (${settings.authClientId.trim()})` : 'default (shipped)'}`,
+      `Auth mode: ${settings.authMode}${settings.authMode === 'azure' && settings.authClientId ? ` (custom ${settings.authClientId.trim()})` : ''}`,
       `Hooks: pre=${settings.prelaunchHook} wrapper=${settings.wrapperHook} post=${settings.postExitHook}`,
     ].join('\n');
     void navigator.clipboard

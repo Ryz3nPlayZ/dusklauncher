@@ -1011,6 +1011,20 @@
 .onboard-hint {
   font-size: 12px;
 }
+.onboard-device {
+  width: 100%;
+  text-align: center;
+}
+.onboard-device__code {
+  margin: 8px auto 0;
+  padding: 8px 18px;
+  width: fit-content;
+  font-size: 22px;
+  letter-spacing: 0.2em;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+}
 .onboard-error {
   width: 100%;
   border: var(--border-w) solid var(--danger);

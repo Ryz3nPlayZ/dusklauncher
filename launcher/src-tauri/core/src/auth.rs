@@ -24,8 +24,75 @@ pub const MCS_ENTITLEMENTS_URL: &str = "https://api.minecraftservices.com/entitl
 pub const MCS_PROFILE_URL: &str = "https://api.minecraftservices.com/minecraft/profile";
 pub const MCS_SKINS_URL: &str = "https://api.minecraftservices.com/minecraft/profile/skins";
 
-/// Scopes for the initial Microsoft authorization request.
+/// Scopes for the initial Microsoft authorization request (Azure v2 flow).
 pub const MSA_SCOPES: &str = "XboxLive.signin offline_access";
+
+/// Legacy MSA endpoints (login.live.com). Title-ID clients authenticate here,
+/// not on the Azure v2 endpoints.
+pub const LIVE_AUTHORIZE_URL: &str = "https://login.live.com/oauth20_authorize.srf";
+pub const LIVE_TOKEN_URL: &str = "https://login.live.com/oauth20_token.srf";
+pub const LIVE_DEVICE_CODE_URL: &str = "https://login.live.com/oauth20_connect.srf";
+/// Official Minecraft: Java Edition launcher's Xbox title ID (Win32). Public
+/// identifier of the first-party title — signing in as this title needs no
+/// Azure app and no Microsoft AppID approval, which is why it is the default
+/// auth mode. Same approach as RaphiMC's MinecraftAuth and the wider tool
+/// ecosystem.
+pub const OFFICIAL_TITLE_CLIENT_ID: &str = "00000000402b5328";
+/// live.com v1 flavor of the offline scope (v2's `offline_access` equivalent).
+pub const LIVE_SCOPES: &str = "XboxLive.signin XboxLive.offline_access";
+
+/// Which Microsoft identity the launcher signs in with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthMode {
+    /// DuskLauncher's own Azure app via the v2 `/consumers` endpoints.
+    /// Requires Microsoft's AppID approval (https://aka.ms/mce-reviewappid);
+    /// unapproved IDs are rejected by Xbox with an opaque HTTP 400.
+    AzureApp,
+    /// The official Minecraft launcher's Xbox title ID via legacy login.live.com
+    /// endpoints. Works with zero setup and zero approval.
+    OfficialTitle,
+}
+
+impl AuthMode {
+    /// Parse the persisted `authMode` setting. Unknown values fall back to the
+    /// Azure flow so a corrupted setting can't silently change identity.
+    pub fn from_setting(s: &str) -> Self {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "official" => Self::OfficialTitle,
+            _ => Self::AzureApp,
+        }
+    }
+
+    pub fn authorize_url(self) -> &'static str {
+        match self {
+            Self::AzureApp => MSA_AUTHORIZE_URL,
+            Self::OfficialTitle => LIVE_AUTHORIZE_URL,
+        }
+    }
+
+    pub fn token_url(self) -> &'static str {
+        match self {
+            Self::AzureApp => MSA_TOKEN_URL,
+            Self::OfficialTitle => LIVE_TOKEN_URL,
+        }
+    }
+
+    pub fn scopes(self) -> &'static str {
+        match self {
+            Self::AzureApp => MSA_SCOPES,
+            Self::OfficialTitle => LIVE_SCOPES,
+        }
+    }
+
+    /// RPS ticket prefix for `user.auth.xboxlive.com`: title-ID tokens take
+    /// `t=`, Azure v2 tokens take `d=`. Mixing them up yields the opaque 400.
+    pub fn rps_prefix(self) -> &'static str {
+        match self {
+            Self::AzureApp => "d=",
+            Self::OfficialTitle => "t=",
+        }
+    }
+}
 
 /// Validate an Azure app client_id before opening the browser. A bad ID
 /// otherwise fails three hops later as an opaque Xbox 400, which is exactly
@@ -60,11 +127,148 @@ pub struct AuthConfig {
     pub client_id: String,
     /// Loopback redirect URI, e.g. http://127.0.0.1:19735
     pub redirect_uri: String,
+    /// Which Microsoft identity `client_id` refers to. In `OfficialTitle`
+    /// mode the client_id is expected to be [`OFFICIAL_TITLE_CLIENT_ID`] and
+    /// the legacy live.com endpoints/scopes are used.
+    pub mode: AuthMode,
+}
+
+impl AuthConfig {
+    /// Mode-aware client-id validation: Azure GUIDs are shape-checked (a bad
+    /// ID otherwise fails three hops later as an opaque Xbox 400); the
+    /// official title ID is a fixed first-party identifier and skipped.
+    pub fn validate(&self) -> Result<()> {
+        match self.mode {
+            AuthMode::AzureApp => validate_client_id(&self.client_id),
+            AuthMode::OfficialTitle => Ok(()),
+        }
+    }
+}
+
+/// A device-code login session started at `login.live.com/oauth20_connect.srf`
+/// (RFC 8628). The user visits `verification_uri` and types `user_code`;
+/// meanwhile we poll the token endpoint until they finish.
+#[derive(Debug, Clone, Deserialize)]
+pub struct DeviceCodeStart {
+    pub device_code: String,
+    pub user_code: String,
+    #[serde(rename = "verification_uri")]
+    pub verification_uri: String,
+    /// Seconds between token polls (Microsoft asks for 5).
+    #[serde(default = "default_poll_interval")]
+    pub interval: u64,
+    /// Seconds until the user_code expires.
+    #[serde(default = "default_device_code_ttl")]
+    pub expires_in: u64,
+}
+
+fn default_poll_interval() -> u64 {
+    5
+}
+
+fn default_device_code_ttl() -> u64 {
+    900
+}
+
+/// Kick off a device-code login. Official-title mode only: Azure v2 apps
+/// would use their own devicecode endpoint, which we don't ship.
+pub async fn start_device_code(
+    client: &reqwest::Client,
+    config: &AuthConfig,
+) -> Result<DeviceCodeStart> {
+    if config.mode != AuthMode::OfficialTitle {
+        return Err(Error::Auth(
+            "device-code sign-in is only available in Official mode".into(),
+        ));
+    }
+    let resp = client
+        .post(LIVE_DEVICE_CODE_URL)
+        .form(&[
+            ("client_id", config.client_id.as_str()),
+            ("scope", config.mode.scopes()),
+            ("response_type", "device_code"),
+        ])
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(Error::Auth(map_msa_error(status, &body)));
+    }
+    Ok(resp.json().await?)
+}
+
+/// Interpret one device-code token poll. `Ok(None)` means "still pending,
+/// keep polling"; errors are mapped like every other MSA failure.
+fn device_poll_outcome(status: u16, body: &str) -> Result<Option<(String, String)>> {
+    let parsed: serde_json::Value = serde_json::from_str(body).unwrap_or_default();
+    let err = parsed.get("error").and_then(|e| e.as_str()).unwrap_or("");
+    if status == 200 && err.is_empty() {
+        let access = parsed
+            .get("access_token")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::Auth("device-code response had no access_token".into()))?;
+        let refresh = parsed
+            .get("refresh_token")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                Error::Auth(
+                    "Microsoft did not return a refresh token (the XboxLive.offline_access \
+                     permission was not consented) — start the sign-in again and approve the \
+                     permissions."
+                        .into(),
+                )
+            })?;
+        return Ok(Some((access.to_owned(), refresh.to_owned())));
+    }
+    match err {
+        "authorization_pending" | "slow_down" => Ok(None),
+        _ => Err(Error::Auth(map_msa_error(status, body))),
+    }
+}
+
+/// Poll the token endpoint until the user finishes the device-code login
+/// (or the code expires). Mirrors MinecraftAuth's DeviceCodeMsaAuthService.
+pub async fn poll_device_code(
+    client: &reqwest::Client,
+    config: &AuthConfig,
+    start: &DeviceCodeStart,
+) -> Result<(String, String)> {
+    let deadline = now_millis() + start.expires_in.saturating_sub(5) * 1000;
+    let mut interval = start.interval.max(1);
+    loop {
+        if now_millis() >= deadline {
+            return Err(Error::Auth(
+                "The sign-in code expired before you finished — start again.".into(),
+            ));
+        }
+        let resp = client
+            .post(config.mode.token_url())
+            .form(&[
+                ("client_id", config.client_id.as_str()),
+                ("grant_type", "device_code"),
+                ("device_code", start.device_code.as_str()),
+            ])
+            .send()
+            .await?;
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+        match device_poll_outcome(status, &body)? {
+            Some(tokens) => return Ok(tokens),
+            None => {
+                // slow_down asks for double the interval (RFC 8628 §3.5)
+                let body_slow = body.contains("slow_down");
+                if body_slow {
+                    interval = (interval * 2).min(30);
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(interval)).await;
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Session {
-    pub access_token: String,
+pub struct Session {    pub access_token: String,
     /// Millis since epoch when the MC access token expires.
     pub expires_at: u64,
     pub uuid: String,
@@ -144,15 +348,27 @@ pub fn authorize_url_with_prompt(
     state: &str,
     prompt: &str,
 ) -> Result<String> {
-    validate_client_id(&config.client_id)?;
+    let (base, client_id, scopes) = match config.mode {
+        AuthMode::AzureApp => {
+            validate_client_id(&config.client_id)?;
+            (MSA_AUTHORIZE_URL, config.client_id.as_str(), MSA_SCOPES)
+        }
+        // The title ID is a fixed first-party identifier, not an Azure GUID —
+        // the GUID shape check does not apply to it.
+        AuthMode::OfficialTitle => (
+            LIVE_AUTHORIZE_URL,
+            OFFICIAL_TITLE_CLIENT_ID,
+            LIVE_SCOPES,
+        ),
+    };
     let mut url =
-        reqwest::Url::parse(MSA_AUTHORIZE_URL).map_err(|e| Error::Other(e.to_string()))?;
+        reqwest::Url::parse(base).map_err(|e| Error::Other(e.to_string()))?;
     url.query_pairs_mut()
-        .append_pair("client_id", &config.client_id)
+        .append_pair("client_id", client_id)
         .append_pair("response_type", "code")
         .append_pair("redirect_uri", &config.redirect_uri)
         .append_pair("response_mode", "query")
-        .append_pair("scope", MSA_SCOPES)
+        .append_pair("scope", scopes)
         // Show the account picker by default: the #1 silent cause of Xbox
         // 400s is the browser being signed into a *different* Microsoft
         // account (no Minecraft, no Xbox profile) than the player's.
@@ -253,12 +469,11 @@ pub fn map_xbl_error(status: u16, body: &str) -> String {
     };
     match status {
         400 => format!(
-            "Xbox rejected the Microsoft sign-in (HTTP 400). Usual causes: the Microsoft token \
-             has no XboxLive.signin grant (fix it with the in-app Re-consent sign-in, which forces \
-             the permission screen again), the Azure app's Supported account types is not set to \
-             personal Microsoft accounts only, or this is a work/school account — Xbox Live needs \
-             a personal Microsoft account. Check Settings → Microsoft sign-in → Auth Client ID, \
-             run Re-consent, then retry.{detail}"
+            "Xbox rejected the Microsoft sign-in (HTTP 400). Usual causes: the Azure app behind \
+             the Client ID has not been approved by Microsoft (submit it at https://aka.ms/mce-reviewappid, \
+             or switch Settings → Microsoft sign-in → Sign-in method to Official, which needs no approval), \
+             the Microsoft token has no XboxLive.signin grant (fix it with the in-app Re-consent sign-in), \
+             or this is a work/school account — Xbox Live needs a personal Microsoft account.{detail}"
         ),
         401 | 403 => format!(
             "Xbox rejected the Microsoft sign-in (HTTP {status}): the Microsoft token was not \
@@ -344,7 +559,11 @@ pub fn map_msa_error(status: u16, body: &str) -> String {
 }
 
 /// Exchange a Microsoft access token for a full Minecraft auth result.
-pub async fn authenticate(client: &reqwest::Client, ms_access_token: &str) -> Result<McAuth> {
+pub async fn authenticate(
+    client: &reqwest::Client,
+    ms_access_token: &str,
+    mode: AuthMode,
+) -> Result<McAuth> {
     // 1. XBL (body-aware errors: a bare 400 hides the real cause, so the
     // response body is captured and mapped like XSTS below)
     let xbl_resp = client
@@ -354,7 +573,7 @@ pub async fn authenticate(client: &reqwest::Client, ms_access_token: &str) -> Re
         .json(&serde_json::json!({
             "AuthMethod": "RPS",
             "SiteName": "user.auth.xboxlive.com",
-            "RpsTicket": format!("d={ms_access_token}"),
+            "RpsTicket": format!("{}{}", mode.rps_prefix(), ms_access_token),
             "RelyingParty": "http://auth.xboxlive.com",
             "TokenType": "JWT"
         }))
@@ -449,15 +668,17 @@ pub async fn exchange_code(
     config: &AuthConfig,
     code: &str,
 ) -> Result<(String, String)> {
-    validate_client_id(&config.client_id)?;
+    if config.mode == AuthMode::AzureApp {
+        validate_client_id(&config.client_id)?;
+    }
     let raw = client
-        .post(MSA_TOKEN_URL)
+        .post(config.mode.token_url())
         .form(&[
             ("client_id", config.client_id.as_str()),
             // Repeat the authorize scopes (RFC 6749 §4.1.3): without this,
             // some Entra setups return a token without the XboxLive.signin
             // grant, which then fails three hops later as an opaque Xbox 400.
-            ("scope", MSA_SCOPES),
+            ("scope", config.mode.scopes()),
             ("code", code),
             ("grant_type", "authorization_code"),
             ("redirect_uri", config.redirect_uri.as_str()),
@@ -484,15 +705,17 @@ pub async fn exchange_code(
 
 /// Refresh MSA tokens silently.
 pub async fn refresh(client: &reqwest::Client, config: &AuthConfig, refresh_token: &str) -> Result<(String, String)> {
-    validate_client_id(&config.client_id)?;
+    if config.mode == AuthMode::AzureApp {
+        validate_client_id(&config.client_id)?;
+    }
     let raw = client
-        .post(MSA_TOKEN_URL)
+        .post(config.mode.token_url())
         .form(&[
             ("client_id", config.client_id.as_str()),
             // Keep the XboxLive.signin grant across silent refreshes (RFC 6749
             // §6 allows re-requesting the same scope); a refresh that drops
             // the grant would otherwise surface later as an Xbox 400.
-            ("scope", MSA_SCOPES),
+            ("scope", config.mode.scopes()),
             ("refresh_token", refresh_token),
             ("grant_type", "refresh_token"),
         ])
@@ -516,8 +739,13 @@ pub async fn refresh(client: &reqwest::Client, config: &AuthConfig, refresh_toke
 }
 
 /// Full login from a Microsoft access token to a `Session`.
-pub async fn full_login(client: &reqwest::Client, refresh_token: String, ms_access_token: &str) -> Result<Session> {
-    let auth = authenticate(client, ms_access_token).await?;
+pub async fn full_login(
+    client: &reqwest::Client,
+    refresh_token: String,
+    ms_access_token: &str,
+    mode: AuthMode,
+) -> Result<Session> {
+    let auth = authenticate(client, ms_access_token, mode).await?;
     let profile = fetch_profile(client, &auth.access_token).await?;
     Ok(Session {
         access_token: auth.access_token,
@@ -540,7 +768,7 @@ pub async fn refresh_session(
         return Ok(session.clone());
     }
     let (ms_token, refresh) = refresh(client, config, &session.refresh_token).await?;
-    full_login(client, refresh, &ms_token).await
+    full_login(client, refresh, &ms_token, config.mode).await
 }
 
 /// Upload a skin PNG to the signed-in Mojang account.
@@ -584,6 +812,15 @@ mod tests {
         AuthConfig {
             client_id: "0e36efd3-4bb6-4bee-ac76-d33ac47fd3df".into(),
             redirect_uri: "http://127.0.0.1:1234/auth/callback".into(),
+            mode: AuthMode::AzureApp,
+        }
+    }
+
+    fn title_config() -> AuthConfig {
+        AuthConfig {
+            client_id: OFFICIAL_TITLE_CLIENT_ID.into(),
+            redirect_uri: "http://127.0.0.1:1234/auth/callback".into(),
+            mode: AuthMode::OfficialTitle,
         }
     }
 
@@ -612,13 +849,64 @@ mod tests {
         let bad = AuthConfig {
             client_id: "not-a-guid".into(),
             redirect_uri: "http://127.0.0.1:1234".into(),
+            mode: AuthMode::AzureApp,
         };
         assert!(authorize_url(&bad, "s").is_err());
         let empty = AuthConfig {
             client_id: "   ".into(),
             redirect_uri: "http://127.0.0.1:1234".into(),
+            mode: AuthMode::AzureApp,
         };
         assert!(authorize_url(&empty, "s").is_err());
+    }
+
+    #[test]
+    fn official_mode_uses_live_endpoints_and_title_id() {
+        let url = authorize_url(&title_config(), "state123").unwrap();
+        assert!(url.starts_with(LIVE_AUTHORIZE_URL));
+        assert!(url.contains(&format!("client_id={OFFICIAL_TITLE_CLIENT_ID}")));
+        // v1 flavor of the offline scope, not the v2 one: "XboxLive.offline_access"
+        // must appear, while a space-delimited bare "offline_access" must not.
+        assert!(url.contains("XboxLive.offline_access"));
+        assert!(!url.contains("+offline_access"));
+        assert!(!url.contains("%20offline_access"));
+        assert!(url.contains("state=state123"));
+        assert!(url.contains("prompt=select_account"));
+    }
+
+    #[test]
+    fn auth_mode_routing_is_consistent() {
+        assert_eq!(AuthMode::from_setting("official"), AuthMode::OfficialTitle);
+        assert_eq!(AuthMode::from_setting(" Official "), AuthMode::OfficialTitle);
+        assert_eq!(AuthMode::from_setting("azure"), AuthMode::AzureApp);
+        assert_eq!(AuthMode::from_setting("garbage"), AuthMode::AzureApp);
+        assert_eq!(AuthMode::AzureApp.rps_prefix(), "d=");
+        assert_eq!(AuthMode::OfficialTitle.rps_prefix(), "t=");
+        assert_eq!(AuthMode::AzureApp.token_url(), MSA_TOKEN_URL);
+        assert_eq!(AuthMode::OfficialTitle.token_url(), LIVE_TOKEN_URL);
+    }
+
+    #[test]
+    fn device_poll_pending_and_slowdown_keep_polling() {
+        assert!(device_poll_outcome(400, r#"{"error":"authorization_pending"}"#).unwrap().is_none());
+        assert!(device_poll_outcome(400, r#"{"error":"slow_down"}"#).unwrap().is_none());
+    }
+
+    #[test]
+    fn device_poll_success_returns_tokens() {
+        let (access, refresh) = device_poll_outcome(
+            200,
+            r#"{"access_token":"at","refresh_token":"rt","expires_in":86400}"#,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!((access.as_str(), refresh.as_str()), ("at", "rt"));
+    }
+
+    #[test]
+    fn device_poll_maps_real_errors() {
+        assert!(device_poll_outcome(400, r#"{"error":"expired_token"}"#).is_err());
+        assert!(device_poll_outcome(200, r#"{"access_token":"at"}"#).is_err());
     }
 
     #[test]

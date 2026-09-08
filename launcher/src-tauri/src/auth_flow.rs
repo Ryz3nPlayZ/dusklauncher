@@ -6,7 +6,7 @@
 //! regardless of how strictly Entra matches loopback URIs.
 
 use crate::appstate::AppState;
-use fasterlauncher_core::auth::{self, AuthConfig, Session};
+use fasterlauncher_core::auth::{self, AuthConfig, AuthMode, Session};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -46,6 +46,28 @@ pub fn resolve_client_id(state: &AppState) -> String {
     SHIPPED_CLIENT_ID.to_string()
 }
 
+/// Resolve the full auth config from settings: which Microsoft identity
+/// (`authMode`) and the matching client_id. Default is the official
+/// Minecraft title ID, which needs no Azure app and no Microsoft approval;
+/// "azure" selects our own registration via [`resolve_client_id`].
+/// `redirect_uri` is filled in by the interactive flow only (refreshes
+/// don't send it).
+pub fn resolve_auth_config(state: &AppState) -> AuthConfig {
+    let mode = AuthMode::from_setting(&state.settings.lock().unwrap().auth_mode);
+    match mode {
+        AuthMode::OfficialTitle => AuthConfig {
+            client_id: auth::OFFICIAL_TITLE_CLIENT_ID.to_string(),
+            redirect_uri: String::new(),
+            mode,
+        },
+        AuthMode::AzureApp => AuthConfig {
+            client_id: resolve_client_id(state),
+            redirect_uri: String::new(),
+            mode,
+        },
+    }
+}
+
 /// Full interactive login: open the browser, wait for the loopback callback,
 /// exchange the code, verify game ownership, persist the session.
 pub async fn run_login(app: &AppHandle, state: &AppState) -> Result<Session, String> {
@@ -65,36 +87,31 @@ async fn run_login_with_prompt(
     state: &AppState,
     prompt: &str,
 ) -> Result<Session, String> {
-    let client_id = resolve_client_id(state);
-    fasterlauncher_core::auth::validate_client_id(&client_id).map_err(|e| e.to_string())?;
+    let mut config = resolve_auth_config(state);
+    config.validate().map_err(|e| e.to_string())?;
+    match config.mode {
+        // Azure app: browser + loopback redirect (the app registration pins
+        // the exact loopback URI).
+        AuthMode::AzureApp => run_loopback_login(app, state, &mut config, prompt).await,
+        // Official title ID: device-code flow. live.com only registers
+        // `oauth20_desktop.srf` as this title's redirect — loopback URIs are
+        // rejected — so the user confirms at the verification page instead.
+        AuthMode::OfficialTitle => run_device_code_login(app, state, &config).await,
+    }
+}
 
-    // Bind the fixed callback port so the redirect URI matches the Azure
-    // registration byte-for-byte.
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", CALLBACK_PORT))
-        .await
-        .map_err(|e| format!("could not bind the login callback on 127.0.0.1:{CALLBACK_PORT} (is another copy of the launcher already signing in?): {e}"))?;
-    let config = AuthConfig {
-        client_id,
-        redirect_uri: format!("http://127.0.0.1:{CALLBACK_PORT}"),
-    };
-    let flow_state = auth::new_flow_state();
-    let url = auth::authorize_url_with_prompt(&config, &flow_state, prompt)
-        .map_err(|e| e.to_string())?;
-
-    let _ = app.emit("auth-state", serde_json::json!({ "state": "waitingForBrowser" }));
-    use tauri_plugin_opener::OpenerExt;
-    app.opener()
-        .open_url(url.clone(), None::<&str>)
-        .map_err(|e| format!("could not open a browser for Microsoft login: {e}.\nOpen this URL manually:\n{url}"))?;
-
-    let code = wait_for_code(listener, &flow_state).await?;
+/// Shared tail of both interactive flows: XBL → XSTS → MCS, entitlements
+/// check, persist, notify.
+async fn finish_login(
+    app: &AppHandle,
+    state: &AppState,
+    config: &AuthConfig,
+    ms_token: String,
+    refresh: String,
+) -> Result<Session, String> {
     let _ = app.emit("auth-state", serde_json::json!({ "state": "finishing" }));
-
     let client = state.client.clone();
-    let (ms_token, refresh) = auth::exchange_code(&client, &config, &code)
-        .await
-        .map_err(|e| e.to_string())?;
-    let session = auth::full_login(&client, refresh, &ms_token)
+    let session = auth::full_login(&client, refresh, &ms_token, config.mode)
         .await
         .map_err(|e| e.to_string())?;
     if !auth::has_entitlements(&client, &session.access_token)
@@ -107,6 +124,65 @@ async fn run_login_with_prompt(
     crate::auth_store::save_session(&state.data_dir, &session);
     let _ = app.emit("auth-state", serde_json::json!({ "state": "signedIn" }));
     Ok(session)
+}
+
+async fn run_loopback_login(
+    app: &AppHandle,
+    state: &AppState,
+    config: &mut AuthConfig,
+    prompt: &str,
+) -> Result<Session, String> {
+    // Bind the fixed callback port so the redirect URI matches the Azure
+    // registration byte-for-byte.
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", CALLBACK_PORT))
+        .await
+        .map_err(|e| format!("could not bind the login callback on 127.0.0.1:{CALLBACK_PORT} (is another copy of the launcher already signing in?): {e}"))?;
+    config.redirect_uri = format!("http://127.0.0.1:{CALLBACK_PORT}");
+    let flow_state = auth::new_flow_state();
+    let url = auth::authorize_url_with_prompt(config, &flow_state, prompt)
+        .map_err(|e| e.to_string())?;
+
+    let _ = app.emit("auth-state", serde_json::json!({ "state": "waitingForBrowser" }));
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_url(url.clone(), None::<&str>)
+        .map_err(|e| format!("could not open a browser for Microsoft login: {e}.\nOpen this URL manually:\n{url}"))?;
+
+    let code = wait_for_code(listener, &flow_state).await?;
+    let (ms_token, refresh) = auth::exchange_code(&state.client, config, &code)
+        .await
+        .map_err(|e| e.to_string())?;
+    finish_login(app, state, config, ms_token, refresh).await
+}
+
+/// Official-mode interactive login: RFC 8628 device-code flow against
+/// login.live.com. The browser opens the verification page; the UI shows the
+/// code to type (emitted via `auth-state`); we poll until Microsoft hands
+/// out tokens. No redirect URI, no callback port.
+async fn run_device_code_login(
+    app: &AppHandle,
+    state: &AppState,
+    config: &AuthConfig,
+) -> Result<Session, String> {
+    let start = auth::start_device_code(&state.client, config)
+        .await
+        .map_err(|e| e.to_string())?;
+    let _ = app.emit(
+        "auth-state",
+        serde_json::json!({
+            "state": "deviceCode",
+            "userCode": start.user_code,
+            "verificationUri": start.verification_uri,
+        }),
+    );
+    use tauri_plugin_opener::OpenerExt;
+    let _ = app
+        .opener()
+        .open_url(start.verification_uri.clone(), None::<&str>);
+    let (ms_token, refresh) = auth::poll_device_code(&state.client, config, &start)
+        .await
+        .map_err(|e| e.to_string())?;
+    finish_login(app, state, config, ms_token, refresh).await
 }
 
 /// Accept loopback connections until one carries the auth code (or timeout).

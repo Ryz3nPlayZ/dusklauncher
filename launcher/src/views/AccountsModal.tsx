@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal } from '../components/ui';
 import { PixelIcon } from '../components/PixelIcon';
 import { useUi } from '../stores/ui';
 import { useAccount } from '../stores/account';
-import { api } from '../lib/tauri';
+import { api, listen } from '../lib/tauri';
 
 /** Accounts pop-out modal (design §8): active card + ADD ACCOUNT. */
 export default function AccountsModal() {
@@ -12,11 +12,23 @@ export default function AccountsModal() {
   const toast = useUi((s) => s.toast);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deviceCode, setDeviceCode] = useState<{ userCode: string } | null>(null);
 
-  if (!accountsOpen) return null;
+  useEffect(() => {
+    if (!accountsOpen) return;
+    let unlisten: (() => void) | undefined;
+    void listen<{ state: string; userCode?: string }>('auth-state', (p) => {
+      if (p.state === 'deviceCode' && p.userCode) setDeviceCode({ userCode: p.userCode });
+      else if (p.state !== 'finishing') setDeviceCode(null);
+    }).then((u) => {
+      unlisten = u;
+    });
+    return () => unlisten?.();
+  }, [accountsOpen]);
 
   async function addAccount() {
     setError(null);
+    setDeviceCode(null);
     setBusy(true);
     try {
       await api.beginLogin();
@@ -26,6 +38,7 @@ export default function AccountsModal() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      setDeviceCode(null);
     }
   }
 
@@ -44,6 +57,8 @@ export default function AccountsModal() {
       setBusy(false);
     }
   }
+
+  if (!accountsOpen) return null;
 
   return (
     <Modal title="ACCOUNTS" onClose={() => setAccountsOpen(false)} width={460}>
@@ -101,12 +116,20 @@ export default function AccountsModal() {
           </div>
         )}
 
+        {busy && deviceCode && (
+          <p className="acct__note text-3">
+            Enter this code at the Microsoft page that just opened:{' '}
+            <span className="font-pixel-bold text-accent">{deviceCode.userCode}</span>
+          </p>
+        )}
+
         <button
           className="pbtn pbtn--block pbtn--gold-outline"
           disabled={busy}
           onClick={() => void addAccount()}
         >
-          <PixelIcon name="plus" size={11} /> {busy ? 'WAITING FOR BROWSER…' : 'ADD ACCOUNT'}
+          <PixelIcon name="plus" size={11} />{' '}
+          {busy ? (deviceCode ? 'WAITING FOR CODE ENTRY…' : 'WAITING FOR BROWSER…') : 'ADD ACCOUNT'}
         </button>
       </div>
     </Modal>

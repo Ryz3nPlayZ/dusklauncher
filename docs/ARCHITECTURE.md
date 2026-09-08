@@ -51,18 +51,22 @@ fasterlauncher/
 - Concurrent (8–16) with global concurrency limit; sha1 verify every artifact (libraries, client jar, assets); on mismatch re-download once then surface error. Never modify Mojang jars in place.
 
 ### Authentication (Microsoft)
-Chain (see [minecraft.wiki/w/Microsoft_authentication](https://minecraft.wiki/w/Microsoft_authentication)):
-1. Azure AD OAuth2 (`XboxLive.signin` + `offline_access` scopes, `consumers` tenant). Prefer auth-code + loopback redirect in the desktop app; device-code as fallback. **Gotcha:** new Azure apps must request Minecraft-services API permission via Microsoft's review form or `api.minecraftservices.com` returns 403 — lead time required before release.
+Two sign-in modes (`Settings → Microsoft sign-in → Sign-in method`), sharing one code path (`core/src/auth.rs`, `AuthMode`):
+
+- **Official (default):** the official Minecraft launcher's Xbox title ID (`00000000402b5328`) on the legacy `login.live.com` endpoints (scope `XboxLive.signin XboxLive.offline_access`, `RpsTicket: t=<token>`). Works with **zero Azure app and zero Microsoft approval** — same approach as RaphiMC's MinecraftAuth and the wider third-party ecosystem. Sign-in is **device-code** (RFC 8628): `oauth20_connect.srf` issues a user code shown in the UI, the user confirms at `microsoft.com/link`, and we poll `oauth20_token.srf` (`authorization_pending` backoff, `slow_down` doubles the interval). live.com registers only `oauth20_desktop.srf` as this title's redirect — loopback URIs like `http://127.0.0.1:<port>` are **rejected** (verified live), so the auth-code flow can't be used here.
+- **Azure App:** DuskLauncher's own registration on the v2 `consumers` endpoints (scope `XboxLive.signin offline_access`, `RpsTicket: d=<token>`). Requires Microsoft's AppID approval — submit at https://aka.ms/mce-reviewappid (weeks of lead time) — otherwise Xbox rejects the token with an opaque HTTP 400.
    Azure registration checklist (an Xbox HTTP 400 almost always means one of these is wrong):
    - Supported account types = **Personal Microsoft accounts only** (work/school accounts are rejected by Xbox Live).
    - Platform = **Mobile and desktop applications** with Redirect URI exactly `http://127.0.0.1:19735` (byte-for-byte what the launcher sends).
    - Public client flows enabled, no client secret; the token request repeats `scope=XboxLive.signin offline_access` so refreshes keep the grant.
    - If the 400 persists, the stored grant is stale: the launcher's **Re-consent** sign-in (`prompt=consent`) forces Microsoft to show the permission screen again.
-2. `POST user.auth.xboxlive.com/user/authenticate` (`RpsTicket: d=<ms_access_token>`) → XBL token + `uhs`
+Chain (see [minecraft.wiki/w/Microsoft_authentication](https://minecraft.wiki/w/Microsoft_authentication)):
+1. Interactive login: auth-code + loopback redirect (Azure mode, `prompt=select_account`) or device-code (Official mode).
+2. `POST user.auth.xboxlive.com/user/authenticate` (`RpsTicket: d=` Azure token or `t=` title token) → XBL token + `uhs`
 3. `POST xsts.auth.xboxlive.com/xsts/authorize` (`SandboxId: RETAIL`, `RelyingParty: rp://api.minecraftservices.com/`) → XSTS token; map `XErr` codes (child account, ban) to user messages
 4. `POST api.minecraftservices.com/authentication/login_with_xbox` (`identityToken: XBL3.0 x=<uhs>;<xsts>`) → Bearer access token (~24h)
 5. `GET /entitlements/mcstore` (license check) and `GET /minecraft/profile` (uuid, name, skins)
-- Persist refresh token in OS keychain (via Tauri stronghold/keyring plugin); silent refresh on launch.
+- Persist refresh token in OS keychain (via Tauri stronghold/keyring plugin); silent refresh on launch. Switching sign-in methods invalidates the stored refresh token (endpoints differ) — next sign-in is interactive.
 - **Microsoft-only auth.** No offline/cracked mode: EULA requirement and anticheat ecosystems block/fingerprint such launchers.
 
 ### Launch path (anti-cheat safe)

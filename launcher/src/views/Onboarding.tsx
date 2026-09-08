@@ -5,7 +5,13 @@ import { api, listen } from '../lib/tauri';
 import { useAccount } from '../stores/account';
 import { playSfx } from '../sfx/sfx';
 
-type Phase = 'idle' | 'waitingForBrowser' | 'finishing';
+type Phase = 'idle' | 'waitingForBrowser' | 'deviceCode' | 'finishing';
+
+/** Shown while the official-mode device-code sign-in waits for the user. */
+interface DeviceCode {
+  userCode: string;
+  verificationUri: string;
+}
 
 /**
  * Blocking first-run gate: the launcher is useless without a Microsoft
@@ -15,15 +21,24 @@ type Phase = 'idle' | 'waitingForBrowser' | 'finishing';
  */
 export default function Onboarding({ onDone }: { onDone: () => void }) {
   const [phase, setPhase] = useState<Phase>('idle');
+  const [deviceCode, setDeviceCode] = useState<DeviceCode | null>(null);
   const [error, setError] = useState<string | null>(null);
   const busy = phase !== 'idle';
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    void listen<{ state: string }>('auth-state', (p) => {
-      if (p.state === 'waitingForBrowser') setPhase('waitingForBrowser');
-      else if (p.state === 'finishing') setPhase('finishing');
-    }).then((u) => {
+    void listen<{ state: string; userCode?: string; verificationUri?: string }>(
+      'auth-state',
+      (p) => {
+        if (p.state === 'waitingForBrowser') {
+          setDeviceCode(null);
+          setPhase('waitingForBrowser');
+        } else if (p.state === 'deviceCode' && p.userCode && p.verificationUri) {
+          setDeviceCode({ userCode: p.userCode, verificationUri: p.verificationUri });
+          setPhase('deviceCode');
+        } else if (p.state === 'finishing') setPhase('finishing');
+      },
+    ).then((u) => {
       unlisten = u;
     });
     return () => unlisten?.();
@@ -32,6 +47,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   async function signIn() {
     setError(null);
     setPhase('idle');
+    setDeviceCode(null);
     playSfx('click');
     try {
       await api.beginLogin();
@@ -97,16 +113,30 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
           <PixelIcon name="user" size={13} />
           {phase === 'waitingForBrowser'
             ? 'WAITING FOR BROWSER…'
-            : phase === 'finishing'
-              ? 'FINISHING SIGN-IN…'
-              : 'SIGN IN WITH MICROSOFT'}
+            : phase === 'deviceCode'
+              ? 'WAITING FOR CODE ENTRY…'
+              : phase === 'finishing'
+                ? 'FINISHING SIGN-IN…'
+                : 'SIGN IN WITH MICROSOFT'}
         </button>
 
-        {phase === 'waitingForBrowser' && (
-          <p className="onboard-hint text-3">
-            No tab opened? Check behind this window — then approve Microsoft and return here.
-          </p>
-        )}
+          {phase === 'waitingForBrowser' && (
+            <p className="onboard-hint text-3">
+              No tab opened? Check behind this window — then approve Microsoft and return here.
+            </p>
+          )}
+
+          {phase === 'deviceCode' && deviceCode && (
+            <div className="onboard-device">
+              <p className="onboard-hint text-3">
+                A browser page opened at{' '}
+                <span className="mono">{deviceCode.verificationUri.replace(/^https?:\/\//, '')}</span>.
+                Enter this code there:
+              </p>
+              <div className="onboard-device__code font-pixel-bold text-accent">{deviceCode.userCode}</div>
+            </div>
+          )}
+
 
         {error && (
           <div className="onboard-error" role="alert">

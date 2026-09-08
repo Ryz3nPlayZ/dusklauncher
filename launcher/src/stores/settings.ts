@@ -20,6 +20,7 @@ export const DEFAULT_SETTINGS: SettingsDto = {
   width: 1280,
   height: 720,
   authClientId: '',
+  authMode: 'official',
   customBackground: '',
 };
 
