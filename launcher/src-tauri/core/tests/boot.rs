@@ -160,10 +160,10 @@ async fn boot_to_menu() {
     println!("natives jars extracted: {n}");
 
     // ── java ──
-    java::provision(&client, &version.java_version.component, &dirs.runtimes, |_| {})
+    java::provision(&client, &version.effective_java().component, &dirs.runtimes, |_| {})
         .await
         .unwrap();
-    let java_bin = java::java_executable(&java::runtime_dir(&dirs.runtimes, &version.java_version.component));
+    let java_bin = java::java_executable(&java::runtime_dir(&dirs.runtimes, &version.effective_java().component));
     println!("java: {}", java_bin.display());
     assert!(java_bin.exists(), "provisioned java binary missing");
 

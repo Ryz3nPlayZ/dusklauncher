@@ -421,11 +421,12 @@ pub async fn install_and_launch(
         install_profile(&app2, &client, &state, &profile, &dirs).await?;
 
     // Java: settings override per major version, else provisioned runtime
+    let java = version.effective_java();
     let java_bin = {
         let settings = state.settings.lock().unwrap();
         settings
             .java_paths
-            .get(&version.java_version.major_version.to_string())
+            .get(&java.major_version.to_string())
             .filter(|p| !p.trim().is_empty())
             .map(std::path::PathBuf::from)
     };
@@ -433,8 +434,8 @@ pub async fn install_and_launch(
         Some(p) => p,
         None => {
             let mut prog = ProgressEmitter::new(app.clone(), &profile_id, "java", 1, 0);
-            let runtime_dir = dirs.runtimes.join(&version.java_version.component);
-            fasterlauncher_core::java::provision(&client, &version.java_version.component, &dirs.runtimes, |_| {})
+            let runtime_dir = dirs.runtimes.join(&java.component);
+            fasterlauncher_core::java::provision(&client, &java.component, &dirs.runtimes, |_| {})
                 .await
                 .map_err(|e| e.to_string())?;
             prog.bump(0);
@@ -608,13 +609,16 @@ async fn install_profile(
         .await
         .map_err(|e| e.to_string())?;
 
-    // Fabric: install the loader profile; it becomes the effective version.
+    // Fabric: install the loader profile merged with the vanilla JSON; the
+    // merged profile becomes the effective version (fabric mainClass and
+    // arguments, vanilla java runtime / client jar / asset index).
     let effective_version = if profile.loader == Loader::Fabric {
         fasterlauncher_core::fabric::install_fabric(
             client,
             &profile.game_version,
             profile.loader_version.as_deref(),
             &dirs.versions,
+            &version,
         )
         .await
         .map_err(|e| e.to_string())?
@@ -912,6 +916,8 @@ async fn ensure_play_session(state: &AppState) -> Result<Session, String> {
             username: "Player".into(),
             xuid: String::new(),
             refresh_token: String::new(),
+            skin_url: String::new(),
+            skin_variant: String::new(),
         });
     }
     Err("Not signed in — use Sign in with Microsoft first.".into())

@@ -71,7 +71,9 @@ pub fn run() {
             skins::delete_skin,
             skins::set_selected_skin,
             skins::read_skin,
-            skins::upload_selected_skin,
+            skins::upload_skin,
+            skins::reset_skin,
+            skins::get_account_skin,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

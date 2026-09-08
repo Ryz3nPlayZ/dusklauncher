@@ -463,6 +463,13 @@ pub struct Session {
     pub xuid: String,
     /// Microsoft refresh token for silent re-login.
     pub refresh_token: String,
+    /// URL of the account's active skin (textures.minecraft.net), refetched
+    /// on login. Empty when the account has no custom skin.
+    #[serde(default)]
+    pub skin_url: String,
+    /// "classic" or "slim" — arm model of the active skin.
+    #[serde(default)]
+    pub skin_variant: String,
 }
 
 impl Session {
@@ -495,10 +502,42 @@ struct McsLoginResponse {
     expires_in: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ProfileResponse {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub skins: Vec<SkinEntry>,
+    #[serde(default)]
+    pub capes: Vec<CapeEntry>,
+}
+
+/// One entry of the profile's `skins` array; `state: "ACTIVE"` marks the
+/// skin currently applied to the account.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SkinEntry {
+    pub id: String,
+    pub state: String,
+    pub url: String,
+    #[serde(default)]
+    pub variant: String,
+    #[serde(default)]
+    pub alias: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CapeEntry {
+    pub id: String,
+    pub state: String,
+    #[serde(default)]
+    pub alias: Option<String>,
+}
+
+impl ProfileResponse {
+    /// The currently applied skin, if the account has one.
+    pub fn active_skin(&self) -> Option<&SkinEntry> {
+        self.skins.iter().find(|s| s.state.eq_ignore_ascii_case("ACTIVE"))
+    }
 }
 
 /// Result of the XBL → XSTS → minecraftservices exchange.
@@ -953,6 +992,10 @@ pub async fn full_login(
 ) -> Result<Session> {
     let auth = authenticate(client, ms_access_token, mode).await?;
     let profile = fetch_profile(client, &auth.access_token).await?;
+    let (skin_url, skin_variant) = match profile.active_skin() {
+        Some(s) => (s.url.clone(), s.variant.clone()),
+        None => (String::new(), String::new()),
+    };
     Ok(Session {
         access_token: auth.access_token,
         expires_at: now_millis() + auth.expires_in.saturating_sub(60) * 1000,
@@ -960,6 +1003,8 @@ pub async fn full_login(
         username: profile.name,
         xuid: auth.xuid,
         refresh_token,
+        skin_url,
+        skin_variant,
     })
 }
 
@@ -978,7 +1023,10 @@ pub async fn refresh_session(
 }
 
 /// Upload a skin PNG to the signed-in Mojang account.
-/// `variant` is `"classic"` or `"slim"`.
+/// `variant` is `"classic"` or `"slim"`. The API is
+/// `POST /minecraft/profile/skins` with multipart `file` + `variant` (the
+/// same request Prism Launcher sends); PUT is the retired 2013-era
+/// sessionserver API and gets a 405 here.
 pub async fn upload_skin(
     client: &reqwest::Client,
     session: &Session,
@@ -992,15 +1040,61 @@ pub async fn upload_skin(
     let form = reqwest::multipart::Form::new()
         .text("variant", variant.to_string())
         .part("file", file_part);
-    client
-        .put(MCS_SKINS_URL)
+    let resp = client
+        .post(MCS_SKINS_URL)
         .bearer_auth(&session.access_token)
         .multipart(form)
         .send()
-        .await?
-        .error_for_status()
-        .map_err(|e| Error::Auth(format!("skin upload failed: {e}")))?;
+        .await?;
+    if !resp.status().is_success() {
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(Error::Auth(format!(
+            "skin upload failed (HTTP {status}): {}",
+            truncate(&body, 300)
+        )));
+    }
     Ok(())
+}
+
+/// Reset the account to a default skin (DELETE the active skin).
+pub async fn reset_skin(client: &reqwest::Client, session: &Session) -> Result<()> {
+    let resp = client
+        .delete(format!("{MCS_SKINS_URL}/active"))
+        .bearer_auth(&session.access_token)
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(Error::Auth(format!(
+            "skin reset failed (HTTP {status}): {}",
+            truncate(&body, 300)
+        )));
+    }
+    Ok(())
+}
+
+/// Download the PNG behind a skin URL (textures.minecraft.net, a few KB) —
+/// used to render the account avatar without a CORS round-trip in the
+/// webview.
+pub async fn fetch_skin_png(client: &reqwest::Client, skin_url: &str) -> Result<Vec<u8>> {
+    if skin_url.trim().is_empty() {
+        return Err(Error::Auth("account has no skin".into()));
+    }
+    let bytes = client
+        .get(skin_url)
+        .send()
+        .await?
+        .error_for_status()?
+        .bytes()
+        .await?
+        .to_vec();
+    Ok(bytes)
+}
+
+fn truncate(s: &str, max: usize) -> String {
+    s.chars().take(max).collect()
 }
 
 pub fn now_millis() -> u64 {
@@ -1193,6 +1287,8 @@ mod tests {
             username: String::new(),
             xuid: String::new(),
             refresh_token: String::new(),
+            skin_url: String::new(),
+            skin_variant: String::new(),
         };
         assert!(!fresh.is_expired(now_millis()));
         let stale = Session { expires_at: now_millis() + 30_000, ..fresh.clone() };

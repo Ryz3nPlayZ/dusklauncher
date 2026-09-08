@@ -28,6 +28,9 @@ export default function Home() {
   const progress = useLaunch((s) => s.progress);
   const launch = useLaunch((s) => s.launch);
   const selectedSkin = useSkins((s) => s.selectedSkin);
+  const accountSkin = useAccount((s) => s.skinUrl);
+  // Local wardrobe pick wins; otherwise show the signed-in account's skin.
+  const avatarSkin = selectedSkin ?? accountSkin;
   const theme = useSettings((s) => s.settings.theme);
   const setView = useUi((s) => s.setView);
   const [popoutOpen, setPopoutOpen] = useState(false);
@@ -49,9 +52,9 @@ export default function Home() {
           title="Open wardrobe"
           aria-label="Click for wardrobe"
         >
-          {selectedSkin ? (
+          {avatarSkin ? (
             <LazySkinViewer
-              skinUrl={selectedSkin}
+              skinUrl={avatarSkin}
               className="home__player"
               interactive={false}
               breathe
@@ -67,7 +70,7 @@ export default function Home() {
           <div className="home__contact" />
           <PixelPedestal theme={theme} />
           <span className="home__wardrobe-tip font-pixel">
-            {selectedSkin ? 'CLICK FOR WARDROBE' : 'OPEN WARDROBE — ADD A SKIN'}
+            {avatarSkin ? 'CLICK FOR WARDROBE' : 'OPEN WARDROBE — ADD A SKIN'}
           </span>
         </button>
       </div>

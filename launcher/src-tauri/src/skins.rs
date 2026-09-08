@@ -1,6 +1,8 @@
 //! Local skin library: PNGs stored under `<data>/skins/`, indexed in
 //! skins.json. Import validates 64x64 / 64x32 (legacy) skins. Applying a skin
-//! to a Mojang account requires Microsoft auth (not yet wired).
+//! to the signed-in Mojang account goes through `api.minecraftservices.com`
+//! (`upload_skin`); the account's active skin is cached under `<data>/cache/`
+//! for the Home avatar.
 
 use crate::appstate::AppState;
 use serde::{Deserialize, Serialize};
@@ -162,30 +164,112 @@ pub fn read_skin(state: State<AppState>, name: String) -> Result<String, String>
     Ok(format!("data:image/png;base64,{b64}"))
 }
 
-/// Upload the selected local skin to the signed-in Mojang account.
-/// `variant` is `"classic"` or `"slim"`.
+/// Upload a wardrobe skin to the signed-in Mojang account.
+/// `variant` is `"classic"` or `"slim"`; `name` picks the wardrobe entry
+/// (need not be the launcher-selected one).
 #[tauri::command]
-pub async fn upload_selected_skin(
+pub async fn upload_skin(
     state: State<'_, AppState>,
+    name: String,
     variant: String,
 ) -> Result<(), String> {
     let variant = variant.to_lowercase();
     if variant != "classic" && variant != "slim" {
         return Err("variant must be \"classic\" or \"slim\"".into());
     }
-    let index = load_index(&state);
-    let selected = index
-        .skins
-        .iter()
-        .find(|s| s.selected)
-        .ok_or_else(|| "no skin selected — pick one in the wardrobe first".to_string())?;
-    let png = std::fs::read(skins_dir(&state).join(format!("{}.png", selected.name)))
-        .map_err(|e| e.to_string())?;
-    let session = crate::auth_store::load_session(&state.data_dir)
+    let png = std::fs::read(skins_dir(&state).join(format!("{name}.png")))
+        .map_err(|e| format!("skin \"{name}\" not readable: {e}"))?;
+    let mut session = crate::auth_store::load_session(&state.data_dir)
         .ok_or_else(|| "sign in with Microsoft before uploading a skin".to_string())?;
     fasterlauncher_core::auth::upload_skin(&state.client, &session, png, &variant)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    // Reflect the change immediately: refetch the profile and re-cache the
+    // account skin so the Home avatar updates without a re-login.
+    if let Ok(profile) =
+        fasterlauncher_core::auth::fetch_profile(&state.client, &session.access_token).await
+    {
+        if let Some(active) = profile.active_skin() {
+            session.skin_url = active.url.clone();
+            session.skin_variant = active.variant.clone();
+            crate::auth_store::save_session(&state.data_dir, &session);
+            refresh_account_skin_cache(&state, &session.skin_url).await;
+        }
+    }
+    Ok(())
+}
+
+/// Reset the account's skin to the default (unapply any custom skin).
+#[tauri::command]
+pub async fn reset_skin(state: State<'_, AppState>) -> Result<(), String> {
+    let mut session = crate::auth_store::load_session(&state.data_dir)
+        .ok_or_else(|| "sign in with Microsoft first".to_string())?;
+    fasterlauncher_core::auth::reset_skin(&state.client, &session)
+        .await
+        .map_err(|e| e.to_string())?;
+    session.skin_url = String::new();
+    session.skin_variant = String::new();
+    crate::auth_store::save_session(&state.data_dir, &session);
+    Ok(())
+}
+
+/// The account's active skin as a PNG data URL (for the Home avatar), or
+/// null when the account has no custom skin. Downloaded in Rust and cached
+/// under `<data>/cache/`, so the webview never hits textures.minecraft.net
+/// (and never needs CORS headers to exist).
+#[tauri::command]
+pub async fn get_account_skin(state: State<'_, AppState>) -> Result<Option<String>, String> {
+    let Some(session) = crate::auth_store::load_session(&state.data_dir) else {
+        return Ok(None);
+    };
+    let mut skin_url = session.skin_url.clone();
+    if skin_url.is_empty() {
+        // Sessions saved before skin tracking exists have no URL — backfill
+        // via a profile fetch (the token is fresh enough in practice; if not,
+        // the avatar simply stays empty until the next sign-in).
+        if let Ok(profile) =
+            fasterlauncher_core::auth::fetch_profile(&state.client, &session.access_token).await
+        {
+            let mut session = session;
+            if let Some(active) = profile.active_skin() {
+                skin_url = active.url.clone();
+                session.skin_url = skin_url.clone();
+                session.skin_variant = active.variant.clone();
+                crate::auth_store::save_session(&state.data_dir, &session);
+            } else {
+                return Ok(None);
+            }
+        } else {
+            return Ok(None);
+        }
+    }
+    Ok(Some(account_skin_data_url(&state, &skin_url).await?))
+}
+
+async fn refresh_account_skin_cache(state: &AppState, skin_url: &str) {
+    let _ = account_skin_data_url(state, skin_url).await;
+}
+
+/// Data URL for the account skin, downloading (and caching) when the cached
+/// copy doesn't match the URL. The URL is stored next to the PNG so a skin
+/// change is detected by content, not by mtime.
+async fn account_skin_data_url(state: &AppState, skin_url: &str) -> Result<String, String> {
+    use base64::Engine;
+    let cache_dir = state.data_dir.join("cache");
+    let png_path = cache_dir.join("account-skin.png");
+    let url_path = cache_dir.join("account-skin.url");
+    let cached_url = std::fs::read_to_string(&url_path).unwrap_or_default();
+    if cached_url != skin_url || !png_path.exists() {
+        let png = fasterlauncher_core::auth::fetch_skin_png(&state.client, skin_url)
+            .await
+            .map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
+        std::fs::write(&png_path, &png).map_err(|e| e.to_string())?;
+        std::fs::write(&url_path, skin_url).map_err(|e| e.to_string())?;
+    }
+    let bytes = std::fs::read(&png_path).map_err(|e| e.to_string())?;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Ok(format!("data:image/png;base64,{b64}"))
 }
 
 fn now_millis() -> u64 {

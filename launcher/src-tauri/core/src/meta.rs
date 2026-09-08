@@ -41,15 +41,36 @@ pub struct VersionJson {
     pub kind: String,
     #[serde(rename = "mainClass")]
     pub main_class: String,
-    #[serde(rename = "javaVersion")]
-    pub java_version: JavaVersion,
+    /// Absent in loader profiles (Fabric) and pre-1.7 version JSONs;
+    /// [`VersionJson::effective_java`] fills the gap.
+    #[serde(rename = "javaVersion", default)]
+    pub java_version: Option<JavaVersion>,
     #[serde(default)]
     pub arguments: Option<Arguments>,
+    /// Pre-1.13 versions spell their game args as one whitespace-joined
+    /// template string instead of the rule-gated `arguments` arrays.
+    #[serde(rename = "minecraftArguments", default)]
+    pub minecraft_arguments: Option<String>,
+    #[serde(default)]
     pub libraries: Vec<Library>,
-    #[serde(rename = "assetIndex")]
+    #[serde(rename = "assetIndex", default)]
     pub asset_index: Option<AssetIndex>,
+    #[serde(default)]
     pub assets: Option<String>,
+    #[serde(default)]
     pub downloads: Downloads,
+}
+
+impl VersionJson {
+    /// Java to launch with when the JSON doesn't say. Fabric profiles inherit
+    /// the vanilla entry at merge time; for genuinely old JSONs Mojang's own
+    /// launcher maps everything pre-1.17 to the Java 8 legacy runtime.
+    pub fn effective_java(&self) -> JavaVersion {
+        self.java_version.clone().unwrap_or(JavaVersion {
+            component: "jre-legacy".into(),
+            major_version: 8,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -76,7 +97,7 @@ pub struct AssetIndex {
     pub totalSize: u64,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Downloads {
     pub client: Option<DownloadArtifact>,
 }
@@ -216,5 +237,41 @@ mod tests {
     fn natives_by_platform() {
         // sanity: classifier naming convention per version JSON classifiers
         assert!(natives_classifier().unwrap_or("none").starts_with("natives-"));
+    }
+
+    /// 1.8.9-style JSON: no `javaVersion` block, no `arguments` — one
+    /// `minecraftArguments` template string instead. This must parse.
+    #[test]
+    fn legacy_version_json_without_javaversion_parses() {
+        let json = r#"{
+            "id": "1.8.9", "type": "release",
+            "mainClass": "net.minecraft.client.main.Main",
+            "minecraftArguments": "--username ${auth_player_name} --version ${version_name} --gameDir ${game_directory} --assetsDir ${assets_root} --assetIndex ${assets_index_name} --uuid ${auth_uuid} --accessToken ${auth_access_token} --userType ${user_type}",
+            "libraries": [],
+            "assetIndex": {"id": "1.8", "url": "https://example.test/18.json", "sha1": "aa", "totalSize": 1},
+            "assets": "1.8",
+            "downloads": {"client": {"url": "https://example.test/c.jar", "sha1": "bb", "size": 1}}
+        }"#;
+        let v: VersionJson = serde_json::from_str(json).unwrap();
+        assert!(v.java_version.is_none());
+        assert!(v.arguments.is_none());
+        assert!(v.minecraft_arguments.is_some());
+        // pre-1.17 without a block maps to the Java 8 legacy runtime
+        let java = v.effective_java();
+        assert_eq!(java.component, "jre-legacy");
+        assert_eq!(java.major_version, 8);
+    }
+
+    /// Fabric-loader profiles carry `arguments` but no `downloads` at all —
+    /// the downloads key itself must be optional too.
+    #[test]
+    fn version_json_tolerates_missing_downloads_key() {
+        let json = r#"{
+            "id": "x", "type": "release", "mainClass": "Main",
+            "arguments": {"jvm": [], "game": []},
+            "libraries": []
+        }"#;
+        let v: VersionJson = serde_json::from_str(json).unwrap();
+        assert!(v.downloads.client.is_none());
     }
 }

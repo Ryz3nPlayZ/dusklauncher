@@ -1186,12 +1186,38 @@
 }
 .skins-inspector__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 12px;
   border-top: var(--border-w) solid var(--border-0);
 }
 .skins-inspector__actions .pbtn {
   flex: 1;
+}
+/* classic/slim arm-model toggle above the apply buttons */
+.skins-inspector__variant {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+.skins-inspector__variant button {
+  flex: 1;
+  height: 22px;
+  font: 10px/1 var(--font-pixel);
+  letter-spacing: 0.08em;
+  background: var(--bg-2);
+  border: 1px solid var(--border-1);
+  color: var(--text-3);
+  cursor: pointer;
+}
+.skins-inspector__variant button:hover {
+  color: var(--text-1);
+  border-color: var(--border-2);
+}
+.skins-inspector__variant button.is-active {
+  color: var(--text-1);
+  background: var(--accent-dim);
+  border-color: var(--border-2);
 }
 
 .zoom-btns {

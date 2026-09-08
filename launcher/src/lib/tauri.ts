@@ -452,6 +452,11 @@ export const api = {
   deleteSkin: (name: string) => invoke<void>('delete_skin', { name }),
   setSelectedSkin: (name: string) => invoke<void>('set_selected_skin', { name }),
   readSkin: (name: string) => invoke<string>('read_skin', { name }), // data URL
-  uploadSelectedSkin: (variant: 'classic' | 'slim') =>
-    invoke<void>('upload_selected_skin', { variant }),
+  /** Upload a wardrobe skin to the signed-in Mojang account. */
+  uploadSkin: (name: string, variant: 'classic' | 'slim') =>
+    invoke<void>('upload_skin', { name, variant }),
+  /** Unapply the account's custom skin (back to default Steve/Alex). */
+  resetSkin: () => invoke<void>('reset_skin'),
+  /** Account's active skin as a data URL, null when none/signed out. */
+  getAccountSkin: () => invoke<string | null>('get_account_skin'),
 };

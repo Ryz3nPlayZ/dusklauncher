@@ -42,6 +42,7 @@ fasterlauncher/
 ### Version meta
 - Source of truth: `https://piston-meta.mojang.com/mc/game/version_manifest_v2.json` (format unchanged in 2026; includes per-version sha1).
 - Per-version JSON at `https://piston-meta.mojang.com/v1/packages/<sha1>/<id>.json`. Structure (verified against 26.2): `mainClass`, rule-based `arguments.game`/`arguments.jvm` (os.name/os.arch/features), `libraries` with `downloads.artifact` + native `classifiers` (e.g. `natives-macos-arm64`), `assetIndex`, `downloads.client` (sha1 + size), `javaVersion`.
+- **Old versions (≤1.12, the PvP classics):** no `arguments` block — a single `minecraftArguments` template string instead; the launcher expands it plus the canonical legacy JVM args (`-Djava.library.path`, `-Djna.tmpdir`, `-Dorg.lwjgl.*librarypath`, `-cp`). Version JSONs without `javaVersion` fall back to the `jre-legacy` (Java 8) runtime, and profile JVM flags a Java 8 JVM can't parse (`-XX:+UseZGC`) are stripped per resolved major version — an unrecognized `-XX` flag is fatal at JVM startup.
 - 26.2 specifics to honor: assets index `"32"` from `resources.download.minecraft.net/<2-char>/<hash>`; JVM args `--sun-misc-unsafe-memory-access=allow`, `--enable-native-access=ALL-UNNAMED`; the **`default-user-jvm`** block (`-Xms2G/-Xmx4G`, compact object headers, `AlwaysPreTouch`, **ZGC** on modern OSes) — we adopt it as our default PvP profile JVM config (frame-time consistency).
 
 ### Java runtime provisioning
@@ -67,12 +68,13 @@ Chain (see [minecraft.wiki/w/Microsoft_authentication](https://minecraft.wiki/w/
 1. Interactive login: auth-code + loopback redirect (Azure mode, `prompt=select_account`) or device-code (Official mode).
 2. Xbox: Azure mode chains `user.auth.xboxlive.com/user/authenticate` (`RpsTicket: d=token`) → `xsts.auth.xboxlive.com/xsts/authorize` (map `XErr` codes to user messages); Official mode does the signed SISU exchange above (user + XSTS tokens in one call)
 3. `POST api.minecraftservices.com/authentication/login_with_xbox` (`identityToken: XBL3.0 x=<uhs>;<xsts>`) → Bearer access token (~24h)
-4. `GET /entitlements/mcstore` (license check) and `GET /minecraft/profile` (uuid, name, skins)
+4. `GET /entitlements/mcstore` (license check) and `GET /minecraft/profile` (uuid, name, `skins[]`/`capes[]` arrays; the `state: "ACTIVE"` skin feeds the Home avatar, downloaded in Rust and cached under `<data>/cache/` as a data URL — no webview CORS dependency)
+- **Skin management** (same Bearer MC token, matches Prism Launcher's requests): upload = `POST /minecraft/profile/skins` multipart `file` + `variant` (classic/slim) — PUT is the retired 2013 sessionserver API and 405s; reset = `DELETE /minecraft/profile/skins/active`.
 - Persist refresh token in OS keychain (via Tauri stronghold/keyring plugin); silent refresh on launch. Switching sign-in methods invalidates the stored refresh token (endpoints differ) — next sign-in is interactive.
 - **Microsoft-only auth.** No offline/cracked mode: EULA requirement and anticheat ecosystems block/fingerprint such launchers.
 
 ### Launch path (anti-cheat safe)
-- Vanilla and Fabric differ only in the version JSON + classpath: Fabric's `https://meta.fabricmc.net/v2/versions/loader/<game_version>/<loader_version>/profile/json` is a drop-in piston-format profile whose `mainClass` is `net.fabricmc.loader.impl.launch.knot.KnotClient` (verify exact v2 schema at implementation time). Installing Fabric = fetch that profile, add its libraries, done.
+- Vanilla and Fabric differ only in the version JSON + classpath: Fabric's `https://meta.fabricmc.net/v2/versions/loader/<game_version>/<loader_version>/profile/json` is a partial piston profile (`inheritsFrom` semantics) whose `mainClass` is `net.fabricmc.loader.impl.launch.knot.KnotClient`. It ships `arguments` + its own libraries but **no** `javaVersion`/`downloads.client`/`assetIndex` — installing Fabric = fetch that profile and **merge it with the vanilla JSON** (fabric fields win, libraries union, java/client jar/assets inherited from vanilla). Parsing it standalone is the `missing field javaVersion` launch failure.
 - Rules: no JVM agents, no runtime injection, no jar rewriting. Mixins are client-side only (rendering/HUD/input), never touch outbound packets or movement math. Client jar sha1 always verified. This is what keeps Grim/Vulcan/Hypixel-style setups comfortable.
 
 ### Profiles

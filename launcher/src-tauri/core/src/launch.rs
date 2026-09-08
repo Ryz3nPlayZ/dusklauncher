@@ -98,6 +98,47 @@ fn rules_allow(rules: &[Value], features: &HashMap<String, bool>) -> bool {
     allowed
 }
 
+/// JVM args pre-1.13 versions need. Modern JSONs ship these as rule-gated
+/// `arguments.jvm`; old ones have no `arguments` at all, so the launcher
+/// supplies the canonical set (same as MultiMC/Prism's legacy path).
+const LEGACY_JVM_ARGS: &[&str] = &[
+    "-Djava.library.path=${natives_directory}",
+    "-Djna.tmpdir=${natives_directory}",
+    "-Dorg.lwjgl.librarypath=${natives_directory}",
+    "-Dorg.lwjgl.util.librarypath=${natives_directory}",
+    "-cp",
+    "${classpath}",
+];
+
+/// Game args from a pre-1.13 `minecraftArguments` template: whitespace-split,
+/// then placeholder-substituted. (No rules/feature gating exists in this
+/// format, which is why it can be this simple.)
+pub fn legacy_game_args(
+    template: &str,
+    values: &HashMap<String, String>,
+) -> Vec<String> {
+    template
+        .split_whitespace()
+        .map(|s| substitute(s, values))
+        .collect()
+}
+
+/// Drop profile JVM flags the resolved Java cannot parse. An unrecognized
+/// -XX option is fatal at JVM startup, so the launcher's PvP-tuned defaults
+/// (ZGC) must not reach a Java 8 runtime provisioned for old versions.
+fn strip_unsupported_flags(args: Vec<String>, java_major: u32) -> Vec<String> {
+    args.into_iter()
+        .filter(|a| {
+            let name = a.trim_start_matches("-XX:+").trim_start_matches("-XX:-");
+            match name {
+                "UseZGC" => java_major >= 15,
+                "UseCompactObjectHeaders" => java_major >= 24,
+                _ => true,
+            }
+        })
+        .collect()
+}
+
 fn substitute(s: &str, values: &HashMap<String, String>) -> String {
     let mut result = s.to_string();
     for (k, v) in values {
@@ -182,23 +223,29 @@ pub fn build_launch_spec(
         Some(args) => (&args.jvm, &args.game),
         None => (&empty, &empty),
     };
+    let java = version.effective_java();
 
     let mut jvm_args: Vec<String> = Vec::new();
-    jvm_args.extend(profile.jvm_args.iter().cloned());
-    jvm_args.extend(crate::profile::modern_jvm_extras(version.java_version.major_version));
+    jvm_args.extend(strip_unsupported_flags(profile.jvm_args.clone(), java.major_version));
+    jvm_args.extend(crate::profile::modern_jvm_extras(java.major_version));
     jvm_args.extend(expand_arguments(jvm_entries, &values, &features));
-    // Compat shim: profiles created while UseCompactObjectHeaders was an
-    // unconditional default still carry it. It is fatal below Java 24, so
-    // strip it there (with a warning) instead of refusing to start.
-    if version.java_version.major_version < 24 {
-        let before = jvm_args.len();
-        jvm_args.retain(|a| a != "-XX:+UseCompactObjectHeaders" && a != "-XX:-UseCompactObjectHeaders");
-        if jvm_args.len() != before {
-            tracing::warn!("dropped UseCompactObjectHeaders: unsupported before Java 24");
+    if version.arguments.is_none() {
+        // Old JSON: no argument arrays at all — supply the legacy JVM set and
+        // let the flag stripper above keep profile defaults Java-8-safe.
+        for a in LEGACY_JVM_ARGS {
+            jvm_args.push(substitute(a, &values));
         }
     }
 
-    let mut game_args = expand_arguments(game_entries, &values, &features);
+    let mut game_args = if version.arguments.is_none() {
+        version
+            .minecraft_arguments
+            .as_deref()
+            .map(|t| legacy_game_args(t, &values))
+            .unwrap_or_default()
+    } else {
+        expand_arguments(game_entries, &values, &features)
+    };
     // Ancient versions predate the rule-gated resolution entries: fall back
     // to the profile resolution so the game still gets a window size. These
     // must stay on the game side of mainClass — the JVM rejects unknown
@@ -341,6 +388,8 @@ mod tests {
             username: "Player".into(),
             xuid: "xuid".into(),
             refresh_token: String::new(),
+            skin_url: String::new(),
+            skin_variant: String::new(),
         };
         let spec = build_launch_spec(
             Path::new("/java"),
@@ -397,6 +446,8 @@ mod tests {
             username: "Player".into(),
             xuid: String::new(),
             refresh_token: String::new(),
+            skin_url: String::new(),
+            skin_variant: String::new(),
         };
         let spec = build_launch_spec(
             Path::new("/java"),
@@ -434,6 +485,8 @@ mod tests {
             username: "Player".into(),
             xuid: String::new(),
             refresh_token: String::new(),
+            skin_url: String::new(),
+            skin_variant: String::new(),
         };
         // stale profile carrying the pre-fix unconditional default
         let mut stale = profile.clone();
@@ -451,7 +504,7 @@ mod tests {
             !spec.jvm_args.iter().any(|a| a.contains("CompactObjectHeaders")),
             "fatal flag must be stripped on Java 21"
         );
-        version.java_version.major_version = 25;
+        version.java_version.as_mut().unwrap().major_version = 25;
         let spec = build_launch_spec(
             Path::new("/java"),
             &version,
@@ -474,5 +527,97 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(env.env_vars.len(), 2);
+    }
+
+    /// Pre-1.13 versions (the PvP classics — 1.8.9): no `arguments` block, a
+    /// `minecraftArguments` template instead, and no `javaVersion`. The spec
+    /// must expand the template, supply the legacy JVM args, and strip the
+    /// ZGC default that a Java 8 runtime would die on.
+    #[test]
+    fn legacy_version_builds_a_working_command_line() {
+        let json = r#"{
+            "id": "1.8.9", "type": "release", "mainClass": "net.minecraft.client.main.Main",
+            "minecraftArguments": "--username ${auth_player_name} --version ${version_name} --assetsDir ${assets_root} --assetIndex ${assets_index_name} --uuid ${auth_uuid} --accessToken ${auth_access_token} --userType ${user_type}",
+            "libraries": [],
+            "downloads": {"client": null}
+        }"#;
+        let version: meta::VersionJson = serde_json::from_str(json).unwrap();
+        let mut profile = test_profile();
+        profile.jvm_args = crate::profile::default_jvm_args(); // includes -XX:+UseZGC
+        let dirs = profile.dirs(Path::new("/data"));
+        let session = Session {
+            access_token: "tok".into(),
+            expires_at: 0,
+            uuid: "u".into(),
+            username: "Player".into(),
+            xuid: String::new(),
+            refresh_token: String::new(),
+            skin_url: String::new(),
+            skin_variant: String::new(),
+        };
+        let spec = build_launch_spec(
+            Path::new("/java"),
+            &version,
+            &profile,
+            &dirs,
+            Path::new("/natives"),
+            &session,
+            &LaunchEnv::default(),
+        );
+
+        // legacy game args expanded from the template
+        let user = spec.game_args.iter().position(|a| a == "--username").unwrap();
+        assert_eq!(spec.game_args[user + 1], "Player");
+        let assets = spec.game_args.iter().position(|a| a == "--assetIndex").unwrap();
+        assert_eq!(spec.game_args[assets + 1], ""); // no assetIndex in the JSON
+        // legacy JVM args present
+        assert!(spec.jvm_args.iter().any(|a| a.starts_with("-Djava.library.path")));
+        assert!(spec.jvm_args.iter().any(|a| a == "-cp"));
+        // Java 8: the ZGC default must be stripped, AlwaysPreTouch survives
+        assert!(!spec.jvm_args.iter().any(|a| a.contains("UseZGC")), "ZGC is fatal on Java 8");
+        assert!(spec.jvm_args.iter().any(|a| a == "-XX:+AlwaysPreTouch"));
+        for arg in spec.jvm_args.iter().chain(spec.game_args.iter()) {
+            assert!(!arg.contains("${"), "unexpanded placeholder: {arg}");
+        }
+    }
+
+    #[test]
+    fn zgc_survives_on_modern_java() {
+        let mut version = test_version(); // Java 21
+        let mut profile = test_profile();
+        profile.jvm_args = vec!["-XX:+UseZGC".into()];
+        let dirs = profile.dirs(Path::new("/data"));
+        let session = Session {
+            access_token: String::new(),
+            expires_at: 0,
+            uuid: "u".into(),
+            username: "Player".into(),
+            xuid: String::new(),
+            refresh_token: String::new(),
+            skin_url: String::new(),
+            skin_variant: String::new(),
+        };
+        let spec = build_launch_spec(
+            Path::new("/java"),
+            &version,
+            &profile,
+            &dirs,
+            Path::new("/natives"),
+            &session,
+            &LaunchEnv::default(),
+        );
+        assert!(spec.jvm_args.iter().any(|a| a == "-XX:+UseZGC"));
+
+        version.java_version = None; // legacy: Java 8 fallback
+        let spec = build_launch_spec(
+            Path::new("/java"),
+            &version,
+            &profile,
+            &dirs,
+            Path::new("/natives"),
+            &session,
+            &LaunchEnv::default(),
+        );
+        assert!(!spec.jvm_args.iter().any(|a| a == "-XX:+UseZGC"));
     }
 }

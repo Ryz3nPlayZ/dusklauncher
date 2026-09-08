@@ -27,11 +27,23 @@ export default function Skins() {
   const [zoom, setZoom] = useState(1);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
-  const { skins, dataUrls, importSkin, select, rename, remove } = useSkins();
+  const [variant, setVariant] = useState<'classic' | 'slim'>('classic');
+  const [applying, setApplying] = useState(false);
+  const { skins, dataUrls, importSkin, select, rename, remove, apply } = useSkins();
   const account = useAccount((s) => s.account);
 
   const inspectedName = inspect ?? skins.find((s) => s.selected)?.name ?? null;
   const inspectedUrl = inspectedName ? dataUrls[inspectedName] || null : null;
+
+  async function applyInspected() {
+    if (!inspectedName || applying) return;
+    setApplying(true);
+    try {
+      await apply(inspectedName, variant);
+    } finally {
+      setApplying(false);
+    }
+  }
 
   async function commitRename(oldName: string) {
     const next = draft.trim();
@@ -217,6 +229,18 @@ export default function Skins() {
             )}
           </div>
           <div className="skins-inspector__actions">
+            <div className="skins-inspector__variant" role="group" aria-label="Skin model">
+              {(['classic', 'slim'] as const).map((v) => (
+                <button
+                  key={v}
+                  className={variant === v ? 'is-active' : ''}
+                  onClick={() => setVariant(v)}
+                  title={v === 'classic' ? 'Wide (4px) arms' : 'Slim (3px) arms'}
+                >
+                  {v === 'classic' ? 'CLASSIC' : 'SLIM'}
+                </button>
+              ))}
+            </div>
             <button
               className="pbtn pbtn--block"
               onClick={() => setInspect(null)}
@@ -226,14 +250,15 @@ export default function Skins() {
             </button>
             <button
               className="pbtn pbtn--block pbtn--install"
-              disabled={!inspect || !account?.authenticated}
+              onClick={() => void applyInspected()}
+              disabled={!inspectedName || !account?.authenticated || applying}
               title={
                 account?.authenticated
                   ? 'Apply this skin to your Mojang account'
-                  : 'Applying skins in-game requires Microsoft login (coming with accounts)'
+                  : 'Sign in with Microsoft to apply skins in-game'
               }
             >
-              APPLY SKIN
+              {applying ? 'APPLYING…' : 'APPLY SKIN'}
             </button>
           </div>
         </aside>

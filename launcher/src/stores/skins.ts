@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api, type SkinDto } from '../lib/tauri';
+import { useAccount } from './account';
 import { useUi } from './ui';
 
 interface SkinsState {
@@ -14,6 +15,8 @@ interface SkinsState {
   select: (name: string) => Promise<void>;
   rename: (oldName: string, newName: string) => Promise<boolean>;
   remove: (name: string) => Promise<void>;
+  /** upload a wardrobe skin to the signed-in Mojang account */
+  apply: (name: string, variant: 'classic' | 'slim') => Promise<boolean>;
 }
 
 async function fetchUrls(list: SkinDto[]): Promise<Record<string, string>> {
@@ -92,5 +95,17 @@ export const useSkins = create<SkinsState>((set, get) => ({
     delete dataUrls[name];
     const sel = skins.find((s) => s.selected);
     set({ skins, dataUrls, selectedSkin: sel ? dataUrls[sel.name] || null : null });
+  },
+
+  apply: async (name, variant) => {
+    try {
+      await api.uploadSkin(name, variant);
+      await useAccount.getState().refreshSkin();
+      useUi.getState().toast(`Applied "${name}" to your account`, 'success');
+      return true;
+    } catch (e) {
+      useUi.getState().toast(e instanceof Error ? e.message : String(e), 'error');
+      return false;
+    }
   },
 }));
