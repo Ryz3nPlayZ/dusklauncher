@@ -1,0 +1,89 @@
+/* Scene background — layered pixel art extracted from dawn.gg (local
+   placeholder art, see src/assets/background/README.md). Stacked layers
+   anchored to the bottom; two always-mounted scenes crossfade on theme
+   change. The water/flower layers are baked animated WebPs looping inside a
+   plain <img>; all other motion is CSS/GPU — no JS frame loop. */
+
+.scene-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.scene-bg__scene {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  /* crossfade time when swapping themes */
+  transition: opacity var(--scene-fade, 1.2s) ease;
+}
+.scene-bg__scene.is-active {
+  opacity: 1;
+}
+
+.scene-bg__layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center bottom;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+/* ── mobs: slow left→right drift + stepped vertical bob ──────────────────── */
+
+@keyframes scene-drift {
+  0% {
+    transform: translateX(-14vw);
+  }
+  100% {
+    transform: translateX(114vw);
+  }
+}
+
+@keyframes scene-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(var(--amp, 12px));
+  }
+}
+
+.scene-bg__mob {
+  position: absolute;
+  left: 0;
+  pointer-events: none;
+  will-change: transform;
+  animation-play-state: running;
+}
+
+.scene-bg__mob-inner {
+  animation: scene-bob var(--bob, 6s) ease-in-out infinite;
+}
+
+.scene-bg__mob img {
+  display: block;
+  image-rendering: pixelated;
+}
+
+/* ── launch/reduce-motion pause ──────────────────────────────────────────── */
+
+/* launch running / reduce-motion setting: freeze mobs (the animated layers
+   are baked into the WebP files and can't be paused from code) */
+.scene-bg--paused .scene-bg__mob {
+  animation-play-state: paused;
+}
+.scene-bg--paused .scene-bg__mob-inner {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-bg .scene-bg__mob,
+  .scene-bg .scene-bg__mob-inner {
+    animation-play-state: paused;
+  }
+}

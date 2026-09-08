@@ -1,0 +1,193 @@
+/* ── DuskLauncher design tokens ───────────────────────────────────────────
+   Two themes share one dark-panel base; the theme swaps the scene palette
+   and the accent family (nether = crimson, overworld = gold/grass).
+   All UI imagery renders with nearest-neighbor (pixel idiom). */
+
+:root {
+  /* typography */
+  --font-pixel: 'Monocraft', 'Monaco', 'Courier New', monospace;
+  --font-pixel-bold: 'Monocraft Bold', 'Monocraft', monospace;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* metrics */
+  --nav-h: 62px;
+  --footer-h: 30px;
+  --border-w: 2px;
+  --radius: 0px;
+  --radius-soft: 3px;
+
+  /* hard pixel shadows (never blurred) */
+  --shadow-sm: 2px 2px 0 rgba(0, 0, 0, 0.55);
+  --shadow-md: 4px 4px 0 rgba(0, 0, 0, 0.55);
+  --shadow-lg: 6px 6px 0 rgba(0, 0, 0, 0.5);
+
+  /* pixel corner notch size */
+  --notch: 6px;
+
+  /* ── Dawn-parity button system ──────────────────────────────────────
+     Every button: dark gradient tile, 2px BLACK frame, lit top edge,
+     press = translate 2px + shadow drop (steps easing = pixel feel).
+     Never gray borders on buttons — always #000. */
+  --btn-bg: linear-gradient(#2a2a2e, #141416);
+  --btn-bg-hover: linear-gradient(#333338, #1a1a1e);
+  --btn-border: #000;
+  --btn-press: translate(2px, 2px);
+  --btn-ease: 80ms steps(3);
+
+  /* semantic button colors (Dawn meanings) */
+  --btn-cta: var(--accent-cta);       /* PLAY / primary — gold or crimson per theme */
+  --btn-install: #39d353;             /* INSTALL / APPLY / CREATE — green */
+  --btn-install-dim: #1d7a33;
+  --btn-danger: #ff4444;              /* LOGOUT / STOP / DELETE */
+  --btn-quiet: #c9c9c9;               /* CANCEL / secondary */
+
+  /* typography scale — pixel font ONLY for headings/tabs/buttons */
+  --font-title: 24px;
+  --font-cta: 20px;
+  --font-btn: 12px;
+  --font-meta: 11px;
+
+  /* z stack */
+  --z-bg: 0;
+  --z-content: 10;
+  --z-nav: 40;
+  --z-drawer: 50;
+  --z-modal: 60;
+  --z-toast: 70;
+  --z-wipe: 100;
+}
+
+/* chunky minecraft scrollbars: dark track, accent-dim thumb */
+.scroll-y, .drawer__log, .skins-grid, .inst-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-dim) #0d0d0f;
+}
+.scroll-y::-webkit-scrollbar,
+.drawer__log::-webkit-scrollbar,
+.skins-grid::-webkit-scrollbar,
+.inst-list::-webkit-scrollbar {
+  width: 10px;
+}
+.scroll-y::-webkit-scrollbar-track,
+.drawer__log::-webkit-scrollbar-track,
+.skins-grid::-webkit-scrollbar-track,
+.inst-list::-webkit-scrollbar-track {
+  background: #0d0d0f;
+  border-left: 2px solid #000;
+}
+.scroll-y::-webkit-scrollbar-thumb,
+.drawer__log::-webkit-scrollbar-thumb,
+.skins-grid::-webkit-scrollbar-thumb,
+.inst-list::-webkit-scrollbar-thumb {
+  background: var(--accent-dim);
+  border: 2px solid #000;
+}
+.scroll-y::-webkit-scrollbar-thumb:hover,
+.drawer__log::-webkit-scrollbar-thumb:hover,
+.skins-grid::-webkit-scrollbar-thumb:hover,
+.inst-list::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* ── NETHER (dark default) ─────────────────────────────────────────────── */
+:root,
+[data-theme='nether'] {
+  color-scheme: dark;
+
+  /* surfaces */
+  --bg-0: #121212;
+  --bg-1: #1a1a1a;
+  --bg-2: #212121;
+  --bg-3: #2a2a2a;
+  --bg-input: #161616;
+  --surface-glass: rgba(18, 18, 18, 0.78);
+  --surface-glass-strong: rgba(14, 14, 14, 0.92);
+
+  /* accents */
+  --accent: #ff1e43;
+  --accent-hi: #ff5a75;
+  --accent-dim: #b3143a;
+  --accent-dark: #6f0d26;
+  --accent-contrast: #ffffff;
+  --accent-cta: #ff1e43; /* PLAY border in nether */
+  --text-on-accent-dim: rgba(255, 224, 231, 0.8);
+  --accent-glow-color: rgba(255, 30, 67, 0.4);
+
+  --success: #39d353;
+  --success-dim: #1d7a33;
+  --gold: #ffd000;
+  --gold-dim: #a88a00;
+  --danger: #ff5555;
+  --info: #58a6ff;
+
+  /* text */
+  --text-1: #f4f4f4;
+  --text-2: #b8b8b8;
+  --text-3: #828282;
+  --text-on-accent: #ffffff;
+  --text-accent: #ff5a75;
+  --text-success: #39d353;
+  --text-gold: #ffd000;
+
+  /* borders */
+  --border-0: #2c2c2c;
+  --border-1: #3a3a3a;
+  --border-2: #4d4d4d;
+  --border-accent: var(--accent);
+  --border-inner: rgba(179, 20, 58, 0.35); /* dark red interior borders */
+
+  /* glow */
+  --glow-accent: 0 0 14px rgba(255, 30, 67, 0.35);
+  --glow-success: 0 0 12px rgba(57, 211, 83, 0.35);
+
+  /* scene palette (kept in sync with background/nether.ts) */
+  --scene-sky-top: #17090d;
+  --scene-sky-bottom: #2b0a12;
+}
+
+/* ── OVERWORLD (light scene, gold/grass accents) ───────────────────────── */
+[data-theme='overworld'] {
+  color-scheme: dark;
+
+  --bg-0: #14181c;
+  --bg-1: #1b2026;
+  --bg-2: #222930;
+  --bg-3: #2b333c;
+  --bg-input: #171c21;
+  --surface-glass: rgba(20, 24, 28, 0.78);
+  --surface-glass-strong: rgba(16, 20, 24, 0.92);
+
+  --accent: #ffd000;
+  --accent-hi: #ffe14d;
+  --accent-dim: #caa500;
+  --accent-dark: #6e5b00;
+  --accent-contrast: #201a00;
+  --accent-cta: #ffd000; /* golden PLAY border in overworld */
+  --text-on-accent-dim: rgba(32, 26, 0, 0.72);
+  --accent-glow-color: rgba(255, 208, 0, 0.45);
+
+  --success: #5c8e32;
+  --success-dim: #3d611f;
+  --gold: #ffd000;
+  --gold-dim: #a88a00;
+
+  --text-1: #f6f8fa;
+  --text-2: #c3ccd6;
+  --text-3: #8b98a5;
+  --text-on-accent: #201a00;
+  --text-accent: #ffe14d;
+  --text-success: #8fd35f;
+  --text-gold: #ffe14d;
+
+  --border-0: #303945;
+  --border-1: #3d4855;
+  --border-2: #52616f;
+  --border-accent: var(--accent);
+  --border-inner: rgba(202, 165, 0, 0.3);
+
+  --glow-accent: 0 0 14px rgba(255, 208, 0, 0.3);
+  --glow-success: 0 0 12px rgba(92, 142, 50, 0.4);
+
+  --scene-sky-top: #7db8ff;
+  --scene-sky-bottom: #b7dcff;
+}

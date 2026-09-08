@@ -1,0 +1,30 @@
+# --- Rust / Tauri ---
+launcher/target/
+launcher/src-tauri/gen/schemas/
+
+# --- Node / Vite ---
+node_modules/
+launcher/dist/
+*.local
+
+# --- Gradle / Java (client-mod) ---
+.gradle/
+build/
+*.iml
+
+# --- macOS / editors ---
+.DS_Store
+.idea/
+.vscode/
+
+# --- env & logs ---
+.env
+.env.*
+*.log
+
+# --- local-only, not for publish ---
+# Dawn's copyrighted reference art (see reference/dawn.gg-assets/README.txt)
+reference/
+# local agent/tool state
+.zcode/
+.freebuff/

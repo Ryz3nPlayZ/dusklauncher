@@ -1,0 +1,366 @@
+/* ── app shell: background stage, top nav, footer drawer ─────────────────── */
+
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-bg);
+}
+/* vignette + bottom glow, GPU-composited, zero per-frame JS */
+.stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 42%, transparent 55%, rgba(0, 0, 0, 0.5) 100%),
+    linear-gradient(rgba(0, 0, 0, 0.12), transparent 22%, transparent 70%, rgba(0, 0, 0, 0.42));
+}
+
+.app {
+  position: relative;
+  z-index: var(--z-content);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+.app > * {
+  pointer-events: auto;
+}
+
+/* ── top navigation ──────────────────────────────────────────────────────── */
+
+.nav {
+  height: var(--nav-h);
+  display: flex;
+  align-items: stretch;
+  background: #141414;
+  border-bottom: var(--border-w) solid #000;
+  z-index: var(--z-nav);
+}
+
+.nav__brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 14px;
+  margin: 6px 14px 6px 6px;
+  background: #232323;
+  border: var(--border-w) solid #000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.nav__logo {
+  color: var(--gold);
+  filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.6));
+}
+.nav__word {
+  font-family: var(--font-pixel-bold);
+  font-size: 19px;
+  color: var(--gold);
+  letter-spacing: 0.06em;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+}
+.nav__word span {
+  color: var(--text-1);
+}
+
+/* nav tabs — Dawn wireframe: flat dark tiles, 2px BLACK borders, 1px inner
+   top highlight, muted block type. Active tile gets the accent top bar. */
+.nav__tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 4px;
+}
+
+.nav__tabs .ptab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-pixel-bold);
+  font-style: normal;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #b9b9b9;
+  background: #232323;
+  border: var(--border-w) solid #000;
+  padding: 9px 16px;
+  margin: 0;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: background 80ms linear, color 80ms linear;
+}
+.nav__tabs .ptab:hover {
+  color: #fff;
+  background: #2e2e2e;
+}
+.nav__tabs .ptab--active {
+  color: #fff;
+  background: #2b2b2b;
+  box-shadow: inset 0 2px 0 var(--accent-cta), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.nav__right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 10px;
+}
+
+/* account pill — Dawn wireframed tile with black border */
+.acct-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #232323;
+  border: var(--border-w) solid #000;
+  padding: 4px 14px 4px 5px;
+  margin-right: 6px;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.acct-pill:hover {
+  background: #2e2e2e;
+}
+.acct-pill__head {
+  width: 28px;
+  height: 28px;
+  image-rendering: pixelated;
+  border: var(--border-w) solid #000;
+}
+.acct-pill__name {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--text-1);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.8);
+}
+
+/* PVPMODE toggle — Dawn tile; ON state bleeds red, OFF stays quiet dark */
+.pvp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #232323;
+  border: var(--border-w) solid #000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: #b9b9b9;
+  font-family: var(--font-pixel-bold);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
+  padding: 9px 14px;
+  margin-right: 6px;
+  cursor: pointer;
+  transition: background 80ms linear, color 80ms linear, border-color 80ms linear;
+}
+.pvp-btn:hover {
+  color: #fff;
+  background: #2e2e2e;
+}
+.pvp-btn.is-on {
+  background: #2a0d12;
+  border-color: var(--accent);
+  color: var(--accent-hi);
+  box-shadow: inset 0 2px 0 var(--accent), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* fullscreen noise-dissolve canvas: quarter-res GL upscaled chunky */
+.pvp-wipe {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  image-rendering: pixelated;
+  z-index: var(--z-wipe);
+  pointer-events: all;
+}
+
+/* square window utility buttons — Dawn wireframed tiles */
+.win-btn {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #232323;
+  border: var(--border-w) solid #000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: #b9b9b9;
+  cursor: pointer;
+}
+.win-btn:hover {
+  background: #2e2e2e;
+  color: #fff;
+}
+.win-btn--close:hover {
+  background: var(--accent-dark);
+  border-color: var(--accent);
+  color: var(--accent-hi);
+}
+
+/* ── main content ────────────────────────────────────────────────────────── */
+
+.view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* generic page scaffold used by Profiles / Modpacks / Settings / Skins */
+.page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 26px;
+  gap: 16px;
+}
+.page__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.page__title {
+  font-family: var(--font-pixel-bold);
+  font-size: 24px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-shadow: var(--shadow-sm);
+}
+.page__spacer {
+  flex: 1;
+}
+
+/* ── footer + launch drawer ──────────────────────────────────────────────── */
+
+.footer {
+  height: var(--footer-h);
+  background: var(--surface-glass-strong);
+  border-top: var(--border-w) solid var(--border-0);
+  display: flex;
+  align-items: center;
+  z-index: var(--z-drawer);
+}
+.footer__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: var(--text-2);
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  text-transform: uppercase;
+  padding: 0 16px;
+  height: 100%;
+  cursor: pointer;
+}
+.footer__toggle:hover {
+  color: var(--text-1);
+}
+.footer__toggle .live-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--text-3);
+}
+.footer__toggle.is-live .live-dot {
+  background: var(--success);
+  animation: pulse-glow 2s steps(4) infinite;
+}
+/* background picker tile (lives in Settings → Display now) */
+.bg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #232323;
+  border: var(--border-w) solid #000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: #b9b9b9;
+  font-family: var(--font-pixel-bold);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: filter var(--btn-ease), transform var(--btn-ease);
+}
+.bg-btn:hover {
+  filter: brightness(1.2);
+  color: #fff;
+}
+.bg-btn:active {
+  transform: var(--btn-press);
+}
+.footer__status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 10px;
+  margin-right: 10px;
+  margin-left: auto;
+  border: var(--border-w) solid var(--border-success, var(--success));
+  color: var(--text-success);
+  font-family: var(--font-pixel-bold);
+  font-size: 9px;
+}
+.footer__status .live-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--success);
+  animation: pulse-glow 2s steps(4) infinite;
+}
+.footer__status.is-offline {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.footer__status.is-offline .live-dot {
+  background: var(--danger);
+  animation: none;
+}
+
+.drawer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--footer-h);
+  height: 220px;
+  background: var(--surface-glass-strong);
+  border-top: var(--border-w) solid var(--border-0);
+  backdrop-filter: blur(4px);
+  z-index: calc(var(--z-drawer) - 1);
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 180ms steps(5);
+}
+.drawer--open {
+  transform: translateY(0);
+}
+.drawer__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: var(--border-w) solid var(--border-0);
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+.drawer__log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 16px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  user-select: text;
+  cursor: text;
+}
+.drawer__log .err {
+  color: var(--danger);
+}
+.drawer__log .line {
+  white-space: pre-wrap;
+  word-break: break-all;
+}

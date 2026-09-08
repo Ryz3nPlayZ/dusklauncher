@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "fasterclient",
+  "version": "${version}",
+  "name": "FasterClient",
+  "description": "PvP-focused client modules for FasterLauncher: keystrokes, CPS, FPS display, toggle-sprint, hit delay fix, and a drag-and-drop HUD editor.",
+  "authors": ["FasterLauncher"],
+  "license": "GPL-3.0-or-later",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["dev.fasterlauncher.client.FasterClient"]
+  },
+  "mixins": [
+    "fasterclient.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.17.0",
+    "fabric-api": "*",
+    "minecraft": ">=1.21"
+  }
+}
