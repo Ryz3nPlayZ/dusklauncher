@@ -122,6 +122,8 @@ pub async fn install_modpack(
 pub struct ModpackVersionDto {
     pub id: String,
     pub name: String,
+    pub version_number: String,
+    pub changelog: Option<String>,
     pub game_versions: Vec<String>,
     pub loaders: Vec<String>,
     pub published: Option<String>,
@@ -143,11 +145,83 @@ pub async fn list_modpack_versions(
         .map(|v| ModpackVersionDto {
             id: v.id,
             name: v.name,
+            version_number: v.version_number,
+            changelog: v.changelog,
             game_versions: v.game_versions,
             loaders: v.loaders,
             published: v.published,
         })
         .collect())
+}
+
+/// Full project details for the detail page: long body, gallery, links,
+/// compatibility. Everything the search hit doesn't carry.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackGalleryDto {
+    pub url: String,
+    pub title: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackProjectDto {
+    pub id: String,
+    pub slug: String,
+    pub title: String,
+    pub description: String,
+    pub body: String,
+    pub icon_url: Option<String>,
+    pub downloads: u64,
+    pub follows: u64,
+    pub categories: Vec<String>,
+    pub loaders: Vec<String>,
+    pub game_versions: Vec<String>,
+    pub gallery: Vec<ModpackGalleryDto>,
+    pub discord_url: Option<String>,
+    pub issues_url: Option<String>,
+    pub source_url: Option<String>,
+    pub wiki_url: Option<String>,
+    pub client_side: String,
+    pub server_side: String,
+    pub published: Option<String>,
+    pub updated: Option<String>,
+}
+
+#[tauri::command]
+pub async fn get_modpack_project(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<ModpackProjectDto, String> {
+    let p = mr::project(&state.client, &id).await.map_err(|e| e.to_string())?;
+    let mut categories = p.categories;
+    categories.extend(p.additional_categories);
+    Ok(ModpackProjectDto {
+        id: p.id,
+        slug: p.slug,
+        title: p.title,
+        description: p.description,
+        body: p.body,
+        icon_url: p.icon_url,
+        downloads: p.downloads,
+        follows: p.followers,
+        categories,
+        loaders: p.loaders,
+        game_versions: p.game_versions,
+        gallery: p
+            .gallery
+            .into_iter()
+            .map(|g| ModpackGalleryDto { url: g.url, title: g.title })
+            .collect(),
+        discord_url: p.discord_url,
+        issues_url: p.issues_url,
+        source_url: p.source_url,
+        wiki_url: p.wiki_url,
+        client_side: p.client_side,
+        server_side: p.server_side,
+        published: p.published,
+        updated: p.updated,
+    })
 }
 
 /// Install a specific Modrinth version of a pack (from the picker modal).

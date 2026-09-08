@@ -41,6 +41,9 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  /* never let the browser fake-slant or fake-bolden pixel type — the
+     "weak italic" look came from synthesis at small sizes */
+  font-synthesis: none;
 }
 
 html,
@@ -232,7 +235,8 @@ textarea {
   color: var(--btn-danger);
 }
 
-/* Typography law: pixel-bold for headings/tabs/CTAs, Inter for body only */
+/* Typography law: pixel-bold for headings/tabs/CTAs, pixel for short
+   strings (names/meta/stats), Inter for long-form body only */
 .page__title,
 .modal-card__head h2,
 .home__play-text > :first-child {
@@ -241,8 +245,6 @@ textarea {
   letter-spacing: 0.05em;
   text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
 }
-.modpack-card__desc,
-.inst-row__sub,
 .settings-hint,
 .pfield__hint {
   font-family: var(--font-body);
@@ -336,10 +338,18 @@ textarea {
 .pinput {
   background: #101012;
   border: var(--border-w) solid #000;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 2px 2px 0 rgba(0, 0, 0, 0.4);
+  /* sunken pixel well: lit top/left inner edge, deep bottom/right shade */
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.07),
+    inset 2px 0 0 rgba(255, 255, 255, 0.03),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.55),
+    inset -2px 0 0 rgba(0, 0, 0, 0.35),
+    inset 3px 3px 0 rgba(0, 0, 0, 0.35);
   color: var(--text-1);
-  padding: 8px 12px;
-  font-size: 13px;
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  padding: 10px 12px;
 }
 .pinput::placeholder {
   color: var(--text-3);
@@ -360,7 +370,13 @@ textarea.pinput {
 .pcard {
   background: #1c1c1e;
   border: var(--border-w) solid #000;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), var(--shadow-sm);
+  /* raised pixel slab: lit top edge, deep bottom/right shade, hard drop */
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.08),
+    inset 2px 0 0 rgba(255, 255, 255, 0.03),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.4),
+    inset -2px 0 0 rgba(0, 0, 0, 0.25),
+    var(--shadow-sm);
 }
 .pcard--raised {
   background: #161618;
@@ -372,19 +388,20 @@ textarea.pinput {
   background: #232323;
   border: none;
   border-bottom: 3px solid transparent;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  color: var(--text-3);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.07);
+  color: #c9c9c9;
   font-family: var(--font-pixel-bold);
   font-style: normal;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  padding: 10px 18px;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
+  padding: 11px 20px;
   cursor: pointer;
 }
-.ptab:hover { color: var(--text-1); background: #2b2b2b; }
+.ptab:hover { color: #fff; background: #2b2b2b; }
 .ptab--active {
-  color: var(--text-1);
+  color: #fff;
   background: #2b2b2b;
   border-bottom-color: var(--accent-cta);
 }
@@ -404,10 +421,13 @@ textarea.pinput {
   -webkit-appearance: none;
   appearance: none;
   width: 16px;
-  height: 22px;
-  background: var(--accent);
-  border: var(--border-w) solid var(--accent-hi);
-  box-shadow: var(--shadow-sm);
+  height: 24px;
+  background: var(--accent-cta);
+  border: var(--border-w) solid #000;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.35),
+    2px 2px 0 rgba(0, 0, 0, 0.6);
   cursor: grab;
 }
 

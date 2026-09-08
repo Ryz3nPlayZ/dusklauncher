@@ -54,7 +54,8 @@ fasterlauncher/
 Two sign-in modes (`Settings → Microsoft sign-in → Sign-in method`), sharing one code path (`core/src/auth.rs`, `AuthMode`):
 
 - **Official (default):** the official Minecraft launcher's Xbox title ID (`00000000402b5328`) on the legacy `login.live.com` endpoints (scope `service::user.auth.xboxlive.com::MBI_SSL` — the *title-auth* scope MinecraftAuth pairs with this title ID — `RpsTicket: t=<token>`). Works with **zero Azure app and zero Microsoft approval** — same approach as RaphiMC's MinecraftAuth and the wider third-party ecosystem. Sign-in is **device-code** (RFC 8628): `oauth20_connect.srf` issues a user code shown in the UI, the user confirms at `microsoft.com/link`, and we poll `oauth20_token.srf` (`authorization_pending` backoff, `slow_down` doubles the interval). live.com registers only `oauth20_desktop.srf` as this title's redirect — loopback URIs like `http://127.0.0.1:<port>` are **rejected** (verified live), so the auth-code flow can't be used here.
-  - **Scope ↔ prefix pairing is load-bearing**: the MBI_SSL scope yields an RPS *title ticket* that `user/authenticate` only accepts with `t=`; a `XboxLive.signin` token is a `d=` ticket. Requesting one and presenting the other is an instant Xbox 400 (found the hard way). As a guard, Official mode retries the Xbox hop once with the other prefix.
+  - **Scope ↔ prefix pairing is load-bearing**: the MBI_SSL scope yields an RPS *title ticket*, passed with `t=`; a `XboxLive.signin` token is a `d=` ticket. Mixing the two is an instant Xbox 400.
+  - Title tickets are redeemed via **SISU**, not `user/authenticate`: MinecraftAuth demoted the plain `t=` RPS path to "experimental" in 4.1.x and it now 400s for both prefixes (verified live, Sept 2026). The launcher registers a per-login "device" (`POST device.auth.xboxlive.com/device/authenticate`, P-256 `ProofKey`, ES256 `Signature` header in Xbox's policy-version/timestamp/P1363 layout), then swaps the MSA ticket for user+XSTS tokens in one `POST sisu.xboxlive.com/authorize` call (`Sandbox: RETAIL`, `AppId: title`, `AccessToken: t=…`, `DeviceToken`, `RelyingParty: rp://api.minecraftservices.com/`).
   - The v1 endpoint issues refresh tokens implicitly for public clients (no offline_access-style scope), so the device flow's token grant can lack an explicit offline consent and still refresh; a genuinely missing refresh token degrades to "sign in again next launch" instead of failing the login.
 - **Azure App:** DuskLauncher's own registration on the v2 `consumers` endpoints (scope `XboxLive.signin offline_access`, `RpsTicket: d=<token>`). Requires Microsoft's AppID approval — submit at https://aka.ms/mce-reviewappid (weeks of lead time) — otherwise Xbox rejects the token with an opaque HTTP 400.
    Azure registration checklist (an Xbox HTTP 400 almost always means one of these is wrong):
@@ -64,10 +65,9 @@ Two sign-in modes (`Settings → Microsoft sign-in → Sign-in method`), sharing
    - If the 400 persists, the stored grant is stale: the launcher's **Re-consent** sign-in (`prompt=consent`) forces Microsoft to show the permission screen again.
 Chain (see [minecraft.wiki/w/Microsoft_authentication](https://minecraft.wiki/w/Microsoft_authentication)):
 1. Interactive login: auth-code + loopback redirect (Azure mode, `prompt=select_account`) or device-code (Official mode).
-2. `POST user.auth.xboxlive.com/user/authenticate` (`RpsTicket: d=` Azure token or `t=` title token) → XBL token + `uhs`
-3. `POST xsts.auth.xboxlive.com/xsts/authorize` (`SandboxId: RETAIL`, `RelyingParty: rp://api.minecraftservices.com/`) → XSTS token; map `XErr` codes (child account, ban) to user messages
-4. `POST api.minecraftservices.com/authentication/login_with_xbox` (`identityToken: XBL3.0 x=<uhs>;<xsts>`) → Bearer access token (~24h)
-5. `GET /entitlements/mcstore` (license check) and `GET /minecraft/profile` (uuid, name, skins)
+2. Xbox: Azure mode chains `user.auth.xboxlive.com/user/authenticate` (`RpsTicket: d=token`) → `xsts.auth.xboxlive.com/xsts/authorize` (map `XErr` codes to user messages); Official mode does the signed SISU exchange above (user + XSTS tokens in one call)
+3. `POST api.minecraftservices.com/authentication/login_with_xbox` (`identityToken: XBL3.0 x=<uhs>;<xsts>`) → Bearer access token (~24h)
+4. `GET /entitlements/mcstore` (license check) and `GET /minecraft/profile` (uuid, name, skins)
 - Persist refresh token in OS keychain (via Tauri stronghold/keyring plugin); silent refresh on launch. Switching sign-in methods invalidates the stored refresh token (endpoints differ) — next sign-in is interactive.
 - **Microsoft-only auth.** No offline/cracked mode: EULA requirement and anticheat ecosystems block/fingerprint such launchers.
 

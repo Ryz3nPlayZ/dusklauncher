@@ -264,6 +264,107 @@ pub fn delete_profile(state: State<AppState>, id: String) -> Result<(), String> 
     Ok(())
 }
 
+/// One world = one subdir of saves/ carrying a level.dat. Name, last
+/// modification time (level.dat when present, else the dir), and total size.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorldDto {
+    pub name: String,
+    pub modified: u64,
+    pub size: u64,
+}
+
+fn millis(t: std::time::SystemTime) -> u64 {
+    t.duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+
+fn dir_size(dir: &std::path::Path) -> u64 {
+    let mut total = 0u64;
+    let mut stack = vec![dir.to_path_buf()];
+    // capped walk: worlds can hold thousands of region files; 20k entries is
+    // plenty for a size hint and keeps the call instant
+    let mut seen = 0usize;
+    while let Some(d) = stack.pop() {
+        let Ok(rd) = std::fs::read_dir(&d) else { continue };
+        for e in rd.flatten() {
+            if seen > 20_000 {
+                return total;
+            }
+            seen += 1;
+            let p = e.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else {
+                total += e.metadata().map(|m| m.len()).unwrap_or(0);
+            }
+        }
+    }
+    total
+}
+
+#[tauri::command]
+pub fn list_worlds(state: State<AppState>, profile_id: String) -> Result<Vec<WorldDto>, String> {
+    let store = state.profiles.lock().unwrap();
+    let profile = store
+        .profiles
+        .iter()
+        .find(|p| p.id == profile_id)
+        .cloned()
+        .ok_or_else(|| "profile not found".to_string())?;
+    drop(store);
+    let saves = profile.dirs(&state.data_dir).root.join("saves");
+    let mut out = Vec::new();
+    let Ok(rd) = std::fs::read_dir(&saves) else { return Ok(out) };
+    for entry in rd.flatten() {
+        let path = entry.path();
+        if !path.is_dir() || path.join("level.dat").exists() == false {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        let stamp = std::fs::metadata(path.join("level.dat"))
+            .and_then(|m| m.modified())
+            .or_else(|_| entry.metadata().and_then(|m| m.modified()))
+            .map(millis)
+            .unwrap_or(0);
+        out.push(WorldDto { name, modified: stamp, size: dir_size(&path) });
+    }
+    out.sort_by(|a, b| b.modified.cmp(&a.modified));
+    Ok(out)
+}
+
+/// Reveal a profile folder in the OS file manager. `subdir` is allow-listed
+/// so the frontend can never escape the profile root.
+#[tauri::command]
+pub fn show_in_folder(
+    app: AppHandle,
+    state: State<AppState>,
+    profile_id: String,
+    subdir: String,
+) -> Result<(), String> {
+    let allowed = ["", "mods", "resourcepacks", "shaderpacks", "saves", "logs", "screenshots"];
+    if !allowed.contains(&subdir.as_str()) {
+        return Err("unknown folder".to_string());
+    }
+    let store = state.profiles.lock().unwrap();
+    let profile = store
+        .profiles
+        .iter()
+        .find(|p| p.id == profile_id)
+        .cloned()
+        .ok_or_else(|| "profile not found".to_string())?;
+    drop(store);
+    let mut path = profile.dirs(&state.data_dir).root;
+    if !subdir.is_empty() {
+        path = path.join(&subdir);
+    }
+    std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_path(path.to_string_lossy().to_string(), None::<&str>)
+        .map_err(|e| format!("could not open folder: {e}"))?;
+    Ok(())
+}
+
 // ── versions ───────────────────────────────────────────────────────────────
 
 #[tauri::command]

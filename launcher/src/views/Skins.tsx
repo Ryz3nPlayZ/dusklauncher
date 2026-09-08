@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { PixelIcon } from '../components/PixelIcon';
-import SkinPreview2D from '../components/SkinPreview2D';
 import LazySkinViewer from '../player/LazySkinViewer';
 import { useSkins } from '../stores/skins';
 import { useAccount } from '../stores/account';
@@ -68,12 +67,14 @@ export default function Skins() {
           <div className="cos-body">
             {tab === 'skins' && (
               <div className="skins-grid scroll-y">
-                <button className="skin-card skin-card--add" onClick={() => void importSkin()}>
-                  <div className="skin-card--add__figure">
-                    <PixelIcon name="plus" size={18} />
+                <article className="skin-card skin-card--add" onClick={() => void importSkin()}>
+                  <div className="skin-card__art skin-card__art--add">
+                    <PixelIcon name="plus" size={22} />
                   </div>
-                  <span className="font-pixel text-3">ADD SKIN</span>
-                </button>
+                  <div className="skin-card__foot">
+                    <span className="skin-card__name">Add Skin</span>
+                  </div>
+                </article>
 
                 {skins.map((s) => {
                   const url = dataUrls[s.name];
@@ -81,18 +82,26 @@ export default function Skins() {
                   return (
                     <article
                       key={s.name}
-                      className={`skin-card ${s.selected ? 'is-current' : ''}`}
+                      className={`skin-card ${s.selected ? 'is-current' : ''} ${inspectedName === s.name ? 'is-inspecting' : ''}`}
                       onClick={() => {
                         if (!isRenaming) setInspect(s.name);
                       }}
                     >
                       <div className="skin-card__art">
                         {url ? (
-                          <SkinPreview2D skinUrl={url} />
+                          <LazySkinViewer
+                            key={url}
+                            skinUrl={url}
+                            width={200}
+                            height={220}
+                            staticFrame
+                            interactive={false}
+                            className="skin-card__viewer"
+                          />
                         ) : (
                           <div className="skin2d skin2d--broken" />
                         )}
-                        {s.selected && <span className="skin-card__badge font-pixel">CURRENT</span>}
+                        {s.selected && <span className="skin-card__current">CURRENT</span>}
                       </div>
                       <div className="skin-card__foot">
                         {isRenaming ? (
@@ -149,9 +158,6 @@ export default function Skins() {
                           </button>
                         </span>
                       </div>
-                      {inspectedName === s.name && (
-                        <span className="skin-card__inspect font-pixel">INSPECTING</span>
-                      )}
                     </article>
                   );
                 })}
@@ -179,8 +185,7 @@ export default function Skins() {
         </section>
 
         <aside className="skins-inspector pcard">
-          <div className="skins-inspector__head">
-            <span className="font-pixel text-3">3D PREVIEW</span>
+          <div className="skins-inspector__zoom">
             <div className="zoom-btns">
               <button
                 title="Zoom out"
@@ -198,10 +203,9 @@ export default function Skins() {
               <LazySkinViewer
                 key={inspectedUrl}
                 skinUrl={inspectedUrl}
-                width={280}
-                height={380}
+                width={300}
+                height={440}
                 zoom={zoom}
-                autoRotate
                 className="skins-inspector__viewer"
               />
             ) : (
@@ -212,10 +216,6 @@ export default function Skins() {
               </div>
             )}
           </div>
-          <div className="skins-inspector__tag font-pixel" title={inspectedName ?? undefined}>
-            {inspectedName ?? 'NO SKIN'}
-          </div>
-          <p className="skins-inspector__hint text-3">Drag to spin · scroll or +/− to zoom</p>
           <div className="skins-inspector__actions">
             <button
               className="pbtn pbtn--block"

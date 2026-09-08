@@ -6,22 +6,29 @@ import { useProfiles } from '../stores/profiles';
 import { useLaunch } from '../stores/launch';
 import { useSettings } from '../stores/settings';
 import { useUi } from '../stores/ui';
-import InstanceContent from './InstanceContent';
-import { ModpackBrowser } from './Modpacks';
+import InstanceDetail from './InstanceDetail';
+import { ModpackBrowse, ModpackDetail } from './Modpacks';
 import { timeAgo } from '../lib/format';
 import { playSfx } from '../sfx/sfx';
+import dawnBanner from '../assets/background/dawn/rear.png';
+import mcpvpBanner from '../assets/background/mcpvp/rear.png';
+import type { ModpackHit } from '../lib/tauri';
 
 type Filter = 'all' | 'vanilla' | 'fabric';
 
 export default function Instances() {
-  const { profiles, remove, select } = useProfiles();
+  const { profiles, select } = useProfiles();
   const settings = useSettings((s) => s.settings);
+  const banner = settings.theme === 'nether' ? mcpvpBanner : dawnBanner;
   const launch = useLaunch((s) => s.launch);
   const launchPhase = useLaunch((s) => s.phase);
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
-  const [creating, setCreating] = useState<null | 'choose' | 'custom' | 'browse'>(null);
-  const [editing, setEditing] = useState<ProfileDto | null>(null);
+  const [creating, setCreating] = useState<null | 'choose' | 'custom'>(null);
+  /** full instance screen (Dawn parity) — replaces the old edit popup */
+  const [detailId, setDetailId] = useState<string | null>(null);
+  /** add-instance flow: null = list, 'browse' = modpack results, hit = detail */
+  const [flow, setFlow] = useState<null | 'browse' | ModpackHit>(null);
 
   const filtered = useMemo(
     () =>
@@ -32,6 +39,30 @@ export default function Instances() {
       ),
     [profiles, filter, search],
   );
+
+  // full instance screen (content / worlds / logs / settings)
+  if (detailId) {
+    const detail = profiles.find((p) => p.id === detailId);
+    if (detail) {
+      return (
+        <InstanceDetail
+          profile={detail}
+          onBack={() => setDetailId(null)}
+          onDeleted={() => setDetailId(null)}
+        />
+      );
+    }
+  }
+  // add-instance flow renders full-view (never a popup): browse results or a
+  // pack detail, with the back arrow returning to the previous step
+  if (flow === 'browse') {
+    return <ModpackBrowse onOpen={(hit) => setFlow(hit)} onBack={() => setFlow(null)} />;
+  }
+  if (flow !== null) {
+    return (
+      <ModpackDetail hit={flow} onBack={() => setFlow('browse')} onInstalled={() => setFlow(null)} />
+    );
+  }
 
   return (
     <div className="page">
@@ -52,93 +83,99 @@ export default function Instances() {
         </div>
       </div>
 
-      <div className="page__subhead profiles-subbar">
-        <nav className="ptabs">
-          {(['all', 'vanilla', 'fabric'] as Filter[]).map((f) => (
-            <button
-              key={f}
-              className={`ptab ${filter === f ? 'ptab--active' : ''}`}
-              onClick={() => {
-                setFilter(f);
-                playSfx('tab');
-              }}
-            >
-              {f.toUpperCase()}
-            </button>
-          ))}
-        </nav>
-        <div className="page__spacer" />
-        <span className="font-pixel profiles-count">
-          {filtered.length} PROFILE{filtered.length === 1 ? '' : 'S'}
-        </span>
-      </div>
-
-      <div className="inst-list scroll-y">
-        {filtered.length === 0 && (
-          <div className="inst-empty">
-            <PixelIcon name="bolt" size={26} className="text-3" />
-            <p className="text-3">
-              {profiles.length === 0
-                ? 'No instances yet — create one to start playing.'
-                : 'Nothing matches this filter.'}
-            </p>
-            {profiles.length === 0 && (
-              <button className="pbtn pbtn--accent-outline" onClick={() => setCreating('choose')}>
-                <PixelIcon name="plus" size={11} /> NEW INSTANCE
+      {/* combined tab strip + grid in one frame — the panel is a lighter
+          gray translucent base so rows read on both scenes */}
+      <div className="inst-panel">
+        <div className="inst-panel__tabs">
+          <nav className="ptabs">
+            {(['all', 'vanilla', 'fabric'] as Filter[]).map((f) => (
+              <button
+                key={f}
+                className={`ptab ${filter === f ? 'ptab--active' : ''}`}
+                onClick={() => {
+                  setFilter(f);
+                  playSfx('tab');
+                }}
+              >
+                {f.toUpperCase()}
               </button>
-            )}
-          </div>
-        )}
-        {filtered.map((p) => {
-          const active = p.id === settings.selectedProfileId;
-          const busy = launchPhase !== 'idle' && launchPhase !== 'error';
-          return (
-            <article
-              key={p.id}
-              className={`inst-row ${active ? 'is-active' : ''}`}
-              onClick={() => select(p.id)}
-              title={active ? 'Selected instance' : 'Select instance'}
-            >
-              <span className="inst-row__icon">
-                <PixelIcon name="bolt" size={16} />
-              </span>
-              <span className="inst-row__meta">
-                <span className="inst-row__name">{p.name}</span>
-                <span className="inst-row__sub">
-                  {p.loader === 'fabric' ? 'Fabric' : 'Vanilla'} · {p.gameVersion} ·{' '}
-                  {timeAgo(p.lastPlayed ?? p.createdAt)}
-                </span>
-              </span>
-              <span className="inst-row__actions">
+            ))}
+          </nav>
+          <div className="page__spacer" />
+          <span className="font-pixel profiles-count">
+            {filtered.length} PROFILE{filtered.length === 1 ? '' : 'S'}
+          </span>
+        </div>
+
+        <div className="inst-grid scroll-y">
+          {filtered.length === 0 && (
+            <div className="inst-empty">
+              <PixelIcon name="bolt" size={26} className="text-3" />
+              <p className="text-3">
+                {profiles.length === 0
+                  ? 'No instances yet — create one to start playing.'
+                  : 'Nothing matches this filter.'}
+              </p>
+              {profiles.length === 0 && (
                 <button
-                  className="pbtn pbtn--sm inst-row__play"
-                  disabled={busy}
-                  title="Launch this instance"
+                  className="pbtn pbtn--accent-outline"
+                  onClick={() => setCreating('choose')}
+                >
+                  <PixelIcon name="plus" size={11} /> NEW INSTANCE
+                </button>
+              )}
+            </div>
+          )}
+          {filtered.map((p) => {
+            const active = p.id === settings.selectedProfileId;
+            const busy = launchPhase !== 'idle' && launchPhase !== 'error';
+            return (
+              <article
+                key={p.id}
+                className={`inst-card ${active ? 'is-active' : ''}`}
+                onClick={() => select(p.id)}
+                title={active ? 'Selected instance' : 'Select instance'}
+              >
+                <div className="inst-card__banner" style={{ backgroundImage: `url(${banner})` }}>
+                  <span className="inst-card__icon">
+                    <PixelIcon name="bolt" size={18} />
+                  </span>
+                </div>
+                <div className="inst-card__body">
+                  <div className="inst-card__name">{p.name}</div>
+                  <div className="inst-card__sub">
+                    {p.loader === 'fabric' ? 'Fabric' : 'Vanilla'} · {p.gameVersion} ·{' '}
+                    {timeAgo(p.lastPlayed ?? p.createdAt)}
+                  </div>
+                  <div className="inst-card__actions">
+                    <button
+                      className="pbtn inst-card__play"
+                      disabled={busy}
+                      title="Launch this instance"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        select(p.id);
+                        void launch(p.id);
+                      }}
+                    >
+                      PLAY NOW
+                    </button>
+                <button
+                  className="pbtn inst-card__gear"
+                  title="Open instance screen"
                   onClick={(e) => {
                     e.stopPropagation();
-                    select(p.id);
-                    void launch(p.id);
+                    setDetailId(p.id);
                   }}
                 >
-                  PLAY
+                  <PixelIcon name="gear" size={13} />
                 </button>
-                <button
-                  className="pbtn pbtn--sm inst-row__gear"
-                  title="Instance settings"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditing(p);
-                  }}
-                >
-                  <PixelIcon name="gear" size={12} />
-                </button>
-                <span className={`pcheck ${active ? 'is-on' : ''}`} aria-hidden="true">
-                  {active && <PixelIcon name="check" size={9} />}
-                </span>
-              </span>
-            </article>
-          );
-        })}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
       </div>
 
       {creating === 'choose' && (
@@ -155,30 +192,18 @@ export default function Instances() {
             </button>
             <button
               className="pbtn pbtn--install pbtn--block pbtn--lg"
-              onClick={() => setCreating('browse')}
+              onClick={() => {
+                setCreating(null);
+                setFlow('browse');
+              }}
             >
               BROWSE MODPACKS
             </button>
           </div>
         </Modal>
       )}
-      {creating === 'browse' && (
-        <Modal title="BROWSE MODPACKS" onClose={() => setCreating(null)} width={960} wide>
-          <ModpackBrowser onInstalled={() => setCreating(null)} />
-        </Modal>
-      )}
       {creating === 'custom' && (
         <CreateModal onClose={() => setCreating(null)} onBack={() => setCreating('choose')} />
-      )}
-      {editing && (
-        <EditModal
-          profile={editing}
-          onClose={() => setEditing(null)}
-          onDelete={async () => {
-            await remove(editing.id);
-            setEditing(null);
-          }}
-        />
       )}
     </div>
   );
@@ -283,139 +308,6 @@ function CreateModal({ onClose, onBack }: { onClose: () => void; onBack: () => v
           </button>
           <button className="pbtn pbtn--install" disabled={busy} onClick={() => void submit()}>
             <PixelIcon name="plus" size={11} /> CREATE
-          </button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-// ── edit modal (per-profile settings) ──────────────────────────────────────
-
-function EditModal({
-  profile,
-  onClose,
-  onDelete,
-}: {
-  profile: ProfileDto;
-  onClose: () => void;
-  onDelete: () => Promise<void>;
-}) {
-  const update = useProfiles((s) => s.update);
-  const toast = useUi((s) => s.toast);
-  const [name, setName] = useState(profile.name);
-  const [server, setServer] = useState(profile.server ?? '');
-  const [width, setWidth] = useState(String(profile.resolution[0]));
-  const [height, setHeight] = useState(String(profile.resolution[1]));
-  const [jvmArgs, setJvmArgs] = useState(profile.jvmArgs.join(' '));
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  async function save() {
-    setBusy(true);
-    try {
-      await update(profile.id, {
-        name: name.trim(),
-        server: server.trim() || null,
-        resolution: [Number(width) || 1280, Number(height) || 720],
-        jvmArgs: jvmArgs.trim().split(/\s+/).filter(Boolean),
-      });
-      playSfx('success');
-      onClose();
-    } catch (e) {
-      toast(e instanceof Error ? e.message : String(e), 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function setMemory(sizeGb: number) {
-    const args = jvmArgs.trim().split(/\s+/).filter(Boolean);
-    const xmx = `-Xmx${sizeGb}G`;
-    const xms = `-Xms${Math.min(2, sizeGb)}G`;
-    let hasXmx = false;
-    let hasXms = false;
-    const out = args.map((a) => {
-      if (a.startsWith('-Xmx')) {
-        hasXmx = true;
-        return xmx;
-      }
-      if (a.startsWith('-Xms')) {
-        hasXms = true;
-        return xms;
-      }
-      return a;
-    });
-    if (!hasXmx) out.unshift(xmx);
-    if (!hasXms) out.unshift(xms);
-    setJvmArgs(out.join(' '));
-  }
-
-  return (
-    <Modal title={`SETTINGS — ${profile.name}`} onClose={onClose} width={560}>
-      <div className="form-col">
-        <div className="form-row">
-          <Field label="NAME">
-            <input className="pinput" value={name} onChange={(e) => setName(e.target.value)} />
-          </Field>
-          <Field label={`${profile.loader.toUpperCase()} • ${profile.gameVersion}`}>
-            <div className="text-3" style={{ padding: '8px 0' }}>
-              {profile.loaderVersion ? `loader ${profile.loaderVersion}` : 'loader: latest'}
-            </div>
-          </Field>
-        </div>
-        <div className="form-row">
-          <Field label="WIDTH">
-            <input className="pinput" value={width} onChange={(e) => setWidth(e.target.value)} />
-          </Field>
-          <Field label="HEIGHT">
-            <input className="pinput" value={height} onChange={(e) => setHeight(e.target.value)} />
-          </Field>
-        </div>
-        <Field label="SERVER" hint="Empty = no auto-join">
-          <input
-            className="pinput"
-            placeholder="play.example.net"
-            value={server}
-            onChange={(e) => setServer(e.target.value)}
-          />
-        </Field>
-        <Field label="JVM ARGUMENTS">
-          <textarea
-            className="pinput"
-            rows={3}
-            value={jvmArgs}
-            onChange={(e) => setJvmArgs(e.target.value)}
-          />
-        </Field>
-        <Field label="CONTENT">
-          <InstanceContent profile={profile} />
-        </Field>
-        <div className="form-row form-row--start">
-          <span className="text-3" style={{ fontSize: 11 }}>
-            MEMORY:
-          </span>
-          {[2, 4, 6, 8, 12, 16].map((g) => (
-            <button key={g} className="pbtn pbtn--sm" onClick={() => setMemory(g)}>
-              {g}G
-            </button>
-          ))}
-        </div>
-        <div className="form-row form-row--end">
-          {confirmDelete ? (
-            <button className="pbtn pbtn--danger-outline" onClick={() => void onDelete()}>
-              <PixelIcon name="trash" size={11} /> REALLY DELETE
-            </button>
-          ) : (
-            <button className="pbtn pbtn--danger-outline" onClick={() => setConfirmDelete(true)}>
-              <PixelIcon name="trash" size={11} /> DELETE
-            </button>
-          )}
-          <button className="pbtn" onClick={onClose}>
-            CANCEL
-          </button>
-          <button className="pbtn pbtn--accent" disabled={busy} onClick={() => void save()}>
-            SAVE
           </button>
         </div>
       </div>

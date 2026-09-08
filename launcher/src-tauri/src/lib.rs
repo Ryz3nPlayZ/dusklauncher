@@ -28,6 +28,8 @@ pub fn run() {
             commands::create_profile,
             commands::update_profile,
             commands::delete_profile,
+            commands::list_worlds,
+            commands::show_in_folder,
             // versions
             commands::list_versions,
             // launch
@@ -45,6 +47,7 @@ pub fn run() {
             commands::get_app_info,
             // modpacks
             modpacks::search_modpacks,
+            modpacks::get_modpack_project,
             modpacks::install_modpack,
             modpacks::list_modpack_versions,
             modpacks::install_modpack_version,

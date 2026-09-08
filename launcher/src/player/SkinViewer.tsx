@@ -28,6 +28,8 @@ export type SkinViewerProps = {
   zoom?: number;
   /** false = locked pose for Home (no drag/zoom, breathing idle on) */
   interactive?: boolean;
+  /** render exactly one frame after the skin loads, then freeze (grid cards) */
+  staticFrame?: boolean;
   /** gentle vertical bob (Home only) — disabled under reduce-motion */
   breathe?: boolean;
 };
@@ -41,10 +43,13 @@ export default function SkinViewer({
   autoRotate = false,
   zoom = 1,
   interactive = true,
+  staticFrame = false,
   breathe = false,
 }: SkinViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewerRef = useRef<skinview3d.SkinViewer | null>(null);
+  const staticRef = useRef(staticFrame);
+  staticRef.current = staticFrame;
   const phase = useLaunch((s) => s.phase);
   const reduceMotion = useSettings((s) => s.settings.reduceMotion);
 
@@ -58,29 +63,30 @@ export default function SkinViewer({
       // No animation: the figure holds a static stance (posed below).
       renderPaused: true,
     });
-    viewer.autoRotate = autoRotate && interactive;
+    viewer.autoRotate = autoRotate && interactive && !staticRef.current;
     viewer.autoRotateSpeed = 0.7;
     viewer.controls.enablePan = false;
-    viewer.controls.enableRotate = interactive;
-    viewer.controls.enableZoom = interactive;
+    viewer.controls.enableRotate = interactive && !staticRef.current;
+    viewer.controls.enableZoom = interactive && !staticRef.current;
 
     // Studio relight, parked in WORLD space: the rig never moves, so
-    // spinning / zooming the figure changes the shading instead of the
-    // light chasing the camera. The bundled three uses physical light
-    // units, so point intensities are scaled by distance-squared to hold
-    // a constant exposure across zoom levels.
+    // orbiting the figure changes the shading gently instead of the light
+    // chasing the camera. Ambient carries most of the exposure (spin-safe);
+    // the key gives direction, the rim gives edge separation. The bundled
+    // three uses physical light units, so point intensities are scaled by
+    // distance-squared to hold a constant exposure across zoom levels.
     const dist = viewer.camera.position.distanceTo(viewer.controls.target);
-    viewer.globalLight.intensity = 0.7;
+    viewer.globalLight.intensity = 0.85;
     viewer.globalLight.color.set(0xfff4e8);
     // warm key, fixed upper-left-front of the stage
     const key = viewer.cameraLight.clone();
     key.position.set(-0.55 * dist, 0.75 * dist, 0.65 * dist);
     key.color.set(0xfff1e0);
-    key.intensity = 1.35 * key.position.length() ** 2;
+    key.intensity = 1.1 * key.position.length() ** 2;
     viewer.scene.add(key);
     // camera-attached light drops to a faint fill so faces never go black
     viewer.cameraLight.color.set(0xfff1e0);
-    viewer.cameraLight.intensity = 0.15 * dist * dist;
+    viewer.cameraLight.intensity = 0.12 * dist * dist;
     // cool rim parked in world space behind the player for edge separation
     const rim = viewer.cameraLight.clone();
     rim.position.set(-14, 10, -14);
@@ -101,7 +107,9 @@ export default function SkinViewer({
 
     viewerRef.current = viewer;
     requestAnimationFrame(() => {
-      if (!viewer.disposed) viewer.renderPaused = false;
+      // static cards stay frozen: their single frame comes from the skin-load
+      // handler below, not the live loop
+      if (!viewer.disposed && !staticRef.current) viewer.renderPaused = false;
     });
     return () => {
       viewer.dispose();
@@ -141,7 +149,11 @@ export default function SkinViewer({
       })
       .catch(() => {})
       .finally(() => {
-        if (!cancelled && !viewer.disposed) viewer.render();
+        if (cancelled || viewer.disposed) return;
+        viewer.render();
+        // grid cards: freeze on the first finished frame — one GL context
+        // per card stays idle instead of animating forever
+        if (staticRef.current) viewer.renderPaused = true;
       });
     return () => {
       cancelled = true;

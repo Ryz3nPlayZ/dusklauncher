@@ -13,6 +13,7 @@
 //! rejects the token with an opaque HTTP 400). See [`AuthMode`].
 
 use crate::{Error, Result};
+use base64::Engine as _;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +21,8 @@ pub const MSA_AUTHORIZE_URL: &str = "https://login.microsoftonline.com/consumers
 pub const MSA_TOKEN_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
 pub const XBL_AUTH_URL: &str = "https://user.auth.xboxlive.com/user/authenticate";
 pub const XSTS_AUTH_URL: &str = "https://xsts.auth.xboxlive.com/xsts/authorize";
+pub const XBL_DEVICE_AUTH_URL: &str = "https://device.auth.xboxlive.com/device/authenticate";
+pub const SISU_AUTH_URL: &str = "https://sisu.xboxlive.com/authorize";
 pub const MCS_LOGIN_URL: &str = "https://api.minecraftservices.com/authentication/login_with_xbox";
 pub const MCS_ENTITLEMENTS_URL: &str = "https://api.minecraftservices.com/entitlements/mcstore";
 pub const MCS_PROFILE_URL: &str = "https://api.minecraftservices.com/minecraft/profile";
@@ -262,8 +265,195 @@ pub async fn poll_device_code(
     }
 }
 
+/// Windows FILETIME (100ns ticks since 1601-01-01) for a unix timestamp —
+/// the timestamp format Xbox's proof-of-possession signatures use.
+fn windows_filetime(unix_secs: u64) -> u64 {
+    (unix_secs + 11_644_473_600) * 10_000_000
+}
+
+/// Byte layout Xbox expects to be ES256-signed for the `Signature` header
+/// (mirrors MinecraftAuth's SignedXblPostRequest): policy version, NUL,
+/// FILETIME, NUL, HTTP method, NUL, path+query, NUL, optional Authorization
+/// header value, NUL, body, NUL.
+fn xbox_signature_payload(
+    filetime: u64,
+    method: &str,
+    path_query: &str,
+    authorization: Option<&str>,
+    body: &[u8],
+) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(body.len() + 64);
+    buf.extend_from_slice(&1u32.to_be_bytes());
+    buf.push(0);
+    buf.extend_from_slice(&filetime.to_be_bytes());
+    buf.push(0);
+    buf.extend_from_slice(method.as_bytes());
+    buf.push(0);
+    buf.extend_from_slice(path_query.as_bytes());
+    buf.push(0);
+    if let Some(auth) = authorization {
+        buf.extend_from_slice(auth.as_bytes());
+    }
+    buf.push(0);
+    buf.extend_from_slice(body);
+    buf.push(0);
+    buf
+}
+
+/// The `Signature` header value: policy version + FILETIME + 64-byte P1363
+/// (r‖s) signature, standard-base64 encoded.
+fn xbox_signature_header(filetime: u64, signature: &[u8; 64]) -> String {
+    let mut buf = Vec::with_capacity(12 + 64);
+    buf.extend_from_slice(&1u32.to_be_bytes());
+    buf.extend_from_slice(&filetime.to_be_bytes());
+    buf.extend_from_slice(signature);
+    base64::engine::general_purpose::STANDARD.encode(buf)
+}
+
+/// JWK form of the P-256 public key Xbox calls `ProofKey`.
+fn xbox_proof_key(verifying_key: &p256::ecdsa::VerifyingKey) -> serde_json::Value {
+    let point = verifying_key.to_encoded_point(false);
+    let bytes = point.as_bytes(); // 0x04 ‖ x ‖ y
+    let enc = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    serde_json::json!({
+        "kty": "EC",
+        "alg": "ES256",
+        "crv": "P-256",
+        "use": "sig",
+        "x": enc.encode(&bytes[1..33]),
+        "y": enc.encode(&bytes[33..65]),
+    })
+}
+
+/// Random `{uuid}` for the device token's `Id` property.
+fn random_device_id() -> String {
+    let mut b = [0u8; 16];
+    rand::thread_rng().fill(&mut b);
+    b[6] = (b[6] & 0x0f) | 0x40; // version 4
+    b[8] = (b[8] & 0x3f) | 0x80; // RFC 4122 variant
+    let h = hex::encode(b);
+    format!("{{{}-{}-{}-{}-{}}}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
+}
+
+/// POST to an Xbox endpoint with the proof-of-possession `Signature` header.
+/// The signature covers the exact body bytes, so the body is serialized once
+/// here and sent verbatim.
+async fn signed_xbl_post(
+    client: &reqwest::Client,
+    url: &str,
+    body: String,
+    signing_key: &p256::ecdsa::SigningKey,
+    contract_version: bool,
+) -> Result<reqwest::Response> {
+    let parsed = reqwest::Url::parse(url).map_err(|e| Error::Other(e.to_string()))?;
+    let path_query = match parsed.query() {
+        Some(q) => format!("{}{}", parsed.path(), q),
+        None => parsed.path().to_string(),
+    };
+    let filetime = windows_filetime(now_millis() / 1000);
+    let payload = xbox_signature_payload(filetime, "POST", &path_query, None, body.as_bytes());
+    use p256::ecdsa::signature::Signer;
+    let signature: p256::ecdsa::Signature = signing_key.sign(&payload);
+    let sig_bytes = signature.to_bytes();
+    let mut sig_arr = [0u8; 64];
+    sig_arr.copy_from_slice(&sig_bytes);
+    let mut req = client
+        .post(url)
+        .header(reqwest::header::ACCEPT, "application/json")
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .header("Signature", xbox_signature_header(filetime, &sig_arr))
+        .body(body);
+    if contract_version {
+        req = req.header("X-Xbl-Contract-Version", "1");
+    }
+    Ok(req.send().await?)
+}
+
+/// Register a per-login "device" with Xbox: proof-of-possession via the ES256
+/// key generated for this login. Returns the device token bound to that key.
+async fn xbl_device_token(
+    client: &reqwest::Client,
+    signing_key: &p256::ecdsa::SigningKey,
+    verifying_key: &p256::ecdsa::VerifyingKey,
+) -> Result<String> {
+    let device_body = serde_json::json!({
+        "Properties": {
+            "DeviceType": "Win32",
+            "Id": random_device_id(),
+            "AuthMethod": "ProofOfPossession",
+            "ProofKey": xbox_proof_key(verifying_key),
+        },
+        "RelyingParty": "http://auth.xboxlive.com",
+        "TokenType": "JWT",
+    })
+    .to_string();
+    let device_resp = signed_xbl_post(client, XBL_DEVICE_AUTH_URL, device_body, signing_key, true).await?;
+    if !device_resp.status().is_success() {
+        let status = device_resp.status().as_u16();
+        let body = device_resp.text().await.unwrap_or_default();
+        return Err(Error::Auth(map_xbl_error(status, &body, AuthMode::OfficialTitle)));
+    }
+    let device: XblResponse = device_resp.json().await?;
+    Ok(device.Token)
+}
+
+/// The SISU (single sign-on) exchange for title clients: one call returns the
+/// user token, title token and the XSTS token for the relying party. This is
+/// the path MinecraftAuth has shipped for title IDs since 4.1 —
+/// `user/authenticate` no longer accepts title tickets (verified live: it
+/// 400s for both `t=` and `d=` prefixes on an MBI_SSL device-code token).
+async fn authenticate_title_sisu(
+    client: &reqwest::Client,
+    ms_access_token: &str,
+) -> Result<(String, String)> {
+    let secret = p256::SecretKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
+    let signing_key = p256::ecdsa::SigningKey::from(&secret);
+    let verifying_key = p256::ecdsa::VerifyingKey::from(&signing_key);
+
+    // 1. Register this "device" (per-login keypair; Xbox returns a device
+    //    token bound to the ProofKey we sign both requests with).
+    let device_token = xbl_device_token(client, &signing_key, &verifying_key).await?;
+
+    // 2. Swap the MSA title ticket for user+XSTS tokens in one call. The
+    //    MBI_SSL ticket is passed with the `t=` prefix here — the pairing
+    //    that `user/authenticate` refuses.
+    let sisu_body = serde_json::json!({
+        "Sandbox": "RETAIL",
+        "UseModernGamertag": true,
+        "AppId": OFFICIAL_TITLE_CLIENT_ID,
+        "AccessToken": format!("t={ms_access_token}"),
+        "DeviceToken": device_token,
+        "ProofKey": xbox_proof_key(&verifying_key),
+        "RelyingParty": "rp://api.minecraftservices.com/",
+    })
+    .to_string();
+    let sisu_resp = signed_xbl_post(client, SISU_AUTH_URL, sisu_body, &signing_key, false).await?;
+    if !sisu_resp.status().is_success() {
+        let status = sisu_resp.status().as_u16();
+        let body = sisu_resp.text().await.unwrap_or_default();
+        // SISU reports account problems as XErr codes like XSTS does.
+        let msg = if body.contains("XErr") {
+            map_xsts_error(status, &body)
+        } else {
+            map_xbl_error(status, &body, AuthMode::OfficialTitle)
+        };
+        return Err(Error::Auth(msg));
+    }
+    let sisu: SisuResponse = sisu_resp.json().await?;
+    let uhs = xbl_uhs(&sisu.authorization_token)?;
+    Ok((uhs, sisu.authorization_token.Token))
+}
+
+#[derive(Debug, Deserialize)]
+struct SisuResponse {
+    #[serde(rename = "AuthorizationToken")]
+    authorization_token: XblResponse,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Session {    pub access_token: String,
+pub struct Session {
+    pub access_token: String,
+
     /// Millis since epoch when the MC access token expires.
     pub expires_at: u64,
     pub uuid: String,
@@ -567,71 +757,59 @@ pub async fn authenticate(
     ms_access_token: &str,
     mode: AuthMode,
 ) -> Result<McAuth> {
-    // 1. XBL (body-aware errors: a bare 400 hides the real cause, so the
-    // response body is captured and mapped like XSTS below). `t=` is the RPS
-    // title-ticket prefix (MBI_SSL scope, Official mode), `d=` the v2/Azure
-    // prefix — the two ticket types are not interchangeable. Official mode
-    // retries once with the other prefix so an unexpectedly-issued ticket
-    // type can't dead-end the login.
-    let prefixes: &[&str] = match mode {
-        AuthMode::OfficialTitle => &["t=", "d="],
-        AuthMode::AzureApp => &["d="],
-    };
-    let mut xbl: Option<XblResponse> = None;
-    let mut failure: Option<(u16, String)> = None;
-    for prefix in prefixes {
-        let resp = client
-            .post(XBL_AUTH_URL)
-            .header(reqwest::header::ACCEPT, "application/json")
-            .header("X-Xbl-Contract-Version", "1")
-            .json(&serde_json::json!({
-                "AuthMethod": "RPS",
-                "SiteName": "user.auth.xboxlive.com",
-                "RpsTicket": format!("{prefix}{ms_access_token}"),
-                "RelyingParty": "http://auth.xboxlive.com",
-                "TokenType": "JWT"
-            }))
-            .send()
-            .await?;
-        if resp.status().is_success() {
-            xbl = Some(resp.json().await?);
-            break;
-        }
-        let status = resp.status().as_u16();
-        let body = resp.text().await.unwrap_or_default();
-        failure = Some((status, body));
-    }
-    let xbl = match xbl {
-        Some(x) => x,
-        None => {
-            let (status, body) = failure.expect("no success implies a captured failure");
-            return Err(Error::Auth(map_xbl_error(status, &body, mode)));
-        }
-    };
-    let uhs = xbl_uhs(&xbl)?;
+    let (uhs, xsts_token) = match mode {
+        // Title clients go through SISU: user/authenticate no longer accepts
+        // their tickets (HTTP 400 for both prefixes, verified live).
+        AuthMode::OfficialTitle => authenticate_title_sisu(client, ms_access_token).await?,
+        AuthMode::AzureApp => {
+            // XBL (body-aware errors: a bare 400 hides the real cause, so the
+            // response body is captured and mapped like XSTS below). Azure v2
+            // tokens are `d=`-prefixed RPS tickets.
+            let xbl_resp = client
+                .post(XBL_AUTH_URL)
+                .header(reqwest::header::ACCEPT, "application/json")
+                .header("X-Xbl-Contract-Version", "1")
+                .json(&serde_json::json!({
+                    "AuthMethod": "RPS",
+                    "SiteName": "user.auth.xboxlive.com",
+                    "RpsTicket": format!("d={ms_access_token}"),
+                    "RelyingParty": "http://auth.xboxlive.com",
+                    "TokenType": "JWT"
+                }))
+                .send()
+                .await?;
+            if !xbl_resp.status().is_success() {
+                let status = xbl_resp.status().as_u16();
+                let body = xbl_resp.text().await.unwrap_or_default();
+                return Err(Error::Auth(map_xbl_error(status, &body, mode)));
+            }
+            let xbl: XblResponse = xbl_resp.json().await?;
+            let uhs = xbl_uhs(&xbl)?;
 
-    // 2. XSTS (body-aware errors: XErr codes carry the real reason)
-    let xsts_resp = client
-        .post(XSTS_AUTH_URL)
-        .header(reqwest::header::ACCEPT, "application/json")
-        .header("X-Xbl-Contract-Version", "1")
-        .json(&serde_json::json!({
-            "SandboxId": "RETAIL",
-            "UserTokens": [xbl.Token],
-            "RelyingParty": "rp://api.minecraftservices.com/",
-            "TokenType": "JWT"
-        }))
-        .send()
-        .await?;
-    if !xsts_resp.status().is_success() {
-        let status = xsts_resp.status().as_u16();
-        let body = xsts_resp.text().await.unwrap_or_default();
-        return Err(Error::Auth(map_xsts_error(status, &body)));
-    }
-    let xsts: XblResponse = xsts_resp.json().await?;
-    let xsts_token = xsts.Token;
+            // XSTS (body-aware errors: XErr codes carry the real reason)
+            let xsts_resp = client
+                .post(XSTS_AUTH_URL)
+                .header(reqwest::header::ACCEPT, "application/json")
+                .header("X-Xbl-Contract-Version", "1")
+                .json(&serde_json::json!({
+                    "SandboxId": "RETAIL",
+                    "UserTokens": [xbl.Token],
+                    "RelyingParty": "rp://api.minecraftservices.com/",
+                    "TokenType": "JWT"
+                }))
+                .send()
+                .await?;
+            if !xsts_resp.status().is_success() {
+                let status = xsts_resp.status().as_u16();
+                let body = xsts_resp.text().await.unwrap_or_default();
+                return Err(Error::Auth(map_xsts_error(status, &body)));
+            }
+            let xsts: XblResponse = xsts_resp.json().await?;
+            (uhs, xsts.Token)
+        }
+    };
 
-    // 3. Minecraft services. A 403 here almost always means the Azure app
+    // Minecraft services. A 403 here almost always means the Azure app
     // was never approved for the Minecraft-services API (review form).
     let mcs_resp = client
         .post(MCS_LOGIN_URL)
@@ -1031,5 +1209,108 @@ mod tests {
     #[test]
     fn flow_states_look_random() {
         assert_ne!(new_flow_state(), new_flow_state());
+    }
+
+    #[test]
+    fn windows_filetime_matches_epoch_offset() {
+        assert_eq!(windows_filetime(0), 116_444_736_000_000_000);
+    }
+
+    #[test]
+    fn xbox_signature_payload_layout_matches_minecraftauth() {
+        let got = xbox_signature_payload(1, "POST", "/authorize", None, b"x");
+        let mut want = Vec::new();
+        want.extend_from_slice(&1u32.to_be_bytes());
+        want.push(0);
+        want.extend_from_slice(&1u64.to_be_bytes());
+        want.push(0);
+        want.extend_from_slice(b"POST");
+        want.push(0);
+        want.extend_from_slice(b"/authorize");
+        want.push(0);
+        // No Authorization value — the trailing separator is still present.
+        want.push(0);
+        want.extend_from_slice(b"x");
+        want.push(0);
+        assert_eq!(got, want);
+
+        let with_auth = xbox_signature_payload(2, "POST", "/a", Some("Bearer t"), b"");
+        let mut want2 = Vec::new();
+        want2.extend_from_slice(&1u32.to_be_bytes());
+        want2.push(0);
+        want2.extend_from_slice(&2u64.to_be_bytes());
+        want2.push(0);
+        want2.extend_from_slice(b"POST");
+        want2.push(0);
+        want2.extend_from_slice(b"/a");
+        want2.push(0);
+        want2.extend_from_slice(b"Bearer t");
+        want2.push(0);
+        want2.push(0);
+        assert_eq!(with_auth, want2);
+    }
+
+    #[test]
+    fn xbox_signature_header_carries_policy_timestamp_and_signature() {
+        use base64::Engine as _;
+        let mut sig = [0u8; 64];
+        sig[0] = 0xAB;
+        sig[63] = 0xCD;
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(xbox_signature_header(7, &sig))
+            .unwrap();
+        assert_eq!(decoded.len(), 12 + 64);
+        assert_eq!(&decoded[0..4], &1u32.to_be_bytes());
+        assert_eq!(&decoded[4..12], &7u64.to_be_bytes());
+        assert_eq!(&decoded[12..], &sig[..]);
+    }
+
+    #[test]
+    fn xbox_proof_key_is_p256_jwk() {
+        let secret = p256::SecretKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
+        let signing_key = p256::ecdsa::SigningKey::from(&secret);
+        let jwk = xbox_proof_key(&p256::ecdsa::VerifyingKey::from(&signing_key));
+        assert_eq!(jwk["kty"], "EC");
+        assert_eq!(jwk["crv"], "P-256");
+        assert_eq!(jwk["alg"], "ES256");
+        assert_eq!(jwk["use"], "sig");
+        // 32-byte coordinates encode to 43 unpadded base64url chars.
+        for k in ["x", "y"] {
+            let s = jwk[k].as_str().unwrap();
+            assert_eq!(s.len(), 43);
+            assert!(!s.contains('=') && !s.contains('+') && !s.contains('/'));
+        }
+    }
+
+    #[test]
+    fn random_device_id_is_braced_uuid_v4() {
+        let id = random_device_id();
+        assert!(id.starts_with('{') && id.ends_with('}'));
+        let inner = &id[1..37];
+        assert_eq!(inner.len(), 36);
+        assert_eq!(inner.chars().filter(|c| *c == '-').count(), 4);
+        assert_eq!(inner.as_bytes()[14], b'4'); // version nibble
+        assert!("89ab".contains(inner.as_bytes()[19] as char)); // variant nibble
+        assert_ne!(random_device_id(), random_device_id());
+    }
+
+    /// Live probe of the Xbox proof-of-possession signing (device
+    /// registration is anonymous — no Microsoft account involved). If the
+    /// signature layout drifts from what Xbox expects, this fails with a
+    /// 401 before any real sign-in does. Run explicitly:
+    /// `cargo test -p fasterlauncher-core sisu_device -- --ignored --nocapture`
+    #[test]
+    #[ignore = "live network call"]
+    fn sisu_device_registration_works_live() {
+        tokio::runtime::Runtime::new().expect("tokio runtime").block_on(async {
+            let client = reqwest::Client::new();
+            let secret = p256::SecretKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
+            let signing_key = p256::ecdsa::SigningKey::from(&secret);
+            let verifying_key = p256::ecdsa::VerifyingKey::from(&signing_key);
+            let token = xbl_device_token(&client, &signing_key, &verifying_key)
+                .await
+                .expect("device registration should succeed");
+            assert!(token.len() > 100, "implausible device token: {token}");
+        });
     }
 }

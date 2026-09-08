@@ -48,7 +48,7 @@ function Nav() {
   return (
     <header className="nav" data-tauri-drag-region>
       <div className="nav__brand">
-        <PixelIcon name="sparkle" size={22} className="nav__logo" />
+        <PixelIcon name="sparkle" size={30} className="nav__logo" />
         <span className="nav__word">
           DUSK<span>LAUNCHER</span>
         </span>
@@ -64,7 +64,7 @@ function Nav() {
               playSfx('click');
             }}
           >
-            <PixelIcon name={t.icon} size={13} /> {t.label}
+            <PixelIcon name={t.icon} size={17} /> {t.label}
           </button>
         ))}
       </nav>
@@ -85,17 +85,17 @@ function Nav() {
           <span className="acct-pill__name">{account?.username ?? 'PLAYER'}</span>
         </button>
         <button className="win-btn" title="Minimize" onClick={() => winAction('min')}>
-          <PixelIcon name="minus" size={12} />
+          <PixelIcon name="minus" size={15} />
         </button>
         <button className="win-btn" title="Fullscreen" onClick={() => winAction('max')}>
-          <PixelIcon name="fullscreen" size={12} />
+          <PixelIcon name="fullscreen" size={15} />
         </button>
         <button
           className="win-btn win-btn--close"
           title="Close"
           onClick={() => winAction('close')}
         >
-          <PixelIcon name="close" size={12} />
+          <PixelIcon name="close" size={15} />
         </button>
       </div>
     </header>
@@ -117,38 +117,29 @@ function PvpButton() {
         startPvpWipe(!pvp);
       }}
     >
-      <PixelIcon name="sword" size={13} /> PVPMODE
+      <PixelIcon name="sword" size={17} /> <span>PVPMODE</span>
     </button>
   );
 }
 
-function Footer() {
+/** Floating chrome: no footer bar, no status pill. The launch console is a
+ *  small floating tile bottom-left that opens the drawer as an overlay. */
+function FloatingChrome() {
   const { drawerOpen, toggleDrawer } = useUi();
   const phase = useLaunch((s) => s.phase);
-  const online = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
   return (
     <>
       {drawerOpen && <LogDrawer />}
-      <footer className="footer">
-        <button
-          className={`footer__toggle ${phase !== 'idle' ? 'is-live' : ''}`}
-          onClick={toggleDrawer}
-        >
-          <span className="live-dot" />
-          LAUNCH CONSOLE
-          <PixelIcon name={drawerOpen ? 'chevronDown' : 'chevronUp'} size={9} />
-        </button>
-        {phase !== 'idle' && (
-          <span className="font-pixel" style={{ fontSize: 10, color: 'var(--text-accent)' }}>
-            {phase.toUpperCase()}
-          </span>
-        )}
-        <div className={`footer__status ${online ? '' : 'is-offline'}`}>
-          <span className="live-dot" />
-          {online ? 'ONLINE' : 'OFFLINE'}
-        </div>
-      </footer>
+      <button
+        className={`console-fab ${phase !== 'idle' ? 'is-live' : ''}`}
+        onClick={toggleDrawer}
+        title="Launch console"
+      >
+        <span className="live-dot" />
+        CONSOLE
+        <PixelIcon name={drawerOpen ? 'chevronDown' : 'chevronUp'} size={9} />
+      </button>
     </>
   );
 }
@@ -205,17 +196,17 @@ export default function App() {
     <>
       <div className="stage">
         <SceneBackground />
+        <PvpWipe />
       </div>
       <div className="app">
         <Nav />
         <main className="view">
           <View />
         </main>
-        <Footer />
+        <FloatingChrome />
       </div>
       <AccountsModal />
       {showOnboarding && <Onboarding onDone={() => setOnboardDismissed(true)} />}
-      <PvpWipe />
       <Toaster />
     </>
   );

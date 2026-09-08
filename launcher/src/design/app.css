@@ -27,26 +27,33 @@
   pointer-events: auto;
 }
 
-/* ── top navigation ──────────────────────────────────────────────────────── */
+/* ── top navigation ────────────────────────────────────────────────────────
+   One bar, three groups: brand-as-logo | segmented tab tray | PVPMODE CTA +
+   account/window cluster. The tray + CTA + right cluster are flex:none so the
+   right side can NEVER be pushed out of view (1280px window). */
 
 .nav {
   height: var(--nav-h);
   display: flex;
-  align-items: stretch;
-  background: #141414;
+  align-items: center;
+  gap: 14px;
+  padding: 0 14px 0 16px;
+  background: linear-gradient(#232326, #171719);
   border-bottom: var(--border-w) solid #000;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.07);
   z-index: var(--z-nav);
+  overflow: hidden;
 }
 
+/* brand: logo + wordmark straight on the bar, no tile — it is not a button */
 .nav__brand {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 0 14px;
-  margin: 6px 14px 6px 6px;
-  background: #232323;
-  border: var(--border-w) solid #000;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  gap: 10px;
+  padding-right: 16px;
+  border-right: var(--border-w) solid #000;
+  box-shadow: 2px 0 0 rgba(255, 255, 255, 0.05);
 }
 .nav__logo {
   color: var(--gold);
@@ -54,22 +61,26 @@
 }
 .nav__word {
   font-family: var(--font-pixel-bold);
-  font-size: 19px;
+  font-size: 24px;
+  white-space: nowrap;
   color: var(--gold);
   letter-spacing: 0.06em;
-  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.8);
 }
 .nav__word span {
   color: var(--text-1);
 }
 
-/* nav tabs — Dawn wireframe: flat dark tiles, 2px BLACK borders, 1px inner
-   top highlight, muted block type. Active tile gets the accent top bar. */
+/* tabs: ONE sunken tray, segments divided — not floating lookalike tiles */
 .nav__tabs {
+  flex: none;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-left: 4px;
+  align-items: stretch;
+  gap: 0;
+  background: #101012;
+  border: var(--border-w) solid #000;
+  box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.55), inset -1px -1px 0 rgba(255, 255, 255, 0.04);
+  padding: 5px;
 }
 
 .nav__tabs .ptab {
@@ -78,107 +89,139 @@
   gap: 8px;
   font-family: var(--font-pixel-bold);
   font-style: normal;
-  font-size: 11px;
+  font-size: 14px;
   letter-spacing: 0.04em;
-  color: #b9b9b9;
-  background: #232323;
-  border: var(--border-w) solid #000;
-  padding: 9px 16px;
+  white-space: nowrap;
+  color: #b5b5b5;
+  background: transparent;
+  border: none;
+  border-left: var(--border-w) solid #000;
+  padding: 14px 18px;
   margin: 0;
-  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.9);
+  box-shadow: none;
+  cursor: pointer;
   transition: background 80ms linear, color 80ms linear;
+}
+.nav__tabs .ptab:first-child {
+  border-left: none;
 }
 .nav__tabs .ptab:hover {
   color: #fff;
-  background: #2e2e2e;
+  background: #1e1e22;
 }
 .nav__tabs .ptab--active {
   color: #fff;
-  background: #2b2b2b;
-  box-shadow: inset 0 2px 0 var(--accent-cta), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: linear-gradient(#333338, #26262b);
+  box-shadow: inset 0 3px 0 var(--accent-cta), inset 0 2px 0 rgba(255, 255, 255, 0.1);
 }
 
 .nav__right {
   margin-left: auto;
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-right: 10px;
+  gap: 10px;
 }
 
-/* account pill — Dawn wireframed tile with black border */
+/* account cluster — head + name on a low tile, clearly not a tab */
 .acct-pill {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: #232323;
+  gap: 10px;
+  background: #1c1c1f;
   border: var(--border-w) solid #000;
-  padding: 4px 14px 4px 5px;
-  margin-right: 6px;
+  padding: 5px 16px 5px 6px;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.07), inset 0 -2px 0 rgba(0, 0, 0, 0.35);
 }
 .acct-pill:hover {
-  background: #2e2e2e;
+  background: #26262b;
 }
 .acct-pill__head {
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   image-rendering: pixelated;
   border: var(--border-w) solid #000;
 }
 .acct-pill__name {
-  font-family: var(--font-pixel);
-  font-size: 11px;
+  font-family: var(--font-pixel-bold);
+  font-size: 14px;
+  white-space: nowrap;
   color: var(--text-1);
-  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.8);
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
 }
 
-/* PVPMODE toggle — Dawn tile; ON state bleeds red, OFF stays quiet dark */
+/* PVPMODE — the signature CTA: accent-bordered, never gray-on-gray */
 .pvp-btn {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: #232323;
-  border: var(--border-w) solid #000;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  color: #b9b9b9;
+  background: #141416;
+  border: var(--border-w) solid var(--accent-cta);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08), inset 0 -3px 0 rgba(0, 0, 0, 0.4);
+  color: var(--accent-cta);
   font-family: var(--font-pixel-bold);
-  font-size: 11px;
+  font-size: 14px;
   letter-spacing: 0.05em;
-  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
-  padding: 9px 14px;
-  margin-right: 6px;
+  white-space: nowrap;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.9);
+  padding: 15px 20px;
   cursor: pointer;
-  transition: background 80ms linear, color 80ms linear, border-color 80ms linear;
+  transition: background 80ms linear, color 80ms linear;
 }
 .pvp-btn:hover {
   color: #fff;
-  background: #2e2e2e;
+  background: #222226;
 }
 .pvp-btn.is-on {
   background: #2a0d12;
   border-color: var(--accent);
   color: var(--accent-hi);
-  box-shadow: inset 0 2px 0 var(--accent), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 3px 0 var(--accent), inset 0 2px 0 rgba(255, 255, 255, 0.08);
 }
 
-/* fullscreen noise-dissolve canvas: quarter-res GL upscaled chunky */
-.pvp-wipe {
-  position: fixed;
+/* narrow windows: shed icons/labels before EVER pushing the right cluster out */
+@media (max-width: 1240px) {
+  .nav__tabs .ptab > svg {
+    display: none;
+  }
+  .nav__tabs .ptab {
+    font-size: 13px;
+    padding: 13px 14px;
+  }
+  .nav__word {
+    font-size: 20px;
+  }
+}
+@media (max-width: 1100px) {
+  .nav__word,
+  .pvp-btn span:last-child,
+  .acct-pill__name {
+    display: none;
+  }
+  .win-btn {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* PVPMODE radial wipe: lives in .stage (BELOW the app UI), half-res GL
+   upscaled chunky. Background-only by construction — panels stay visible. */
+.scene-wipe {
+  position: absolute;
   inset: 0;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   image-rendering: pixelated;
-  z-index: var(--z-wipe);
-  pointer-events: all;
+  pointer-events: none;
 }
 
 /* square window utility buttons — Dawn wireframed tiles */
 .win-btn {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -232,39 +275,37 @@
   flex: 1;
 }
 
-/* ── footer + launch drawer ──────────────────────────────────────────────── */
+/* ── floating chrome (no footer bar) + launch drawer ───────────────────── */
 
-.footer {
-  height: var(--footer-h);
-  background: var(--surface-glass-strong);
-  border-top: var(--border-w) solid var(--border-0);
-  display: flex;
-  align-items: center;
+/* console toggle: small dark tile parked bottom-left */
+.console-fab {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
   z-index: var(--z-drawer);
-}
-.footer__toggle {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: none;
-  border: none;
+  background: rgba(13, 13, 15, 0.9);
+  border: var(--border-w) solid #000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   color: var(--text-2);
-  font-family: var(--font-pixel);
+  font-family: var(--font-pixel-bold);
   font-size: 10px;
-  text-transform: uppercase;
-  padding: 0 16px;
-  height: 100%;
+  letter-spacing: 0.05em;
+  padding: 8px 12px;
   cursor: pointer;
 }
-.footer__toggle:hover {
+.console-fab:hover {
   color: var(--text-1);
+  filter: brightness(1.2);
 }
-.footer__toggle .live-dot {
+.console-fab .live-dot {
   width: 8px;
   height: 8px;
   background: var(--text-3);
 }
-.footer__toggle.is-live .live-dot {
+.console-fab.is-live .live-dot {
   background: var(--success);
   animation: pulse-glow 2s steps(4) infinite;
 }
@@ -291,38 +332,11 @@
 .bg-btn:active {
   transform: var(--btn-press);
 }
-.footer__status {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 2px 10px;
-  margin-right: 10px;
-  margin-left: auto;
-  border: var(--border-w) solid var(--border-success, var(--success));
-  color: var(--text-success);
-  font-family: var(--font-pixel-bold);
-  font-size: 9px;
-}
-.footer__status .live-dot {
-  width: 7px;
-  height: 7px;
-  background: var(--success);
-  animation: pulse-glow 2s steps(4) infinite;
-}
-.footer__status.is-offline {
-  border-color: var(--danger);
-  color: var(--danger);
-}
-.footer__status.is-offline .live-dot {
-  background: var(--danger);
-  animation: none;
-}
-
 .drawer {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: var(--footer-h);
+  bottom: 0;
   height: 220px;
   background: var(--surface-glass-strong);
   border-top: var(--border-w) solid var(--border-0);

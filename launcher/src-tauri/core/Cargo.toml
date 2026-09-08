@@ -16,3 +16,7 @@ rand.workspace = true
 dirs.workspace = true
 tracing.workspace = true
 zip = { version = "2", default-features = false, features = ["deflate"] }
+# Title (SISU) auth: Xbox proof-of-possession requests are ES256-signed with
+# a per-login P-256 key; the Signature header is base64.
+p256 = "0.13"
+base64 = "0.22"

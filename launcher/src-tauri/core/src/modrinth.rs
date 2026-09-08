@@ -147,6 +147,10 @@ pub struct Version {
     pub id: String,
     pub name: String,
     #[serde(default)]
+    pub version_number: String,
+    #[serde(default)]
+    pub changelog: Option<String>,
+    #[serde(default)]
     pub files: Vec<VersionFile>,
     #[serde(default)]
     pub dependencies: Vec<VersionDependency>,
@@ -174,6 +178,73 @@ pub async fn version(client: &reqwest::Client, version_id: &str) -> Result<Versi
         .send()
         .await?;
     Ok(decode(check(resp, "version").await?, "version").await?)
+}
+
+// ── project details (detail page: body, gallery, links, compat) ────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GalleryImage {
+    #[serde(default)]
+    pub url: String,
+    #[serde(default)]
+    pub title: Option<String>,
+}
+
+/// Modrinth project on the wire — everything optional except id so a schema
+/// addition upstream degrades to an empty section, never a decode failure.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Project {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub slug: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default)]
+    pub icon_url: Option<String>,
+    #[serde(default)]
+    pub downloads: u64,
+    #[serde(default)]
+    pub followers: u64,
+    #[serde(default)]
+    pub categories: Vec<String>,
+    #[serde(default)]
+    pub additional_categories: Vec<String>,
+    #[serde(default)]
+    pub loaders: Vec<String>,
+    #[serde(default)]
+    pub game_versions: Vec<String>,
+    #[serde(default)]
+    pub gallery: Vec<GalleryImage>,
+    #[serde(default)]
+    pub discord_url: Option<String>,
+    #[serde(default)]
+    pub issues_url: Option<String>,
+    #[serde(default)]
+    pub source_url: Option<String>,
+    #[serde(default)]
+    pub wiki_url: Option<String>,
+    #[serde(default)]
+    pub client_side: String,
+    #[serde(default)]
+    pub server_side: String,
+    #[serde(default)]
+    pub published: Option<String>,
+    #[serde(default)]
+    pub updated: Option<String>,
+}
+
+pub async fn project(client: &reqwest::Client, project_id: &str) -> Result<Project> {
+    let resp = client
+        .get(format!("{MODRINTH_API}/project/{project_id}"))
+        .header(reqwest::header::USER_AGENT, USER_AGENT)
+        .send()
+        .await?;
+    Ok(decode(check(resp, "project").await?, "project").await?)
 }
 
 /// Newest version of a project playable on this game version + loader.

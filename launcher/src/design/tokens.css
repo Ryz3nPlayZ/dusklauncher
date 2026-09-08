@@ -10,7 +10,7 @@
   --font-body: 'Inter', system-ui, -apple-system, sans-serif;
 
   /* metrics */
-  --nav-h: 62px;
+  --nav-h: 96px;
   --footer-h: 30px;
   --border-w: 2px;
   --radius: 0px;
@@ -58,34 +58,38 @@
 }
 
 /* chunky minecraft scrollbars: dark track, accent-dim thumb */
-.scroll-y, .drawer__log, .skins-grid, .inst-list {
+.scroll-y, .drawer__log, .skins-grid, .inst-grid, .modpacks__list {
   scrollbar-width: thin;
   scrollbar-color: var(--accent-dim) #0d0d0f;
 }
 .scroll-y::-webkit-scrollbar,
 .drawer__log::-webkit-scrollbar,
 .skins-grid::-webkit-scrollbar,
-.inst-list::-webkit-scrollbar {
+.inst-grid::-webkit-scrollbar,
+.modpacks__list::-webkit-scrollbar {
   width: 10px;
 }
 .scroll-y::-webkit-scrollbar-track,
 .drawer__log::-webkit-scrollbar-track,
 .skins-grid::-webkit-scrollbar-track,
-.inst-list::-webkit-scrollbar-track {
+.inst-grid::-webkit-scrollbar-track,
+.modpacks__list::-webkit-scrollbar-track {
   background: #0d0d0f;
   border-left: 2px solid #000;
 }
 .scroll-y::-webkit-scrollbar-thumb,
 .drawer__log::-webkit-scrollbar-thumb,
 .skins-grid::-webkit-scrollbar-thumb,
-.inst-list::-webkit-scrollbar-thumb {
+.inst-grid::-webkit-scrollbar-thumb,
+.modpacks__list::-webkit-scrollbar-thumb {
   background: var(--accent-dim);
   border: 2px solid #000;
 }
 .scroll-y::-webkit-scrollbar-thumb:hover,
 .drawer__log::-webkit-scrollbar-thumb:hover,
 .skins-grid::-webkit-scrollbar-thumb:hover,
-.inst-list::-webkit-scrollbar-thumb:hover {
+.inst-grid::-webkit-scrollbar-thumb:hover,
+.modpacks__list::-webkit-scrollbar-thumb:hover {
   background: var(--accent);
 }
 

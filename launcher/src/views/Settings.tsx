@@ -5,6 +5,7 @@ import { api, isTauri, type AppInfoDto, type FpsTarget, type ThemeName } from '.
 import { playerLoop } from '../lib/fps';
 import { useSettings } from '../stores/settings';
 import { useUi } from '../stores/ui';
+import { BUILD_ID } from '../build';
 import { playSfx } from '../sfx/sfx';
 
 type Tab = 'general' | 'java' | 'display' | 'files' | 'debug';
@@ -543,6 +544,9 @@ function DebugTab() {
       <SettingsCard title="VERSIONS">
         <Row label="LAUNCHER">
           <span className="mono text-2">DuskLauncher {info?.launcherVersion ?? '…'}</span>
+        </Row>
+        <Row label="BUILD">
+          <span className="mono text-2">{BUILD_ID}</span>
         </Row>
         <Row label="OS">
           <span className="mono text-2">{info?.os ?? '…'}</span>

@@ -112,6 +112,12 @@ export interface SkinDto {
   selected: boolean;
 }
 
+export interface WorldDto {
+  name: string;
+  modified: number;
+  size: number;
+}
+
 export type LaunchStage = 'libraries' | 'client' | 'assets' | 'java' | 'mods' | 'launching';
 
 export interface LaunchProgressEvent {
@@ -158,9 +164,39 @@ export interface ModpackHit {
 export interface ModpackVersionDto {
   id: string;
   name: string;
+  versionNumber: string;
+  changelog: string | null;
   gameVersions: string[];
   loaders: string[];
   published: string | null;
+}
+
+export interface ModpackGalleryDto {
+  url: string;
+  title: string | null;
+}
+
+export interface ModpackProjectDto {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  body: string;
+  iconUrl: string | null;
+  downloads: number;
+  follows: number;
+  categories: string[];
+  loaders: string[];
+  gameVersions: string[];
+  gallery: ModpackGalleryDto[];
+  discordUrl: string | null;
+  issuesUrl: string | null;
+  sourceUrl: string | null;
+  wikiUrl: string | null;
+  clientSide: string;
+  serverSide: string;
+  published: string | null;
+  updated: string | null;
 }
 
 export interface ModpackSearchResponse {
@@ -271,13 +307,42 @@ function mockInvoke(cmd: string, args: Record<string, unknown> = {}): unknown {
       return [];
     case 'list_skins':
       return [];
+    case 'list_worlds':
+      return [];
+    case 'show_in_folder':
+      return null;
     case 'search_modpacks':
       return mockModpacks(args);
     case 'list_modpack_versions':
       return [
-        { id: 'v1', name: '1.0.0', gameVersions: ['26.2'], loaders: ['fabric'], published: new Date(now).toISOString() },
-        { id: 'v0', name: '0.9.0', gameVersions: ['1.21.11'], loaders: ['fabric'], published: new Date(now - 30 * 86400e3).toISOString() },
+        { id: 'v1', name: '1.0.0', versionNumber: '1.0.0', changelog: null, gameVersions: ['26.2'], loaders: ['fabric'], published: new Date(now).toISOString() },
+        { id: 'v0', name: '0.9.0', versionNumber: '0.9.0', changelog: null, gameVersions: ['1.21.11'], loaders: ['fabric'], published: new Date(now - 30 * 86400e3).toISOString() },
       ];
+    case 'get_modpack_project': {
+      const hit = mockModpacks({}).hits[0];
+      return {
+        id: hit.id,
+        slug: hit.slug,
+        title: hit.title,
+        description: hit.description,
+        body: `# ${hit.title}\n\n${hit.description}\n`,
+        iconUrl: hit.iconUrl,
+        downloads: hit.downloads,
+        follows: hit.follows,
+        categories: ['optimization'],
+        loaders: ['fabric'],
+        gameVersions: ['26.2', '1.21.11'],
+        gallery: [],
+        discordUrl: null,
+        issuesUrl: null,
+        sourceUrl: null,
+        wikiUrl: null,
+        clientSide: 'required',
+        serverSide: 'unsupported',
+        published: null,
+        updated: hit.updatedAt,
+      };
+    }
     default:
       return null;
   }
@@ -329,6 +394,9 @@ export const api = {
   updateProfile: (id: string, patch: ProfilePatch) =>
     invoke<ProfileDto>('update_profile', { id, patch }),
   deleteProfile: (id: string) => invoke<void>('delete_profile', { id }),
+  listWorlds: (profileId: string) => invoke<WorldDto[]>('list_worlds', { profileId }),
+  showInFolder: (profileId: string, subdir: string) =>
+    invoke<void>('show_in_folder', { profileId, subdir }),
   listVersions: () => invoke<VersionInfo[]>('list_versions'),
   installAndLaunch: (profileId: string) => invoke<void>('install_and_launch', { profileId }),
   stopGame: () => invoke<void>('stop_game'),
@@ -372,6 +440,9 @@ export const api = {
   installModpack: (id: string) => invoke<ProfileDto>('install_modpack', { id }),
   listModpackVersions: (id: string) =>
     invoke<ModpackVersionDto[]>('list_modpack_versions', { id }),
+
+  getModpackProject: (id: string) =>
+    invoke<ModpackProjectDto>('get_modpack_project', { id }),
   installModpackVersion: (id: string, versionId: string) =>
     invoke<ProfileDto>('install_modpack_version', { id, versionId }),
   listSkins: () => invoke<SkinDto[]>('list_skins'),
