@@ -1151,6 +1151,16 @@
 .skin2d--broken {
   background: var(--bg-2);
 }
+/* head-only avatar crop — fills its framed parent (e.g. .acct__head) */
+.skin-head {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+.skin-head--broken {
+  background: var(--bg-2);
+}
 
 .skins-inspector {
   display: flex;

@@ -71,6 +71,8 @@ Chain (see [minecraft.wiki/w/Microsoft_authentication](https://minecraft.wiki/w/
 4. `GET /entitlements/mcstore` (license check) and `GET /minecraft/profile` (uuid, name, `skins[]`/`capes[]` arrays; the `state: "ACTIVE"` skin feeds the Home avatar, downloaded in Rust and cached under `<data>/cache/` as a data URL — no webview CORS dependency)
 - **Skin management** (same Bearer MC token, matches Prism Launcher's requests): upload = `POST /minecraft/profile/skins` multipart `file` + `variant` (classic/slim) — PUT is the retired 2013 sessionserver API and 405s; reset = `DELETE /minecraft/profile/skins/active`.
 - Persist refresh token in OS keychain (via Tauri stronghold/keyring plugin); silent refresh on launch. Switching sign-in methods invalidates the stored refresh token (endpoints differ) — next sign-in is interactive.
+- **Session restore is unconditional**: `get_current_account` returns the persisted session whenever one exists (refreshing only when stale). Falling through to the in-memory account on a fresh session made every restart look signed-out and forced a pointless device-code re-login.
+- Device-code sign-in opens `verification_uri_complete` (the `?otc=` page with the code prefilled) when Microsoft serves it — the user just confirms; the bare `verification_uri` + typed `user_code` stays as fallback.
 - **Microsoft-only auth.** No offline/cracked mode: EULA requirement and anticheat ecosystems block/fingerprint such launchers.
 
 ### Launch path (anti-cheat safe)

@@ -155,6 +155,11 @@ pub struct DeviceCodeStart {
     pub user_code: String,
     #[serde(rename = "verification_uri")]
     pub verification_uri: String,
+    /// Same page with the code prefilled (`?otc=`). When present, opening
+    /// this instead of `verification_uri` means the user just confirms —
+    /// no code typing (what Prism does).
+    #[serde(rename = "verification_uri_complete", default)]
+    pub verification_uri_complete: Option<String>,
     /// Seconds between token polls (Microsoft asks for 5).
     #[serde(default = "default_poll_interval")]
     pub interval: u64,
@@ -1124,6 +1129,35 @@ mod tests {
         }
     }
 
+    /// Microsoft's device-code response includes `verification_uri_complete`
+    /// (the page with the code prefilled via ?otc=). Opening that instead of
+    /// the bare verification page removes the code-typing step.
+    #[test]
+    fn device_code_start_parses_prefilled_uri() {
+        let json = r#"{
+            "device_code": "dc", "user_code": "ABCD1234",
+            "verification_uri": "https://login.live.com/device",
+            "verification_uri_complete": "https://login.live.com/device?otc=ABCD1234",
+            "interval": 5, "expires_in": 900
+        }"#;
+        let s: DeviceCodeStart = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            s.verification_uri_complete.as_deref(),
+            Some("https://login.live.com/device?otc=ABCD1234")
+        );
+    }
+
+    /// Some tenants omit it — the flow must fall back to the bare page.
+    #[test]
+    fn device_code_start_tolerates_missing_prefilled_uri() {
+        let json = r#"{
+            "device_code": "dc", "user_code": "AB",
+            "verification_uri": "https://login.live.com/device"
+        }"#;
+        let s: DeviceCodeStart = serde_json::from_str(json).unwrap();
+        assert!(s.verification_uri_complete.is_none());
+    }
+
     #[test]
     fn authorize_url_carries_all_params() {
         let url = authorize_url(&config(), "state123").unwrap();
@@ -1131,8 +1165,7 @@ mod tests {
         assert!(url.contains("client_id=0e36efd3-4bb6-4bee-ac76-d33ac47fd3df"));
         assert!(url.contains("response_type=code"));
         assert!(url.contains("response_mode=query"));
-        assert!(url.contains("scope=XboxLive.signin+offline_access") || url.contains("scope=XboxLive.signin%20offline_access"));
-        assert!(url.contains("state=state123"));
+        assert!(url.contains("scope=XboxLive.signin+offline_access") || url.contains("scope=XboxLive.signin%20offline_access"));        assert!(url.contains("state=state123"));
         assert!(url.contains("redirect_uri="));
         assert!(url.contains("prompt=select_account"));
     }

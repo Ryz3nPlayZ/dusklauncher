@@ -167,18 +167,23 @@ async fn run_device_code_login(
     let start = auth::start_device_code(&state.client, config)
         .await
         .map_err(|e| e.to_string())?;
+    // Prefilled-code page when Microsoft serves one (`?otc=`): the user just
+    // confirms instead of retyping the code. userCode is still emitted as the
+    // manual fallback (and for browsers that drop the query param).
+    let confirm_uri = start
+        .verification_uri_complete
+        .clone()
+        .unwrap_or_else(|| start.verification_uri.clone());
     let _ = app.emit(
         "auth-state",
         serde_json::json!({
             "state": "deviceCode",
             "userCode": start.user_code,
-            "verificationUri": start.verification_uri,
+            "verificationUri": confirm_uri,
         }),
     );
     use tauri_plugin_opener::OpenerExt;
-    let _ = app
-        .opener()
-        .open_url(start.verification_uri.clone(), None::<&str>);
+    let _ = app.opener().open_url(confirm_uri, None::<&str>);
     let (ms_token, refresh) = auth::poll_device_code(&state.client, config, &start)
         .await
         .map_err(|e| e.to_string())?;

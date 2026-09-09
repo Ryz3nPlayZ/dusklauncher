@@ -802,23 +802,32 @@ pub struct AccountDto {
 
 #[tauri::command]
 pub async fn get_current_account(state: State<'_, AppState>) -> Result<Option<AccountDto>, String> {
-    // Opportunistic silent refresh so the UI never shows a stale identity.
+    // Hydrate from the persisted session on every call: a still-fresh session
+    // must count as signed in too. Falling through to the in-memory account
+    // here (empty after a restart) made every launch look signed-out and
+    // forced a pointless re-sign-in.
     if let Some(session) = auth_store::load_session(&state.data_dir) {
-        if session.needs_refresh() {
+        let session = if session.needs_refresh() {
             let config = auth_flow::resolve_auth_config(&state);
-            if let Ok(fresh) =
-                fasterlauncher_core::auth::refresh_session(&state.client, &config, &session).await
-            {
-                auth_store::save_session(&state.data_dir, &fresh);
-                let dto = account_dto(&fresh);
-                *state.account.lock().unwrap() = Some(Account {
-                    username: fresh.username.clone(),
-                    uuid: fresh.uuid.clone(),
-                    authenticated: true,
-                });
-                return Ok(Some(dto));
+            match fasterlauncher_core::auth::refresh_session(&state.client, &config, &session).await {
+                Ok(fresh) => {
+                    auth_store::save_session(&state.data_dir, &fresh);
+                    fresh
+                }
+                // Keep showing the stored identity; the launch path surfaces
+                // refresh failures when they actually block playing.
+                Err(_) => session,
             }
-        }
+        } else {
+            session
+        };
+        let dto = account_dto(&session);
+        *state.account.lock().unwrap() = Some(Account {
+            username: session.username.clone(),
+            uuid: session.uuid.clone(),
+            authenticated: true,
+        });
+        return Ok(Some(dto));
     }
     Ok(state
         .account

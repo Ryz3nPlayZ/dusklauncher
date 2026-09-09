@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Modal } from '../components/ui';
 import { PixelIcon } from '../components/PixelIcon';
+import SkinHead from '../components/SkinHead';
 import { useUi } from '../stores/ui';
 import { useAccount } from '../stores/account';
 import { api, listen } from '../lib/tauri';
@@ -8,7 +9,7 @@ import { api, listen } from '../lib/tauri';
 /** Accounts pop-out modal (design §8): active card + ADD ACCOUNT. */
 export default function AccountsModal() {
   const { accountsOpen, setAccountsOpen } = useUi();
-  const { account, logout } = useAccount();
+  const { account, skinUrl, logout } = useAccount();
   const toast = useUi((s) => s.toast);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -65,17 +66,24 @@ export default function AccountsModal() {
       <div className="acct">
         <div className="acct__sub font-pixel">ACTIVE</div>
         <div className="acct__card">
-          <img
-            className="acct__head"
-            src="img/head-placeholder.png"
-            alt=""
-            draggable={false}
-          />
+          {skinUrl ? (
+            <div className="acct__head">
+              <SkinHead skinUrl={skinUrl} />
+            </div>
+          ) : (
+            <img
+              className="acct__head"
+              src="img/head-placeholder.png"
+              alt=""
+              draggable={false}
+            />
+          )}
           <div className="acct__meta">
             <div className="acct__name font-pixel-bold">{account?.username ?? 'PLAYER'}</div>
             <div className="acct__rows">
               <span className="acct__row">
-                <PixelIcon name="user" size={11} /> Java · offline session
+                <PixelIcon name="user" size={11} />{' '}
+                {account?.authenticated ? 'Java · Microsoft' : 'Java · offline session'}
               </span>
               {!account?.authenticated && <span className="acct__row text-3">Not signed in</span>}
             </div>
@@ -118,8 +126,9 @@ export default function AccountsModal() {
 
         {busy && deviceCode && (
           <p className="acct__note text-3">
-            Enter this code at the Microsoft page that just opened:{' '}
-            <span className="font-pixel-bold text-accent">{deviceCode.userCode}</span>
+            The Microsoft page that just opened has the code prefilled — just
+            confirm it. (Manual entry fallback:{' '}
+            <span className="font-pixel-bold text-accent">{deviceCode.userCode}</span>)
           </p>
         )}
 
