@@ -65,7 +65,19 @@ pub fn merge_with_vanilla(
     merged.id = fabric.id;
     merged.kind = fabric.kind;
     merged.main_class = fabric.main_class;
-    merged.arguments = fabric.arguments.or(merged.arguments);
+    // inheritsFrom semantics: the child's argument arrays are APPENDED to the
+    // parent's, never substituted — fabric's profile ships `"game": []` and a
+    // single emu jvm flag, so taking it wholesale would drop every vanilla
+    // game arg and `-cp ${classpath}` (an empty classpath, i.e. exactly the
+    // `ClassNotFoundException: KnotClient` failure).
+    merged.arguments = match (merged.arguments.take(), fabric.arguments) {
+        (Some(mut parent), Some(child)) => {
+            parent.game.extend(child.game);
+            parent.jvm.extend(child.jvm);
+            Some(parent)
+        }
+        (parent, child) => parent.or(child),
+    };
     merged.minecraft_arguments = fabric.minecraft_arguments.or(merged.minecraft_arguments);
     merged.asset_index = fabric.asset_index.or(merged.asset_index);
     merged.assets = fabric.assets.or(merged.assets);
@@ -113,10 +125,12 @@ mod tests {
         serde_json::from_str(json).unwrap()
     }
 
-    /// The exact shape that broke launching: fabric meta's profile json has
-    /// `type`, `mainClass`, `arguments` and `libraries`, but NO `javaVersion`,
-    /// `downloads` or `assetIndex`. Standalone parsing died with
-    /// `missing field javaVersion`; the merge must inherit them from vanilla.
+    /// The exact shape that broke launching (captured from a real install):
+    /// fabric meta's profile json has `type`, `mainClass`, `arguments` and
+    /// maven-style `libraries`, but NO `javaVersion`, `downloads` or
+    /// `assetIndex` — and its `arguments.game` is EMPTY. Standalone parsing
+    /// died with `missing field javaVersion`; a wholesale-arguments merge
+    /// dropped `-cp` and all vanilla game args.
     #[test]
     fn fabric_profile_merges_with_vanilla() {
         let profile = serde_json::json!({
@@ -124,10 +138,14 @@ mod tests {
             "inheritsFrom": "26.2",
             "mainClass": "net.fabricmc.loader.impl.launch.knot.KnotClient",
             "arguments": {
-                "jvm": ["-Djava.library.path=${natives_directory}", "-cp", "${classpath}"],
-                "game": ["--username", "${auth_player_name}"]
+                "jvm": ["-DFabricMcEmu= net.minecraft.client.main.Main "],
+                "game": []
             },
-            "libraries": [{"name": "net.fabricmc:fabric-loader"}]
+            "libraries": [
+                {"name": "net.fabricmc:fabric-loader:0.19.3", "url": "https://maven.fabricmc.net/"},
+                {"name": "org.ow2.asm:asm:9.10.1", "url": "https://maven.fabricmc.net/",
+                 "sha1": "ada2141c0cc52ee8f5c48cd5fa4ce0e794f22236", "size": 126151}
+            ]
         });
         let merged = merge_with_vanilla(profile, &vanilla());
 
@@ -137,11 +155,31 @@ mod tests {
         assert_eq!(merged.effective_java().component, "java-runtime-epsilon");
         assert!(merged.downloads.client.is_some(), "client jar comes from vanilla");
         assert_eq!(merged.asset_index.as_ref().unwrap().id, "262");
+        // arguments concatenate: fabric's empty game list must not blank out
+        // vanilla's game args, and its emu flag appends after vanilla's jvm
+        let args = merged.arguments.as_ref().unwrap();
+        assert!(args.game.iter().any(|a| a == "--username"), "vanilla game args survive");
+        assert!(args.jvm.iter().any(|a| a == "-cp"), "vanilla -cp survives");
+        assert!(
+            args.jvm.iter().any(|a| a.to_string().contains("FabricMcEmu")),
+            "fabric jvm flag appended"
+        );
         // union of libraries, no duplicates
         let names: Vec<&str> = merged.libraries.iter().map(|l| l.name.as_str()).collect();
         assert!(names.contains(&"com.mojang:logging"));
-        assert!(names.contains(&"net.fabricmc:fabric-loader"));
-        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"net.fabricmc:fabric-loader:0.19.3"));
+        assert_eq!(names.len(), 3);
+        // every merged library resolves to a real jar (download + classpath)
+        let fabric_loader = merged
+            .libraries
+            .iter()
+            .find(|l| l.name == "net.fabricmc:fabric-loader:0.19.3")
+            .unwrap();
+        let artifact = fabric_loader.resolve_artifact().unwrap();
+        assert_eq!(
+            artifact.url,
+            "https://maven.fabricmc.net/net/fabricmc/fabric-loader/0.19.3/fabric-loader-0.19.3.jar"
+        );
     }
 
     /// The fabric profile alone must NOT parse into a usable version: this is

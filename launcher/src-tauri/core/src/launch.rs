@@ -148,6 +148,8 @@ fn substitute(s: &str, values: &HashMap<String, String>) -> String {
 }
 
 /// Collect classpath entries: all allowed library artifacts + the client jar.
+/// Covers both Mojang (`downloads.artifact`) and Fabric (maven `url`)
+/// library dialects.
 pub fn build_classpath(
     version: &meta::VersionJson,
     libraries_root: &Path,
@@ -158,7 +160,7 @@ pub fn build_classpath(
         if !meta::library_allowed(lib) {
             continue;
         }
-        if let Some(Some(artifact)) = lib.downloads.as_ref().map(|d| d.artifact.as_ref()) {
+        if let Some(artifact) = lib.resolve_artifact() {
             entries.push(libraries_root.join(&artifact.path));
         }
     }

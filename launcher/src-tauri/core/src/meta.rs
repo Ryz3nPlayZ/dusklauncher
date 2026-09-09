@@ -114,8 +114,76 @@ pub struct Library {
     pub name: String,
     #[serde(default)]
     pub downloads: Option<LibraryDownloads>,
+    /// Fabric-style libraries (meta.fabricmc.net) have no `downloads` block:
+    /// they carry a top-level `url` (maven repo base) plus optional checksums.
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub sha1: Option<String>,
+    #[serde(default)]
+    pub size: Option<u64>,
     #[serde(default)]
     pub rules: Option<Vec<Rule>>,
+}
+
+/// A library jar resolved to a concrete download/classpath entry, regardless
+/// of which dialect the version JSON speaks (Mojang piston or Fabric maven).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedArtifact {
+    pub path: String,
+    pub url: String,
+    pub sha1: Option<String>,
+    pub size: Option<u64>,
+}
+
+impl Library {
+    /// Maven coordinates → repository path:
+    /// `group:artifact:version[:classifier]` →
+    /// `group/as/dots/artifact/version/artifact-version[-classifier].jar`
+    pub fn maven_path(&self) -> Option<String> {
+        let mut parts = self.name.split(':');
+        let group = parts.next()?;
+        let artifact = parts.next()?;
+        let version = parts.next()?;
+        let file = match parts.next() {
+            Some(classifier) => format!("{artifact}-{version}-{classifier}.jar"),
+            None => format!("{artifact}-{version}.jar"),
+        };
+        Some(format!(
+            "{}/{}/{}/{}",
+            group.replace('.', "/"),
+            artifact,
+            version,
+            file
+        ))
+    }
+
+    /// Mojang libraries resolve through `downloads.artifact`; Fabric libraries
+    /// through the top-level `url` base + a path derived from the coordinates.
+    /// Returns `None` only for libraries that specify neither.
+    pub fn resolve_artifact(&self) -> Option<ResolvedArtifact> {
+        if let Some(a) = self.downloads.as_ref().and_then(|d| d.artifact.as_ref()) {
+            return Some(ResolvedArtifact {
+                path: a.path.clone(),
+                url: a.url.clone(),
+                sha1: Some(a.sha1.clone()),
+                size: Some(a.size),
+            });
+        }
+        let base = self.url.as_ref()?;
+        let path = self.maven_path()?;
+        let url = if base.ends_with('/') {
+            format!("{base}{path}")
+        } else {
+            format!("{base}/{path}")
+        };
+        Some(ResolvedArtifact {
+            path,
+            url,
+            sha1: self.sha1.clone(),
+            size: self.size,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -273,5 +341,71 @@ mod tests {
         }"#;
         let v: VersionJson = serde_json::from_str(json).unwrap();
         assert!(v.downloads.client.is_none());
+    }
+
+    /// Fabric meta libraries: maven coordinates + repo base url, no
+    /// `downloads` block. The loader jar itself ships no checksum.
+    #[test]
+    fn fabric_library_resolves_via_maven_url() {
+        let lib: Library = serde_json::from_str(
+            r#"{"name": "net.fabricmc:fabric-loader:0.19.3", "url": "https://maven.fabricmc.net/"}"#,
+        )
+        .unwrap();
+        let art = lib.resolve_artifact().unwrap();
+        assert_eq!(art.path, "net/fabricmc/fabric-loader/0.19.3/fabric-loader-0.19.3.jar");
+        assert_eq!(
+            art.url,
+            "https://maven.fabricmc.net/net/fabricmc/fabric-loader/0.19.3/fabric-loader-0.19.3.jar"
+        );
+        assert!(art.sha1.is_none());
+        assert!(art.size.is_none());
+    }
+
+    /// Fabric dependency jars (asm, mixin) DO ship checksums top-level —
+    /// honored when present so sha1 verification keeps working.
+    #[test]
+    fn fabric_library_checksums_are_honored() {
+        let lib: Library = serde_json::from_str(
+            r#"{"name": "org.ow2.asm:asm:9.10.1", "url": "https://maven.fabricmc.net/",
+                "sha1": "ada2141c0cc52ee8f5c48cd5fa4ce0e794f22236", "size": 126151}"#,
+        )
+        .unwrap();
+        let art = lib.resolve_artifact().unwrap();
+        assert_eq!(art.path, "org/ow2/asm/asm/9.10.1/asm-9.10.1.jar");
+        assert_eq!(art.sha1.as_deref(), Some("ada2141c0cc52ee8f5c48cd5fa4ce0e794f22236"));
+        assert_eq!(art.size, Some(126151));
+    }
+
+    /// A repo base without a trailing slash still resolves (path join).
+    #[test]
+    fn maven_url_join_handles_missing_trailing_slash() {
+        let lib: Library = serde_json::from_str(
+            r#"{"name": "net.fabricmc:fabric-loader:0.19.3", "url": "https://maven.fabricmc.net"}"#,
+        )
+        .unwrap();
+        let art = lib.resolve_artifact().unwrap();
+        assert!(art.url.starts_with("https://maven.fabricmc.net/net/fabricmc/"));
+    }
+
+    /// Mojang libraries keep resolving through `downloads.artifact` unchanged.
+    #[test]
+    fn mojang_library_still_resolves_via_downloads() {
+        let lib: Library = serde_json::from_str(
+            r#"{"name": "com.mojang:logging:1.2.7",
+                "downloads": {"artifact": {"path": "com/mojang/logging/1.2.7/logging-1.2.7.jar",
+                "url": "https://libraries.minecraft.net/com/mojang/logging/1.2.7/logging-1.2.7.jar",
+                "sha1": "aa", "size": 10}}}"#,
+        )
+        .unwrap();
+        let art = lib.resolve_artifact().unwrap();
+        assert_eq!(art.path, "com/mojang/logging/1.2.7/logging-1.2.7.jar");
+        assert_eq!(art.sha1.as_deref(), Some("aa"));
+    }
+
+    /// Neither dialect → unresolvable (never downloadable, never on classpath).
+    #[test]
+    fn bare_library_without_url_is_unresolvable() {
+        let lib: Library = serde_json::from_str(r#"{"name": "a:b:1"}"#).unwrap();
+        assert!(lib.resolve_artifact().is_none());
     }
 }

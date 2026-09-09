@@ -626,18 +626,20 @@ async fn install_profile(
         version
     };
 
-    // Libraries
+    // Libraries — both Mojang (`downloads.artifact`) and Fabric (maven `url`
+    // base + coordinates) dialects resolve through resolve_artifact; without
+    // it every fabric jar is silently skipped and KnotClient won't load.
     let libs: Vec<download::Download> = effective_version
         .libraries
         .iter()
         .filter(|l| meta::library_allowed(l))
         .filter_map(|l| {
-            let artifact = l.downloads.as_ref()?.artifact.as_ref()?;
+            let artifact = l.resolve_artifact()?;
             Some(download::Download {
                 url: artifact.url.clone(),
                 dest: dirs.libraries.join(&artifact.path),
-                sha1: Some(artifact.sha1.clone()),
-                size: Some(artifact.size),
+                sha1: artifact.sha1.clone(),
+                size: artifact.size,
             })
         })
         .collect();
