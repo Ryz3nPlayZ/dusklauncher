@@ -47,6 +47,24 @@
   --font-btn: 12px;
   --font-meta: 11px;
 
+  /* ── Dawn frame system ────────────────────────────────────────────────
+     Every chip/tab/CTA is: 2px black outline, then a --frame-w ring of
+     flat (never blended) colors, then a fill. Corners are explicit L-shape
+     squares, not gradients — Dawn's whole point is hard, opinionated edges. */
+  --frame-outline: var(--border-w);
+  --frame-w: 5px;
+
+  /* generic (tabs, plain chips): dark-grey fill, lighter-grey ring, even
+     lighter grey L corners at top-right / bottom-left */
+  --frame-grey-fill-top: #2c2c30;
+  --frame-grey-fill-bottom: #17171a;
+  --frame-grey-mid: #4a4b52;
+  --frame-grey-hi: #7a7b82;
+
+  /* two-tone pixel-text: upper half lighter, lower half normal */
+  --text-hi: #ffffff;
+  --text-lo: #c7c7c7;
+
   /* z stack */
   --z-bg: 0;
   --z-content: 10;
@@ -116,6 +134,9 @@
   --accent-cta: #ff1e43; /* PLAY border in nether */
   --text-on-accent-dim: rgba(255, 224, 231, 0.8);
   --accent-glow-color: rgba(255, 30, 67, 0.4);
+  --accent-pale: #ffb3bf; /* desaturated, near-white — top edge / upper-half of CTA frame */
+  --btn-cta-fill-top: var(--frame-grey-fill-top);
+  --btn-cta-fill-bottom: #3a1e23; /* dark slate, only a hint of red — never full accent */
 
   --success: #39d353;
   --success-dim: #1d7a33;
@@ -169,6 +190,9 @@
   --accent-cta: #ffd000; /* golden PLAY border in overworld */
   --text-on-accent-dim: rgba(32, 26, 0, 0.72);
   --accent-glow-color: rgba(255, 208, 0, 0.45);
+  --accent-pale: #fff1b8; /* desaturated, near-white — top edge / upper-half of CTA frame */
+  --btn-cta-fill-top: var(--frame-grey-fill-top);
+  --btn-cta-fill-bottom: #3a331a; /* dark slate, only a hint of gold — never full accent */
 
   --success: #5c8e32;
   --success-dim: #3d611f;

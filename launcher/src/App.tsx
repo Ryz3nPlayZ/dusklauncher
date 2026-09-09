@@ -64,7 +64,7 @@ function Nav() {
               playSfx('click');
             }}
           >
-            <PixelIcon name={t.icon} size={17} /> {t.label}
+            <span className="dawn-text">{t.label}</span>
           </button>
         ))}
       </nav>
@@ -72,7 +72,7 @@ function Nav() {
       <div className="nav__right">
         <PvpButton />
         <button
-          className="acct-pill"
+          className="acct-pill dawn-frame--plain"
           title={account?.authenticated ? 'Account' : 'Accounts — not signed in'}
           onClick={() => setAccountsOpen(true)}
         >
@@ -82,7 +82,7 @@ function Nav() {
             alt=""
             draggable={false}
           />
-          <span className="acct-pill__name">{account?.username ?? 'PLAYER'}</span>
+          <span className="acct-pill__name dawn-text">{account?.username ?? 'PLAYER'}</span>
         </button>
         <button className="win-btn" title="Minimize" onClick={() => winAction('min')}>
           <PixelIcon name="minus" size={15} />
@@ -110,14 +110,14 @@ function PvpButton() {
   const pvp = theme === 'nether';
   return (
     <button
-      className={`pvp-btn ${pvp ? 'is-on' : ''}`}
+      className={`pvp-btn dawn-frame--cta ${pvp ? 'is-on' : ''}`}
       title={pvp ? 'PVPMODE on — wipe back to Overworld' : 'Wipe to PVPMODE'}
       onClick={() => {
         playSfx('click');
         startPvpWipe(!pvp);
       }}
     >
-      <PixelIcon name="sword" size={17} /> <span>PVPMODE</span>
+      <span className="dawn-text--accent">PVPMODE</span>
     </button>
   );
 }

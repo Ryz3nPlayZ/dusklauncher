@@ -28,19 +28,19 @@
 }
 
 /* ── top navigation ────────────────────────────────────────────────────────
-   One bar, three groups: brand-as-logo | segmented tab tray | PVPMODE CTA +
-   account/window cluster. The tray + CTA + right cluster are flex:none so the
-   right side can NEVER be pushed out of view (1280px window). */
+   The bar is just its buttons — no decorative panel, no margin around the
+   controls. Three groups: brand | full-height tab strip | CTA + account +
+   window cluster. Tab strip + CTA + right cluster are flex:none so the right
+   side can NEVER be pushed out of view (1280px window). */
 
 .nav {
   height: var(--nav-h);
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 0 14px 0 16px;
-  background: linear-gradient(#232326, #171719);
-  border-bottom: var(--border-w) solid #000;
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.07);
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  background: var(--bg-1);
+  border-bottom: var(--frame-outline) solid #000;
   z-index: var(--z-nav);
   overflow: hidden;
 }
@@ -51,9 +51,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding-right: 16px;
-  border-right: var(--border-w) solid #000;
-  box-shadow: 2px 0 0 rgba(255, 255, 255, 0.05);
+  padding: 0 16px;
+  border-right: var(--frame-outline) solid #000;
 }
 .nav__logo {
   color: var(--gold);
@@ -71,49 +70,109 @@
   color: var(--text-1);
 }
 
-/* tabs: ONE sunken tray, segments divided — not floating lookalike tiles */
+/* ── Dawn frame system ─────────────────────────────────────────────────
+   Two variants, both: 2px black outline, then a hard (never blended)
+   --frame-w ring, then a fill — clipped per background layer so the ring
+   and the fill never blur into each other.
+   --plain: dark-grey fill, lighter-grey ring, even-lighter-grey L corners
+            at top-right / bottom-left. Used for tabs and plain chips.
+   --cta:   dark-to-accent-tinted fill, white L corners at top-right /
+            bottom-left, top edge + upper half of the sides pale accent,
+            bottom edge + lower half of the sides full accent. Used for
+            the one true call-to-action in the bar. */
+.dawn-frame--plain {
+  border: var(--frame-outline) solid #000;
+  background:
+    linear-gradient(var(--frame-grey-hi), var(--frame-grey-hi)) top right / var(--frame-w) var(--frame-w) no-repeat,
+    linear-gradient(var(--frame-grey-hi), var(--frame-grey-hi)) bottom left / var(--frame-w) var(--frame-w) no-repeat,
+    linear-gradient(var(--frame-grey-mid), var(--frame-grey-mid)) top / 100% var(--frame-w) no-repeat,
+    linear-gradient(var(--frame-grey-mid), var(--frame-grey-mid)) bottom / 100% var(--frame-w) no-repeat,
+    linear-gradient(var(--frame-grey-mid), var(--frame-grey-mid)) left / var(--frame-w) 100% no-repeat,
+    linear-gradient(var(--frame-grey-mid), var(--frame-grey-mid)) right / var(--frame-w) 100% no-repeat,
+    linear-gradient(var(--frame-grey-fill-top), var(--frame-grey-fill-bottom));
+  background-clip: border-box, border-box, border-box, border-box, border-box, border-box, padding-box;
+  padding: var(--frame-w);
+}
+.dawn-frame--cta {
+  border: var(--frame-outline) solid #000;
+  background:
+    linear-gradient(#fff, #fff) top right / var(--frame-w) var(--frame-w) no-repeat,
+    linear-gradient(#fff, #fff) bottom left / var(--frame-w) var(--frame-w) no-repeat,
+    linear-gradient(var(--accent-pale), var(--accent-pale)) top / 100% var(--frame-w) no-repeat,
+    linear-gradient(var(--accent), var(--accent)) bottom / 100% var(--frame-w) no-repeat,
+    linear-gradient(var(--accent-pale) 50%, var(--accent) 50%) left / var(--frame-w) 100% no-repeat,
+    linear-gradient(var(--accent-pale) 50%, var(--accent) 50%) right / var(--frame-w) 100% no-repeat,
+    linear-gradient(var(--btn-cta-fill-top), var(--btn-cta-fill-bottom));
+  background-clip: border-box, border-box, border-box, border-box, border-box, border-box, padding-box;
+  padding: var(--frame-w);
+}
+
+/* pixel-text two-tone: upper half lighter, lower half normal — never a
+   smooth gradient, always a hard 50/50 split */
+.dawn-text {
+  background: linear-gradient(var(--text-hi) 50%, var(--text-lo) 50%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.dawn-text--accent {
+  background: linear-gradient(var(--accent-hi) 50%, var(--accent) 50%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+/* tabs: no tray, no padding — each tab is a full-height column flush with
+   the bar's own top/bottom edge, divided by hairline black rules */
 .nav__tabs {
   flex: none;
   display: flex;
   align-items: stretch;
   gap: 0;
-  background: #101012;
-  border: var(--border-w) solid #000;
-  box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.55), inset -1px -1px 0 rgba(255, 255, 255, 0.04);
-  padding: 5px;
+  height: 100%;
 }
 
 .nav__tabs .ptab {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
   font-family: var(--font-pixel-bold);
   font-style: normal;
   font-size: 14px;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   white-space: nowrap;
-  color: #b5b5b5;
   background: transparent;
   border: none;
-  border-left: var(--border-w) solid #000;
-  padding: 14px 18px;
+  border-left: var(--frame-outline) solid #000;
+  padding: 0 20px;
   margin: 0;
-  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.9);
-  box-shadow: none;
+  height: 100%;
   cursor: pointer;
-  transition: background 80ms linear, color 80ms linear;
+  transition: background 80ms linear;
 }
 .nav__tabs .ptab:first-child {
   border-left: none;
 }
+.nav__tabs .ptab .dawn-text {
+  --text-hi: #d6d6d6;
+  --text-lo: #8c8c8c;
+}
 .nav__tabs .ptab:hover {
-  color: #fff;
-  background: #1e1e22;
+  background: var(--bg-2);
+}
+.nav__tabs .ptab:hover .dawn-text {
+  --text-hi: #ffffff;
+  --text-lo: #c7c7c7;
 }
 .nav__tabs .ptab--active {
-  color: #fff;
-  background: linear-gradient(#333338, #26262b);
-  box-shadow: inset 0 3px 0 var(--accent-cta), inset 0 2px 0 rgba(255, 255, 255, 0.1);
+  background: var(--bg-3);
+  box-shadow: inset 0 -4px 0 var(--accent-cta);
+}
+.nav__tabs .ptab--active .dawn-text {
+  --text-hi: #ffffff;
+  --text-lo: #d6d6d6;
 }
 
 .nav__right {
@@ -122,74 +181,56 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 0 14px;
 }
 
-/* account cluster — head + name on a low tile, clearly not a tab */
+/* account cluster — head + name on its own framed chip, clearly not a tab */
 .acct-pill {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #1c1c1f;
-  border: var(--border-w) solid #000;
-  padding: 5px 16px 5px 6px;
+  padding: 4px 16px 4px 4px;
   cursor: pointer;
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.07), inset 0 -2px 0 rgba(0, 0, 0, 0.35);
 }
 .acct-pill:hover {
-  background: #26262b;
+  filter: brightness(1.15);
 }
 .acct-pill__head {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   image-rendering: pixelated;
-  border: var(--border-w) solid #000;
+  border: var(--frame-outline) solid #000;
 }
 .acct-pill__name {
   font-family: var(--font-pixel-bold);
   font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   white-space: nowrap;
-  color: var(--text-1);
-  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
 }
 
-/* PVPMODE — the signature CTA: accent-bordered, never gray-on-gray */
+/* PVPMODE — the signature CTA: full Dawn accent frame, never gray-on-gray */
 .pvp-btn {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  background: #141416;
-  border: var(--border-w) solid var(--accent-cta);
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08), inset 0 -3px 0 rgba(0, 0, 0, 0.4);
-  color: var(--accent-cta);
-  font-family: var(--font-pixel-bold);
   font-size: 14px;
-  letter-spacing: 0.05em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   white-space: nowrap;
-  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.9);
-  padding: 15px 20px;
+  padding: 12px 22px;
   cursor: pointer;
-  transition: background 80ms linear, color 80ms linear;
+  transition: filter 80ms linear;
 }
 .pvp-btn:hover {
-  color: #fff;
-  background: #222226;
-}
-.pvp-btn.is-on {
-  background: #2a0d12;
-  border-color: var(--accent);
-  color: var(--accent-hi);
-  box-shadow: inset 0 3px 0 var(--accent), inset 0 2px 0 rgba(255, 255, 255, 0.08);
+  filter: brightness(1.15);
 }
 
-/* narrow windows: shed icons/labels before EVER pushing the right cluster out */
+/* narrow windows: shed labels before EVER pushing the right cluster out */
 @media (max-width: 1240px) {
-  .nav__tabs .ptab > svg {
-    display: none;
-  }
   .nav__tabs .ptab {
     font-size: 13px;
-    padding: 13px 14px;
+    padding: 0 14px;
   }
   .nav__word {
     font-size: 20px;
@@ -225,9 +266,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #232323;
-  border: var(--border-w) solid #000;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: var(--bg-2);
+  border: var(--frame-outline) solid #000;
   color: #b9b9b9;
   cursor: pointer;
 }
