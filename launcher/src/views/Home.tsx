@@ -39,13 +39,17 @@ export default function Home({
     <div className="home">
       <div className="home__stage">
         <PxBox family="panel" className="home__tag">
-          <TT size={13}>{account?.username ?? 'NOT SIGNED IN'}</TT>
+          <TT size={16}>{account?.username ?? 'NOT SIGNED IN'}</TT>
         </PxBox>
 
         <button className="home__player" onClick={onWardrobe} title="Open the wardrobe">
-          <PlayerRender skin={skin} pose={pose} zoom={0.8} className="home__canvas" paused={running} />
+          {/* the canvas sizes itself off this box — it must never be the flex
+              child that decides the column's height, or it feeds itself */}
+          <span className="home__stage-box">
+            <PlayerRender skin={skin} pose={pose} zoom={0.8} className="home__canvas" paused={running} />
+          </span>
           <span className="home__wardrobe">
-            <TT size={13} tone="sub">
+            <TT size={16} tone="sub">
               CLICK FOR WARDROBE
             </TT>
           </span>
@@ -59,7 +63,7 @@ export default function Home({
               <TT size={20} tone="accent">
                 {progress.stage.toUpperCase()}
               </TT>
-              <TT size={13} tone="sub">{`${pct}%`}</TT>
+              <TT size={16} tone="sub">{`${pct}%`}</TT>
             </div>
             <div className="home__bar">
               <div className="home__bar-fill" style={{ width: `${pct}%` }} />
@@ -85,7 +89,7 @@ export default function Home({
                 </TT>
                 {!running && <PixelArrow />}
               </span>
-              <TT size={13} tone="sub">
+              <TT size={16} tone="sub">
                 {selected ? selected.name : 'NO INSTANCE — CREATE ONE'}
               </TT>
             </PxButton>
@@ -117,7 +121,7 @@ export default function Home({
                   setPopout(false);
                 }}
               >
-                <TT size={16}>{p.name}</TT>
+                <TT size={20}>{p.name}</TT>
                 <span className="meta">
                   {loaderLabel(p)} · {p.gameVersion} · {ago(p.lastPlayed)}
                 </span>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { PxBox, PxButton, TT } from '../components/px/Px';
+import { NavCell, PxBox, PxButton, TT } from '../components/px/Px';
 import { api, type AppInfo, type Settings } from '../lib/api';
 
 const TABS = ['GENERAL', 'JAVA', 'DISPLAY', 'FILES'] as const;
@@ -17,7 +17,9 @@ function Row({
   return (
     <div className="srow">
       <div className="srow__text">
-        <TT size={16}>{label}</TT>
+        <TT size={20} tone="plain">
+          {label}
+        </TT>
         {hint && <span className="meta">{hint}</span>}
       </div>
       <div className="srow__control">{children}</div>
@@ -40,10 +42,10 @@ function Choice<T extends string | number>({
         <PxButton
           key={String(o.value)}
           family={value === o.value ? 'accent' : 'grey'}
-          height="sm"
+          height="md"
           onClick={() => onPick(o.value)}
         >
-          <TT size={13} tone={value === o.value ? 'accent' : undefined}>
+          <TT size={16} tone={value === o.value ? 'accent' : undefined}>
             {o.label}
           </TT>
         </PxButton>
@@ -73,19 +75,15 @@ export default function SettingsView({
         <h1 className="page__title">Settings</h1>
       </div>
 
-      <PxBox family="panel" className="sheet">
-        <div className="sheet__tabs">
+      <div className="win win--solid">
+        <div className="win__bar">
           {TABS.map((t) => (
-            <PxButton key={t} family={tab === t ? 'accent' : 'grey'} height="md" onClick={() => setTab(t)}>
-              <TT size={16} tone={tab === t ? 'accent' : undefined}>
-                {t}
-              </TT>
-            </PxButton>
+            <NavCell key={t} label={t} active={tab === t} onClick={() => setTab(t)} />
           ))}
-          <span className="tabstrip__spacer" />
+          <div className="win__fill" />
         </div>
 
-        <PxBox family="panel" listing className="settings__body scroll">
+        <div className="win__body settings__body scroll">
           {tab === 'GENERAL' && (
             <>
               <Row label="THEME" hint="Swaps the accent family and the scene behind the launcher.">
@@ -154,7 +152,7 @@ export default function SettingsView({
                 />
               </Row>
               <Row label="JVM ARGUMENTS" hint="Applied to new instances.">
-                <PxBox family="panel" height="sm" className="px--wide">
+                <PxBox family="panel" height="md" className="px--wide">
                   <input
                     className="input"
                     value={settings.defaultJvmArgs}
@@ -163,7 +161,7 @@ export default function SettingsView({
                 </PxBox>
               </Row>
               <Row label="ENVIRONMENT" hint="KEY=VALUE pairs, one per line, passed to the game process.">
-                <PxBox family="panel" height="sm" className="px--wide">
+                <PxBox family="panel" height="md" className="px--wide">
                   <input
                     className="input"
                     placeholder="MESA_GL_VERSION_OVERRIDE=4.6"
@@ -173,7 +171,7 @@ export default function SettingsView({
                 </PxBox>
               </Row>
               <Row label="PRE-LAUNCH HOOK" hint="Runs before the game starts.">
-                <PxBox family="panel" height="sm" className="px--wide">
+                <PxBox family="panel" height="md" className="px--wide">
                   <input
                     className="input"
                     value={settings.prelaunchHook}
@@ -187,7 +185,7 @@ export default function SettingsView({
           {tab === 'DISPLAY' && (
             <>
               <Row label="RESOLUTION" hint="Default window size for new instances.">
-                <PxBox family="panel" height="sm">
+                <PxBox family="panel" height="md">
                   <input
                     className="input"
                     type="number"
@@ -195,7 +193,7 @@ export default function SettingsView({
                     onChange={(e) => set({ width: Number(e.target.value) })}
                   />
                 </PxBox>
-                <PxBox family="panel" height="sm">
+                <PxBox family="panel" height="md">
                   <input
                     className="input"
                     type="number"
@@ -222,26 +220,26 @@ export default function SettingsView({
               <Row label="DATA FOLDER" hint={info?.dataDir}>
                 <PxButton
                   family="blue"
-                  height="sm"
+                  height="md"
                   disabled={!info}
                   onClick={() => info && void api.showInFolder(info.dataDir)}
                 >
-                  <TT size={13} tone="blue">
+                  <TT size={16} tone="blue">
                     REVEAL
                   </TT>
                 </PxButton>
               </Row>
               <Row label="LAUNCHER" hint={info ? `${info.launcherVersion} · ${info.os}` : ''}>
-                <PxBox family="panel" height="sm">
-                  <TT size={13} tone="dim">
+                <PxBox family="panel" height="md">
+                  <TT size={16} tone="dim">
                     {info?.launcherVersion ?? '—'}
                   </TT>
                 </PxBox>
               </Row>
             </>
           )}
-        </PxBox>
-      </PxBox>
+        </div>
+      </div>
     </div>
   );
 }

@@ -19,8 +19,8 @@
 .nav__cell {
   flex: 0 1 auto;
   min-width: 0;
-  padding: 0 30px;
-  gap: 12px;
+  padding: 0 calc(16 * var(--u));
+  gap: calc(12 * var(--u));
   overflow: hidden;
 }
 
@@ -30,10 +30,20 @@
   padding: 0 26px;
   cursor: default;
 }
+/* The strip has to hold every cell at once, so its type takes a second cap
+   tied to the window's width: it grows with --u like everything else until
+   the row would stop fitting, and never past that. */
+.nav .tt {
+  font-size: min(calc(26 * var(--u)), 1.7vw);
+}
+.win__bar .tt {
+  font-size: min(calc(28 * var(--u)), 2.2vw);
+}
+
 .nav__word {
   font-family: var(--font-pixel);
-  font-size: 22px;
-  letter-spacing: 2px;
+  font-size: min(calc(28 * var(--u)), 1.8vw);
+  letter-spacing: calc(3 * var(--u));
   text-transform: uppercase;
   white-space: nowrap;
   color: var(--accent-up);
@@ -48,7 +58,7 @@
 
 /* tabs share one width so the strip reads as a grid, not a word-length row */
 .nav__tab {
-  flex: 0 1 228px;
+  flex: 1 1 calc(228 * var(--u));
   min-width: 0;
 }
 
@@ -96,13 +106,6 @@
   .nav__cell {
     padding: 0 18px;
   }
-  .nav .tt--20 {
-    font-size: 16px;
-    letter-spacing: 1px;
-  }
-  .nav__word {
-    font-size: 18px;
-  }
 }
 @media (max-width: 1120px) {
   .nav__cell {
@@ -112,19 +115,12 @@
   .nav__word b {
     display: none;
   }
-  .nav .tt--16 {
-    font-size: 13px;
-  }
 }
 @media (max-width: 1000px) {
   /* narrower than the app's own minimum — only reachable in a browser
      preview. The wordmark goes first; all six cells stay reachable. */
   .nav__brand {
     display: none;
-  }
-  .nav .tt--20 {
-    font-size: 13px;
-    letter-spacing: 0;
   }
   .nav__cell {
     padding: 0 8px;
@@ -136,4 +132,61 @@
   .nav__profile .tt {
     display: none;
   }
+}
+
+/* ── the window frame ──────────────────────────────────────────────────────
+   A page's content is ONE rectangle: a navbar attached to the top of a body
+   pane, wrapped in a single 5px black outline. The bar is the real navbar —
+   same height, same cells, same type — so a tab strip anywhere in the app
+   reads as the strip at the top of the window. */
+.win {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: var(--px-black) solid var(--black);
+}
+.win__bar {
+  flex: none;
+  height: var(--nav-h);
+  display: flex;
+  align-items: stretch;
+  gap: 3px;
+  padding: 3px 3px 0;
+  background: var(--black);
+}
+/* the filler between the tab group and whatever is pinned right — the same
+   plain panel the navbar uses */
+.win__fill {
+  flex: 1 1 0;
+  min-width: 0;
+  background-color: var(--panel);
+  background-repeat: no-repeat;
+  background-image:
+    linear-gradient(var(--panel-bd), var(--panel-bd)),
+    linear-gradient(var(--panel-bd), var(--panel-bd));
+  background-position:
+    left 0 top 0,
+    left 0 bottom 0;
+  background-size:
+    100% var(--px-band),
+    100% var(--px-band);
+}
+/* the body pane: translucent, so the scene reads through it */
+.win__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(30, 30, 30, 0.85);
+  padding: var(--gap);
+}
+/* settings and other reading surfaces stay opaque */
+.win--solid > .win__body {
+  background: var(--panel);
+}
+/* a window nested inside another window's body */
+.win--inner {
+  flex: 1;
+  min-height: 0;
 }

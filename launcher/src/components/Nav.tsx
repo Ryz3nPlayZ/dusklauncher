@@ -1,21 +1,13 @@
 import type { Account } from '../lib/api';
 import type { Route } from '../routes';
 import PlayerHead from './PlayerHead';
-import { TT } from './px/Px';
+import { cellClass, TT } from './px/Px';
 
 const TABS: { route: Route; label: string }[] = [
   { route: 'home', label: 'HOME' },
   { route: 'instances', label: 'INSTANCES' },
   { route: 'cosmetics', label: 'COSMETICS' },
 ];
-
-function cellClass(active: boolean, extra = '') {
-  return [
-    'px px--cell nav__cell',
-    active ? 'px--active px--depth-split' : 'px--grey px--depth',
-    extra,
-  ].join(' ');
-}
 
 export default function Nav({
   route,

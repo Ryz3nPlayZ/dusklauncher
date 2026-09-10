@@ -73,7 +73,6 @@
   --act-arrow: #828282;
   --act-sh-up: #272727;
   --act-sh-lo: #1b1b1b;
-  --nav-h: 92px;
 
   /* ── generic panel: 5px black + 6px border + body.
      The panel IS the component (search bar, FILTERS header, listing tile).
@@ -136,21 +135,36 @@
 }
 
 /* ── construction sizes (measured from spec.html specimens) ───────────────
-   Every element in the app is built from these; nothing else may invent a
-   height. Rows in a grid share one height so button feet always line up. */
+   Two kinds of number live here and they behave differently.
+
+   CONSTRUCTION is pixel art and never scales: the 5px black outline and the
+   6px border band stay 5 and 6 at every window size, so the borders read as
+   the deliberately thick frame the design calls for.
+
+   SIZE — every height and every type step — is a multiple of --u, the one
+   responsive atom. --u is 1px in a 1280×800 window and tracks the smaller of
+   the two axes, so a row that is 86 tall keeps its proportion to the window
+   instead of hard-coding one machine's pixels. */
 :root {
+  --u: clamp(0.78px, min(0.0781vw, 0.125vh), 1.4px);
+
   --px-black: 5px;   /* black outline (nav frame/dividers use 3px) */
   --px-band: 6px;    /* border band */
   --px-corner: 17px; /* L-corner leg — 28px on the 143px CTA (17/86 × side) */
   --px-corner-cta: 28px;
 
-  /* the height scale — spec: nav 92, CTA 545×143, buttons 200×84,
-     panel rows 64 (search / FILTERS header), listing tiles 96 */
-  --h-xl: 143px;
-  --h-lg: 84px;
-  --h-md: 64px;
-  --h-sm: 48px;
-  --h-listing: 96px;
+  /* the height scale. --h-md IS the navbar height: a search bar, a tab, a
+     settings control and a nav cell are all one row tall, everywhere. */
+  --nav-h: calc(86 * var(--u));
+  --h-xl: calc(143 * var(--u)); /* the PLAY NOW hero (spec §2) */
+  --h-lg: calc(104 * var(--u));
+  --h-md: calc(86 * var(--u));  /* the standard row — navbar parity */
+  --h-sm: calc(62 * var(--u));
+  --h-listing: calc(96 * var(--u));
+
+  /* the gutter scale, likewise relative */
+  --gap: calc(24 * var(--u));
+  --gap-sm: calc(14 * var(--u));
 
   /* surface bottoms for the derived families (spec §3) */
   --g-surf-bot: #123d1c;

@@ -71,32 +71,39 @@ canvas {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding: 24px 24px 72px; /* the status pill floats over the last 72px */
+  gap: var(--gap);
+  padding: var(--gap) var(--gap) calc(var(--h-sm) + var(--gap));
 }
+
+/* the header row: the page's name, its search, its primary action — all one
+   row tall, the same row height as a navbar cell */
 .page__head {
   flex: none;
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: stretch;
+  gap: var(--gap-sm);
   height: var(--h-md);
 }
 .page__title {
+  display: flex;
+  align-items: center;
   font-family: var(--font-pixel);
-  font-size: 34px;
-  letter-spacing: 3px;
+  font-size: calc(46 * var(--u));
+  letter-spacing: calc(4 * var(--u));
   text-transform: uppercase;
   color: #fff;
   -webkit-text-stroke: 0.5px #fff;
   paint-order: stroke fill;
   margin: 0;
   margin-right: auto;
+  padding-left: calc(4 * var(--u));
+  white-space: nowrap;
 }
 .page__body {
   flex: 1;
   min-height: 0;
   display: flex;
-  gap: 24px;
+  gap: var(--gap);
 }
 
 /* form controls inherit the panel voice — a control is a panel with a
@@ -110,8 +117,8 @@ canvas {
   background: transparent;
   color: var(--text-1);
   font-family: var(--font-body);
-  font-size: 13px;
-  padding: 0 14px;
+  font-size: calc(17 * var(--u));
+  padding: 0 calc(12 * var(--u));
 }
 .input::placeholder {
   color: var(--text-3);
@@ -127,7 +134,7 @@ canvas {
   height: var(--h-sm);
   display: flex;
   align-items: center;
-  padding: 0 24px;
+  padding: 0 var(--gap);
   pointer-events: none;
 }
 .status-bar > * {

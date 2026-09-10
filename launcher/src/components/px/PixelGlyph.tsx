@@ -2,7 +2,7 @@
  * Hand-drawn pixel glyphs as crisp SVG rects — no icon font, no emoji
  * (DESIGN.md). Each glyph is drawn on a 12×12 grid.
  */
-export type Glyph = 'minimize' | 'maximize' | 'close' | 'search';
+export type Glyph = 'minimize' | 'maximize' | 'close' | 'search' | 'gear';
 
 const RECTS: Record<Glyph, [number, number, number, number][]> = {
   minimize: [[1, 9, 10, 2]],
@@ -22,6 +22,23 @@ const RECTS: Record<Glyph, [number, number, number, number][]> = {
     [7, 3, 2, 2],
     [3, 7, 2, 2],
     [1, 9, 2, 2],
+  ],
+  gear: [
+    /* four cardinal teeth */
+    [5, 0, 2, 2],
+    [5, 10, 2, 2],
+    [0, 5, 2, 2],
+    [10, 5, 2, 2],
+    /* four diagonal teeth */
+    [2, 2, 2, 2],
+    [8, 2, 2, 2],
+    [2, 8, 2, 2],
+    [8, 8, 2, 2],
+    /* the ring, drawn as four bars around an open 2×2 hub */
+    [3, 3, 6, 2],
+    [3, 7, 6, 2],
+    [3, 5, 2, 2],
+    [7, 5, 2, 2],
   ],
   search: [
     [1, 1, 8, 2],

@@ -26,7 +26,7 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  padding: 0 20px;
+  padding: 0 calc(22 * var(--u));
   border: var(--px-black) solid var(--black);
   border-radius: var(--radius);
   background-color: transparent;
@@ -70,15 +70,16 @@
     100% 100%;
 }
 
-/* the 1px depth shadow baked into the LEFT band (border channel × 0.44).
-   Idle: one flat #161616 column. Active: per-half, no depth layer. */
+/* the 1px depth shadow that sits AGAINST the left band (border channel ×
+   0.44). It goes on the outer side of the band — putting it on the inner
+   side splits the 6px band into 5+1 and breaks the border's continuity. */
 .px--depth::before,
 .px--depth-split::before {
   content: '';
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(var(--px-band) - 1px);
+  left: 0;
   width: 1px;
   pointer-events: none;
 }
@@ -123,6 +124,12 @@
   --up: var(--accent-up);
   --lo: var(--accent-lo);
   --co: var(--accent-co);
+  --surf-bot: var(--accent-surf-bot);
+}
+/* spec 5.3 construction in the accent voice: grey ring (never accented),
+   accent-tinted surface. The primary action inside a panel. */
+.px--soft {
+  --co: var(--tab-corner);
   --surf-bot: var(--accent-surf-bot);
 }
 /* spec 5.3 — grey ring, whisper-green surface, green text */
@@ -226,20 +233,26 @@ a.px:focus-visible {
 .tt--accent { --tt-top: var(--accent-up); --tt-bot: var(--accent-lo); }
 .tt--sub    { --tt-top: #b5b5b5; --tt-bot: #6e6e6e; --tt-stroke: 0.4px; }
 .tt--dim    { --tt-top: #cfcfcf; --tt-bot: #cfcfcf; }
+/* prose voice: the hard 50/50 split is decoration and costs legibility, so
+   descriptive text inside a panel takes one flat fill instead */
+.tt--plain  { --tt-top: #f0f0f0; --tt-bot: #f0f0f0; }
 
-/* type sizes measured off the specimens */
-.tt--36 { font-size: 36px; letter-spacing: 3px; }
-.tt--22 { font-size: 22px; letter-spacing: 2px; }
-.tt--20 { font-size: 20px; letter-spacing: 2px; }
-.tt--16 { font-size: 16px; letter-spacing: 2px; }
-.tt--14 { font-size: 14px; letter-spacing: 2px; }
-.tt--13 { font-size: 13px; letter-spacing: 2px; }
-.tt--11 { font-size: 11px; letter-spacing: 1px; }
+/* The type scale. Every step is a multiple of --u, so type tracks the
+   window the same way the row heights do and a label always sits the same
+   fraction of the way across its button. */
+.tt--36 { font-size: calc(42 * var(--u)); letter-spacing: calc(4 * var(--u)); }
+.tt--22 { font-size: calc(34 * var(--u)); letter-spacing: calc(3 * var(--u)); }
+.tt--20 { font-size: calc(30 * var(--u)); letter-spacing: calc(3 * var(--u)); }
+.tt--16 { font-size: calc(26 * var(--u)); letter-spacing: calc(2 * var(--u)); }
+.tt--14 { font-size: calc(23 * var(--u)); letter-spacing: calc(2 * var(--u)); }
+.tt--13 { font-size: calc(21 * var(--u)); letter-spacing: calc(2 * var(--u)); }
+.tt--11 { font-size: calc(18 * var(--u)); letter-spacing: calc(1 * var(--u)); }
 
 /* body/metadata voice */
 .meta {
   font-family: var(--font-body);
-  font-size: 12px;
+  font-size: calc(15 * var(--u));
+  line-height: 1.45;
   color: var(--text-3);
 }
 

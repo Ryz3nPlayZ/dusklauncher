@@ -9,7 +9,8 @@ import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from 'react';
 export type Family =
   | 'panel' // 5.1 · grey ring, no corners
   | 'grey' // grey ring + #4A4A4A corners
-  | 'install' // 5.3 · grey ring, whisper-green surface
+  | 'install' // 5.3 · whisper-green surface, green text
+  | 'soft' // 5.3 construction wearing the accent surface — a panel's primary
   | 'accent' // 2 · PLAY NOW and every selected state — follows the theme
   | 'yellow' // 2 · the gold family itself
   | 'green' // 3 · INSTALL
@@ -95,7 +96,7 @@ export function TT({
 }: {
   children: string;
   size?: 36 | 22 | 20 | 16 | 14 | 13 | 11;
-  tone?: 'yellow' | 'green' | 'blue' | 'red' | 'accent' | 'sub' | 'dim';
+  tone?: 'yellow' | 'green' | 'blue' | 'red' | 'accent' | 'sub' | 'dim' | 'plain';
   className?: string;
 }) {
   return (
@@ -107,5 +108,50 @@ export function TT({
     >
       {children}
     </span>
+  );
+}
+
+/* ── navbar cells ─────────────────────────────────────────────────────────
+   The strip at the top of the window and the tab strip inside a page are the
+   same component. A cell never takes the accent — selection reads as the
+   lighter split band (--act-up / --act-lo), exactly as the navbar does. */
+
+export function cellClass(active: boolean, extra = '') {
+  return [
+    'px px--cell nav__cell',
+    active ? 'px--active px--depth-split' : 'px--grey px--depth',
+    extra,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** A clickable tab in a navbar or a window bar. */
+export function NavCell({
+  active = false,
+  label,
+  className,
+  onClick,
+}: {
+  active?: boolean;
+  label: string;
+  className?: string;
+  onClick?: () => void;
+}) {
+  return (
+    <button className={cellClass(active, className)} onClick={onClick}>
+      <TT size={20}>{label}</TT>
+    </button>
+  );
+}
+
+/** A cell that only reports something — the instance count, a status. */
+export function NavLabel({ label, className }: { label: string; className?: string }) {
+  return (
+    <div className={cellClass(false, className)}>
+      <TT size={20} tone="dim">
+        {label}
+      </TT>
+    </div>
   );
 }

@@ -1,55 +1,66 @@
 /* ── views ─────────────────────────────────────────────────────────────────
    Layout only. Every box below is a spec element (.px …) — these rules place
-   them on the grid and never restyle them. */
+   them on the grid and never restyle them. Sizes are multiples of --u, so a
+   layout keeps its proportions instead of one machine's pixel counts. */
 
-/* ══ HOME ═══════════════════════════════════════════════════════════════ */
+/* ══ HOME ═══════════════════════════════════════════════════════════════
+   The player and the console are ONE centred object: the character sits just
+   above the midline, the CTA row just below it, and the pair is centred both
+   ways in the stage. */
 .home {
   flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  justify-items: center;
+  padding: var(--gap) var(--gap) calc(var(--h-sm) + var(--gap));
+}
+
+/* the character owns the upper half and sits on the midline; the console
+   owns the lower half and hangs from it */
+.home__stage {
   min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  gap: 24px;
-  padding: 24px 24px 72px;
-}
-
-.home__stage {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
+  gap: calc(10 * var(--u));
+  padding-bottom: calc(var(--gap) / 2);
 }
 
 /* the nametag: a small panel, same stack as everything else */
 .home__tag {
   flex: none;
-  height: 38px;
-  padding: 0 16px;
+  height: calc(42 * var(--u));
+  padding: 0 calc(16 * var(--u));
 }
 
 /* the player is a button — the whole silhouette is the hit area */
 .home__player {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: calc(6 * var(--u));
   border: 0;
   padding: 0;
   background: none;
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
-.home__canvas {
+/* the box that decides how big the render is. The canvas measures its
+   parent, so the parent must have a size of its own — never one derived
+   from the canvas sitting inside it. */
+.home__stage-box {
   flex: 1 1 auto;
   min-height: 0;
-  width: 340px;
-  max-height: 420px; /* the tag rides just above the head, Dawn-style */
+  display: block;
+  width: calc(330 * var(--u));
+  max-height: calc(390 * var(--u));
+}
+.home__canvas {
+  display: block;
   transition: filter 120ms steps(2);
 }
 /* hover outlines the CHARACTER: four drop-shadows dilate the rendered
@@ -62,7 +73,7 @@
 }
 .home__wardrobe {
   flex: none;
-  height: 22px;
+  height: calc(26 * var(--u));
   opacity: 0;
   transition: opacity 120ms steps(2);
 }
@@ -76,27 +87,27 @@
   flex: none;
   display: flex;
   align-items: stretch;
-  gap: 24px;
+  gap: var(--gap);
 }
 .home__play {
-  width: 545px;
+  width: calc(545 * var(--u));
   max-width: 60vw;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(6 * var(--u));
 }
 .home__play-line {
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: calc(22 * var(--u));
 }
 .home__quick {
-  width: 143px;
+  width: var(--h-xl);
   flex-direction: column;
-  gap: 7px;
+  gap: calc(7 * var(--u));
 }
 .home__quick-bar {
-  width: 42px;
-  height: 6px;
+  width: calc(42 * var(--u));
+  height: calc(6 * var(--u));
   background: var(--tab-text-top);
 }
 .home__quick-bar:nth-child(even) {
@@ -106,44 +117,46 @@
 /* quick-profile popout: a window (same stack at 87%) */
 .home__popout {
   position: absolute;
-  right: 24px;
-  bottom: calc(var(--h-xl) + 96px);
-  width: 420px;
-  max-height: 340px;
+  right: 0;
+  bottom: calc(var(--h-xl) + var(--gap));
+  width: calc(460 * var(--u));
+  max-height: calc(380 * var(--u));
   flex-direction: column;
   align-items: stretch;
   padding: var(--px-band);
   gap: 3px;
   overflow-y: auto;
+  z-index: var(--z-modal);
 }
 .home__popout-row {
   flex: none;
   justify-content: space-between;
-  padding: 0 18px;
+  padding: 0 calc(18 * var(--u));
   text-align: left;
 }
 .home__console-wrap {
   position: relative;
-  flex: none;
+  align-self: start;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: var(--gap-sm);
+  padding-top: calc(var(--gap) / 2);
 }
 .home__error {
-  width: 713px;
+  width: calc(713 * var(--u));
   max-width: 90vw;
-  padding: 0 22px;
+  padding: 0 calc(22 * var(--u));
 }
 
 /* launch progress replaces the console while installing */
 .home__progress {
-  width: 713px;
+  width: calc(713 * var(--u));
   max-width: 90vw;
   flex-direction: column;
   align-items: stretch;
-  gap: 12px;
-  padding: 0 26px;
+  gap: calc(12 * var(--u));
+  padding: 0 calc(26 * var(--u));
 }
 .home__progress-head {
   display: flex;
@@ -151,7 +164,7 @@
   justify-content: space-between;
 }
 .home__bar {
-  height: 22px;
+  height: calc(22 * var(--u));
   background: var(--black);
   padding: 4px;
 }
@@ -161,117 +174,92 @@
   transition: width 160ms steps(8);
 }
 
-
 /* content panels stack from the top — .px centres its children by default,
    which is right for a button and wrong for a list */
-.sheet,
-.sheet__body,
-.settings__body,
 .card,
 .modal,
-.inspector,
+.viewer,
 .home__popout,
 .stack,
-.column {
-  justify-content: flex-start;
-}
+.column,
 .account {
   justify-content: flex-start;
 }
 
-/* ══ SHEET — the page's content panel ═══════════════════════════════════
-   Dawn puts a page's tab strip and its listing INSIDE one panel; the header
-   row (title / search / primary action) is the only thing outside it. */
-.sheet {
-  flex: 1;
-  min-height: 0;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 18px;
-  padding: 18px;
-}
-.sheet__tabs {
-  flex: none;
-  display: flex;
-  align-items: stretch;
-  gap: 12px;
-  height: var(--h-md);
-}
-.sheet__tabs .px {
-  padding: 0 26px;
-}
-.sheet__body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+/* ══ WINDOW CONTENTS ════════════════════════════════════════════════════ */
+
+/* a scrolling body inside a window pane */
+.win__body--scroll {
   overflow-y: auto;
 }
 
-/* ══ INSTANCES ══════════════════════════════════════════════════════════ */
-.grid {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
-  grid-auto-rows: min-content;
-  gap: 24px;
-  align-content: start;
-  overflow-y: auto;
-  padding-right: 8px;
-}
-
-.card {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 12px;
-  padding: var(--px-band);
-}
-.card__banner {
-  flex: none;
-  width: 100%;
-  height: 96px;
-  display: block;
-  border: var(--px-black) solid var(--black);
-}
-.card__name {
-  padding: 2px 4px 0;
-}
-.card__meta {
-  padding: 0 4px 4px;
-}
-.card__row {
-  display: flex;
-  align-items: stretch;
-  gap: 12px;
-}
-.card__row .px {
-  flex: 1;
-}
-.card__row .card__del {
-  flex: 0 0 132px;
-}
-
-.tabstrip__spacer {
-  flex: 1;
-}
-
+/* the search field wears the panel stack, one row tall */
 .search {
-  flex: 0 1 460px;
+  flex: 0 1 calc(520 * var(--u));
   justify-content: flex-start;
-  gap: 12px;
-  padding-left: 18px;
+  gap: calc(12 * var(--u));
+  padding-left: calc(20 * var(--u));
 }
 
 .empty {
   flex: 1;
   flex-direction: column;
-  gap: 14px;
+  justify-content: center;
+  gap: var(--gap-sm);
   text-align: center;
-  padding: 40px;
+  padding: calc(40 * var(--u));
 }
 .empty .meta {
-  max-width: 620px;
+  max-width: calc(620 * var(--u));
+}
+
+/* ══ INSTANCES ══════════════════════════════════════════════════════════
+   Tiles are the generic panel: #1E1E1E body, 6px band, 5px black. Each one
+   carries a PLAY NOW bar and a square gear, equal spacing all round. */
+.grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(560 * var(--u)), 1fr));
+  grid-auto-rows: min-content;
+  gap: var(--gap);
+  align-content: start;
+  overflow-y: auto;
+}
+
+.card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--gap-sm);
+  padding: var(--gap-sm);
+}
+.card__banner {
+  flex: none;
+  width: 100%;
+  height: calc(200 * var(--u));
+  display: block;
+  border: var(--px-black) solid var(--black);
+}
+.card__name {
+  padding: calc(2 * var(--u)) calc(4 * var(--u)) 0;
+}
+.card__meta {
+  padding: 0 calc(4 * var(--u));
+}
+/* the CTA row: a bar that takes what is left, then an 80×80 square */
+.card__row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--gap-sm);
+  height: calc(80 * var(--u));
+}
+.card__play {
+  flex: 1;
+  min-width: 0;
+}
+.card__gear {
+  flex: 0 0 calc(80 * var(--u));
+  padding: 0;
 }
 
 /* new-profile / confirm dialogs: window variant, centred */
@@ -285,49 +273,107 @@
   background: rgba(0, 0, 0, 0.55);
 }
 .modal {
-  width: 560px;
+  width: calc(640 * var(--u));
+  max-width: 92vw;
   flex-direction: column;
   align-items: stretch;
-  gap: 18px;
-  padding: 28px;
+  gap: calc(18 * var(--u));
+  padding: calc(28 * var(--u));
 }
 .modal__row {
   display: flex;
   align-items: stretch;
-  gap: 12px;
+  gap: calc(12 * var(--u));
   height: var(--h-sm);
 }
 .modal__row > .px {
   flex: 1;
 }
+.modal__row--tall,
+.modal__row:has(> .h-md) {
+  height: var(--h-md);
+}
 .modal__label {
-  flex: 0 0 150px;
+  flex: 0 0 calc(160 * var(--u));
   display: flex;
   align-items: center;
 }
 
-/* ══ COSMETICS ══════════════════════════════════════════════════════════ */
+/* ══ COSMETICS ══════════════════════════════════════════════════════════
+   Inside the page window: the viewer column, a gutter, then the gallery —
+   itself a window (bar + translucent pane). Proportions, not pixels:
+   580 : 30 : 2000 of the available width. */
 .wardrobe {
   flex: 1;
   min-height: 0;
   display: flex;
-  gap: 24px;
+  gap: 1.15%;
 }
-.wardrobe__left {
+.viewer {
+  flex: 0 0 22.2%;
+  min-width: calc(240 * var(--u));
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--gap-sm);
+  padding: var(--gap-sm);
+}
+.viewer__stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.viewer__canvas {
+  flex: 1;
+  min-height: 0;
+}
+/* the two CTAs, one row tall, sharing the width */
+.viewer__actions {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: var(--gap-sm);
+  height: var(--h-md);
+}
+.viewer__actions .px {
+  flex: 1;
+  min-width: 0;
+  padding: 0 calc(8 * var(--u));
+}
+/* the viewer is a narrow column by design, so its two CTAs take the same
+   width-aware cap the navbar does rather than overrunning their buttons */
+.viewer__actions .tt {
+  font-size: min(calc(26 * var(--u)), 1.3vw);
+  letter-spacing: min(calc(2 * var(--u)), 0.1vw);
+}
+.wardrobe__note {
+  flex: none;
+  padding-top: var(--gap-sm);
+}
+.wardrobe__gallery {
   flex: 1;
   min-width: 0;
 }
-.wardrobe__grid {
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+
+/* the gallery: four columns of 45:50 tiles */
+.skin-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(300 * var(--u)), 1fr));
+  grid-auto-rows: min-content;
+  gap: var(--gap);
+  align-content: start;
+  overflow-y: auto;
 }
 .skin-tile {
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  height: 280px;
+  gap: calc(10 * var(--u));
+  padding: calc(14 * var(--u));
+  aspect-ratio: 45 / 50;
 }
 .skin-tile__stage {
   flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -336,7 +382,7 @@
 .skin-tile__name {
   flex: none;
   width: 100%;
-  height: 30px;
+  height: calc(34 * var(--u));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -349,15 +395,15 @@
 .skin-tile__badge {
   flex: none;
   width: 100%;
-  height: 26px;
+  height: calc(30 * var(--u));
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--g-lo);
 }
 .skin-tile__plus {
-  width: 46px;
-  height: 46px;
+  width: calc(56 * var(--u));
+  height: calc(56 * var(--u));
   position: relative;
 }
 .skin-tile__plus::before,
@@ -369,46 +415,14 @@
 .skin-tile__plus::before {
   left: 0;
   right: 0;
-  top: 20px;
+  top: calc(50% - 3px);
   height: 6px;
 }
 .skin-tile__plus::after {
   top: 0;
   bottom: 0;
-  left: 20px;
+  left: calc(50% - 3px);
   width: 6px;
-}
-
-.inspector {
-  flex: 0 0 420px;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 18px;
-  padding: 18px;
-}
-.inspector__zoom {
-  display: flex;
-  gap: 12px;
-}
-.inspector__zoom .px {
-  flex: 1;
-}
-.inspector__stage {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-.inspector__canvas {
-  flex: 1;
-  min-height: 0;
-}
-.inspector__poses {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-}
-.inspector__poses .px {
-  padding: 0;
 }
 
 /* the 2D paper doll — CSS crops out of the skin sheet, no canvas */
@@ -424,21 +438,16 @@
 
 /* ══ SETTINGS ═══════════════════════════════════════════════════════════ */
 .settings__body {
-  flex: 1;
-  min-height: 0;
-  flex-direction: column;
-  align-items: stretch;
   gap: 0;
-  padding: calc(var(--px-band) + 10px);
   overflow-y: auto;
 }
 .srow {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 24px;
-  height: 82px;
-  padding: 0 22px;
+  gap: var(--gap);
+  min-height: calc(126 * var(--u));
+  padding: calc(18 * var(--u)) calc(10 * var(--u));
   border-bottom: 2px solid var(--panel-bd);
 }
 .srow:last-child {
@@ -449,24 +458,24 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: calc(8 * var(--u));
 }
+/* controls are full rows, same height as everything else in the app */
 .srow__control {
   flex: 0 0 auto;
   display: flex;
   align-items: stretch;
-  gap: 12px;
-  height: var(--h-sm);
+  gap: calc(12 * var(--u));
+  height: var(--h-md);
 }
 .srow__control .px {
-  min-width: 108px;
-  padding: 0 18px;
+  min-width: calc(140 * var(--u));
 }
 .srow__control .px--wide {
-  min-width: 300px;
+  min-width: calc(360 * var(--u));
 }
 .slider {
-  width: 260px;
+  width: calc(300 * var(--u));
   accent-color: var(--accent-up);
 }
 
@@ -474,38 +483,39 @@
 .account {
   flex: none;
   align-items: center;
-  gap: 26px;
-  padding: 26px;
+  gap: calc(26 * var(--u));
+  padding: calc(26 * var(--u));
 }
 .account__text {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: calc(10 * var(--u));
   align-items: flex-start;
 }
 .account__actions {
   display: flex;
   align-items: stretch;
-  gap: 12px;
+  gap: calc(12 * var(--u));
   height: var(--h-md);
 }
 .account__actions .px {
-  min-width: 200px;
+  min-width: calc(220 * var(--u));
 }
 .column {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--gap);
+  overflow-y: auto;
 }
 .stack {
   flex-direction: column;
   align-items: flex-start;
-  gap: 14px;
-  padding: 26px;
+  gap: var(--gap-sm);
+  padding: calc(26 * var(--u));
 }
 .stack--center {
   align-items: center;
