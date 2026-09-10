@@ -166,26 +166,32 @@
    shelf), never the same shell blown up. */
 :root {
   --u: clamp(0.41px, min(0.0409vw, 0.0654vh), 0.523px);
-  --t: clamp(0.49px, min(0.0492vw, 0.0788vh), 0.63px);
+  --t: clamp(0.448px, min(0.0449vw, 0.0719vh), 0.575px);
 
-  --px-black: 3px;   /* black outline (nav frame/dividers use 2px) */
-  --px-band: 4px;    /* border band */
+  /* Construction weight. These are the thinnest whole-pixel values that
+     still read as pixel art: 2px of black, a 2px band inside it. The nav
+     frame and its dividers go one step thinner again, at 1px, because the
+     bar draws a divider between EVERY pair of cells and a 2px one there
+     doubles up visually against the cells' own bands. */
+  --px-black: 2px;
+  --px-band: 2px;
+  --px-nav: 1px;
   /* L-corner leg — the spec's 17/86 of the side, held at the box scale so
      the corner stays a fifth of the edge rather than a third of it */
-  --px-corner: 12px;
-  --px-corner-cta: 20px;
+  --px-corner: 7px;
+  --px-corner-cta: 12px;
 
   /* the height scale. --h-md IS the navbar height: a search bar, a tab, a
      settings control and a nav cell are all one row tall, everywhere. */
-  --nav-h: calc(86 * var(--u));
+  --nav-h: calc(96 * var(--u));
   /* the hero CTA. The spec draws it at 143 against an 86 navbar — a 1.66x
      jump that reads as a slab once the shell is at its real scale. It stays
      the largest row in the app, but in the navbar's magnitude, not double. */
   --h-xl: calc(130 * var(--u));
-  --h-lg: calc(112 * var(--u));
-  --h-md: calc(86 * var(--u));  /* the standard row — navbar parity */
-  --h-sm: calc(62 * var(--u));
-  --h-listing: calc(96 * var(--u));
+  --h-lg: calc(120 * var(--u));
+  --h-md: calc(96 * var(--u));  /* the standard row — navbar parity */
+  --h-sm: calc(69 * var(--u));
+  --h-listing: calc(107 * var(--u));
 
   /* the gutter scale, likewise relative */
   --gap: calc(24 * var(--u));
@@ -196,5 +202,5 @@
   --b-surf-bot: #12283d;
   --r-surf-bot: #3d1512;
 
-  --sb-w: 18px;      /* scrollbar assembly: 3 black / 3 accent / 6 inner */
+  --sb-w: 12px;      /* scrollbar assembly: 2 black / 2 accent / 4 inner */
 }

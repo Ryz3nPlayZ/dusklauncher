@@ -1,18 +1,15 @@
 /**
- * The CTA arrow (spec §2): a 28×36 triangle in the accent two-tone, drawn as
- * crisp-edged SVG so its diagonal steps like the rest of the UI instead of
- * being anti-aliased by the browser.
+ * The play triangle (spec §2). Sized in em off whatever row it sits in, so
+ * it tracks the label beside it through every window size — a fixed pixel
+ * height stopped matching the moment the shell rescaled.
  */
-export default function PixelArrow({ height = 36 }: { height?: number }) {
-  const w = Math.round((height * 28) / 36);
+export default function PixelArrow({ size = '0.62em' }: { size?: string }) {
   return (
     <svg
-      width={w}
-      height={height}
       viewBox="0 0 28 36"
       shapeRendering="crispEdges"
       aria-hidden="true"
-      style={{ flex: 'none' }}
+      style={{ height: size, width: 'auto', flex: 'none' }}
     >
       <defs>
         <linearGradient id="px-arrow" x1="0" y1="0" x2="0" y2="1">

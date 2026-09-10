@@ -57,7 +57,7 @@ canvas {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.62);
+  background: rgba(0, 0, 0, 0.38);
   pointer-events: none;
 }
 .view--dim > * {
@@ -72,7 +72,9 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: var(--gap);
-  padding: var(--gap) var(--gap) calc(var(--h-sm) + var(--gap));
+  /* the side gutter is wider than the vertical one on purpose: a window
+     that runs edge to edge leaves the scene no room to read as a scene */
+  padding: var(--gap) calc(72 * var(--u)) calc(var(--h-sm) + var(--gap));
 }
 
 /* the header row: the page's name, its search, its primary action — all one
@@ -88,7 +90,7 @@ canvas {
   display: flex;
   align-items: center;
   font-family: var(--font-pixel);
-  font-size: calc(46 * var(--t));
+  font-size: calc(42 * var(--t));
   letter-spacing: calc(4 * var(--t));
   text-transform: uppercase;
   color: #fff;

@@ -13,7 +13,7 @@
   display: grid;
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   justify-items: center;
-  padding: var(--gap) var(--gap) calc(var(--h-sm) + var(--gap));
+  padding: var(--gap) calc(72 * var(--u)) calc(var(--h-sm) + var(--gap));
 }
 
 /* the character owns the upper half and sits on the midline; the console
@@ -101,12 +101,16 @@
   width: calc(545 * var(--u));
   max-width: 60vw;
   flex-direction: column;
-  gap: calc(6 * var(--u));
+  gap: calc(4 * var(--u));
 }
+/* the hero line sets the type size for its own row, so the arrow can be
+   sized in em off the label instead of a fixed pixel height that stops
+   tracking the label the moment the shell rescales */
 .home__play-line {
   display: flex;
   align-items: center;
-  gap: calc(22 * var(--u));
+  font-size: calc(42 * var(--t));
+  gap: calc(14 * var(--u));
 }
 .home__quick {
   width: var(--h-xl);

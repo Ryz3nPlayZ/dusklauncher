@@ -11,15 +11,15 @@
   height: var(--nav-h);
   display: flex;
   align-items: stretch;
-  gap: 2px;
-  padding: 2px;
+  gap: var(--px-nav);
+  padding: var(--px-nav);
   background: var(--black);
 }
 
 .nav__cell {
   flex: 0 1 auto;
   min-width: 0;
-  padding: 0 calc(13 * var(--t));
+  padding: 0 calc(19 * var(--t));
   gap: calc(12 * var(--t));
   overflow: hidden;
 }
@@ -27,23 +27,25 @@
 /* the wordmark cell — a label, not a control, so it never takes the
    active/idle band treatment */
 .nav__brand {
-  padding: 0 calc(18 * var(--t));
+  padding: 0 calc(22 * var(--t));
   cursor: default;
 }
 /* The strip has to hold every cell at once, so its type takes a second cap
    tied to the window's width: it grows with --u like everything else until
    the row would stop fitting, and never past that. */
 .nav .tt {
-  font-size: min(calc(26 * var(--t)), 1.6vw);
+  font-size: min(calc(25 * var(--t)), 1.45vw);
 }
 .win__bar .tt {
-  font-size: min(calc(28 * var(--t)), 2.2vw);
+  font-size: min(calc(26 * var(--t)), 1.9vw);
 }
 
 .nav__word {
   font-family: var(--font-pixel);
-  font-size: min(calc(28 * var(--t)), 1.55vw);
+  font-size: min(calc(26 * var(--t)), 1.45vw);
   letter-spacing: calc(3 * var(--t));
+  /* same trailing-gap trim as .tt — see px.css */
+  margin-right: calc(-3 * var(--t));
   text-transform: uppercase;
   white-space: nowrap;
   color: var(--accent-up);
@@ -147,11 +149,11 @@
   height: var(--nav-h);
   display: flex;
   align-items: stretch;
-  gap: 2px;
+  gap: var(--px-nav);
   /* Only the BOTTOM edge and the dividers are drawn here. The window's own
      outline already closes the bar on the other three sides — padding them
      again stacked two black borders on top of each other. */
-  padding: 0 0 2px;
+  padding: 0 0 var(--px-nav);
   background: var(--black);
 }
 /* the filler between the tab group and whatever is pinned right — the same

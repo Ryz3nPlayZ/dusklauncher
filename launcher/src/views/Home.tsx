@@ -84,12 +84,12 @@ export default function Home({
               onClick={() => (running ? onStop() : selected && onLaunch(selected.id))}
             >
               <span className="home__play-line">
+                {!running && <PixelArrow />}
                 <TT size={36} tone="accent">
                   {running ? 'STOP GAME' : 'PLAY NOW'}
                 </TT>
-                {!running && <PixelArrow />}
               </span>
-              <TT size={16} tone="sub">
+              <TT size={13} tone="sub">
                 {selected ? selected.name : 'NO INSTANCE — CREATE ONE'}
               </TT>
             </PxButton>

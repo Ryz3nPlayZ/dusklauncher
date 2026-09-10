@@ -26,7 +26,7 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  padding: 0 calc(22 * var(--t));
+  padding: 0 calc(30 * var(--t));
   border: var(--px-black) solid var(--black);
   border-radius: var(--radius);
   background-color: transparent;
@@ -201,6 +201,7 @@ a.px:focus-visible {
   --tt-bot: var(--tab-text-bot);
   --tt-stroke: var(--tt-w);
   --tt-split: 50%;
+  --tt-ls: 0.1em;
 
   position: relative;
   display: inline-block;
@@ -211,7 +212,12 @@ a.px:focus-visible {
      evenly above and below — so the 50% two-tone cut still lands mid-glyph. */
   line-height: 1.4;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--tt-ls);
+  /* letter-spacing puts a gap after the LAST glyph too, so the box being
+     centred is wider on the right than the glyphs are — which reads as the
+     label leaning left. Pulling that one gap back off the end makes the box
+     exactly as wide as the text, and centring true. */
+  margin-right: calc(-1 * var(--tt-ls));
   white-space: nowrap;
   color: var(--tt-top);
   -webkit-text-stroke: var(--tt-stroke) var(--tt-top);
@@ -243,13 +249,13 @@ a.px:focus-visible {
 /* The type scale. Every step is a multiple of --u, so type tracks the
    window the same way the row heights do and a label always sits the same
    fraction of the way across its button. */
-.tt--36 { font-size: calc(26 * var(--t)); letter-spacing: calc(3 * var(--t)); }
-.tt--22 { font-size: calc(34 * var(--t)); letter-spacing: calc(3 * var(--t)); }
-.tt--20 { font-size: calc(30 * var(--t)); letter-spacing: calc(3 * var(--t)); }
-.tt--16 { font-size: calc(26 * var(--t)); letter-spacing: calc(2 * var(--t)); }
-.tt--14 { font-size: calc(23 * var(--t)); letter-spacing: calc(2 * var(--t)); }
-.tt--13 { font-size: calc(21 * var(--t)); letter-spacing: calc(2 * var(--t)); }
-.tt--11 { font-size: calc(18 * var(--t)); letter-spacing: calc(1 * var(--t)); }
+.tt--36 { font-size: calc(42 * var(--t)); --tt-ls: calc(3 * var(--t)); }
+.tt--22 { font-size: calc(34 * var(--t)); --tt-ls: calc(3 * var(--t)); }
+.tt--20 { font-size: calc(30 * var(--t)); --tt-ls: calc(3 * var(--t)); }
+.tt--16 { font-size: calc(26 * var(--t)); --tt-ls: calc(2 * var(--t)); }
+.tt--14 { font-size: calc(23 * var(--t)); --tt-ls: calc(2 * var(--t)); }
+.tt--13 { font-size: calc(21 * var(--t)); --tt-ls: calc(2 * var(--t)); }
+.tt--11 { font-size: calc(18 * var(--t)); --tt-ls: calc(1 * var(--t)); }
 
 /* body/metadata voice */
 .meta {
@@ -259,9 +265,9 @@ a.px:focus-visible {
   color: var(--text-3);
 }
 
-/* ── scrollbar — 18px assembly (spec 5.2, at this shell's scale) ───────────
-   3px black housing / 3px accent CLOSED RING split at mid-height /
-   6px inner thumb #C77707 → #382C1B. */
+/* ── scrollbar — 12px assembly (spec 5.2, at this shell's scale) ───────────
+   2px black housing / 2px accent CLOSED RING split at mid-height /
+   4px inner thumb #C77707 → #382C1B. */
 .scroll {
   overflow-y: auto;
   /* NB: no `scrollbar-width` here — setting it makes Chromium ignore the
@@ -286,15 +292,15 @@ a.px:focus-visible {
     /* 6px inner thumb */
     linear-gradient(var(--sb-in-top), var(--sb-in-bot));
   background-position:
-    3px 0,
-    3px 100%,
-    3px 3px,
-    calc(100% - 3px) 3px,
-    6px 3px;
+    2px 0,
+    2px 100%,
+    2px 2px,
+    calc(100% - 2px) 2px,
+    4px 2px;
   background-size:
-    12px 3px,
-    12px 3px,
-    3px calc(100% - 6px),
-    3px calc(100% - 6px),
-    6px calc(100% - 6px);
+    8px 2px,
+    8px 2px,
+    2px calc(100% - 4px),
+    2px calc(100% - 4px),
+    4px calc(100% - 4px);
 }
