@@ -117,7 +117,7 @@ canvas {
   background: transparent;
   color: var(--text-1);
   font-family: var(--font-body);
-  font-size: calc(17 * var(--t));
+  font-size: calc(21 * var(--t));
   padding: 0 calc(12 * var(--u));
 }
 .input::placeholder {

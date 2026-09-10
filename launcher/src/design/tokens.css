@@ -149,18 +149,18 @@
    234 are proportions to hold, not CSS pixels to copy. Copying them literally
    is what made a navbar eat an eighth of the window.
 
-   --t sizes TYPE, and stays at 1px on that same window. Type therefore fills
-   more of its button than a naive scale-everything-together would give: a
-   chunky label in a tight box, which is what the reference actually looks
-   like. Shrinking the boxes must never drag the text down with it — that is
-   the whole point of keeping two atoms.
+   --t sizes TYPE. It sits above --u — type fills more of its button than a
+   scale-everything-together would give, which is what the reference looks
+   like — but only by about a fifth, not by half. Raising the type scale 1.7x
+   AND dropping the box scale to 0.7 compounded to ~2.4x the original ratio,
+   which is what made the labels read as oversized.
 
    Both track the smaller axis below the reference window and neither grows
    past it: a big display shows MORE (more cards per row, more skins per
    shelf), never the same shell blown up. */
 :root {
   --u: clamp(0.55px, min(0.0547vw, 0.0875vh), 0.7px);
-  --t: clamp(0.78px, min(0.0781vw, 0.125vh), 1px);
+  --t: clamp(0.61px, min(0.0609vw, 0.0975vh), 0.78px);
 
   --px-black: 5px;   /* black outline (nav frame/dividers use 3px) */
   --px-band: 6px;    /* border band */

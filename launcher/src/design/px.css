@@ -251,7 +251,7 @@ a.px:focus-visible {
 /* body/metadata voice */
 .meta {
   font-family: var(--font-body);
-  font-size: calc(15 * var(--t));
+  font-size: calc(19 * var(--t));
   line-height: 1.45;
   color: var(--text-3);
 }
