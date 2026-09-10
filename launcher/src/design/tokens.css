@@ -62,7 +62,7 @@
      --tt-w is the stroke that thickens each fill in place (paint-order:
      stroke fill). Monocraft Bold is already heavy; at the type sizes this
      shell actually uses, 0.5px doubled the apparent weight. */
-  --tt-w: 0.3px;
+  --tt-w: 0.2px;
   --tab-text-top: #e2e2e2;
   --tab-text-bot: #8a8a8a;
 
@@ -178,8 +178,11 @@
   /* the height scale. --h-md IS the navbar height: a search bar, a tab, a
      settings control and a nav cell are all one row tall, everywhere. */
   --nav-h: calc(86 * var(--u));
-  --h-xl: calc(143 * var(--u)); /* the PLAY NOW hero (spec §2) */
-  --h-lg: calc(104 * var(--u));
+  /* the hero CTA. The spec draws it at 143 against an 86 navbar — a 1.66x
+     jump that reads as a slab once the shell is at its real scale. It stays
+     the largest row in the app, but in the navbar's magnitude, not double. */
+  --h-xl: calc(100 * var(--u));
+  --h-lg: calc(92 * var(--u));
   --h-md: calc(86 * var(--u));  /* the standard row — navbar parity */
   --h-sm: calc(62 * var(--u));
   --h-listing: calc(96 * var(--u));

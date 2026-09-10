@@ -161,7 +161,7 @@
 /* ── heights: the shared grid. Feet line up because nothing invents one ── */
 .h-xl {
   height: var(--h-xl);
-  --corner: var(--px-corner-cta); /* 28px legs on the 143px CTA (spec §2) */
+  --corner: var(--px-corner-cta); /* longer legs on the hero CTA (spec §2) */
 }
 .h-lg { height: var(--h-lg); }
 .h-md { height: var(--h-md); }
@@ -206,7 +206,10 @@ a.px:focus-visible {
   display: inline-block;
   font-family: var(--font-pixel);
   font-weight: 700;
-  line-height: 1;
+  /* Monocraft's glyph box is ~1.35em, so line-height:1 clipped every label
+     against its own span. 1.4 contains it, and the leading it adds is split
+     evenly above and below — so the 50% two-tone cut still lands mid-glyph. */
+  line-height: 1.4;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   white-space: nowrap;
@@ -240,7 +243,7 @@ a.px:focus-visible {
 /* The type scale. Every step is a multiple of --u, so type tracks the
    window the same way the row heights do and a label always sits the same
    fraction of the way across its button. */
-.tt--36 { font-size: calc(42 * var(--t)); letter-spacing: calc(4 * var(--t)); }
+.tt--36 { font-size: calc(31 * var(--t)); letter-spacing: calc(3 * var(--t)); }
 .tt--22 { font-size: calc(34 * var(--t)); letter-spacing: calc(3 * var(--t)); }
 .tt--20 { font-size: calc(30 * var(--t)); letter-spacing: calc(3 * var(--t)); }
 .tt--16 { font-size: calc(26 * var(--t)); letter-spacing: calc(2 * var(--t)); }

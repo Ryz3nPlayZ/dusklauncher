@@ -31,13 +31,13 @@
 /* the nametag: a small panel, same stack as everything else */
 .home__tag {
   flex: none;
-  height: calc(42 * var(--u));
+  height: calc(52 * var(--u));
   padding: 0 calc(16 * var(--u));
 }
 
 /* the player is a button — the whole silhouette is the hit area */
 .home__player {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -53,14 +53,22 @@
    parent, so the parent must have a size of its own — never one derived
    from the canvas sitting inside it. */
 .home__stage-box {
-  flex: 1 1 auto;
+  position: relative;
+  flex: 1 1 0;
   min-height: 0;
   display: block;
   width: calc(330 * var(--u));
   max-height: calc(390 * var(--u));
+  overflow: hidden;
 }
+/* skinview3d measures this canvas's PARENT and writes an inline width and
+   height back onto the canvas. So the parent's size must never depend on
+   the canvas: .home__stage-box has a fixed width and a flex-basis of 0, and
+   clips, so the two can't ratchet each other up the way they were. */
 .home__canvas {
   display: block;
+  max-width: 100%;
+  max-height: 100%;
   transition: filter 120ms steps(2);
 }
 /* hover outlines the CHARACTER: four drop-shadows dilate the rendered
@@ -71,9 +79,9 @@
     drop-shadow(2px 0 0 var(--accent-co)) drop-shadow(-2px 0 0 var(--accent-co))
     drop-shadow(0 2px 0 var(--accent-co)) drop-shadow(0 -2px 0 var(--accent-co));
 }
+/* height comes from the label — a fixed row here just clipped it */
 .home__wardrobe {
   flex: none;
-  height: calc(26 * var(--u));
   opacity: 0;
   transition: opacity 120ms steps(2);
 }
@@ -236,7 +244,7 @@
 .card__banner {
   flex: none;
   width: 100%;
-  height: calc(200 * var(--u));
+  height: calc(150 * var(--u));
   display: block;
   border: var(--px-black) solid var(--black);
 }
@@ -321,10 +329,16 @@
   flex: 1;
   min-height: 0;
   display: flex;
+  /* the same feedback loop as .home__stage-box — see the note there. This
+     262px column was reporting 791px of content before the clip. */
+  overflow: hidden;
 }
 .viewer__canvas {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
 }
 /* the two CTAs, one row tall, sharing the width */
 .viewer__actions {
