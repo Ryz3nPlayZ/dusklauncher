@@ -124,7 +124,7 @@
   flex-direction: column;
   align-items: stretch;
   padding: var(--px-band);
-  gap: 3px;
+  gap: 2px;
   overflow-y: auto;
   z-index: var(--z-modal);
 }
@@ -420,14 +420,14 @@
 .skin-tile__plus::before {
   left: 0;
   right: 0;
-  top: calc(50% - 3px);
-  height: 6px;
+  top: calc(50% - 2px);
+  height: 4px;
 }
 .skin-tile__plus::after {
   top: 0;
   bottom: 0;
-  left: calc(50% - 3px);
-  width: 6px;
+  left: calc(50% - 2px);
+  width: 4px;
 }
 
 /* the 2D paper doll — CSS crops out of the skin sheet, no canvas */

@@ -92,7 +92,7 @@ canvas {
   letter-spacing: calc(4 * var(--t));
   text-transform: uppercase;
   color: #fff;
-  -webkit-text-stroke: 0.5px #fff;
+  -webkit-text-stroke: var(--tt-w) #fff;
   paint-order: stroke fill;
   margin: 0;
   margin-right: auto;

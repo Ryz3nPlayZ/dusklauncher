@@ -4,8 +4,8 @@
 
    One recipe, used by every element in the app:
 
-     5px black outline            .px                (border)
-     6px border band              layers 5-8         (top = --up, bottom = --lo,
+     black outline (--px-black)   .px                (border)
+     border band (--px-band)      layers 5-8         (top = --up, bottom = --lo,
                                                       sides split 50/50)
      L corners, TR + BL only      layers 1-4         (--co, leg = --px-corner)
      surface                      layer 9            (flat --surf-top held
@@ -146,7 +146,7 @@
 .px--window {
   opacity: var(--panel-window-opacity);
 }
-/* nav-cell geometry: 3px black comes from the bar itself, not the cell */
+/* nav-cell geometry: the 2px black comes from the bar itself, not the cell */
 .px--cell {
   --surf-top: var(--tab-base);
   --surf-bot: var(--tab-base);
@@ -194,12 +194,12 @@ a.px:focus-visible {
 
 /* ── two-tone pixel text ───────────────────────────────────────────────────
    Hard 50/50 split, upper lighter, never smooth. Each half is a solid fill
-   so the 0.5px matched stroke (paint-order: stroke) thickens it exactly the
-   way the spec's SVG text does. Requires data-text on the element. */
+   so the matched --tt-w stroke (paint-order: stroke) thickens it in place,
+   the way the spec's SVG text does. Requires data-text on the element. */
 .tt {
   --tt-top: var(--tab-text-top);
   --tt-bot: var(--tab-text-bot);
-  --tt-stroke: 0.5px;
+  --tt-stroke: var(--tt-w);
   --tt-split: 50%;
 
   position: relative;
@@ -231,7 +231,7 @@ a.px:focus-visible {
 .tt--blue   { --tt-top: var(--b-up); --tt-bot: var(--b-lo); }
 .tt--red    { --tt-top: var(--r-up); --tt-bot: var(--r-lo); }
 .tt--accent { --tt-top: var(--accent-up); --tt-bot: var(--accent-lo); }
-.tt--sub    { --tt-top: #b5b5b5; --tt-bot: #6e6e6e; --tt-stroke: 0.4px; }
+.tt--sub    { --tt-top: #b5b5b5; --tt-bot: #6e6e6e; --tt-stroke: calc(var(--tt-w) * 0.8); }
 .tt--dim    { --tt-top: #cfcfcf; --tt-bot: #cfcfcf; }
 /* prose voice: the hard 50/50 split is decoration and costs legibility, so
    descriptive text inside a panel takes one flat fill instead */
@@ -256,9 +256,9 @@ a.px:focus-visible {
   color: var(--text-3);
 }
 
-/* ── scrollbar — 25px assembly (spec 5.2) ──────────────────────────────────
-   5px black housing / 4px accent CLOSED RING split at mid-height /
-   7px inner thumb #C77707 → #382C1B. */
+/* ── scrollbar — 18px assembly (spec 5.2, at this shell's scale) ───────────
+   3px black housing / 3px accent CLOSED RING split at mid-height /
+   6px inner thumb #C77707 → #382C1B. */
 .scroll {
   overflow-y: auto;
   /* NB: no `scrollbar-width` here — setting it makes Chromium ignore the
@@ -280,18 +280,18 @@ a.px:focus-visible {
     /* left + right accent bands, split at mid-height */
     linear-gradient(var(--accent-up) 50%, var(--accent-lo) 50%),
     linear-gradient(var(--accent-up) 50%, var(--accent-lo) 50%),
-    /* 7px inner thumb */
+    /* 6px inner thumb */
     linear-gradient(var(--sb-in-top), var(--sb-in-bot));
   background-position:
-    5px 0,
-    5px 100%,
-    5px 4px,
-    calc(100% - 5px) 4px,
-    9px 4px;
+    3px 0,
+    3px 100%,
+    3px 3px,
+    calc(100% - 3px) 3px,
+    6px 3px;
   background-size:
-    15px 4px,
-    15px 4px,
-    4px calc(100% - 8px),
-    4px calc(100% - 8px),
-    7px calc(100% - 8px);
+    12px 3px,
+    12px 3px,
+    3px calc(100% - 6px),
+    3px calc(100% - 6px),
+    6px calc(100% - 6px);
 }

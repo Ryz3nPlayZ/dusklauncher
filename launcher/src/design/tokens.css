@@ -38,14 +38,14 @@
 :root {
   /* typography — headings/tabs/CTAs: Monocraft Bold (bundled, SIL OFL),
      always UPRIGHT, always ALL CAPS. Body/metadata: Inter. Type is
-     thickened with a 0.5px stroke in its own fill (paint-order: stroke);
-     subtext 0.4px. */
+     thickened with the --tt-w stroke in its own fill (paint-order: stroke);
+     subtext takes 0.8 of it. */
   --font-pixel: 'Monocraft', ui-monospace, monospace;
   --font-body: 'Inter', system-ui, -apple-system, sans-serif;
 
   /* ── construction (applies to EVERYTHING) ── */
   --black: #000000;          /* outline around all elements */
-  --black-w: 5px;            /* outline weight (3px on navbar frame/dividers) */
+  --black-w: var(--px-black); /* outline weight (2px on navbar frame/dividers) */
   --border-w: 6px;           /* border-band weight */
   --depth: #161616;          /* 1px shadow baked into left border = border × 0.44 */
   --radius: 0px;             /* sharp corners, no blur, no gradients-as-style */
@@ -58,7 +58,11 @@
      The ONLY blended elements in the system. */
   --surf-hold: 45%;
 
-  /* two-tone pixel text: hard 50/50 split, upper lighter, never smooth */
+  /* two-tone pixel text: hard 50/50 split, upper lighter, never smooth.
+     --tt-w is the stroke that thickens each fill in place (paint-order:
+     stroke fill). Monocraft Bold is already heavy; at the type sizes this
+     shell actually uses, 0.5px doubled the apparent weight. */
+  --tt-w: 0.3px;
   --tab-text-top: #e2e2e2;
   --tab-text-bot: #8a8a8a;
 
@@ -137,9 +141,11 @@
 /* ── construction sizes (measured from spec.html specimens) ───────────────
    Two kinds of number live here and they behave differently.
 
-   CONSTRUCTION is pixel art and never scales: the 5px black outline and the
-   6px border band stay 5 and 6 at every window size, so the borders read as
-   the deliberately thick frame the design calls for.
+   CONSTRUCTION is pixel art: whole pixels only, no fractional borders, or it
+   blurs. It does not track --u continuously — but it IS authored for the
+   reference window, and the spec's proportions are what carry over: black is
+   5/86 of the row and the band 6/86. Holding 5 and 6 while the row came down
+   from 86 to 60 is what made every frame read as too heavy.
 
    SIZE splits into two atoms, and they are NOT the same number.
 
@@ -162,8 +168,8 @@
   --u: clamp(0.55px, min(0.0547vw, 0.0875vh), 0.7px);
   --t: clamp(0.61px, min(0.0609vw, 0.0975vh), 0.78px);
 
-  --px-black: 5px;   /* black outline (nav frame/dividers use 3px) */
-  --px-band: 6px;    /* border band */
+  --px-black: 3px;   /* black outline (nav frame/dividers use 2px) */
+  --px-band: 4px;    /* border band */
   /* L-corner leg — the spec's 17/86 of the side, held at the box scale so
      the corner stays a fifth of the edge rather than a third of it */
   --px-corner: 12px;
@@ -187,5 +193,5 @@
   --b-surf-bot: #12283d;
   --r-surf-bot: #3d1512;
 
-  --sb-w: 25px;      /* scrollbar assembly: 5 black / 4 accent / 7 inner */
+  --sb-w: 18px;      /* scrollbar assembly: 3 black / 3 accent / 6 inner */
 }

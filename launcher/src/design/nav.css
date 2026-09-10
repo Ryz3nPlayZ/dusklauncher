@@ -1,6 +1,6 @@
 /* ── navbar (spec §1) ──────────────────────────────────────────────────────
-   One 92px strip: 3px black frame, 3px black dividers SHARED between cells —
-   so the bar is black with 3px gaps and every cell draws only its own band.
+   One strip: 2px black frame, 2px black dividers SHARED between cells — so
+   the bar is black with 2px gaps and every cell draws only its own band.
    Layout: left tab group · plain-panel gap · right group pinned (PROFILE /
    STORE / SETTINGS). */
 
@@ -11,8 +11,8 @@
   height: var(--nav-h);
   display: flex;
   align-items: stretch;
-  gap: 3px;
-  padding: 3px;
+  gap: 2px;
+  padding: 2px;
   background: var(--black);
 }
 
@@ -47,12 +47,12 @@
   text-transform: uppercase;
   white-space: nowrap;
   color: var(--accent-up);
-  -webkit-text-stroke: 0.5px var(--accent-up);
+  -webkit-text-stroke: var(--tt-w) var(--accent-up);
   paint-order: stroke fill;
 }
 .nav__word b {
   color: #fff;
-  -webkit-text-stroke: 0.5px #fff;
+  -webkit-text-stroke: var(--tt-w) #fff;
   font-weight: inherit;
 }
 
@@ -147,10 +147,10 @@
   height: var(--nav-h);
   display: flex;
   align-items: stretch;
-  gap: 3px;
+  gap: 2px;
   /* black on all four sides — the bar is a strip of black with the cells
      inset into it, so the frame reads continuous with the window outline */
-  padding: 3px;
+  padding: 2px;
   background: var(--black);
 }
 /* the filler between the tab group and whatever is pinned right — the same
