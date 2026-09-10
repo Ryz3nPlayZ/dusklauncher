@@ -116,3 +116,24 @@
     font-size: 13px;
   }
 }
+@media (max-width: 1000px) {
+  /* narrower than the app's own minimum — only reachable in a browser
+     preview. The wordmark goes first; all six cells stay reachable. */
+  .nav__brand {
+    display: none;
+  }
+  .nav .tt--20 {
+    font-size: 13px;
+    letter-spacing: 0;
+  }
+  .nav__cell {
+    padding: 0 8px;
+  }
+  .nav__tab {
+    flex: 0 1 140px;
+  }
+  /* the account cell keeps its head and drops the name */
+  .nav__profile .tt {
+    display: none;
+  }
+}
