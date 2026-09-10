@@ -1,0 +1,5 @@
+Monocraft (c) IdreesInc — SIL Open Font License 1.1
+Monocraft is licensed under the SIL Open Font License 1.1.
+See https://github.com/IdreesInc/Monocraft
+Inter by Rasmus Andersson — SIL Open Font License 1.1.
+See https://github.com/rsms/inter

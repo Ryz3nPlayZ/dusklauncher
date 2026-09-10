@@ -1,0 +1,166 @@
+/* ── base ──────────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--text-1);
+  background: var(--black);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  appearance: none;
+  -webkit-app-region: no-drag;
+}
+
+img,
+canvas {
+  image-rendering: pixelated;
+}
+
+/* the app is one rectangle: nav strip on top, view below, status foot. */
+.app {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.view {
+  position: relative;
+  z-index: var(--z-content);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* content views dim the scene behind them, the way Dawn does — the scene is
+   the Home stage, everywhere else it is wallpaper */
+.view--dim::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+  pointer-events: none;
+}
+.view--dim > * {
+  position: relative;
+}
+
+/* page scaffolding shared by every non-home view: title row, then body.
+   The 24px gutter is the only spacing value pages are allowed to use. */
+.page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 24px 24px 72px; /* the status pill floats over the last 72px */
+}
+.page__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--h-md);
+}
+.page__title {
+  font-family: var(--font-pixel);
+  font-size: 34px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #fff;
+  -webkit-text-stroke: 0.5px #fff;
+  paint-order: stroke fill;
+  margin: 0;
+  margin-right: auto;
+}
+.page__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 24px;
+}
+
+/* form controls inherit the panel voice — a control is a panel with a
+   caret in it, never a browser widget */
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-1);
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 0 14px;
+}
+.input::placeholder {
+  color: var(--text-3);
+}
+
+/* ── status foot: the ONLINE pill (spec panel stack, small) ────────────── */
+.status-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-nav);
+  height: var(--h-sm);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  pointer-events: none;
+}
+.status-bar > * {
+  pointer-events: auto;
+}
+.status-pill {
+  margin-left: auto;
+  height: var(--h-sm);
+  min-width: 210px;
+  gap: 10px;
+  padding: 0 18px;
+  justify-content: flex-start;
+}
+.status-pill__dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  background: var(--g-up);
+}
+.status-pill__dot--off {
+  background: var(--r-lo);
+}
+
+/* the window is undecorated, so minimise / maximise / close live here —
+   the navbar stays exactly the six cells the design calls for */
+.win-controls {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-left: 12px;
+  height: var(--h-sm);
+}
+.win-controls .px {
+  width: 52px;
+  padding: 0;
+}

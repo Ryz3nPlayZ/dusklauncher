@@ -1,0 +1,161 @@
+/* ── DuskLauncher design tokens ───────────────────────────────────────────
+   Dawn-parity pixel system. VISUAL SOURCE OF TRUTH: ~/dusk-spec/spec.html
+   (screenshot-verified SVG specimens — every value below was measured there,
+   never eyeballed). Nothing outside this file may declare a raw color or
+   font-family. */
+
+@font-face {
+  font-family: 'Monocraft';
+  src: url('../assets/fonts/Monocraft-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/inter-400.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/inter-500.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/inter-600.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/inter-700.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  /* typography — headings/tabs/CTAs: Monocraft Bold (bundled, SIL OFL),
+     always UPRIGHT, always ALL CAPS. Body/metadata: Inter. Type is
+     thickened with a 0.5px stroke in its own fill (paint-order: stroke);
+     subtext 0.4px. */
+  --font-pixel: 'Monocraft', ui-monospace, monospace;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* ── construction (applies to EVERYTHING) ── */
+  --black: #000000;          /* outline around all elements */
+  --black-w: 5px;            /* outline weight (3px on navbar frame/dividers) */
+  --border-w: 6px;           /* border-band weight */
+  --depth: #161616;          /* 1px shadow baked into left border = border × 0.44 */
+  --radius: 0px;             /* sharp corners, no blur, no gradients-as-style */
+
+  /* L corners (top-right / bottom-left only): square outer box,
+     leg = side length × 17/86. Vert rect overlaps the foot band. */
+  --l-ratio: 0.1977;         /* 17/86 */
+
+  /* surface gradients: hold flat top color through 45%, then blend down.
+     The ONLY blended elements in the system. */
+  --surf-hold: 45%;
+
+  /* two-tone pixel text: hard 50/50 split, upper lighter, never smooth */
+  --tab-text-top: #e2e2e2;
+  --tab-text-bot: #8a8a8a;
+
+  /* ── navbar tabs (234×86 cells, full-height, shared black dividers) ── */
+  --tab-base: #232323;
+  --tab-border: #323232;
+  --tab-corner: #4a4a4a;
+  /* active tab: split border (upper/lower), arrow-grey corners, per-half
+     shadow (each = border channel × 0.44), NO depth layer */
+  --act-up: #585858;
+  --act-lo: #3d3d3d;
+  --act-arrow: #828282;
+  --act-sh-up: #272727;
+  --act-sh-lo: #1b1b1b;
+  --nav-h: 92px;
+
+  /* ── generic panel: 5px black + 6px border + body.
+     The panel IS the component (search bar, FILTERS header, listing tile).
+     Window variant: identical stack at 87% opacity (range 85–90). */
+  --panel: #1e1e1e;
+  --panel-bd: #323232;
+  --panel-window-opacity: 0.87;
+  --listing-body: #181818;   /* modpack listing tiles */
+
+  /* ── accent family. Derivation (HLS, measured from #FFC600):
+     lower = H−12.8° / L−0.055 / S−0.053 · corner = H+8.6° / L+0.402.
+     Any new accent = pick a hue, run the same math. */
+  --y-up: #ffc600;  --y-lo: #dd7f06;  --y-co: #fffbcd;   /* gold (PLAY NOW) */
+  --g-up: #00ff40;  --g-lo: #06dd0e;  --g-co: #cdffe1;   /* green (install) */
+  --b-up: #1f7cff;  --b-lo: #09a0f8;  --b-co: #ecf1ff;   /* blue (+0.06 L so
+     the top reads light — blue needs the lift, yellow doesn't) */
+  --r-up: #ff1100;  --r-lo: #dd0626;  --r-co: #ffd8cd;   /* red (PvP/delete) */
+  --cta-surf-top: #1e1e1e;
+  --cta-surf-bot: #453319;   /* PLAY NOW 545×143 incl. black */
+  --inst-surf-bot: #16241a;  /* grey-border INSTALL: whisper-green bottom */
+
+  /* ── scrollbar: 25px assembly — 5 black housing / 4 accent CLOSED RING
+     (upper #FFC600, lower #DD7F06, split at mid-height) / 7 inner thumb
+     gradient #C77707 → #382C1B. */
+  --sb-in-top: #c77707;
+  --sb-in-bot: #382c1b;
+
+  /* ── legacy body-text scale (unchanged) ── */
+  --text-1: #f4f4f4;
+  --text-2: #b8b8b8;
+  --text-3: #828282;
+  --success: #39d353;
+
+  /* z stack */
+  --z-bg: 0;
+  --z-content: 10;
+  --z-nav: 40;
+  --z-modal: 60;
+}
+
+/* ── themes: one dark-panel base; the theme ONLY swaps scene + accent ── */
+:root,
+[data-theme='overworld'] {
+  color-scheme: dark;
+  --accent-up: var(--y-up);
+  --accent-lo: var(--y-lo);
+  --accent-co: var(--y-co);
+  --accent-surf-bot: var(--cta-surf-bot);
+  --scene-sky-top: #7db8ff;
+  --scene-sky-bottom: #b7dcff;
+}
+[data-theme='nether'] {
+  color-scheme: dark;
+  --accent-up: var(--r-up);
+  --accent-lo: var(--r-lo);
+  --accent-co: var(--r-co);
+  --accent-surf-bot: var(--r-surf-bot);
+  --scene-sky-top: #17090d;
+  --scene-sky-bottom: #2b0a12;
+}
+
+/* ── construction sizes (measured from spec.html specimens) ───────────────
+   Every element in the app is built from these; nothing else may invent a
+   height. Rows in a grid share one height so button feet always line up. */
+:root {
+  --px-black: 5px;   /* black outline (nav frame/dividers use 3px) */
+  --px-band: 6px;    /* border band */
+  --px-corner: 17px; /* L-corner leg — 28px on the 143px CTA (17/86 × side) */
+  --px-corner-cta: 28px;
+
+  /* the height scale — spec: nav 92, CTA 545×143, buttons 200×84,
+     panel rows 64 (search / FILTERS header), listing tiles 96 */
+  --h-xl: 143px;
+  --h-lg: 84px;
+  --h-md: 64px;
+  --h-sm: 48px;
+  --h-listing: 96px;
+
+  /* surface bottoms for the derived families (spec §3) */
+  --g-surf-bot: #123d1c;
+  --b-surf-bot: #12283d;
+  --r-surf-bot: #3d1512;
+
+  --sb-w: 25px;      /* scrollbar assembly: 5 black / 4 accent / 7 inner */
+}

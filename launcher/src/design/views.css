@@ -1,0 +1,514 @@
+/* ── views ─────────────────────────────────────────────────────────────────
+   Layout only. Every box below is a spec element (.px …) — these rules place
+   them on the grid and never restyle them. */
+
+/* ══ HOME ═══════════════════════════════════════════════════════════════ */
+.home {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 24px;
+  padding: 24px 24px 72px;
+}
+
+.home__stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* the nametag: a small panel, same stack as everything else */
+.home__tag {
+  flex: none;
+  height: 38px;
+  padding: 0 16px;
+}
+
+/* the player is a button — the whole silhouette is the hit area */
+.home__player {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.home__canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 340px;
+  max-height: 420px; /* the tag rides just above the head, Dawn-style */
+  transition: filter 120ms steps(2);
+}
+/* hover outlines the CHARACTER: four drop-shadows dilate the rendered
+   alpha, so the outline is the silhouette — never a rectangle */
+.home__player:hover .home__canvas,
+.home__player:focus-visible .home__canvas {
+  filter:
+    drop-shadow(2px 0 0 var(--accent-co)) drop-shadow(-2px 0 0 var(--accent-co))
+    drop-shadow(0 2px 0 var(--accent-co)) drop-shadow(0 -2px 0 var(--accent-co));
+}
+.home__wardrobe {
+  flex: none;
+  height: 22px;
+  opacity: 0;
+  transition: opacity 120ms steps(2);
+}
+.home__player:hover .home__wardrobe,
+.home__player:focus-visible .home__wardrobe {
+  opacity: 1;
+}
+
+/* the console row: PLAY NOW + the quick-profile popout, one height */
+.home__console {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 24px;
+}
+.home__play {
+  width: 545px;
+  max-width: 60vw;
+  flex-direction: column;
+  gap: 6px;
+}
+.home__play-line {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.home__quick {
+  width: 143px;
+  flex-direction: column;
+  gap: 7px;
+}
+.home__quick-bar {
+  width: 42px;
+  height: 6px;
+  background: var(--tab-text-top);
+}
+.home__quick-bar:nth-child(even) {
+  background: var(--tab-text-bot);
+}
+
+/* quick-profile popout: a window (same stack at 87%) */
+.home__popout {
+  position: absolute;
+  right: 24px;
+  bottom: calc(var(--h-xl) + 96px);
+  width: 420px;
+  max-height: 340px;
+  flex-direction: column;
+  align-items: stretch;
+  padding: var(--px-band);
+  gap: 3px;
+  overflow-y: auto;
+}
+.home__popout-row {
+  flex: none;
+  justify-content: space-between;
+  padding: 0 18px;
+  text-align: left;
+}
+.home__console-wrap {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.home__error {
+  width: 713px;
+  max-width: 90vw;
+  padding: 0 22px;
+}
+
+/* launch progress replaces the console while installing */
+.home__progress {
+  width: 713px;
+  max-width: 90vw;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 0 26px;
+}
+.home__progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.home__bar {
+  height: 22px;
+  background: var(--black);
+  padding: 4px;
+}
+.home__bar-fill {
+  height: 100%;
+  background: linear-gradient(var(--accent-up) 50%, var(--accent-lo) 50%);
+  transition: width 160ms steps(8);
+}
+
+
+/* content panels stack from the top — .px centres its children by default,
+   which is right for a button and wrong for a list */
+.sheet,
+.sheet__body,
+.settings__body,
+.card,
+.modal,
+.inspector,
+.home__popout,
+.stack,
+.column {
+  justify-content: flex-start;
+}
+.account {
+  justify-content: flex-start;
+}
+
+/* ══ SHEET — the page's content panel ═══════════════════════════════════
+   Dawn puts a page's tab strip and its listing INSIDE one panel; the header
+   row (title / search / primary action) is the only thing outside it. */
+.sheet {
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
+  padding: 18px;
+}
+.sheet__tabs {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  height: var(--h-md);
+}
+.sheet__tabs .px {
+  padding: 0 26px;
+}
+.sheet__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+/* ══ INSTANCES ══════════════════════════════════════════════════════════ */
+.grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  grid-auto-rows: min-content;
+  gap: 24px;
+  align-content: start;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: var(--px-band);
+}
+.card__banner {
+  flex: none;
+  width: 100%;
+  height: 96px;
+  display: block;
+  border: var(--px-black) solid var(--black);
+}
+.card__name {
+  padding: 2px 4px 0;
+}
+.card__meta {
+  padding: 0 4px 4px;
+}
+.card__row {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+}
+.card__row .px {
+  flex: 1;
+}
+.card__row .card__del {
+  flex: 0 0 132px;
+}
+
+.tabstrip__spacer {
+  flex: 1;
+}
+
+.search {
+  flex: 0 1 460px;
+  justify-content: flex-start;
+  gap: 12px;
+  padding-left: 18px;
+}
+
+.empty {
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+  padding: 40px;
+}
+.empty .meta {
+  max-width: 620px;
+}
+
+/* new-profile / confirm dialogs: window variant, centred */
+.modal-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+.modal {
+  width: 560px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
+  padding: 28px;
+}
+.modal__row {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  height: var(--h-sm);
+}
+.modal__row > .px {
+  flex: 1;
+}
+.modal__label {
+  flex: 0 0 150px;
+  display: flex;
+  align-items: center;
+}
+
+/* ══ COSMETICS ══════════════════════════════════════════════════════════ */
+.wardrobe {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 24px;
+}
+.wardrobe__left {
+  flex: 1;
+  min-width: 0;
+}
+.wardrobe__grid {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+}
+.skin-tile {
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  height: 280px;
+}
+.skin-tile__stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+.skin-tile__name {
+  flex: none;
+  width: 100%;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.skin-tile__badge .tt {
+  --tt-top: #ffffff;
+  --tt-bot: var(--g-co);
+}
+.skin-tile__badge {
+  flex: none;
+  width: 100%;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--g-lo);
+}
+.skin-tile__plus {
+  width: 46px;
+  height: 46px;
+  position: relative;
+}
+.skin-tile__plus::before,
+.skin-tile__plus::after {
+  content: '';
+  position: absolute;
+  background: var(--text-2);
+}
+.skin-tile__plus::before {
+  left: 0;
+  right: 0;
+  top: 20px;
+  height: 6px;
+}
+.skin-tile__plus::after {
+  top: 0;
+  bottom: 0;
+  left: 20px;
+  width: 6px;
+}
+
+.inspector {
+  flex: 0 0 420px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
+  padding: 18px;
+}
+.inspector__zoom {
+  display: flex;
+  gap: 12px;
+}
+.inspector__zoom .px {
+  flex: 1;
+}
+.inspector__stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.inspector__canvas {
+  flex: 1;
+  min-height: 0;
+}
+.inspector__poses {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.inspector__poses .px {
+  padding: 0;
+}
+
+/* the 2D paper doll — CSS crops out of the skin sheet, no canvas */
+.doll {
+  position: relative;
+  image-rendering: pixelated;
+}
+.doll span {
+  position: absolute;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+/* ══ SETTINGS ═══════════════════════════════════════════════════════════ */
+.settings__body {
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: calc(var(--px-band) + 10px);
+  overflow-y: auto;
+}
+.srow {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 82px;
+  padding: 0 22px;
+  border-bottom: 2px solid var(--panel-bd);
+}
+.srow:last-child {
+  border-bottom: 0;
+}
+.srow__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.srow__control {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  height: var(--h-sm);
+}
+.srow__control .px {
+  min-width: 108px;
+  padding: 0 18px;
+}
+.srow__control .px--wide {
+  min-width: 300px;
+}
+.slider {
+  width: 260px;
+  accent-color: var(--accent-up);
+}
+
+/* ══ PROFILE ════════════════════════════════════════════════════════════ */
+.account {
+  flex: none;
+  align-items: center;
+  gap: 26px;
+  padding: 26px;
+}
+.account__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.account__actions {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  height: var(--h-md);
+}
+.account__actions .px {
+  min-width: 200px;
+}
+.column {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.stack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 26px;
+}
+.stack--center {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}

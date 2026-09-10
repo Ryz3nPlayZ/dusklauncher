@@ -1,0 +1,71 @@
+/* Layered pixel-art scene backgrounds (dawn.gg-style parallax). Layers stack
+   bottom→top, cover/bottom-anchored, pixelated. Mob drift/bob is pure CSS —
+   no per-frame JS. See src/assets/background/README.md for the asset recipe. */
+
+.scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.scene__layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center bottom;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+/* vignette so foreground UI stays readable over any scene */
+.scene::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 42%, transparent 55%, rgba(0, 0, 0, 0.5) 100%),
+    linear-gradient(rgba(0, 0, 0, 0.12), transparent 22%, transparent 70%, rgba(0, 0, 0, 0.42));
+}
+
+@keyframes scene-drift {
+  from {
+    transform: translateX(-14vw);
+  }
+  to {
+    transform: translateX(114vw);
+  }
+}
+@keyframes scene-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(var(--amp, 12px));
+  }
+}
+
+.scene__mob {
+  position: absolute;
+  left: 0;
+  pointer-events: none;
+  will-change: transform;
+  animation: scene-drift var(--drift, 60s) linear var(--delay, 0s) infinite;
+}
+.scene__mob-inner {
+  animation: scene-bob var(--bob, 6s) ease-in-out infinite;
+}
+.scene__mob img {
+  display: block;
+  image-rendering: pixelated;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene__mob,
+  .scene__mob-inner {
+    animation-play-state: paused;
+  }
+}

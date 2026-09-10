@@ -1,0 +1,118 @@
+/* ── navbar (spec §1) ──────────────────────────────────────────────────────
+   One 92px strip: 3px black frame, 3px black dividers SHARED between cells —
+   so the bar is black with 3px gaps and every cell draws only its own band.
+   Layout: left tab group · plain-panel gap · right group pinned (PROFILE /
+   STORE / SETTINGS). */
+
+.nav {
+  position: relative;
+  z-index: var(--z-nav);
+  flex: none;
+  height: var(--nav-h);
+  display: flex;
+  align-items: stretch;
+  gap: 3px;
+  padding: 3px;
+  background: var(--black);
+}
+
+.nav__cell {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0 30px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+/* the wordmark cell — a label, not a control, so it never takes the
+   active/idle band treatment */
+.nav__brand {
+  padding: 0 26px;
+  cursor: default;
+}
+.nav__word {
+  font-family: var(--font-pixel);
+  font-size: 22px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--accent-up);
+  -webkit-text-stroke: 0.5px var(--accent-up);
+  paint-order: stroke fill;
+}
+.nav__word b {
+  color: #fff;
+  -webkit-text-stroke: 0.5px #fff;
+  font-weight: inherit;
+}
+
+/* tabs share one width so the strip reads as a grid, not a word-length row */
+.nav__tab {
+  flex: 0 1 228px;
+  min-width: 0;
+}
+
+/* the gap: a plain generic panel — bands top and bottom only, since the
+   black dividers close it left and right. Doubles as the drag region. */
+.nav__gap {
+  flex: 1 1 0;
+  min-width: 0;
+  background-color: var(--panel);
+  background-repeat: no-repeat;
+  background-image:
+    linear-gradient(var(--panel-bd), var(--panel-bd)),
+    linear-gradient(var(--panel-bd), var(--panel-bd));
+  background-position:
+    left 0 top 0,
+    left 0 bottom 0;
+  background-size:
+    100% var(--px-band),
+    100% var(--px-band);
+}
+
+/* profile cell: head + IGN */
+.nav__profile {
+  padding: 0 24px;
+  gap: 14px;
+}
+
+/* the head, cropped straight out of the skin PNG (front face + hat layer) */
+.head {
+  position: relative;
+  flex: none;
+  image-rendering: pixelated;
+}
+.head__face,
+.head__hat {
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+/* narrow windows (the minimum is 1024×680): the strip keeps all six cells —
+   type steps down and the padding tightens rather than anything dropping out */
+@media (max-width: 1280px) {
+  .nav__cell {
+    padding: 0 18px;
+  }
+  .nav .tt--20 {
+    font-size: 16px;
+    letter-spacing: 1px;
+  }
+  .nav__word {
+    font-size: 18px;
+  }
+}
+@media (max-width: 1120px) {
+  .nav__cell {
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .nav__word b {
+    display: none;
+  }
+  .nav .tt--16 {
+    font-size: 13px;
+  }
+}
