@@ -19,31 +19,31 @@
 .nav__cell {
   flex: 0 1 auto;
   min-width: 0;
-  padding: 0 calc(16 * var(--u));
-  gap: calc(12 * var(--u));
+  padding: 0 calc(13 * var(--t));
+  gap: calc(12 * var(--t));
   overflow: hidden;
 }
 
 /* the wordmark cell — a label, not a control, so it never takes the
    active/idle band treatment */
 .nav__brand {
-  padding: 0 26px;
+  padding: 0 calc(18 * var(--t));
   cursor: default;
 }
 /* The strip has to hold every cell at once, so its type takes a second cap
    tied to the window's width: it grows with --u like everything else until
    the row would stop fitting, and never past that. */
 .nav .tt {
-  font-size: min(calc(26 * var(--u)), 1.7vw);
+  font-size: min(calc(26 * var(--t)), 1.6vw);
 }
 .win__bar .tt {
-  font-size: min(calc(28 * var(--u)), 2.2vw);
+  font-size: min(calc(28 * var(--t)), 2.2vw);
 }
 
 .nav__word {
   font-family: var(--font-pixel);
-  font-size: min(calc(28 * var(--u)), 1.8vw);
-  letter-spacing: calc(3 * var(--u));
+  font-size: min(calc(28 * var(--t)), 1.55vw);
+  letter-spacing: calc(3 * var(--t));
   text-transform: uppercase;
   white-space: nowrap;
   color: var(--accent-up);
@@ -56,9 +56,12 @@
   font-weight: inherit;
 }
 
-/* tabs share one width so the strip reads as a grid, not a word-length row */
+/* A cell is as wide as its own label plus the shared padding — HOME is short,
+   PROFILE is long, exactly as the spec strip reads. They must NOT share one
+   width: flex-growing them to fill the bar is what stretched every tab to
+   ~460px on a wide window. The gap panel takes all the slack instead. */
 .nav__tab {
-  flex: 1 1 calc(228 * var(--u));
+  flex: 0 0 auto;
   min-width: 0;
 }
 
@@ -82,8 +85,8 @@
 
 /* profile cell: head + IGN */
 .nav__profile {
-  padding: 0 24px;
-  gap: 14px;
+  padding: 0 calc(24 * var(--t));
+  gap: calc(14 * var(--t));
 }
 
 /* the head, cropped straight out of the skin PNG (front face + hat layer) */
@@ -101,12 +104,8 @@
 }
 
 /* narrow windows (the minimum is 1024×680): the strip keeps all six cells —
-   type steps down and the padding tightens rather than anything dropping out */
-@media (max-width: 1280px) {
-  .nav__cell {
-    padding: 0 18px;
-  }
-}
+   type steps down with --u on its own; below 1120 the padding tightens past
+   that too, rather than anything dropping out */
 @media (max-width: 1120px) {
   .nav__cell {
     padding: 0 12px;
@@ -124,9 +123,6 @@
   }
   .nav__cell {
     padding: 0 8px;
-  }
-  .nav__tab {
-    flex: 0 1 140px;
   }
   /* the account cell keeps its head and drops the name */
   .nav__profile .tt {
@@ -152,7 +148,9 @@
   display: flex;
   align-items: stretch;
   gap: 3px;
-  padding: 3px 3px 0;
+  /* black on all four sides — the bar is a strip of black with the cells
+     inset into it, so the frame reads continuous with the window outline */
+  padding: 3px;
   background: var(--black);
 }
 /* the filler between the tab group and whatever is pinned right — the same

@@ -342,8 +342,8 @@
 /* the viewer is a narrow column by design, so its two CTAs take the same
    width-aware cap the navbar does rather than overrunning their buttons */
 .viewer__actions .tt {
-  font-size: min(calc(26 * var(--u)), 1.3vw);
-  letter-spacing: min(calc(2 * var(--u)), 0.1vw);
+  font-size: min(calc(26 * var(--t)), 1.1vw);
+  letter-spacing: min(calc(2 * var(--t)), 0.08vw);
 }
 .wardrobe__note {
   flex: none;
@@ -378,6 +378,11 @@
   align-items: center;
   justify-content: center;
   width: 100%;
+}
+/* a long skin name must shrink to fit rather than clip off both ends */
+.skin-tile__name .tt {
+  font-size: min(calc(26 * var(--t)), 1.3vw);
+  letter-spacing: min(calc(2 * var(--t)), 0.08vw);
 }
 .skin-tile__name {
   flex: none;

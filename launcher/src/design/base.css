@@ -88,8 +88,8 @@ canvas {
   display: flex;
   align-items: center;
   font-family: var(--font-pixel);
-  font-size: calc(46 * var(--u));
-  letter-spacing: calc(4 * var(--u));
+  font-size: calc(46 * var(--t));
+  letter-spacing: calc(4 * var(--t));
   text-transform: uppercase;
   color: #fff;
   -webkit-text-stroke: 0.5px #fff;
@@ -117,7 +117,7 @@ canvas {
   background: transparent;
   color: var(--text-1);
   font-family: var(--font-body);
-  font-size: calc(17 * var(--u));
+  font-size: calc(17 * var(--t));
   padding: 0 calc(12 * var(--u));
 }
 .input::placeholder {

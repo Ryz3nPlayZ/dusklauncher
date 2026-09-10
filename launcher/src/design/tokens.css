@@ -141,17 +141,33 @@
    6px border band stay 5 and 6 at every window size, so the borders read as
    the deliberately thick frame the design calls for.
 
-   SIZE — every height and every type step — is a multiple of --u, the one
-   responsive atom. --u is 1px in a 1280×800 window and tracks the smaller of
-   the two axes, so a row that is 86 tall keeps its proportion to the window
-   instead of hard-coding one machine's pixels. */
+   SIZE splits into two atoms, and they are NOT the same number.
+
+   --u sizes BOXES: every height, gutter and tile. It is 0.7px at the app's
+   own window (1280×800), i.e. the spec's "86px row" lands at 60 real pixels.
+   The spec.html specimens are magnified construction drawings — their 86 and
+   234 are proportions to hold, not CSS pixels to copy. Copying them literally
+   is what made a navbar eat an eighth of the window.
+
+   --t sizes TYPE, and stays at 1px on that same window. Type therefore fills
+   more of its button than a naive scale-everything-together would give: a
+   chunky label in a tight box, which is what the reference actually looks
+   like. Shrinking the boxes must never drag the text down with it — that is
+   the whole point of keeping two atoms.
+
+   Both track the smaller axis below the reference window and neither grows
+   past it: a big display shows MORE (more cards per row, more skins per
+   shelf), never the same shell blown up. */
 :root {
-  --u: clamp(0.78px, min(0.0781vw, 0.125vh), 1.4px);
+  --u: clamp(0.55px, min(0.0547vw, 0.0875vh), 0.7px);
+  --t: clamp(0.78px, min(0.0781vw, 0.125vh), 1px);
 
   --px-black: 5px;   /* black outline (nav frame/dividers use 3px) */
   --px-band: 6px;    /* border band */
-  --px-corner: 17px; /* L-corner leg — 28px on the 143px CTA (17/86 × side) */
-  --px-corner-cta: 28px;
+  /* L-corner leg — the spec's 17/86 of the side, held at the box scale so
+     the corner stays a fifth of the edge rather than a third of it */
+  --px-corner: 12px;
+  --px-corner-cta: 20px;
 
   /* the height scale. --h-md IS the navbar height: a search bar, a tab, a
      settings control and a nav cell are all one row tall, everywhere. */

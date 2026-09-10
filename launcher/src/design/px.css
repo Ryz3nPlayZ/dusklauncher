@@ -26,7 +26,7 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  padding: 0 calc(22 * var(--u));
+  padding: 0 calc(22 * var(--t));
   border: var(--px-black) solid var(--black);
   border-radius: var(--radius);
   background-color: transparent;
@@ -240,18 +240,18 @@ a.px:focus-visible {
 /* The type scale. Every step is a multiple of --u, so type tracks the
    window the same way the row heights do and a label always sits the same
    fraction of the way across its button. */
-.tt--36 { font-size: calc(42 * var(--u)); letter-spacing: calc(4 * var(--u)); }
-.tt--22 { font-size: calc(34 * var(--u)); letter-spacing: calc(3 * var(--u)); }
-.tt--20 { font-size: calc(30 * var(--u)); letter-spacing: calc(3 * var(--u)); }
-.tt--16 { font-size: calc(26 * var(--u)); letter-spacing: calc(2 * var(--u)); }
-.tt--14 { font-size: calc(23 * var(--u)); letter-spacing: calc(2 * var(--u)); }
-.tt--13 { font-size: calc(21 * var(--u)); letter-spacing: calc(2 * var(--u)); }
-.tt--11 { font-size: calc(18 * var(--u)); letter-spacing: calc(1 * var(--u)); }
+.tt--36 { font-size: calc(42 * var(--t)); letter-spacing: calc(4 * var(--t)); }
+.tt--22 { font-size: calc(34 * var(--t)); letter-spacing: calc(3 * var(--t)); }
+.tt--20 { font-size: calc(30 * var(--t)); letter-spacing: calc(3 * var(--t)); }
+.tt--16 { font-size: calc(26 * var(--t)); letter-spacing: calc(2 * var(--t)); }
+.tt--14 { font-size: calc(23 * var(--t)); letter-spacing: calc(2 * var(--t)); }
+.tt--13 { font-size: calc(21 * var(--t)); letter-spacing: calc(2 * var(--t)); }
+.tt--11 { font-size: calc(18 * var(--t)); letter-spacing: calc(1 * var(--t)); }
 
 /* body/metadata voice */
 .meta {
   font-family: var(--font-body);
-  font-size: calc(15 * var(--u));
+  font-size: calc(15 * var(--t));
   line-height: 1.45;
   color: var(--text-3);
 }
