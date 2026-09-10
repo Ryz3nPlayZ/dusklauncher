@@ -1,58 +1,60 @@
-import { useEffect, useRef } from 'react';
-import { hash32, mulberry32 } from '../lib/format';
-
 /**
- * Deterministic pixel banner for profile cards — a seeded block pattern in
- * the theme's accent family. No assets, unique per profile id.
+ * Per-instance banner: a tiny pixel landscape drawn once from the profile's
+ * `art` seed, at 48×14 cells and upscaled with nearest-neighbour. Deterministic,
+ * so an instance always looks like itself. Palette comes from the tokens.
  */
-export default function ProfileBanner({
-  seed,
-  height = 44,
-  className,
-}: {
-  seed: number;
-  height?: number;
-  className?: string;
-}) {
+import { useEffect, useRef } from 'react';
+
+const CELLS_X = 48;
+const CELLS_Y = 14;
+
+function rng(seed: number) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export default function ProfileBanner({ seed, className }: { seed: number; className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const cv = ref.current;
-    if (!cv) return;
-    const W = 64; // internal resolution; CSS upscales with pixelated
-    const H = Math.round((height / 320) * W * 0.45);
-    cv.width = W;
-    cv.height = H;
-    const ctx = cv.getContext('2d')!;
+    const canvas = ref.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    canvas.width = CELLS_X;
+    canvas.height = CELLS_Y;
+    const rand = rng(seed);
 
-    const rng = mulberry32(seed || 1);
-    const dark = '#160710';
-    const tones = ['#2b0d14', '#43101c', '#6f0d26', '#a3123a'];
-    ctx.fillStyle = dark;
-    ctx.fillRect(0, 0, W, H);
-    // stacked strata
-    for (let y = 0; y < H; y++) {
-      const t = y / H;
-      const tone = tones[Math.min(tones.length - 1, Math.floor(t * tones.length + rng() * 0.8))];
-      ctx.fillStyle = tone;
-      ctx.fillRect(0, y, W, 1);
-      // jagged right-edge variation per stratum
-      const cuts = 2 + Math.floor(rng() * 4);
-      for (let c = 0; c < cuts; c++) {
-        const x = Math.floor(rng() * W);
-        const w = 1 + Math.floor(rng() * 3);
-        ctx.fillStyle = rng() < 0.5 ? dark : tones[Math.max(0, tones.indexOf(tone) - 1)];
-        ctx.fillRect(x, y, w, 1);
-      }
-    }
-    // ember specks
-    ctx.fillStyle = '#ff1e43';
-    for (let i = 0; i < 10; i++) {
-      ctx.globalAlpha = 0.35 + rng() * 0.6;
-      ctx.fillRect(Math.floor(rng() * W), Math.floor(rng() * H), 1, 1);
-    }
-    ctx.globalAlpha = 1;
-  }, [seed, height]);
+    // sky: three flat bands, hue picked from the seed but kept in the
+    // dark-panel range so the card never out-shouts its own text
+    const hue = Math.floor(rand() * 360);
+    const sky = [`hsl(${hue} 22% 20%)`, `hsl(${hue} 20% 16%)`, `hsl(${hue} 18% 13%)`];
+    sky.forEach((c, i) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(0, i * 3, CELLS_X, 3);
+    });
 
-  return <canvas ref={ref} className={className} />;
+    // a sun/moon block
+    ctx.fillStyle = `hsl(${(hue + 40) % 360} 60% 62%)`;
+    ctx.fillRect(4 + Math.floor(rand() * (CELLS_X - 12)), 1 + Math.floor(rand() * 3), 3, 3);
+
+    // terrain: integer-frequency sines, so the silhouette tiles cleanly
+    const a = 1 + Math.floor(rand() * 3);
+    const b = 1 + Math.floor(rand() * 4);
+    const phase = rand() * Math.PI * 2;
+    for (let x = 0; x < CELLS_X; x++) {
+      const t = (x / CELLS_X) * Math.PI * 2;
+      const h = 4 + Math.round(1.6 * Math.sin(a * t + phase) + 1.2 * Math.sin(b * t));
+      ctx.fillStyle = `hsl(${(hue + 150) % 360} 26% 26%)`;
+      ctx.fillRect(x, CELLS_Y - h, 1, 1);
+      ctx.fillStyle = `hsl(${(hue + 150) % 360} 24% 15%)`;
+      ctx.fillRect(x, CELLS_Y - h + 1, 1, h - 1);
+    }
+  }, [seed]);
+
+  return <canvas ref={ref} className={className} aria-hidden="true" />;
 }

@@ -1,213 +1,157 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import SceneBackground from './background/SceneBackground';
-import { PixelIcon, type IconName } from './components/PixelIcon';
-import { Toaster } from './components/ui';
-import AccountsModal from './views/AccountsModal';
-import PvpWipe from './components/PvpWipe';
-import Onboarding from './views/Onboarding';
+import Nav from './components/Nav';
+import { PxBox, PxButton, TT } from './components/px/Px';
+import PixelGlyph from './components/px/PixelGlyph';
+import type { Pose } from './components/PlayerRender';
+import { api, isTauri, listen, type Account, type GameState, type Profile, type Progress, type Settings } from './lib/api';
+import type { Route } from './routes';
 import Home from './views/Home';
 import Instances from './views/Instances';
-import Settings from './views/Settings';
-import Skins from './views/Skins';
-import { useUi, type View } from './stores/ui';
-import { useSettings } from './stores/settings';
-import { useProfiles } from './stores/profiles';
-import { useAccount } from './stores/account';
-import { useSkins } from './stores/skins';
-import { useLaunch } from './stores/launch';
-import { isTauri } from './lib/tauri';
-import { playSfx } from './sfx/sfx';
+import Cosmetics from './views/Cosmetics';
+import Store from './views/Store';
+import ProfileView from './views/Profile';
+import SettingsView from './views/Settings';
 
-const TABS: { view: View; label: string; icon: IconName }[] = [
-  { view: 'home', label: 'HOME', icon: 'home' },
-  { view: 'instances', label: 'INSTANCES', icon: 'bolt' },
-  { view: 'skins', label: 'COSMETICS', icon: 'shirt' },
-  { view: 'settings', label: 'SETTINGS', icon: 'gear' },
-];
-
-const VIEWS: Record<View, () => JSX.Element> = {
-  home: Home,
-  instances: Instances,
-  settings: Settings,
-  skins: Skins,
-};
-
-function Nav() {
-  const { view, setView, setAccountsOpen } = useUi();
-  const account = useAccount((s) => s.account);
-
-  async function winAction(action: 'min' | 'max' | 'close') {
-    if (!isTauri) return;
-    const { getCurrentWindow } = await import('@tauri-apps/api/window');
-    const w = getCurrentWindow();
-    if (action === 'min') void w.minimize();
-    else if (action === 'max') void w.toggleMaximize();
-    else void w.close();
-  }
-
-  return (
-    <header className="nav" data-tauri-drag-region>
-      <div className="nav__brand">
-        <PixelIcon name="sparkle" size={30} className="nav__logo" />
-        <span className="nav__word">
-          DUSK<span>LAUNCHER</span>
-        </span>
-      </div>
-
-      <nav className="nav__tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.view}
-            className={`ptab ${view === t.view ? 'ptab--active' : ''}`}
-            onClick={() => {
-              setView(t.view);
-              playSfx('click');
-            }}
-          >
-            <PixelIcon name={t.icon} size={17} /> {t.label}
-          </button>
-        ))}
-      </nav>
-
-      <div className="nav__right">
-        <PvpButton />
-        <button
-          className="acct-pill"
-          title={account?.authenticated ? 'Account' : 'Accounts — not signed in'}
-          onClick={() => setAccountsOpen(true)}
-        >
-          <img
-            className="acct-pill__head"
-            src="img/head-placeholder.png"
-            alt=""
-            draggable={false}
-          />
-          <span className="acct-pill__name">{account?.username ?? 'PLAYER'}</span>
-        </button>
-        <button className="win-btn" title="Minimize" onClick={() => winAction('min')}>
-          <PixelIcon name="minus" size={15} />
-        </button>
-        <button className="win-btn" title="Fullscreen" onClick={() => winAction('max')}>
-          <PixelIcon name="fullscreen" size={15} />
-        </button>
-        <button
-          className="win-btn win-btn--close"
-          title="Close"
-          onClick={() => winAction('close')}
-        >
-          <PixelIcon name="close" size={15} />
-        </button>
-      </div>
-    </header>
-  );
-}
-
-/** PVPMODE toggle: nether (red PvP) <-> overworld (gold), always through
- *  the noise-dissolve wipe so the two states feel like modes, not themes. */
-function PvpButton() {
-  const theme = useSettings((s) => s.settings.theme);
-  const startPvpWipe = useUi((s) => s.startPvpWipe);
-  const pvp = theme === 'nether';
-  return (
-    <button
-      className={`pvp-btn ${pvp ? 'is-on' : ''}`}
-      title={pvp ? 'PVPMODE on — wipe back to Overworld' : 'Wipe to PVPMODE'}
-      onClick={() => {
-        playSfx('click');
-        startPvpWipe(!pvp);
-      }}
-    >
-      <PixelIcon name="sword" size={17} /> <span>PVPMODE</span>
-    </button>
-  );
-}
-
-/** Floating chrome: no footer bar, no status pill. The launch console is a
- *  small floating tile bottom-left that opens the drawer as an overlay. */
-function FloatingChrome() {
-  const { drawerOpen, toggleDrawer } = useUi();
-  const phase = useLaunch((s) => s.phase);
-
-  return (
-    <>
-      {drawerOpen && <LogDrawer />}
-      <button
-        className={`console-fab ${phase !== 'idle' ? 'is-live' : ''}`}
-        onClick={toggleDrawer}
-        title="Launch console"
-      >
-        <span className="live-dot" />
-        CONSOLE
-        <PixelIcon name={drawerOpen ? 'chevronDown' : 'chevronUp'} size={9} />
-      </button>
-    </>
-  );
-}
-
-function LogDrawer() {
-  const { drawerOpen, toggleDrawer } = useUi();
-  const log = useLaunch((s) => s.log);
-  const progress = useLaunch((s) => s.progress);
-
-  return (
-    <div className={`drawer ${drawerOpen ? 'drawer--open' : ''}`}>
-      <div className="drawer__head">
-        <PixelIcon name="java" size={11} />
-        GAME OUTPUT
-        {progress && (
-          <span style={{ marginLeft: 'auto', color: 'var(--text-accent)' }}>
-            {progress.stage.toUpperCase()} {progress.done}/{progress.total}
-          </span>
-        )}
-        <button className="pbtn pbtn--ghost pbtn--sm" onClick={toggleDrawer}>
-          <PixelIcon name="chevronDown" size={9} />
-        </button>
-      </div>
-      <div className="drawer__log">
-        {log.length === 0 && <div className="text-3">No output yet — launch a profile.</div>}
-        {log.map((l, i) => (
-          <div key={i} className={`line ${l.stream === 'err' ? 'err' : ''}`}>
-            {l.line}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+/** The window is undecorated (tauri.conf.json), so the shell owns its chrome. */
+const appWindow = () => getCurrentWindow();
 
 export default function App() {
-  const view = useUi((s) => s.view);
-  const account = useAccount((s) => s.account);
-  const accountLoaded = useAccount((s) => s.loaded);
-  const [onboardDismissed, setOnboardDismissed] = useState(false);
-  const showOnboarding = accountLoaded && !account?.authenticated && !onboardDismissed;
+  const [route, setRoute] = useState<Route>('home');
+  const [account, setAccount] = useState<Account | null>(null);
+  const [skin, setSkin] = useState<string | null>(null);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [pose, setPose] = useState<Pose>('IDLE');
+  const [progress, setProgress] = useState<Progress | null>(null);
+  const [game, setGame] = useState<GameState | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void useSettings.getState().load();
-    void useProfiles.getState().load();
-    void useAccount.getState().load();
-    void useSkins.getState().load();
-    useLaunch.getState().bindEvents();
+  const refreshProfiles = useCallback(async () => setProfiles(await api.listProfiles()), []);
+  const refreshAccount = useCallback(async () => {
+    setAccount(await api.getAccount());
+    setSkin(await api.accountSkin());
   }, []);
 
-  const View = VIEWS[view] ?? Home;
+  useEffect(() => {
+    void refreshProfiles();
+    void refreshAccount();
+    void api.getSettings().then(setSettings);
+  }, [refreshProfiles, refreshAccount]);
+
+  // theme drives both the accent family and which scene plays behind
+  useEffect(() => {
+    if (settings) document.documentElement.dataset.theme = settings.theme;
+  }, [settings?.theme]);
+
+  useEffect(() => {
+    const unlisten = [
+      listen<Progress>('launch-progress', setProgress),
+      listen<GameState>('game-state', (s) => {
+        setGame(s);
+        if (s.state === 'exited') setProgress(null);
+      }),
+    ];
+    return () => {
+      void Promise.all(unlisten).then((fns) => fns.forEach((f) => f?.()));
+    };
+  }, []);
+
+  const selected = useMemo(
+    () => profiles.find((p) => p.id === settings?.selectedProfileId) ?? profiles[0] ?? null,
+    [profiles, settings?.selectedProfileId],
+  );
+
+  const saveSettings = useCallback(async (next: Settings) => {
+    setSettings(next);
+    await api.setSettings(next);
+  }, []);
+
+  const selectProfile = useCallback(
+    (id: string) => {
+      if (settings) void saveSettings({ ...settings, selectedProfileId: id });
+    },
+    [settings, saveSettings],
+  );
+
+  const launch = useCallback(
+    async (id: string) => {
+      setError(null);
+      setProgress({ profileId: id, stage: 'starting', done: 0, total: 0, doneBytes: 0, totalBytes: 0 });
+      try {
+        await api.launch(id);
+        void refreshProfiles();
+      } catch (e) {
+        setProgress(null);
+        setError(String(e));
+      }
+    },
+    [refreshProfiles],
+  );
 
   return (
-    <>
-      <div className="stage">
-        <SceneBackground />
-        <PvpWipe />
+    <div className="app">
+      <SceneBackground scene={settings?.theme === 'nether' ? 'mcpvp' : 'dawn'} />
+
+      <Nav route={route} onRoute={setRoute} account={account} skin={skin} />
+
+      <main className={`view${route === 'home' ? '' : ' view--dim'}`}>
+        {route === 'home' && (
+          <Home
+            account={account}
+            skin={skin}
+            pose={pose}
+            profiles={profiles}
+            selected={selected}
+            progress={progress}
+            game={game}
+            error={error}
+            onLaunch={launch}
+            onSelect={selectProfile}
+            onWardrobe={() => setRoute('cosmetics')}
+            onStop={() => void api.stopGame()}
+          />
+        )}
+        {route === 'instances' && (
+          <Instances profiles={profiles} selected={selected} onRefresh={refreshProfiles} onLaunch={launch} onSelect={selectProfile} />
+        )}
+        {route === 'cosmetics' && (
+          <Cosmetics account={account} pose={pose} onPose={setPose} onSkinChange={refreshAccount} />
+        )}
+        {route === 'store' && <Store />}
+        {route === 'profile' && <ProfileView account={account} skin={skin} onChange={refreshAccount} />}
+        {route === 'settings' && settings && <SettingsView settings={settings} onSave={saveSettings} />}
+      </main>
+
+      <div className="status-bar">
+        <PxBox family="panel" height="sm" className="status-pill">
+          <span className={`status-pill__dot ${account?.authenticated ? '' : 'status-pill__dot--off'}`} />
+          <TT size={13} tone="dim">
+            {game?.state === 'running'
+              ? 'GAME RUNNING'
+              : account?.authenticated
+                ? 'ONLINE'
+                : isTauri
+                  ? 'OFFLINE — NOT SIGNED IN'
+                  : 'BROWSER PREVIEW'}
+          </TT>
+        </PxBox>
+
+        {isTauri && (
+          <div className="win-controls">
+            <PxButton family="panel" height="sm" title="Minimize" onClick={() => void appWindow().minimize()}>
+              <PixelGlyph glyph="minimize" size={14} color="var(--text-2)" />
+            </PxButton>
+            <PxButton family="panel" height="sm" title="Maximize" onClick={() => void appWindow().toggleMaximize()}>
+              <PixelGlyph glyph="maximize" size={14} color="var(--text-2)" />
+            </PxButton>
+            <PxButton family="red" height="sm" title="Close" onClick={() => void appWindow().close()}>
+              <PixelGlyph glyph="close" size={14} color="var(--r-up)" />
+            </PxButton>
+          </div>
+        )}
       </div>
-      <div className="app">
-        <Nav />
-        <main className="view">
-          <View />
-        </main>
-        <FloatingChrome />
-      </div>
-      <AccountsModal />
-      {showOnboarding && <Onboarding onDone={() => setOnboardDismissed(true)} />}
-      <Toaster />
-    </>
+    </div>
   );
 }

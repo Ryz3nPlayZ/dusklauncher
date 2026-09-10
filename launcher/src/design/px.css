@@ -1,0 +1,306 @@
+/* ── px.css — THE CONSTRUCTION ─────────────────────────────────────────────
+   Direct CSS transcription of ~/dusk-spec/spec.html. Nothing here is
+   invented: every layer below corresponds to a <rect> in a spec specimen.
+
+   One recipe, used by every element in the app:
+
+     black outline (--px-black)   .px                (border)
+     border band (--px-band)      layers 5-8         (top = --up, bottom = --lo,
+                                                      sides split 50/50)
+     L corners, TR + BL only      layers 1-4         (--co, leg = --px-corner)
+     surface                      layer 9            (flat --surf-top held
+                                                      through 45%, then --surf-bot)
+
+   Variants only ever swap --up / --lo / --co / --surf-bot. */
+
+.px {
+  --up: var(--panel-bd);
+  --lo: var(--panel-bd);
+  --co: transparent;
+  --surf-top: var(--panel);
+  --surf-bot: var(--panel);
+  --corner: var(--px-corner);
+
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 0 calc(30 * var(--t));
+  border: var(--px-black) solid var(--black);
+  border-radius: var(--radius);
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-origin: padding-box;
+  background-clip: padding-box;
+  background-image:
+    /* 1-2 · top-right L */
+    linear-gradient(var(--co), var(--co)),
+    linear-gradient(var(--co), var(--co)),
+    /* 3-4 · bottom-left L */
+    linear-gradient(var(--co), var(--co)),
+    linear-gradient(var(--co), var(--co)),
+    /* 5-6 · top + bottom bands */
+    linear-gradient(var(--up), var(--up)),
+    linear-gradient(var(--lo), var(--lo)),
+    /* 7-8 · side bands, hard split at mid-height */
+    linear-gradient(var(--up) 50%, var(--lo) 50%),
+    linear-gradient(var(--up) 50%, var(--lo) 50%),
+    /* 9 · surface — the only blended element in the system */
+    linear-gradient(var(--surf-top) 0, var(--surf-top) var(--surf-hold), var(--surf-bot) 100%);
+  background-position:
+    right 0 top 0,
+    right 0 top 0,
+    left 0 bottom 0,
+    left 0 bottom 0,
+    left 0 top 0,
+    left 0 bottom 0,
+    left 0 top 0,
+    right 0 top 0,
+    left 0 top 0;
+  background-size:
+    var(--corner) var(--px-band),
+    var(--px-band) var(--corner),
+    var(--corner) var(--px-band),
+    var(--px-band) var(--corner),
+    100% var(--px-band),
+    100% var(--px-band),
+    var(--px-band) 100%,
+    var(--px-band) 100%,
+    100% 100%;
+}
+
+/* the 1px depth shadow that sits AGAINST the left band (border channel ×
+   0.44). It goes on the outer side of the band — putting it on the inner
+   side splits the 6px band into 5+1 and breaks the border's continuity. */
+.px--depth::before,
+.px--depth-split::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  pointer-events: none;
+}
+.px--depth::before {
+  background: var(--depth);
+}
+.px--depth-split::before {
+  background: linear-gradient(var(--act-sh-up) 50%, var(--act-sh-lo) 50%);
+}
+
+/* ── the families (spec §2, §3, §5.3) ─────────────────────────────────── */
+.px--grey {
+  --co: var(--tab-corner);
+}
+.px--yellow {
+  --up: var(--y-up);
+  --lo: var(--y-lo);
+  --co: var(--y-co);
+  --surf-bot: var(--cta-surf-bot);
+}
+.px--green {
+  --up: var(--g-up);
+  --lo: var(--g-lo);
+  --co: var(--g-co);
+  --surf-bot: var(--g-surf-bot);
+}
+.px--blue {
+  --up: var(--b-up);
+  --lo: var(--b-lo);
+  --co: var(--b-co);
+  --surf-bot: var(--b-surf-bot);
+}
+.px--red {
+  --up: var(--r-up);
+  --lo: var(--r-lo);
+  --co: var(--r-co);
+  --surf-bot: var(--r-surf-bot);
+}
+/* the themed voice: same construction, accent family swapped by the theme
+   (gold in Overworld, red in Nether) — PLAY NOW and every selected state */
+.px--accent {
+  --up: var(--accent-up);
+  --lo: var(--accent-lo);
+  --co: var(--accent-co);
+  --surf-bot: var(--accent-surf-bot);
+}
+/* spec 5.3 construction in the accent voice: grey ring (never accented),
+   accent-tinted surface. The primary action inside a panel. */
+.px--soft {
+  --co: var(--tab-corner);
+  --surf-bot: var(--accent-surf-bot);
+}
+/* spec 5.3 — grey ring, whisper-green surface, green text */
+.px--install {
+  --co: var(--tab-corner);
+  --surf-bot: var(--inst-surf-bot);
+}
+/* listing tile body (spec 5.1) */
+.px--listing {
+  --surf-top: var(--listing-body);
+  --surf-bot: var(--listing-body);
+}
+/* window variant: identical stack at 87% */
+.px--window {
+  opacity: var(--panel-window-opacity);
+}
+/* nav-cell geometry: the 2px black comes from the bar itself, not the cell */
+.px--cell {
+  --surf-top: var(--tab-base);
+  --surf-bot: var(--tab-base);
+  border-width: 0;
+}
+.px--active {
+  --up: var(--act-up);
+  --lo: var(--act-lo);
+  --co: var(--act-arrow);
+}
+
+/* ── heights: the shared grid. Feet line up because nothing invents one ── */
+.h-xl {
+  height: var(--h-xl);
+  --corner: var(--px-corner-cta); /* longer legs on the hero CTA (spec §2) */
+}
+.h-lg { height: var(--h-lg); }
+.h-md { height: var(--h-md); }
+.h-sm { height: var(--h-sm); }
+.h-listing { height: var(--h-listing); }
+
+/* ── press: translate 2px, steps easing (never a smooth transition) ────── */
+button.px,
+a.px {
+  cursor: pointer;
+  transition: filter 120ms steps(3);
+}
+button.px:hover:not(:disabled),
+a.px:hover {
+  filter: brightness(1.18);
+}
+button.px:active:not(:disabled) {
+  transform: translateY(2px);
+  filter: brightness(0.94);
+}
+button.px:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.7) brightness(0.72);
+}
+button.px:focus-visible,
+a.px:focus-visible {
+  outline: 2px solid var(--accent-co);
+  outline-offset: 2px;
+}
+
+/* ── two-tone pixel text ───────────────────────────────────────────────────
+   Hard 50/50 split, upper lighter, never smooth. Each half is a solid fill
+   so the matched --tt-w stroke (paint-order: stroke) thickens it in place,
+   the way the spec's SVG text does. Requires data-text on the element. */
+.tt {
+  --tt-top: var(--tab-text-top);
+  --tt-bot: var(--tab-text-bot);
+  --tt-stroke: var(--tt-w);
+  --tt-split: 50%;
+  --tt-ls: 0.1em;
+
+  position: relative;
+  display: inline-block;
+  font-family: var(--font-pixel);
+  font-weight: 700;
+  /* Monocraft's glyph box is ~1.35em, so line-height:1 clipped every label
+     against its own span. 1.4 contains it, and the leading it adds is split
+     evenly above and below — so the 50% two-tone cut still lands mid-glyph. */
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: var(--tt-ls);
+  /* letter-spacing puts a gap after the LAST glyph too, so the box being
+     centred is wider on the right than the glyphs are — which reads as the
+     label leaning left. Pulling that one gap back off the end makes the box
+     exactly as wide as the text, and centring true. */
+  margin-right: calc(-1 * var(--tt-ls));
+  white-space: nowrap;
+  color: var(--tt-top);
+  -webkit-text-stroke: var(--tt-stroke) var(--tt-top);
+  paint-order: stroke fill;
+}
+.tt::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  color: var(--tt-bot);
+  -webkit-text-stroke: var(--tt-stroke) var(--tt-bot);
+  paint-order: stroke fill;
+  clip-path: inset(var(--tt-split) 0 0 0);
+  pointer-events: none;
+}
+.tt--yellow { --tt-top: var(--y-up); --tt-bot: var(--y-lo); }
+.tt--green  { --tt-top: var(--g-up); --tt-bot: var(--g-lo); }
+.tt--blue   { --tt-top: var(--b-up); --tt-bot: var(--b-lo); }
+.tt--red    { --tt-top: var(--r-up); --tt-bot: var(--r-lo); }
+.tt--accent { --tt-top: var(--accent-up); --tt-bot: var(--accent-lo); }
+.tt--sub    { --tt-top: #b5b5b5; --tt-bot: #6e6e6e; --tt-stroke: calc(var(--tt-w) * 0.8); }
+.tt--dim    { --tt-top: #cfcfcf; --tt-bot: #cfcfcf; }
+/* prose voice: the hard 50/50 split is decoration and costs legibility, so
+   descriptive text inside a panel takes one flat fill instead */
+.tt--plain  { --tt-top: #f0f0f0; --tt-bot: #f0f0f0; }
+
+/* The type scale. Every step is a multiple of --u, so type tracks the
+   window the same way the row heights do and a label always sits the same
+   fraction of the way across its button. */
+.tt--36 { font-size: calc(42 * var(--t)); --tt-ls: calc(3 * var(--t)); }
+.tt--22 { font-size: calc(34 * var(--t)); --tt-ls: calc(3 * var(--t)); }
+.tt--20 { font-size: calc(30 * var(--t)); --tt-ls: calc(3 * var(--t)); }
+.tt--16 { font-size: calc(26 * var(--t)); --tt-ls: calc(2 * var(--t)); }
+.tt--14 { font-size: calc(23 * var(--t)); --tt-ls: calc(2 * var(--t)); }
+.tt--13 { font-size: calc(21 * var(--t)); --tt-ls: calc(2 * var(--t)); }
+.tt--11 { font-size: calc(18 * var(--t)); --tt-ls: calc(1 * var(--t)); }
+
+/* body/metadata voice */
+.meta {
+  font-family: var(--font-body);
+  font-size: calc(19 * var(--t));
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+/* ── scrollbar — 12px assembly (spec 5.2, at this shell's scale) ───────────
+   2px black housing / 2px accent CLOSED RING split at mid-height /
+   4px inner thumb #C77707 → #382C1B. */
+.scroll {
+  overflow-y: auto;
+  /* NB: no `scrollbar-width` here — setting it makes Chromium ignore the
+     ::-webkit-scrollbar rules below and draw its own bar instead. */
+}
+.scroll::-webkit-scrollbar {
+  width: var(--sb-w);
+}
+.scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll::-webkit-scrollbar-thumb {
+  background-color: var(--black);
+  background-repeat: no-repeat;
+  background-image:
+    /* top + bottom accent bands — the ring is closed at the travel ends */
+    linear-gradient(var(--accent-up), var(--accent-up)),
+    linear-gradient(var(--accent-lo), var(--accent-lo)),
+    /* left + right accent bands, split at mid-height */
+    linear-gradient(var(--accent-up) 50%, var(--accent-lo) 50%),
+    linear-gradient(var(--accent-up) 50%, var(--accent-lo) 50%),
+    /* 6px inner thumb */
+    linear-gradient(var(--sb-in-top), var(--sb-in-bot));
+  background-position:
+    2px 0,
+    2px 100%,
+    2px 2px,
+    calc(100% - 2px) 2px,
+    4px 2px;
+  background-size:
+    8px 2px,
+    8px 2px,
+    2px calc(100% - 4px),
+    2px calc(100% - 4px),
+    4px calc(100% - 4px);
+}

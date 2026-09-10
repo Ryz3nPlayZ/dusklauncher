@@ -1,15 +1,14 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
 import App from './App';
 import './design/tokens.css';
 import './design/base.css';
-import './design/components.css';
-import './design/app.css';
-import './design/home.css';
-import './design/pages.css';
+import './design/px.css';
+import './design/nav.css';
+import './design/views.css';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
     <App />
-  </React.StrictMode>,
+  </StrictMode>,
 );

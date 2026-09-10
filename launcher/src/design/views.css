@@ -1,0 +1,553 @@
+/* ── views ─────────────────────────────────────────────────────────────────
+   Layout only. Every box below is a spec element (.px …) — these rules place
+   them on the grid and never restyle them. Sizes are multiples of --u, so a
+   layout keeps its proportions instead of one machine's pixel counts. */
+
+/* ══ HOME ═══════════════════════════════════════════════════════════════
+   The player and the console are ONE centred object: the character sits just
+   above the midline, the CTA row just below it, and the pair is centred both
+   ways in the stage. */
+.home {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  justify-items: center;
+  padding: var(--gap) calc(72 * var(--u)) calc(var(--h-sm) + var(--gap));
+}
+
+/* the character owns the upper half and sits on the midline; the console
+   owns the lower half and hangs from it */
+.home__stage {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: calc(10 * var(--u));
+  padding-bottom: 0;
+}
+
+/* the nametag: a small panel, same stack as everything else */
+.home__tag {
+  flex: none;
+  height: calc(52 * var(--u));
+  padding: 0 calc(16 * var(--u));
+}
+
+/* the player is a button — the whole silhouette is the hit area */
+.home__player {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(6 * var(--u));
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+/* the box that decides how big the render is. The canvas measures its
+   parent, so the parent must have a size of its own — never one derived
+   from the canvas sitting inside it. */
+.home__stage-box {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  display: block;
+  width: calc(460 * var(--u));
+  max-height: calc(540 * var(--u));
+  overflow: hidden;
+}
+/* skinview3d measures this canvas's PARENT and writes an inline width and
+   height back onto the canvas. So the parent's size must never depend on
+   the canvas: .home__stage-box has a fixed width and a flex-basis of 0, and
+   clips, so the two can't ratchet each other up the way they were. */
+.home__canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  transition: filter 120ms steps(2);
+}
+/* hover outlines the CHARACTER: four drop-shadows dilate the rendered
+   alpha, so the outline is the silhouette — never a rectangle */
+.home__player:hover .home__canvas,
+.home__player:focus-visible .home__canvas {
+  filter:
+    drop-shadow(2px 0 0 var(--accent-co)) drop-shadow(-2px 0 0 var(--accent-co))
+    drop-shadow(0 2px 0 var(--accent-co)) drop-shadow(0 -2px 0 var(--accent-co));
+}
+/* height comes from the label — a fixed row here just clipped it */
+.home__wardrobe {
+  flex: none;
+  opacity: 0;
+  transition: opacity 120ms steps(2);
+}
+.home__player:hover .home__wardrobe,
+.home__player:focus-visible .home__wardrobe {
+  opacity: 1;
+}
+
+/* the console row: PLAY NOW + the quick-profile popout, one height */
+.home__console {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: var(--gap);
+}
+.home__play {
+  width: calc(545 * var(--u));
+  max-width: 60vw;
+  flex-direction: column;
+  gap: calc(4 * var(--u));
+}
+/* the hero line sets the type size for its own row, so the arrow can be
+   sized in em off the label instead of a fixed pixel height that stops
+   tracking the label the moment the shell rescales */
+.home__play-line {
+  display: flex;
+  align-items: center;
+  font-size: calc(42 * var(--t));
+  gap: calc(14 * var(--u));
+}
+.home__quick {
+  width: var(--h-xl);
+  flex-direction: column;
+  gap: calc(7 * var(--u));
+}
+.home__quick-bar {
+  width: calc(42 * var(--u));
+  height: calc(6 * var(--u));
+  background: var(--tab-text-top);
+}
+.home__quick-bar:nth-child(even) {
+  background: var(--tab-text-bot);
+}
+
+/* quick-profile popout: a window (same stack at 87%) */
+.home__popout {
+  position: absolute;
+  right: 0;
+  bottom: calc(var(--h-xl) + var(--gap));
+  width: calc(460 * var(--u));
+  max-height: calc(380 * var(--u));
+  flex-direction: column;
+  align-items: stretch;
+  padding: var(--px-band);
+  gap: 2px;
+  overflow-y: auto;
+  z-index: var(--z-modal);
+}
+.home__popout-row {
+  flex: none;
+  justify-content: space-between;
+  padding: 0 calc(18 * var(--u));
+  text-align: left;
+}
+.home__console-wrap {
+  position: relative;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap-sm);
+  padding-top: calc(var(--gap) / 2);
+}
+.home__error {
+  width: calc(713 * var(--u));
+  max-width: 90vw;
+  padding: 0 calc(22 * var(--u));
+}
+
+/* launch progress replaces the console while installing */
+.home__progress {
+  width: calc(713 * var(--u));
+  max-width: 90vw;
+  flex-direction: column;
+  align-items: stretch;
+  gap: calc(12 * var(--u));
+  padding: 0 calc(26 * var(--u));
+}
+.home__progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.home__bar {
+  height: calc(22 * var(--u));
+  background: var(--black);
+  padding: 4px;
+}
+.home__bar-fill {
+  height: 100%;
+  background: linear-gradient(var(--accent-up) 50%, var(--accent-lo) 50%);
+  transition: width 160ms steps(8);
+}
+
+/* content panels stack from the top — .px centres its children by default,
+   which is right for a button and wrong for a list */
+.card,
+.modal,
+.viewer,
+.home__popout,
+.stack,
+.column,
+.account {
+  justify-content: flex-start;
+}
+
+/* ══ WINDOW CONTENTS ════════════════════════════════════════════════════ */
+
+/* a scrolling body inside a window pane */
+.win__body--scroll {
+  overflow-y: auto;
+}
+
+/* the search field wears the panel stack, one row tall */
+.search {
+  flex: 0 1 calc(520 * var(--u));
+  justify-content: flex-start;
+  gap: calc(12 * var(--u));
+  padding-left: calc(20 * var(--u));
+}
+
+.empty {
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--gap-sm);
+  text-align: center;
+  padding: calc(40 * var(--u));
+}
+.empty .meta {
+  max-width: calc(620 * var(--u));
+}
+
+/* ══ INSTANCES ══════════════════════════════════════════════════════════
+   Tiles are the generic panel: #1E1E1E body, 6px band, 5px black. Each one
+   carries a PLAY NOW bar and a square gear, equal spacing all round. */
+.grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(690 * var(--u)), 1fr));
+  grid-auto-rows: min-content;
+  gap: var(--gap);
+  align-content: start;
+  overflow-y: auto;
+}
+
+.card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--gap-sm);
+  padding: var(--gap-sm);
+}
+.card__banner {
+  flex: none;
+  width: 100%;
+  height: calc(190 * var(--u));
+  display: block;
+  border: var(--px-black) solid var(--black);
+}
+.card__name {
+  padding: calc(2 * var(--u)) calc(4 * var(--u)) 0;
+}
+.card__meta {
+  padding: 0 calc(4 * var(--u));
+}
+/* the CTA row: a bar that takes what is left, then an 80×80 square */
+.card__row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--gap-sm);
+  height: calc(80 * var(--u));
+}
+.card__play {
+  flex: 1;
+  min-width: 0;
+}
+.card__gear {
+  flex: 0 0 calc(80 * var(--u));
+  padding: 0;
+}
+
+/* new-profile / confirm dialogs: window variant, centred */
+.modal-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+.modal {
+  width: calc(640 * var(--u));
+  max-width: 92vw;
+  flex-direction: column;
+  align-items: stretch;
+  gap: calc(18 * var(--u));
+  padding: calc(28 * var(--u));
+}
+.modal__row {
+  display: flex;
+  align-items: stretch;
+  gap: calc(12 * var(--u));
+  height: var(--h-sm);
+}
+.modal__row > .px {
+  flex: 1;
+}
+.modal__row--tall,
+.modal__row:has(> .h-md) {
+  height: var(--h-md);
+}
+.modal__label {
+  flex: 0 0 calc(160 * var(--u));
+  display: flex;
+  align-items: center;
+}
+
+/* ══ COSMETICS ══════════════════════════════════════════════════════════
+   Inside the page window: the viewer column, a gutter, then the gallery —
+   itself a window (bar + translucent pane). Proportions, not pixels:
+   580 : 30 : 2000 of the available width. */
+.wardrobe {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 1.15%;
+}
+.viewer {
+  flex: 0 0 22.2%;
+  min-width: calc(240 * var(--u));
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--gap-sm);
+  padding: var(--gap-sm);
+}
+.viewer__stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  /* the same feedback loop as .home__stage-box — see the note there. This
+     262px column was reporting 791px of content before the clip. */
+  overflow: hidden;
+}
+.viewer__canvas {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+}
+/* the two CTAs, one row tall, sharing the width */
+.viewer__actions {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: var(--gap-sm);
+  height: var(--h-md);
+}
+.viewer__actions .px {
+  flex: 1;
+  min-width: 0;
+  padding: 0 calc(8 * var(--u));
+}
+/* the viewer is a narrow column by design, so its two CTAs take the same
+   width-aware cap the navbar does rather than overrunning their buttons */
+.viewer__actions .tt {
+  font-size: min(calc(26 * var(--t)), 1.1vw);
+  letter-spacing: min(calc(2 * var(--t)), 0.08vw);
+}
+.wardrobe__note {
+  flex: none;
+  padding-top: var(--gap-sm);
+}
+.wardrobe__gallery {
+  flex: 1;
+  min-width: 0;
+}
+
+/* the gallery: four columns of 45:50 tiles */
+.skin-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(400 * var(--u)), 1fr));
+  grid-auto-rows: min-content;
+  gap: var(--gap);
+  align-content: start;
+  overflow-y: auto;
+}
+.skin-tile {
+  flex-direction: column;
+  gap: calc(10 * var(--u));
+  padding: calc(14 * var(--u));
+  aspect-ratio: 45 / 50;
+}
+.skin-tile__stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  /* the same canvas/parent feedback as .home__stage-box — see the note there */
+  overflow: hidden;
+}
+.skin-tile__stage > canvas {
+  max-width: 100%;
+  max-height: 100%;
+}
+/* a long skin name must shrink to fit rather than clip off both ends */
+.skin-tile__name .tt {
+  font-size: min(calc(26 * var(--t)), 1.15vw);
+  letter-spacing: min(calc(2 * var(--t)), 0.08vw);
+}
+.skin-tile__name {
+  flex: none;
+  width: 100%;
+  height: calc(34 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.skin-tile__badge .tt {
+  --tt-top: #ffffff;
+  --tt-bot: var(--g-co);
+}
+.skin-tile__badge {
+  flex: none;
+  width: 100%;
+  height: calc(30 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--g-lo);
+}
+.skin-tile__plus {
+  width: calc(56 * var(--u));
+  height: calc(56 * var(--u));
+  position: relative;
+}
+.skin-tile__plus::before,
+.skin-tile__plus::after {
+  content: '';
+  position: absolute;
+  background: var(--text-2);
+}
+.skin-tile__plus::before {
+  left: 0;
+  right: 0;
+  top: calc(50% - 2px);
+  height: 4px;
+}
+.skin-tile__plus::after {
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 2px);
+  width: 4px;
+}
+
+/* the 2D paper doll — CSS crops out of the skin sheet, no canvas */
+.doll {
+  position: relative;
+  image-rendering: pixelated;
+}
+.doll span {
+  position: absolute;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+/* ══ SETTINGS ═══════════════════════════════════════════════════════════ */
+.settings__body {
+  gap: 0;
+  overflow-y: auto;
+}
+.srow {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-height: calc(126 * var(--u));
+  padding: calc(18 * var(--u)) calc(10 * var(--u));
+  border-bottom: 2px solid var(--panel-bd);
+}
+.srow:last-child {
+  border-bottom: 0;
+}
+.srow__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(8 * var(--u));
+}
+/* controls are full rows, same height as everything else in the app */
+.srow__control {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: calc(12 * var(--u));
+  height: var(--h-md);
+}
+.srow__control .px {
+  min-width: calc(140 * var(--u));
+}
+.srow__control .px--wide {
+  min-width: calc(360 * var(--u));
+}
+.slider {
+  width: calc(300 * var(--u));
+  accent-color: var(--accent-up);
+}
+
+/* ══ PROFILE ════════════════════════════════════════════════════════════ */
+.account {
+  flex: none;
+  align-items: center;
+  gap: calc(26 * var(--u));
+  padding: calc(26 * var(--u));
+}
+.account__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(10 * var(--u));
+  align-items: flex-start;
+}
+.account__actions {
+  display: flex;
+  align-items: stretch;
+  gap: calc(12 * var(--u));
+  height: var(--h-md);
+}
+.account__actions .px {
+  min-width: calc(220 * var(--u));
+}
+.column {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  overflow-y: auto;
+}
+.stack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--gap-sm);
+  padding: calc(26 * var(--u));
+}
+.stack--center {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}

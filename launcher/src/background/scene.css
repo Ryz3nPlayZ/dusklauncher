@@ -1,27 +1,15 @@
-/* Scene background — layered pixel art extracted from dawn.gg (local
-   placeholder art, see src/assets/background/README.md). Stacked layers
-   anchored to the bottom; two always-mounted scenes crossfade on theme
-   change. The water/flower layers are baked animated WebPs looping inside a
-   plain <img>; all other motion is CSS/GPU — no JS frame loop. */
+/* Layered pixel-art scene backgrounds (dawn.gg-style parallax). Layers stack
+   bottom→top, cover/bottom-anchored, pixelated. Mob drift/bob is pure CSS —
+   no per-frame JS. See src/assets/background/README.md for the asset recipe. */
 
-.scene-bg {
-  position: absolute;
+.scene {
+  position: fixed;
   inset: 0;
+  z-index: 0;
   overflow: hidden;
 }
 
-.scene-bg__scene {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  /* crossfade time when swapping themes */
-  transition: opacity var(--scene-fade, 1.2s) ease;
-}
-.scene-bg__scene.is-active {
-  opacity: 1;
-}
-
-.scene-bg__layer {
+.scene__layer {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -32,17 +20,24 @@
   pointer-events: none;
 }
 
-/* ── mobs: slow left→right drift + stepped vertical bob ──────────────────── */
+/* vignette so foreground UI stays readable over any scene */
+.scene::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 42%, transparent 55%, rgba(0, 0, 0, 0.5) 100%),
+    linear-gradient(rgba(0, 0, 0, 0.12), transparent 22%, transparent 70%, rgba(0, 0, 0, 0.42));
+}
 
 @keyframes scene-drift {
-  0% {
+  from {
     transform: translateX(-14vw);
   }
-  100% {
+  to {
     transform: translateX(114vw);
   }
 }
-
 @keyframes scene-bob {
   0%,
   100% {
@@ -53,37 +48,24 @@
   }
 }
 
-.scene-bg__mob {
+.scene__mob {
   position: absolute;
   left: 0;
   pointer-events: none;
   will-change: transform;
-  animation-play-state: running;
+  animation: scene-drift var(--drift, 60s) linear var(--delay, 0s) infinite;
 }
-
-.scene-bg__mob-inner {
+.scene__mob-inner {
   animation: scene-bob var(--bob, 6s) ease-in-out infinite;
 }
-
-.scene-bg__mob img {
+.scene__mob img {
   display: block;
   image-rendering: pixelated;
 }
 
-/* ── launch/reduce-motion pause ──────────────────────────────────────────── */
-
-/* launch running / reduce-motion setting: freeze mobs (the animated layers
-   are baked into the WebP files and can't be paused from code) */
-.scene-bg--paused .scene-bg__mob {
-  animation-play-state: paused;
-}
-.scene-bg--paused .scene-bg__mob-inner {
-  animation-play-state: paused;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .scene-bg .scene-bg__mob,
-  .scene-bg .scene-bg__mob-inner {
+  .scene__mob,
+  .scene__mob-inner {
     animation-play-state: paused;
   }
 }

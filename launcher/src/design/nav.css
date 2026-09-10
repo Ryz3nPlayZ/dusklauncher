@@ -1,0 +1,193 @@
+/* ── navbar (spec §1) ──────────────────────────────────────────────────────
+   One strip: 2px black frame, 2px black dividers SHARED between cells — so
+   the bar is black with 2px gaps and every cell draws only its own band.
+   Layout: left tab group · plain-panel gap · right group pinned (PROFILE /
+   STORE / SETTINGS). */
+
+.nav {
+  position: relative;
+  z-index: var(--z-nav);
+  flex: none;
+  height: var(--nav-h);
+  display: flex;
+  align-items: stretch;
+  gap: var(--px-nav);
+  padding: var(--px-nav);
+  background: var(--black);
+}
+
+.nav__cell {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0 calc(19 * var(--t));
+  gap: calc(12 * var(--t));
+  overflow: hidden;
+}
+
+/* the wordmark cell — a label, not a control, so it never takes the
+   active/idle band treatment */
+.nav__brand {
+  padding: 0 calc(22 * var(--t));
+  cursor: default;
+}
+/* The strip has to hold every cell at once, so its type takes a second cap
+   tied to the window's width: it grows with --u like everything else until
+   the row would stop fitting, and never past that. */
+.nav .tt {
+  font-size: min(calc(25 * var(--t)), 1.45vw);
+}
+.win__bar .tt {
+  font-size: min(calc(26 * var(--t)), 1.9vw);
+}
+
+.nav__word {
+  font-family: var(--font-pixel);
+  font-size: min(calc(26 * var(--t)), 1.45vw);
+  letter-spacing: calc(3 * var(--t));
+  /* same trailing-gap trim as .tt — see px.css */
+  margin-right: calc(-3 * var(--t));
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--accent-up);
+  -webkit-text-stroke: var(--tt-w) var(--accent-up);
+  paint-order: stroke fill;
+}
+.nav__word b {
+  color: #fff;
+  -webkit-text-stroke: var(--tt-w) #fff;
+  font-weight: inherit;
+}
+
+/* A cell is as wide as its own label plus the shared padding — HOME is short,
+   PROFILE is long, exactly as the spec strip reads. They must NOT share one
+   width: flex-growing them to fill the bar is what stretched every tab to
+   ~460px on a wide window. The gap panel takes all the slack instead. */
+.nav__tab {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+/* the gap: a plain generic panel — bands top and bottom only, since the
+   black dividers close it left and right. Doubles as the drag region. */
+.nav__gap {
+  flex: 1 1 0;
+  min-width: 0;
+  background-color: var(--panel);
+  background-repeat: no-repeat;
+  background-image:
+    linear-gradient(var(--panel-bd), var(--panel-bd)),
+    linear-gradient(var(--panel-bd), var(--panel-bd));
+  background-position:
+    left 0 top 0,
+    left 0 bottom 0;
+  background-size:
+    100% var(--px-band),
+    100% var(--px-band);
+}
+
+/* profile cell: head + IGN */
+.nav__profile {
+  padding: 0 calc(24 * var(--t));
+  gap: calc(14 * var(--t));
+}
+
+/* the head, cropped straight out of the skin PNG (front face + hat layer) */
+.head {
+  position: relative;
+  flex: none;
+  image-rendering: pixelated;
+}
+.head__face,
+.head__hat {
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+/* narrow windows (the minimum is 1024×680): the strip keeps all six cells —
+   type steps down with --u on its own; below 1120 the padding tightens past
+   that too, rather than anything dropping out */
+@media (max-width: 1120px) {
+  .nav__cell {
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .nav__word b {
+    display: none;
+  }
+}
+@media (max-width: 1000px) {
+  /* narrower than the app's own minimum — only reachable in a browser
+     preview. The wordmark goes first; all six cells stay reachable. */
+  .nav__brand {
+    display: none;
+  }
+  .nav__cell {
+    padding: 0 8px;
+  }
+  /* the account cell keeps its head and drops the name */
+  .nav__profile .tt {
+    display: none;
+  }
+}
+
+/* ── the window frame ──────────────────────────────────────────────────────
+   A page's content is ONE rectangle: a navbar attached to the top of a body
+   pane, wrapped in a single 5px black outline. The bar is the real navbar —
+   same height, same cells, same type — so a tab strip anywhere in the app
+   reads as the strip at the top of the window. */
+.win {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: var(--px-black) solid var(--black);
+}
+.win__bar {
+  flex: none;
+  height: var(--nav-h);
+  display: flex;
+  align-items: stretch;
+  gap: var(--px-nav);
+  /* Only the BOTTOM edge and the dividers are drawn here. The window's own
+     outline already closes the bar on the other three sides — padding them
+     again stacked two black borders on top of each other. */
+  padding: 0 0 var(--px-nav);
+  background: var(--black);
+}
+/* the filler between the tab group and whatever is pinned right — the same
+   plain panel the navbar uses */
+.win__fill {
+  flex: 1 1 0;
+  min-width: 0;
+  background-color: var(--panel);
+  background-repeat: no-repeat;
+  background-image:
+    linear-gradient(var(--panel-bd), var(--panel-bd)),
+    linear-gradient(var(--panel-bd), var(--panel-bd));
+  background-position:
+    left 0 top 0,
+    left 0 bottom 0;
+  background-size:
+    100% var(--px-band),
+    100% var(--px-band);
+}
+/* the body pane: translucent, so the scene reads through it */
+.win__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(30, 30, 30, 0.85);
+  padding: var(--gap);
+}
+/* settings and other reading surfaces stay opaque */
+.win--solid > .win__body {
+  background: var(--panel);
+}
+/* a window nested inside another window's body */
+.win--inner {
+  flex: 1;
+  min-height: 0;
+}

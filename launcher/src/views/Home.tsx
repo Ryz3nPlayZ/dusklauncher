@@ -1,269 +1,146 @@
-import { useEffect, useRef, useState } from 'react';
-import LazySkinViewer from '../player/LazySkinViewer';
-import { PixelIcon } from '../components/PixelIcon';
-import PixelPedestal from '../components/PixelPedestal';
-import { ProgressBar } from '../components/ui';
-import { useAccount } from '../stores/account';
-import { useProfiles } from '../stores/profiles';
-import { useLaunch } from '../stores/launch';
-import { useSettings } from '../stores/settings';
-import { useSkins } from '../stores/skins';
-import { useUi } from '../stores/ui';
-import { timeAgo } from '../lib/format';
-import { playSfx } from '../sfx/sfx';
+import { useState } from 'react';
+import PlayerRender, { type Pose } from '../components/PlayerRender';
+import PixelArrow from '../components/px/PixelArrow';
+import { PxBox, PxButton, TT } from '../components/px/Px';
+import { ago, loaderLabel, type Account, type GameState, type Profile, type Progress } from '../lib/api';
 
-const STAGE_LABELS: Record<string, string> = {
-  libraries: 'DOWNLOADING LIBRARIES',
-  client: 'DOWNLOADING CLIENT',
-  assets: 'DOWNLOADING ASSETS',
-  java: 'PROVISIONING JAVA',
-  mods: 'DOWNLOADING MODS',
-  launching: 'LAUNCHING',
-};
-
-export default function Home() {
-  const account = useAccount((s) => s.account);
-  const { profiles, selected, select } = useProfiles();
-  const phase = useLaunch((s) => s.phase);
-  const progress = useLaunch((s) => s.progress);
-  const launch = useLaunch((s) => s.launch);
-  const selectedSkin = useSkins((s) => s.selectedSkin);
-  const accountSkin = useAccount((s) => s.skinUrl);
-  // Local wardrobe pick wins; otherwise show the signed-in account's skin.
-  const avatarSkin = selectedSkin ?? accountSkin;
-  const theme = useSettings((s) => s.settings.theme);
-  const setView = useUi((s) => s.setView);
-  const [popoutOpen, setPopoutOpen] = useState(false);
-
-  const profile = selected();
-  const busy = phase === 'preparing' || phase === 'downloading';
-  const running = phase === 'running';
-  const stop = useLaunch((s) => s.stop);
+export default function Home({
+  account,
+  skin,
+  pose,
+  profiles,
+  selected,
+  progress,
+  game,
+  error,
+  onLaunch,
+  onSelect,
+  onWardrobe,
+  onStop,
+}: {
+  account: Account | null;
+  skin: string | null;
+  pose: Pose;
+  profiles: Profile[];
+  selected: Profile | null;
+  progress: Progress | null;
+  game: GameState | null;
+  error: string | null;
+  onLaunch: (id: string) => void;
+  onSelect: (id: string) => void;
+  onWardrobe: () => void;
+  onStop: () => void;
+}) {
+  const [popout, setPopout] = useState(false);
+  const running = game?.state === 'running';
+  const pct = progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
 
   return (
     <div className="home">
-      <AudioWidget />
+      <div className="home__stage">
+        <PxBox family="panel" className="home__tag">
+          <TT size={16}>{account?.username ?? 'NOT SIGNED IN'}</TT>
+        </PxBox>
 
-      <div className="home__center anim-fade-in">
-        <div className="home__nametag font-pixel">{account?.username ?? 'PLAYER'}</div>
-        <button
-          className="home__anchor home__player-btn"
-          onClick={() => setView('skins')}
-          title="Open wardrobe"
-          aria-label="Click for wardrobe"
-        >
-          {avatarSkin ? (
-            <LazySkinViewer
-              skinUrl={avatarSkin}
-              className="home__player"
-              interactive={false}
-              breathe
-            />
-          ) : (
-            <div className="home__player home__player-empty" aria-hidden="true">
-              <PixelIcon name="shirt" size={44} className="text-3" />
-              <span className="font-pixel">NO SKIN</span>
-            </div>
-          )}
-          {/* dithered contact shadow sits behind the (transparent) player
-              canvas, on the pedestal surface, grounding the feet */}
-          <div className="home__contact" />
-          <PixelPedestal theme={theme} />
-          <span className="home__wardrobe-tip font-pixel">
-            {avatarSkin ? 'CLICK FOR WARDROBE' : 'OPEN WARDROBE — ADD A SKIN'}
+        <button className="home__player" onClick={onWardrobe} title="Open the wardrobe">
+          {/* the canvas sizes itself off this box — it must never be the flex
+              child that decides the column's height, or it feeds itself */}
+          <span className="home__stage-box">
+            <PlayerRender skin={skin} pose={pose} zoom={0.95} className="home__canvas" paused={running} />
+          </span>
+          <span className="home__wardrobe">
+            <TT size={16} tone="sub">
+              CLICK FOR WARDROBE
+            </TT>
           </span>
         </button>
       </div>
 
-      <div className="home__console home__console--centered">
-        {busy && progress ? (
-          <div className="home__progress pcard pixel-notch">
+      <div className="home__console-wrap">
+        {progress ? (
+          <PxBox family="accent" height="xl" className="home__progress">
             <div className="home__progress-head">
-              <PixelIcon name="download" size={13} className="text-accent" />
-              <span className="font-pixel">{STAGE_LABELS[progress.stage] ?? progress.stage}</span>
-              <span className="mono" style={{ marginLeft: 'auto' }}>
-                {Math.round((progress.done / Math.max(1, progress.total)) * 100)}%
-              </span>
+              <TT size={20} tone="accent">
+                {progress.stage.toUpperCase()}
+              </TT>
+              <TT size={16} tone="sub">{`${pct}%`}</TT>
             </div>
-            <ProgressBar value={progress.done / Math.max(1, progress.total)} />
-            <div className="home__progress-sub text-3">
-              {progress.done}/{progress.total} files
+            <div className="home__bar">
+              <div className="home__bar-fill" style={{ width: `${pct}%` }} />
             </div>
-          </div>
-        ) : running ? (
-          <div className="home__cta">
-            <div className="home__play is-running" aria-live="polite">
-              <PixelIcon name="play" size={22} />
-              <span className="home__play-text">
-                <span className="font-pixel-bold text-success">ACTIVE</span>
-                <span className="home__play-sub font-pixel">
-                  {profile ? profile.name : 'GAME RUNNING'}
-                </span>
-              </span>
-            </div>
-            <button
-              className="home__stop"
-              title="Stop game"
-              aria-label="Stop game"
-              onClick={() => void stop()}
+            <span className="meta">
+              {progress.total > 0
+                ? `${progress.done} / ${progress.total} files`
+                : 'preparing…'}
+            </span>
+          </PxBox>
+        ) : (
+          <div className="home__console">
+            <PxButton
+              family="accent"
+              height="xl"
+              className="home__play"
+              disabled={!selected}
+              onClick={() => (running ? onStop() : selected && onLaunch(selected.id))}
             >
-              <PixelIcon name="close" size={14} />
-            </button>
+              <span className="home__play-line">
+                {!running && <PixelArrow />}
+                <TT size={36} tone="accent">
+                  {running ? 'STOP GAME' : 'PLAY NOW'}
+                </TT>
+              </span>
+              <TT size={13} tone="sub">
+                {selected ? selected.name : 'NO INSTANCE — CREATE ONE'}
+              </TT>
+            </PxButton>
 
-            <div className="home__toggle-wrap">
-              <button
-                className={`home__toggle ${popoutOpen ? 'is-open' : ''}`}
-                title="Quick instance selector"
+            <PxButton
+              family="grey"
+              height="xl"
+              className="home__quick"
+              onClick={() => setPopout((v) => !v)}
+              title="Pick an instance"
+            >
+              <span className="home__quick-bar" />
+              <span className="home__quick-bar" />
+              <span className="home__quick-bar" />
+            </PxButton>
+          </div>
+        )}
+
+        {popout && (
+          <PxBox family="panel" className="px--window home__popout scroll">
+            {profiles.map((p) => (
+              <PxButton
+                key={p.id}
+                family={p.id === selected?.id ? 'accent' : 'grey'}
+                height="md"
+                className="home__popout-row"
                 onClick={() => {
-                  setPopoutOpen(!popoutOpen);
-                  playSfx('click');
+                  onSelect(p.id);
+                  setPopout(false);
                 }}
               >
-                <PixelIcon name="list" size={16} />
-              </button>
-              {popoutOpen && (
-                <ProfilePopout
-                  profiles={profiles}
-                  activeId={profile?.id ?? null}
-                  onPick={(id) => {
-                    select(id);
-                    setPopoutOpen(false);
-                  }}
-                  onClose={() => setPopoutOpen(false)}
-                />
-              )}
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="home__cta-glow">
-              <div className="home__cta">
-                <button
-                  className="home__play"
-                  disabled={!profile}
-                  onClick={() => profile && void launch(profile.id)}
-                >
-                  <PixelIcon name="play" size={22} />
-                  <span className="home__play-text">
-                    <span className="font-pixel-bold">PLAY NOW</span>
-                    <span className="home__play-sub font-pixel">
-                      {profile ? profile.name : 'NO INSTANCE'}
-                    </span>
-                  </span>
-                </button>
+                <TT size={20}>{p.name}</TT>
+                <span className="meta">
+                  {loaderLabel(p)} · {p.gameVersion} · {ago(p.lastPlayed)}
+                </span>
+              </PxButton>
+            ))}
+            {profiles.length === 0 && (
+              <PxBox family="panel" height="md" className="home__popout-row">
+                <span className="meta">No instances yet — create one in INSTANCES.</span>
+              </PxBox>
+            )}
+          </PxBox>
+        )}
 
-                <div className="home__toggle-wrap">
-                  <button
-                    className={`home__toggle ${popoutOpen ? 'is-open' : ''}`}
-                    title="Quick instance selector"
-                    onClick={() => {
-                      setPopoutOpen(!popoutOpen);
-                      playSfx('click');
-                    }}
-                  >
-                    <PixelIcon name="list" size={16} />
-                  </button>
-                  {popoutOpen && (
-                    <ProfilePopout
-                      profiles={profiles}
-                      activeId={profile?.id ?? null}
-                      onPick={(id) => {
-                        select(id);
-                        setPopoutOpen(false);
-                      }}
-                      onClose={() => setPopoutOpen(false)}
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-          </>
+        {error && (
+          <PxBox family="red" height="md" className="home__error">
+            <span className="meta">{error}</span>
+          </PxBox>
         )}
       </div>
-    </div>
-  );
-}
-
-function ProfilePopout({
-  profiles,
-  activeId,
-  onPick,
-  onClose,
-}: {
-  profiles: ReturnType<typeof useProfiles.getState>['profiles'];
-  activeId: string | null;
-  onPick: (id: string) => void;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const setView = useUi((s) => s.setView);
-
-  useEffect(() => {
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [onClose]);
-
-  return (
-    <div className="popout anim-pop-in" ref={ref}>
-      {profiles.length === 0 && <div className="popout__empty text-3">No instances yet</div>}
-      {profiles.map((p) => (
-        <button
-          key={p.id}
-          className={`popout__item ${p.id === activeId ? 'is-active' : ''}`}
-          onClick={() => onPick(p.id)}
-        >
-          <PixelIcon name="bolt" size={14} className={p.id === activeId ? 'text-accent' : 'text-3'} />
-          <span className="popout__meta">
-            <span className="font-pixel">{p.name}</span>
-            <span className="text-3">
-              {p.loader} • {p.gameVersion} • {timeAgo(p.lastPlayed ?? p.createdAt)}
-            </span>
-          </span>
-          <span className={`pcheck ${p.id === activeId ? 'is-on' : ''}`}>
-            {p.id === activeId && <PixelIcon name="check" size={9} />}
-          </span>
-        </button>
-      ))}
-      <button
-        className="popout__footer font-pixel"
-        onClick={() => {
-          onClose();
-          setView('instances');
-        }}
-      >
-        MANAGE INSTANCES
-      </button>
-    </div>
-  );
-}
-
-function AudioWidget() {
-  const { settings, update } = useSettings();
-  const pct = Math.round(settings.volume * 100);
-  return (
-    <div className="home__audio">
-      <button
-        className="home__audio-btn"
-        title={settings.muted ? 'Unmute' : 'Mute'}
-        onClick={() => {
-          update({ muted: !settings.muted });
-          playSfx('click');
-        }}
-      >
-        <PixelIcon name={settings.muted ? 'volumeOff' : 'volume'} size={13} />
-      </button>
-      <input
-        className="prange"
-        type="range"
-        min={0}
-        max={100}
-        value={settings.muted ? 0 : pct}
-        onChange={(e) => update({ volume: Number(e.target.value) / 100, muted: false })}
-      />
-      <span className="font-pixel home__audio-pct">{settings.muted ? 'MUTE' : `${pct}%`}</span>
     </div>
   );
 }

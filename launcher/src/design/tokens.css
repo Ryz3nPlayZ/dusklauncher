@@ -1,197 +1,206 @@
 /* ── DuskLauncher design tokens ───────────────────────────────────────────
-   Two themes share one dark-panel base; the theme swaps the scene palette
-   and the accent family (nether = crimson, overworld = gold/grass).
-   All UI imagery renders with nearest-neighbor (pixel idiom). */
+   Dawn-parity pixel system. VISUAL SOURCE OF TRUTH: ~/dusk-spec/spec.html
+   (screenshot-verified SVG specimens — every value below was measured there,
+   never eyeballed). Nothing outside this file may declare a raw color or
+   font-family. */
+
+@font-face {
+  font-family: 'Monocraft';
+  src: url('../assets/fonts/Monocraft-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/inter-400.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/inter-500.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/inter-600.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/inter-700.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
 
 :root {
-  /* typography */
-  --font-pixel: 'Monocraft', 'Monaco', 'Courier New', monospace;
-  --font-pixel-bold: 'Monocraft Bold', 'Monocraft', monospace;
+  /* typography — headings/tabs/CTAs: Monocraft Bold (bundled, SIL OFL),
+     always UPRIGHT, always ALL CAPS. Body/metadata: Inter. Type is
+     thickened with the --tt-w stroke in its own fill (paint-order: stroke);
+     subtext takes 0.8 of it. */
+  --font-pixel: 'Monocraft', ui-monospace, monospace;
   --font-body: 'Inter', system-ui, -apple-system, sans-serif;
 
-  /* metrics */
-  --nav-h: 96px;
-  --footer-h: 30px;
-  --border-w: 2px;
-  --radius: 0px;
-  --radius-soft: 3px;
+  /* ── construction (applies to EVERYTHING) ── */
+  --black: #000000;          /* outline around all elements */
+  --black-w: var(--px-black); /* outline weight (2px on navbar frame/dividers) */
+  --border-w: 6px;           /* border-band weight */
+  --depth: #161616;          /* 1px shadow baked into left border = border × 0.44 */
+  --radius: 0px;             /* sharp corners, no blur, no gradients-as-style */
 
-  /* hard pixel shadows (never blurred) */
-  --shadow-sm: 2px 2px 0 rgba(0, 0, 0, 0.55);
-  --shadow-md: 4px 4px 0 rgba(0, 0, 0, 0.55);
-  --shadow-lg: 6px 6px 0 rgba(0, 0, 0, 0.5);
+  /* L corners (top-right / bottom-left only): square outer box,
+     leg = side length × 17/86. Vert rect overlaps the foot band. */
+  --l-ratio: 0.1977;         /* 17/86 */
 
-  /* pixel corner notch size */
-  --notch: 6px;
+  /* surface gradients: hold flat top color through 45%, then blend down.
+     The ONLY blended elements in the system. */
+  --surf-hold: 45%;
 
-  /* ── Dawn-parity button system ──────────────────────────────────────
-     Every button: dark gradient tile, 2px BLACK frame, lit top edge,
-     press = translate 2px + shadow drop (steps easing = pixel feel).
-     Never gray borders on buttons — always #000. */
-  --btn-bg: linear-gradient(#2a2a2e, #141416);
-  --btn-bg-hover: linear-gradient(#333338, #1a1a1e);
-  --btn-border: #000;
-  --btn-press: translate(2px, 2px);
-  --btn-ease: 80ms steps(3);
+  /* two-tone pixel text: hard 50/50 split, upper lighter, never smooth.
+     --tt-w is the stroke that thickens each fill in place (paint-order:
+     stroke fill). Monocraft Bold is already heavy; at the type sizes this
+     shell actually uses, 0.5px doubled the apparent weight. */
+  --tt-w: 0.2px;
+  --tab-text-top: #e2e2e2;
+  --tab-text-bot: #8a8a8a;
 
-  /* semantic button colors (Dawn meanings) */
-  --btn-cta: var(--accent-cta);       /* PLAY / primary — gold or crimson per theme */
-  --btn-install: #39d353;             /* INSTALL / APPLY / CREATE — green */
-  --btn-install-dim: #1d7a33;
-  --btn-danger: #ff4444;              /* LOGOUT / STOP / DELETE */
-  --btn-quiet: #c9c9c9;               /* CANCEL / secondary */
+  /* ── navbar tabs (234×86 cells, full-height, shared black dividers) ── */
+  --tab-base: #232323;
+  --tab-border: #323232;
+  --tab-corner: #4a4a4a;
+  /* active tab: split border (upper/lower), arrow-grey corners, per-half
+     shadow (each = border channel × 0.44), NO depth layer */
+  --act-up: #585858;
+  --act-lo: #3d3d3d;
+  --act-arrow: #828282;
+  --act-sh-up: #272727;
+  --act-sh-lo: #1b1b1b;
 
-  /* typography scale — pixel font ONLY for headings/tabs/buttons */
-  --font-title: 24px;
-  --font-cta: 20px;
-  --font-btn: 12px;
-  --font-meta: 11px;
+  /* ── generic panel: 5px black + 6px border + body.
+     The panel IS the component (search bar, FILTERS header, listing tile).
+     Window variant: identical stack at 87% opacity (range 85–90). */
+  --panel: #1e1e1e;
+  --panel-bd: #323232;
+  --panel-window-opacity: 0.87;
+  --listing-body: #181818;   /* modpack listing tiles */
+
+  /* ── accent family. Derivation (HLS, measured from #FFC600):
+     lower = H−12.8° / L−0.055 / S−0.053 · corner = H+8.6° / L+0.402.
+     Any new accent = pick a hue, run the same math. */
+  --y-up: #ffc600;  --y-lo: #dd7f06;  --y-co: #fffbcd;   /* gold (PLAY NOW) */
+  --g-up: #00ff40;  --g-lo: #06dd0e;  --g-co: #cdffe1;   /* green (install) */
+  --b-up: #1f7cff;  --b-lo: #09a0f8;  --b-co: #ecf1ff;   /* blue (+0.06 L so
+     the top reads light — blue needs the lift, yellow doesn't) */
+  --r-up: #ff1100;  --r-lo: #dd0626;  --r-co: #ffd8cd;   /* red (PvP/delete) */
+  --cta-surf-top: #1e1e1e;
+  --cta-surf-bot: #453319;   /* PLAY NOW 545×143 incl. black */
+  --inst-surf-bot: #16241a;  /* grey-border INSTALL: whisper-green bottom */
+
+  /* ── scrollbar: 25px assembly — 5 black housing / 4 accent CLOSED RING
+     (upper #FFC600, lower #DD7F06, split at mid-height) / 7 inner thumb
+     gradient #C77707 → #382C1B. */
+  --sb-in-top: #c77707;
+  --sb-in-bot: #382c1b;
+
+  /* ── legacy body-text scale (unchanged) ── */
+  --text-1: #f4f4f4;
+  --text-2: #b8b8b8;
+  --text-3: #828282;
+  --success: #39d353;
 
   /* z stack */
   --z-bg: 0;
   --z-content: 10;
   --z-nav: 40;
-  --z-drawer: 50;
   --z-modal: 60;
-  --z-toast: 70;
-  --z-wipe: 100;
 }
 
-/* chunky minecraft scrollbars: dark track, accent-dim thumb */
-.scroll-y, .drawer__log, .skins-grid, .inst-grid, .modpacks__list {
-  scrollbar-width: thin;
-  scrollbar-color: var(--accent-dim) #0d0d0f;
-}
-.scroll-y::-webkit-scrollbar,
-.drawer__log::-webkit-scrollbar,
-.skins-grid::-webkit-scrollbar,
-.inst-grid::-webkit-scrollbar,
-.modpacks__list::-webkit-scrollbar {
-  width: 10px;
-}
-.scroll-y::-webkit-scrollbar-track,
-.drawer__log::-webkit-scrollbar-track,
-.skins-grid::-webkit-scrollbar-track,
-.inst-grid::-webkit-scrollbar-track,
-.modpacks__list::-webkit-scrollbar-track {
-  background: #0d0d0f;
-  border-left: 2px solid #000;
-}
-.scroll-y::-webkit-scrollbar-thumb,
-.drawer__log::-webkit-scrollbar-thumb,
-.skins-grid::-webkit-scrollbar-thumb,
-.inst-grid::-webkit-scrollbar-thumb,
-.modpacks__list::-webkit-scrollbar-thumb {
-  background: var(--accent-dim);
-  border: 2px solid #000;
-}
-.scroll-y::-webkit-scrollbar-thumb:hover,
-.drawer__log::-webkit-scrollbar-thumb:hover,
-.skins-grid::-webkit-scrollbar-thumb:hover,
-.inst-grid::-webkit-scrollbar-thumb:hover,
-.modpacks__list::-webkit-scrollbar-thumb:hover {
-  background: var(--accent);
-}
-
-/* ── NETHER (dark default) ─────────────────────────────────────────────── */
+/* ── themes: one dark-panel base; the theme ONLY swaps scene + accent ── */
 :root,
+[data-theme='overworld'] {
+  color-scheme: dark;
+  --accent-up: var(--y-up);
+  --accent-lo: var(--y-lo);
+  --accent-co: var(--y-co);
+  --accent-surf-bot: var(--cta-surf-bot);
+  --scene-sky-top: #7db8ff;
+  --scene-sky-bottom: #b7dcff;
+}
 [data-theme='nether'] {
   color-scheme: dark;
-
-  /* surfaces */
-  --bg-0: #121212;
-  --bg-1: #1a1a1a;
-  --bg-2: #212121;
-  --bg-3: #2a2a2a;
-  --bg-input: #161616;
-  --surface-glass: rgba(18, 18, 18, 0.78);
-  --surface-glass-strong: rgba(14, 14, 14, 0.92);
-
-  /* accents */
-  --accent: #ff1e43;
-  --accent-hi: #ff5a75;
-  --accent-dim: #b3143a;
-  --accent-dark: #6f0d26;
-  --accent-contrast: #ffffff;
-  --accent-cta: #ff1e43; /* PLAY border in nether */
-  --text-on-accent-dim: rgba(255, 224, 231, 0.8);
-  --accent-glow-color: rgba(255, 30, 67, 0.4);
-
-  --success: #39d353;
-  --success-dim: #1d7a33;
-  --gold: #ffd000;
-  --gold-dim: #a88a00;
-  --danger: #ff5555;
-  --info: #58a6ff;
-
-  /* text */
-  --text-1: #f4f4f4;
-  --text-2: #b8b8b8;
-  --text-3: #828282;
-  --text-on-accent: #ffffff;
-  --text-accent: #ff5a75;
-  --text-success: #39d353;
-  --text-gold: #ffd000;
-
-  /* borders */
-  --border-0: #2c2c2c;
-  --border-1: #3a3a3a;
-  --border-2: #4d4d4d;
-  --border-accent: var(--accent);
-  --border-inner: rgba(179, 20, 58, 0.35); /* dark red interior borders */
-
-  /* glow */
-  --glow-accent: 0 0 14px rgba(255, 30, 67, 0.35);
-  --glow-success: 0 0 12px rgba(57, 211, 83, 0.35);
-
-  /* scene palette (kept in sync with background/nether.ts) */
+  --accent-up: var(--r-up);
+  --accent-lo: var(--r-lo);
+  --accent-co: var(--r-co);
+  --accent-surf-bot: var(--r-surf-bot);
   --scene-sky-top: #17090d;
   --scene-sky-bottom: #2b0a12;
 }
 
-/* ── OVERWORLD (light scene, gold/grass accents) ───────────────────────── */
-[data-theme='overworld'] {
-  color-scheme: dark;
+/* ── construction sizes (measured from spec.html specimens) ───────────────
+   Two kinds of number live here and they behave differently.
 
-  --bg-0: #14181c;
-  --bg-1: #1b2026;
-  --bg-2: #222930;
-  --bg-3: #2b333c;
-  --bg-input: #171c21;
-  --surface-glass: rgba(20, 24, 28, 0.78);
-  --surface-glass-strong: rgba(16, 20, 24, 0.92);
+   CONSTRUCTION is pixel art: whole pixels only, no fractional borders, or it
+   blurs. It does not track --u continuously — but it IS authored for the
+   reference window, and the spec's proportions are what carry over: black is
+   5/86 of the row and the band 6/86. Holding 5 and 6 while the row came down
+   from 86 to 60 is what made every frame read as too heavy.
 
-  --accent: #ffd000;
-  --accent-hi: #ffe14d;
-  --accent-dim: #caa500;
-  --accent-dark: #6e5b00;
-  --accent-contrast: #201a00;
-  --accent-cta: #ffd000; /* golden PLAY border in overworld */
-  --text-on-accent-dim: rgba(32, 26, 0, 0.72);
-  --accent-glow-color: rgba(255, 208, 0, 0.45);
+   SIZE splits into two atoms, and they are NOT the same number.
 
-  --success: #5c8e32;
-  --success-dim: #3d611f;
-  --gold: #ffd000;
-  --gold-dim: #a88a00;
+   --u sizes BOXES: every height, gutter and tile. It is 0.7px at the app's
+   own window (1280×800), i.e. the spec's "86px row" lands at 60 real pixels.
+   The spec.html specimens are magnified construction drawings — their 86 and
+   234 are proportions to hold, not CSS pixels to copy. Copying them literally
+   is what made a navbar eat an eighth of the window.
 
-  --text-1: #f6f8fa;
-  --text-2: #c3ccd6;
-  --text-3: #8b98a5;
-  --text-on-accent: #201a00;
-  --text-accent: #ffe14d;
-  --text-success: #8fd35f;
-  --text-gold: #ffe14d;
+   --t sizes TYPE. It sits above --u — type fills more of its button than a
+   scale-everything-together would give, which is what the reference looks
+   like — but only by about a fifth, not by half. Raising the type scale 1.7x
+   AND dropping the box scale to 0.7 compounded to ~2.4x the original ratio,
+   which is what made the labels read as oversized.
 
-  --border-0: #303945;
-  --border-1: #3d4855;
-  --border-2: #52616f;
-  --border-accent: var(--accent);
-  --border-inner: rgba(202, 165, 0, 0.3);
+   Both track the smaller axis below the reference window and neither grows
+   past it: a big display shows MORE (more cards per row, more skins per
+   shelf), never the same shell blown up. */
+:root {
+  --u: clamp(0.41px, min(0.0409vw, 0.0654vh), 0.523px);
+  --t: clamp(0.448px, min(0.0449vw, 0.0719vh), 0.575px);
 
-  --glow-accent: 0 0 14px rgba(255, 208, 0, 0.3);
-  --glow-success: 0 0 12px rgba(92, 142, 50, 0.4);
+  /* Construction weight. These are the thinnest whole-pixel values that
+     still read as pixel art: 2px of black, a 2px band inside it. The nav
+     frame and its dividers go one step thinner again, at 1px, because the
+     bar draws a divider between EVERY pair of cells and a 2px one there
+     doubles up visually against the cells' own bands. */
+  --px-black: 2px;
+  --px-band: 2px;
+  --px-nav: 1px;
+  /* L-corner leg — the spec's 17/86 of the side, held at the box scale so
+     the corner stays a fifth of the edge rather than a third of it */
+  --px-corner: 7px;
+  --px-corner-cta: 12px;
 
-  --scene-sky-top: #7db8ff;
-  --scene-sky-bottom: #b7dcff;
+  /* the height scale. --h-md IS the navbar height: a search bar, a tab, a
+     settings control and a nav cell are all one row tall, everywhere. */
+  --nav-h: calc(96 * var(--u));
+  /* the hero CTA. The spec draws it at 143 against an 86 navbar — a 1.66x
+     jump that reads as a slab once the shell is at its real scale. It stays
+     the largest row in the app, but in the navbar's magnitude, not double. */
+  --h-xl: calc(130 * var(--u));
+  --h-lg: calc(120 * var(--u));
+  --h-md: calc(96 * var(--u));  /* the standard row — navbar parity */
+  --h-sm: calc(69 * var(--u));
+  --h-listing: calc(107 * var(--u));
+
+  /* the gutter scale, likewise relative */
+  --gap: calc(24 * var(--u));
+  --gap-sm: calc(14 * var(--u));
+
+  /* surface bottoms for the derived families (spec §3) */
+  --g-surf-bot: #123d1c;
+  --b-surf-bot: #12283d;
+  --r-surf-bot: #3d1512;
+
+  --sb-w: 12px;      /* scrollbar assembly: 2 black / 2 accent / 4 inner */
 }
