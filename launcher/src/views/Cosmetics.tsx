@@ -88,7 +88,7 @@ export default function Cosmetics({
                   <PlayerRender
                     skin={picked ? data[picked] : null}
                     pose={pose}
-                    zoom={0.72}
+                    zoom={0.62}
                     interactive
                     className="viewer__canvas"
                   />

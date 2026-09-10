@@ -243,7 +243,7 @@ a.px:focus-visible {
 /* The type scale. Every step is a multiple of --u, so type tracks the
    window the same way the row heights do and a label always sits the same
    fraction of the way across its button. */
-.tt--36 { font-size: calc(31 * var(--t)); letter-spacing: calc(3 * var(--t)); }
+.tt--36 { font-size: calc(26 * var(--t)); letter-spacing: calc(3 * var(--t)); }
 .tt--22 { font-size: calc(34 * var(--t)); letter-spacing: calc(3 * var(--t)); }
 .tt--20 { font-size: calc(30 * var(--t)); letter-spacing: calc(3 * var(--t)); }
 .tt--16 { font-size: calc(26 * var(--t)); letter-spacing: calc(2 * var(--t)); }

@@ -148,9 +148,10 @@
   display: flex;
   align-items: stretch;
   gap: 2px;
-  /* black on all four sides — the bar is a strip of black with the cells
-     inset into it, so the frame reads continuous with the window outline */
-  padding: 2px;
+  /* Only the BOTTOM edge and the dividers are drawn here. The window's own
+     outline already closes the bar on the other three sides — padding them
+     again stacked two black borders on top of each other. */
+  padding: 0 0 2px;
   background: var(--black);
 }
 /* the filler between the tab group and whatever is pinned right — the same

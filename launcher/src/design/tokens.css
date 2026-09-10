@@ -165,8 +165,8 @@
    past it: a big display shows MORE (more cards per row, more skins per
    shelf), never the same shell blown up. */
 :root {
-  --u: clamp(0.55px, min(0.0547vw, 0.0875vh), 0.7px);
-  --t: clamp(0.61px, min(0.0609vw, 0.0975vh), 0.78px);
+  --u: clamp(0.41px, min(0.0409vw, 0.0654vh), 0.523px);
+  --t: clamp(0.49px, min(0.0492vw, 0.0788vh), 0.63px);
 
   --px-black: 3px;   /* black outline (nav frame/dividers use 2px) */
   --px-band: 4px;    /* border band */
@@ -181,8 +181,8 @@
   /* the hero CTA. The spec draws it at 143 against an 86 navbar — a 1.66x
      jump that reads as a slab once the shell is at its real scale. It stays
      the largest row in the app, but in the navbar's magnitude, not double. */
-  --h-xl: calc(100 * var(--u));
-  --h-lg: calc(92 * var(--u));
+  --h-xl: calc(130 * var(--u));
+  --h-lg: calc(112 * var(--u));
   --h-md: calc(86 * var(--u));  /* the standard row — navbar parity */
   --h-sm: calc(62 * var(--u));
   --h-listing: calc(96 * var(--u));

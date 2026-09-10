@@ -46,7 +46,7 @@ export default function Home({
           {/* the canvas sizes itself off this box — it must never be the flex
               child that decides the column's height, or it feeds itself */}
           <span className="home__stage-box">
-            <PlayerRender skin={skin} pose={pose} zoom={0.8} className="home__canvas" paused={running} />
+            <PlayerRender skin={skin} pose={pose} zoom={0.95} className="home__canvas" paused={running} />
           </span>
           <span className="home__wardrobe">
             <TT size={16} tone="sub">
