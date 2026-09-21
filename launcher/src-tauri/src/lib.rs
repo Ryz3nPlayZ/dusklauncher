@@ -2,10 +2,13 @@ mod appstate;
 mod auth_flow;
 mod auth_store;
 mod commands;
+mod cosmetics;
+mod dusk;
 mod modpacks;
 mod mods;
 mod settings;
 mod skins;
+mod wallpapers;
 
 pub use appstate::AppState;
 
@@ -21,6 +24,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(AppState::init())
         .invoke_handler(tauri::generate_handler![
             // profiles
@@ -30,14 +35,23 @@ pub fn run() {
             commands::delete_profile,
             commands::list_worlds,
             commands::show_in_folder,
+            commands::open_data_dir,
+            modpacks::import_mrpack,
+            modpacks::export_instance,
+            modpacks::install_bundled_pack,
             // versions
             commands::list_versions,
+            commands::fabric_loader_version,
             // launch
             commands::install_and_launch,
             commands::stop_game,
             // settings
             commands::get_settings,
             commands::set_settings,
+            // wallpapers
+            wallpapers::list_wallpapers,
+            wallpapers::import_wallpaper,
+            wallpapers::remove_wallpaper,
             // account
             commands::begin_login,
             commands::begin_reconsent_login,
@@ -47,13 +61,16 @@ pub fn run() {
             commands::get_app_info,
             // modpacks
             modpacks::search_modpacks,
+            modpacks::search_projects,
             modpacks::get_modpack_project,
             modpacks::install_modpack,
             modpacks::list_modpack_versions,
             modpacks::install_modpack_version,
+            modpacks::modrinth_tags,
             // mods + instance content (mods / resource packs / shaders)
             mods::list_profile_mods,
             mods::list_profile_content,
+            mods::lookup_profile_content,
             mods::remove_profile_mod,
             mods::remove_profile_content,
             mods::set_mod_enabled,
@@ -63,7 +80,21 @@ pub fn run() {
             mods::search_content,
             mods::install_mod_to_profile,
             mods::install_content_to_profile,
+            mods::install_content_version_to_profile,
             mods::install_bundled_client_mod,
+            // cosmetics
+            cosmetics::list_cosmetics,
+            cosmetics::read_cosmetic_texture,
+            cosmetics::read_cosmetic_model,
+            cosmetics::get_loadout,
+            cosmetics::set_loadout,
+            cosmetics::get_inventory,
+            // dusk service (wallet / store)
+            dusk::get_store,
+            dusk::get_wallet,
+            dusk::redeem_code,
+            dusk::buy_cosmetic,
+            cosmetics::export_cosmetic_texture,
             // skins
             skins::list_skins,
             skins::import_skin,

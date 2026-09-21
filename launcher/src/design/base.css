@@ -19,6 +19,16 @@ body {
   background: var(--black);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  /* it's an app, not a document: nothing highlights on cmd+A or a stray
+     drag. Fields opt back in below; the sign-in code opts into `all`. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+input,
+textarea,
+[contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 button {
@@ -57,7 +67,8 @@ canvas {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.38);
+  /* Figma 30:353 — the scene under a page is dimmed 30% */
+  background: rgba(0, 0, 0, 0.3);
   pointer-events: none;
 }
 .view--dim > * {
@@ -65,16 +76,16 @@ canvas {
 }
 
 /* page scaffolding shared by every non-home view: title row, then body.
-   The 24px gutter is the only spacing value pages are allowed to use. */
+   Figma 28:249 @ 1280×832: the head row sits 47px under the navbar, the
+   window 47px under that, both 67px in from the sides; 86px stays clear
+   below the window (room for the status bar, which the frame omits). */
 .page {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--gap);
-  /* the side gutter is wider than the vertical one on purpose: a window
-     that runs edge to edge leaves the scene no room to read as a scene */
-  padding: var(--gap) calc(72 * var(--u)) calc(var(--h-sm) + var(--gap));
+  gap: calc(90 * var(--u));
+  padding: calc(90 * var(--u)) calc(128 * var(--u)) calc(164 * var(--u));
 }
 
 /* the header row: the page's name, its search, its primary action — all one
@@ -84,22 +95,29 @@ canvas {
   display: flex;
   align-items: stretch;
   gap: var(--gap-sm);
-  height: var(--h-md);
+  /* the NEW INSTANCE plate (40:7) is 42px tall — shorter than a nav cell */
+  height: calc(80 * var(--u));
 }
+/* the page's name (30:352): Monocraft Bold 40px, 2px tracking, flush with
+   the window's left edge */
 .page__title {
   display: flex;
   align-items: center;
   font-family: var(--font-pixel);
-  font-size: calc(42 * var(--t));
-  letter-spacing: calc(4 * var(--t));
+  font-size: calc(70 * var(--t));
+  letter-spacing: calc(3.5 * var(--t));
   text-transform: uppercase;
   color: #fff;
   -webkit-text-stroke: var(--tt-w) #fff;
   paint-order: stroke fill;
   margin: 0;
   margin-right: auto;
-  padding-left: calc(4 * var(--u));
   white-space: nowrap;
+}
+/* the head's primary action (40:20): 12px in from the band on each side */
+.page__cta {
+  flex: none;
+  padding: 0 calc(23 * var(--u));
 }
 .page__body {
   flex: 1;
@@ -160,16 +178,8 @@ canvas {
   background: var(--r-lo);
 }
 
-/* the window is undecorated, so minimise / maximise / close live here —
-   the navbar stays exactly the six cells the design calls for */
-.win-controls {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  margin-left: 12px;
+/* the update button owns the bottom-left corner; the pill keeps the right */
+.update-btn {
   height: var(--h-sm);
-}
-.win-controls .px {
-  width: 52px;
-  padding: 0;
+  padding: 0 18px;
 }

@@ -145,6 +145,8 @@ pub struct VersionDependency {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Version {
     pub id: String,
+    #[serde(default)]
+    pub project_id: String,
     pub name: String,
     #[serde(default)]
     pub version_number: String,
@@ -160,6 +162,11 @@ pub struct Version {
     pub loaders: Vec<String>,
     #[serde(default, rename = "date_published")]
     pub published: Option<String>,
+    /// "release" | "beta" | "alpha"
+    #[serde(default)]
+    pub version_type: String,
+    #[serde(default)]
+    pub downloads: u64,
 }
 
 pub async fn project_versions(client: &reqwest::Client, project_id: &str) -> Result<Vec<Version>> {
@@ -178,6 +185,83 @@ pub async fn version(client: &reqwest::Client, version_id: &str) -> Result<Versi
         .send()
         .await?;
     Ok(decode(check(resp, "version").await?, "version").await?)
+}
+
+/// Which Modrinth version each file hash belongs to — `POST /version_files`.
+/// Hashes Modrinth doesn't know (local jars, hand-built packs) are simply
+/// absent from the map.
+pub async fn version_files(
+    client: &reqwest::Client,
+    hashes: &[String],
+) -> Result<std::collections::HashMap<String, Version>> {
+    if hashes.is_empty() {
+        return Ok(Default::default());
+    }
+    let resp = client
+        .post(format!("{MODRINTH_API}/version_files"))
+        .header(reqwest::header::USER_AGENT, USER_AGENT)
+        .json(&serde_json::json!({ "hashes": hashes, "algorithm": "sha1" }))
+        .send()
+        .await?;
+    Ok(decode(check(resp, "version lookup").await?, "version lookup").await?)
+}
+
+// ── tags (the filter vocabularies) ─────────────────────────────────────────
+
+/// One `/tag/category` entry: `project_type` says which browse page it
+/// belongs to; `header` groups it ("categories", "features", "resolutions",
+/// "performance impact").
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CategoryTag {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub project_type: String,
+    #[serde(default)]
+    pub header: String,
+}
+
+/// One `/tag/loader` entry — `supported_project_types` tells whether a
+/// loader means anything for modpacks / mods / shaders.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LoaderTag {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub supported_project_types: Vec<String>,
+}
+
+/// One `/tag/game_version` entry, newest first on the wire.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GameVersionTag {
+    #[serde(default)]
+    pub version: String,
+    #[serde(default)]
+    pub version_type: String, // release | snapshot | alpha | beta
+    #[serde(default)]
+    pub major: bool,
+}
+
+async fn tag<T: serde::de::DeserializeOwned>(client: &reqwest::Client, name: &str) -> Result<Vec<T>> {
+    let resp = client
+        .get(format!("{MODRINTH_API}/tag/{name}"))
+        .header(reqwest::header::USER_AGENT, USER_AGENT)
+        .send()
+        .await?;
+    let what = format!("tag/{name}");
+    Ok(decode(check(resp, &what).await?, &what).await?)
+}
+
+pub async fn category_tags(client: &reqwest::Client) -> Result<Vec<CategoryTag>> {
+    tag(client, "category").await
+}
+
+pub async fn loader_tags(client: &reqwest::Client) -> Result<Vec<LoaderTag>> {
+    tag(client, "loader").await
+}
+
+pub async fn game_version_tags(client: &reqwest::Client) -> Result<Vec<GameVersionTag>> {
+    tag(client, "game_version").await
 }
 
 // ── project details (detail page: body, gallery, links, compat) ────────────

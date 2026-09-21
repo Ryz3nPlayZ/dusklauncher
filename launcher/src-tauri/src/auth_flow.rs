@@ -167,13 +167,15 @@ async fn run_device_code_login(
     let start = auth::start_device_code(&state.client, config)
         .await
         .map_err(|e| e.to_string())?;
-    // Prefilled-code page when Microsoft serves one (`?otc=`): the user just
-    // confirms instead of retyping the code. userCode is still emitted as the
-    // manual fallback (and for browsers that drop the query param).
-    let confirm_uri = start
-        .verification_uri_complete
-        .clone()
-        .unwrap_or_else(|| start.verification_uri.clone());
+    // Prefilled-code page (`?otc=`): the user just confirms instead of
+    // retyping the code. live.com hands back a bare `microsoft.com/link` and
+    // no `verification_uri_complete`, so build the prefilled link ourselves —
+    // both `login.live.com/oauth20_remoteconnect.srf` and `microsoft.com/link`
+    // honour `otc`. userCode is still emitted as the manual fallback.
+    let confirm_uri = start.verification_uri_complete.clone().unwrap_or_else(|| {
+        let sep = if start.verification_uri.contains('?') { '&' } else { '?' };
+        format!("{}{sep}otc={}", start.verification_uri, start.user_code)
+    });
     let _ = app.emit(
         "auth-state",
         serde_json::json!({

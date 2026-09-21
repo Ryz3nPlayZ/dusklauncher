@@ -2,7 +2,7 @@
  * The 8×8 front face of a skin PNG (plus its hat layer), scaled up with
  * nearest-neighbour. Cheap enough for lists — no canvas, no 3D.
  */
-import defaultSkin from '../assets/skins/dusk-knight.png';
+import steveSkin from '../assets/skins/steve.png';
 
 export default function PlayerHead({
   skin,
@@ -13,7 +13,7 @@ export default function PlayerHead({
   size?: number;
   className?: string;
 }) {
-  const src = skin || defaultSkin;
+  const src = skin || steveSkin;
   const scale = size / 8; // the face is 8×8 in a 64-wide sheet
   const sheet = `${64 * scale}px ${64 * scale}px`;
   return (

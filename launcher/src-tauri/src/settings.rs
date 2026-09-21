@@ -38,7 +38,8 @@ pub struct Settings {
     /// session's refresh token, so the next sign-in must be interactive.
     #[serde(default = "default_auth_mode")]
     pub auth_mode: String,
-    /// Custom background override (image or video file path). Empty = animated scene.
+    /// Wallpaper override: a file name inside `<data>/wallpapers/` (see
+    /// wallpapers.rs). Empty = the built-in animated scene.
     #[serde(default)]
     pub custom_background: String,
 }

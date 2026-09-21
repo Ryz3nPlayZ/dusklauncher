@@ -4,7 +4,7 @@
  * tile would be absurd.
  */
 import { useEffect, useState } from 'react';
-import defaultSkin from '../assets/skins/dusk-knight.png';
+import steveSkin from '../assets/skins/steve.png';
 
 type Part = [sx: number, sy: number, sw: number, sh: number, dx: number, dy: number];
 
@@ -35,7 +35,7 @@ export default function SkinDoll({
   scale?: number;
   className?: string;
 }) {
-  const src = skin || defaultSkin;
+  const src = skin || steveSkin;
   const [legacy, setLegacy] = useState(false);
 
   useEffect(() => {

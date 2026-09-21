@@ -2,7 +2,7 @@
 
 use crate::{Error, Result};
 use sha1::{Digest, Sha1};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 
@@ -118,6 +118,15 @@ async fn fetch_and_write(client: &reqwest::Client, dl: &Download) -> Result<()> 
     file.write_all(&bytes).await?;
     file.flush().await?;
     Ok(())
+}
+
+/// Hex sha1 of a file on disk — the key Modrinth's `version_files` lookup
+/// answers by.
+pub async fn sha1_file(path: &Path) -> Result<String> {
+    let bytes = tokio::fs::read(path).await?;
+    let mut hasher = Sha1::new();
+    hasher.update(&bytes);
+    Ok(hex::encode(hasher.finalize()))
 }
 
 async fn verify_existing(dl: &Download) -> Result<bool> {

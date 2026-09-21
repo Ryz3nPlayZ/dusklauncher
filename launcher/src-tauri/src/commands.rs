@@ -29,6 +29,10 @@ pub struct ProfileDto {
     pub mod_count: usize,
     /// deterministic seed for the procedural card banner
     pub art: u32,
+    /// per-instance heap override (MB); null = launcher setting
+    pub memory_mb: Option<u32>,
+    /// per-instance java executable; null = launcher setting / provisioned
+    pub java_path: Option<String>,
 }
 
 pub fn dto(p: &Profile) -> ProfileDto {
@@ -45,6 +49,8 @@ pub fn dto(p: &Profile) -> ProfileDto {
         server: p.server.clone(),
         mod_count: p.mod_filenames.len(),
         art: art_seed(&p.id),
+        memory_mb: p.memory_mb,
+        java_path: p.java_path.clone(),
     }
 }
 
@@ -68,6 +74,10 @@ pub struct ProfilePatch {
     pub jvm_args: Option<Vec<String>>,
     pub resolution: Option<(u32, u32)>,
     pub server: Option<Option<String>>,
+    /// 0 clears the override (JSON null can't reach an Option<Option<_>>)
+    pub memory_mb: Option<u32>,
+    /// "" clears the override
+    pub java_path: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -217,6 +227,8 @@ pub fn create_profile(
         server,
         created_at: now_millis(),
         last_played: None,
+        memory_mb: None,
+        java_path: None,
     };
     let mut store = state.profiles.lock().unwrap();
     store.profiles.push(profile);
@@ -250,6 +262,12 @@ pub fn update_profile(state: State<AppState>, id: String, patch: ProfilePatch) -
             }
             if let Some(server) = &patch.server {
                 p.server = server.clone().filter(|s| !s.trim().is_empty());
+            }
+            if let Some(mb) = patch.memory_mb {
+                p.memory_mb = Some(mb).filter(|m| *m > 0);
+            }
+            if let Some(path) = &patch.java_path {
+                p.java_path = Some(path.trim().to_string()).filter(|s| !s.is_empty());
             }
         })
         .map(|p| dto(&p))
@@ -365,6 +383,17 @@ pub fn show_in_folder(
     Ok(())
 }
 
+/// Reveal the launcher's own data folder (Settings → FILES).
+#[tauri::command]
+pub fn open_data_dir(app: AppHandle, state: State<AppState>) -> Result<(), String> {
+    std::fs::create_dir_all(&state.data_dir).map_err(|e| e.to_string())?;
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_path(state.data_dir.to_string_lossy().to_string(), None::<&str>)
+        .map_err(|e| format!("could not open folder: {e}"))?;
+    Ok(())
+}
+
 // ── versions ───────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -379,6 +408,16 @@ pub async fn list_versions(state: State<'_, AppState>) -> Result<Vec<VersionDto>
             release_at: v.release_time,
         })
         .collect())
+}
+
+/// The fabric loader the installer would pin for a new profile — the meta
+/// endpoint's newest stable loader. The UI shows it next to the version
+/// picker so "just choose Minecraft" is genuinely all a user must decide.
+#[tauri::command]
+pub async fn fabric_loader_version(state: State<'_, AppState>) -> Result<String, String> {
+    fasterlauncher_core::fabric::latest_loader_version(&state.client)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 // ── launch ─────────────────────────────────────────────────────────────────
@@ -420,14 +459,22 @@ pub async fn install_and_launch(
     let (version, natives_dir) =
         install_profile(&app2, &client, &state, &profile, &dirs).await?;
 
-    // Java: settings override per major version, else provisioned runtime
+    // Java: the instance's own executable, else the settings override for
+    // this major version, else the provisioned runtime
     let java = version.effective_java();
     let java_bin = {
         let settings = state.settings.lock().unwrap();
-        settings
-            .java_paths
-            .get(&java.major_version.to_string())
+        profile
+            .java_path
+            .as_deref()
             .filter(|p| !p.trim().is_empty())
+            .or_else(|| {
+                settings
+                    .java_paths
+                    .get(&java.major_version.to_string())
+                    .map(String::as_str)
+                    .filter(|p| !p.trim().is_empty())
+            })
             .map(std::path::PathBuf::from)
     };
     let java_bin = match java_bin {
@@ -455,6 +502,55 @@ pub async fn install_and_launch(
         }
     };
 
+    // Heap: the instance override, else the launcher-wide MEMORY setting.
+    // Either replaces whatever -Xmx/-Xms the stored args carry, so the
+    // number the UI shows is the number the JVM gets.
+    let profile = {
+        let heap_mb = {
+            let settings = state.settings.lock().unwrap();
+            profile.memory_mb.filter(|m| *m > 0).unwrap_or(settings.memory_mb)
+        };
+        let mut p = profile.clone();
+        if heap_mb > 0 {
+            p.jvm_args.retain(|a| !a.starts_with("-Xmx") && !a.starts_with("-Xms"));
+            p.jvm_args.insert(0, format!("-Xmx{heap_mb}M"));
+            p.jvm_args.insert(0, format!("-Xms{}M", heap_mb.min(2048)));
+        }
+        p
+    };
+
+    // DuskClient is part of every Fabric instance: the bundled jar for the
+    // profile's game line is handed to the loader through `-Dfabric.addMods`
+    // rather than copied into mods/, so instances stay clean and every launch
+    // runs the jar the launcher shipped with. A copy already in mods/ (from
+    // "install bundled client mod") wins, otherwise the loader would see the
+    // mod twice. The mod reads other players' loadouts from the Dusk service.
+    let profile = {
+        let mut p = profile;
+        p.jvm_args.retain(|a| !a.starts_with("-Dfabric.addMods=") && !a.starts_with("-Ddusk.api="));
+        if p.loader == Loader::Fabric {
+            let in_mods = crate::cosmetics::client_mod_in_mods(&dirs.mods);
+            match crate::cosmetics::client_mod_jar_for(&p.game_version) {
+                None => tracing::warn!(
+                    "bundled client mod targets {}; skipping it for {}",
+                    crate::cosmetics::CLIENT_MOD_GAME_VERSIONS,
+                    p.game_version
+                ),
+                Some(name) => match crate::cosmetics::bundled_client_mod_jar(&app, &state.data_dir, name) {
+                    Some(jar) if !in_mods => {
+                        p.jvm_args.push(format!("-Dfabric.addMods={}", jar.display()));
+                    }
+                    Some(_) => {}
+                    None => tracing::warn!("bundled client mod {name} not found; launching without it"),
+                },
+            }
+            p.jvm_args.push(format!("-Ddusk.api={}", crate::dusk::api_base()));
+            if let Err(e) = crate::cosmetics::write_loadout_to_instance(&state.data_dir, &dirs.root) {
+                tracing::warn!("could not write cosmetics loadout to instance: {e}");
+            }
+        }
+        p
+    };
     let spec = launch::build_launch_spec(&java_bin, &version, &profile, &dirs, &natives_dir, &session, &env);
     let mut child = launch::launch(&spec, &env).await.map_err(|e| e.to_string())?;
 
@@ -798,6 +894,9 @@ pub struct AccountDto {
     pub username: String,
     pub uuid: String,
     pub authenticated: bool,
+    /// the arm model Mojang reports for the active skin: "classic" | "slim"
+    /// ("" when unknown)
+    pub skin_variant: String,
 }
 
 #[tauri::command]
@@ -838,6 +937,7 @@ pub async fn get_current_account(state: State<'_, AppState>) -> Result<Option<Ac
             username: a.username.clone(),
             uuid: a.uuid.clone(),
             authenticated: a.authenticated,
+            skin_variant: String::new(),
         }))
 }
 
@@ -887,6 +987,7 @@ fn account_dto(session: &Session) -> AccountDto {
         username: session.username.clone(),
         uuid: session.uuid.clone(),
         authenticated: true,
+        skin_variant: session.skin_variant.to_lowercase(),
     }
 }
 
@@ -901,7 +1002,7 @@ pub fn logout(state: State<AppState>) {
 /// - no session + login configured → hard error telling the user to sign in
 /// - no session + login not configured yet (pre-Azure-approval) → clearly
 ///   logged demo session so the install/launch pipeline stays testable.
-async fn ensure_play_session(state: &AppState) -> Result<Session, String> {
+pub(crate) async fn ensure_play_session(state: &AppState) -> Result<Session, String> {
     if let Some(session) = auth_store::load_session(&state.data_dir) {
         if !session.needs_refresh() {
             return Ok(session);

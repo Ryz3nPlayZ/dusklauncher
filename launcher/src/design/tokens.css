@@ -11,6 +11,14 @@
   font-display: swap;
 }
 @font-face {
+  font-family: 'Monocraft';
+  /* Latin subset of the Regular face — the repo's Monocraft.otf is actually
+     the Black Italic cut (see its name table), so it is not used. */
+  src: url('../assets/fonts/Monocraft-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
   font-family: 'Inter';
   src: url('../assets/fonts/inter-400.woff2') format('woff2');
   font-weight: 400;
@@ -47,7 +55,6 @@
   --black: #000000;          /* outline around all elements */
   --black-w: var(--px-black); /* outline weight (2px on navbar frame/dividers) */
   --border-w: 6px;           /* border-band weight */
-  --depth: #161616;          /* 1px shadow baked into left border = border × 0.44 */
   --radius: 0px;             /* sharp corners, no blur, no gradients-as-style */
 
   /* L corners (top-right / bottom-left only): square outer box,
@@ -63,20 +70,19 @@
      stroke fill). Monocraft Bold is already heavy; at the type sizes this
      shell actually uses, 0.5px doubled the apparent weight. */
   --tt-w: 0.2px;
-  --tab-text-top: #e2e2e2;
-  --tab-text-bot: #8a8a8a;
+  /* Figma: HOME/INSTANCES/COSMETICS vectors — c6c6c6 over 7b7b7b, hard
+     split; the cut sits at ~42% of the cap, not mid-box */
+  --tab-text-top: #c6c6c6;
+  --tab-text-bot: #7b7b7b;
 
   /* ── navbar tabs (234×86 cells, full-height, shared black dividers) ── */
-  --tab-base: #232323;
+  --tab-base: #1e1e1e;      /* Figma cell fill */
   --tab-border: #323232;
   --tab-corner: #4a4a4a;
-  /* active tab: split border (upper/lower), arrow-grey corners, per-half
-     shadow (each = border channel × 0.44), NO depth layer */
-  --act-up: #585858;
-  --act-lo: #3d3d3d;
-  --act-arrow: #828282;
-  --act-sh-up: #272727;
-  --act-sh-lo: #1b1b1b;
+  /* the open tab: the plate is identical (Figma 8:28 has one construction
+     for every cell) — only the label steps up to this brighter pair */
+  --act-text-top: #f2f2f2;
+  --act-text-bot: #a6a6a6;
 
   /* ── generic panel: 5px black + 6px border + body.
      The panel IS the component (search bar, FILTERS header, listing tile).
@@ -89,14 +95,23 @@
   /* ── accent family. Derivation (HLS, measured from #FFC600):
      lower = H−12.8° / L−0.055 / S−0.053 · corner = H+8.6° / L+0.402.
      Any new accent = pick a hue, run the same math. */
-  --y-up: #ffc600;  --y-lo: #dd7f06;  --y-co: #fffbcd;   /* gold (PLAY NOW) */
+  --y-up: #ffc600;  --y-lo: #de8105;  --y-co: #fffbcd;   /* gold (PLAY NOW) */
   --g-up: #00ff40;  --g-lo: #06dd0e;  --g-co: #cdffe1;   /* green (install) */
   --b-up: #1f7cff;  --b-lo: #09a0f8;  --b-co: #ecf1ff;   /* blue (+0.06 L so
      the top reads light — blue needs the lift, yellow doesn't) */
-  --r-up: #ff1100;  --r-lo: #dd0626;  --r-co: #ffd8cd;   /* red (PvP/delete) */
+  --r-up: #ff1100;  --r-lo: #dd0626;  --r-co: #ff8b8e;   /* red (PvP/delete) */
+  /* Figma 98:86 / 98:40 — the NEW INSTANCE chooser's two voices: a purple
+     for DUSK PROFILE and a mossier green than INSTALL's for BROWSE MODPACKS */
+  --p-up: #813ec1;  --p-lo: #4616ca;  --p-co: #e9d8ff;   /* purple (dusk) */
+  --m-up: #8ccf2d;  --m-lo: #468a28;                     /* moss (modpacks) */
   --cta-surf-top: #1e1e1e;
-  --cta-surf-bot: #453319;   /* PLAY NOW 545×143 incl. black */
+  --cta-surf-bot: #413018;   /* PLAY NOW: Figma 238×62, 1e1e1e → 413018 */
+  --grey-surf-bot: #2b261c;
+  /* Figma 30:381 — the tile's PLAY NOW: flat through 35.6%, then 271e11 */
+  --tile-surf-bot: #271e11;  /* the grey quick button beside it, held to 13.5% */
   --inst-surf-bot: #16241a;  /* grey-border INSTALL: whisper-green bottom */
+  --dusk-surf-bot: #1f163a;  /* Figma 98:79 — DUSK PROFILE: purple bottom */
+  --moss-surf-bot: #202c1d;  /* Figma 98:31 — BROWSE MODPACKS: moss bottom */
 
   /* ── scrollbar: 25px assembly — 5 black housing / 4 accent CLOSED RING
      (upper #FFC600, lower #DD7F06, split at mid-height) / 7 inner thumb
@@ -168,28 +183,26 @@
   --u: clamp(0.41px, min(0.0409vw, 0.0654vh), 0.523px);
   --t: clamp(0.448px, min(0.0449vw, 0.0719vh), 0.575px);
 
-  /* Construction weight. These are the thinnest whole-pixel values that
-     still read as pixel art: 2px of black, a 2px band inside it. The nav
-     frame and its dividers go one step thinner again, at 1px, because the
-     bar draws a divider between EVERY pair of cells and a 2px one there
-     doubles up visually against the cells' own bands. */
+  /* Construction weight. Whole pixels, scaled against the reference
+     screenshots: 2px of black — the same weight the navbar draws — with a
+     4px band inside it. */
   --px-black: 2px;
-  --px-band: 2px;
-  --px-nav: 1px;
+  --px-band: 3px;
+  --px-nav: 2px;
   /* L-corner leg — the spec's 17/86 of the side, held at the box scale so
      the corner stays a fifth of the edge rather than a third of it */
-  --px-corner: 7px;
-  --px-corner-cta: 12px;
+  --px-corner: 9px;
+  --px-corner-cta: 9px;
 
   /* the height scale. --h-md IS the navbar height: a search bar, a tab, a
      settings control and a nav cell are all one row tall, everywhere. */
-  --nav-h: calc(96 * var(--u));
+  --nav-h: calc(88 * var(--u));  /* Figma 46px @ 1280×832 */
   /* the hero CTA. The spec draws it at 143 against an 86 navbar — a 1.66x
      jump that reads as a slab once the shell is at its real scale. It stays
      the largest row in the app, but in the navbar's magnitude, not double. */
-  --h-xl: calc(130 * var(--u));
+  --h-xl: calc(118 * var(--u)); /* Figma 62px @ 1280×832 */
   --h-lg: calc(120 * var(--u));
-  --h-md: calc(96 * var(--u));  /* the standard row — navbar parity */
+  --h-md: calc(88 * var(--u));  /* the standard row — navbar parity */
   --h-sm: calc(69 * var(--u));
   --h-listing: calc(107 * var(--u));
 
@@ -202,5 +215,5 @@
   --b-surf-bot: #12283d;
   --r-surf-bot: #3d1512;
 
-  --sb-w: 12px;      /* scrollbar assembly: 2 black / 2 accent / 4 inner */
+  --sb-w: 16px;      /* scrollbar assembly: 2 black / 3 accent / 6 inner */
 }

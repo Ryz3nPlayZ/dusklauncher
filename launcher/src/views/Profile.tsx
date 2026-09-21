@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { DevicePanel, useLogin } from '../components/SignIn';
 import PlayerHead from '../components/PlayerHead';
 import { PxBox, PxButton, TT } from '../components/px/Px';
 import { api, isTauri, type Account, type AppInfo } from '../lib/api';
@@ -12,9 +13,10 @@ export default function Profile({
   skin: string | null;
   onChange: () => Promise<void> | void;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
   const [info, setInfo] = useState<AppInfo | null>(null);
+  const { busy: signingIn, err, auth, start } = useLogin(onChange);
+  const busy = signingIn || signingOut;
 
   useEffect(() => {
     void api.getAppInfo().then(setInfo);
@@ -46,10 +48,10 @@ export default function Profile({
                 height="md"
                 disabled={busy}
                 onClick={async () => {
-                  setBusy(true);
+                  setSigningOut(true);
                   await api.logout();
                   await onChange();
-                  setBusy(false);
+                  setSigningOut(false);
                 }}
               >
                 <TT size={22} tone="red">
@@ -61,17 +63,7 @@ export default function Profile({
                 family="blue"
                 height="md"
                 disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  setErr(null);
-                  try {
-                    await api.login();
-                    await onChange();
-                  } catch (e) {
-                    setErr(String(e));
-                  }
-                  setBusy(false);
-                }}
+                onClick={() => void start()}
               >
                 <TT size={22} tone="blue">
                   {busy ? 'WAITING…' : 'SIGN IN'}
@@ -81,8 +73,10 @@ export default function Profile({
           </div>
         </PxBox>
 
+        {signingIn && <DevicePanel auth={auth} />}
+
         {err && (
-          <PxBox family="red" height="md" className="stack">
+          <PxBox family="red" className="stack">
             <span className="meta">{err}</span>
           </PxBox>
         )}

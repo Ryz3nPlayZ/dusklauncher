@@ -5,8 +5,11 @@ use crate::commands::{dto, ProfileDto};
 use fasterlauncher_core::modrinth as mr;
 use fasterlauncher_core::profile::{default_jvm_args, Loader, Profile};
 use serde::{Deserialize, Serialize};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_dialog::DialogExt;
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -68,15 +71,36 @@ pub async fn search_modpacks(
     page_size: u32,
     sort: String,
 ) -> Result<ModpackSearchDto, String> {
-    let mut groups: Vec<Vec<String>> = vec![vec!["project_type:modpack".into()]];
+    search_projects(state, "modpack".into(), query, facets, page, page_size, sort).await
+}
+
+/// The same paged, faceted, sorted search for any Modrinth project type —
+/// the browse page for mods / resource packs / shaders runs on this.
+#[tauri::command]
+pub async fn search_projects(
+    state: State<'_, AppState>,
+    kind: String,
+    query: String,
+    facets: ModpackFacets,
+    page: u32,
+    page_size: u32,
+    sort: String,
+) -> Result<ModpackSearchDto, String> {
+    let project_type = match kind.as_str() {
+        "modpack" | "mod" | "resourcepack" | "shader" => kind.as_str(),
+        _ => return Err("unknown project kind (want modpack|mod|resourcepack|shader)".into()),
+    };
+    let mut groups: Vec<Vec<String>> = vec![vec![format!("project_type:{project_type}")]];
     if !facets.categories.is_empty() {
         groups.push(facets.categories.iter().map(|c| format!("categories:{c}")).collect());
     }
     if !facets.versions.is_empty() {
         groups.push(facets.versions.iter().map(|v| format!("versions:{v}")).collect());
     }
+    // Modrinth's search index files loaders under `categories` — there is no
+    // `loaders:` facet type, and asking for one quietly mangled the results.
     if !facets.loaders.is_empty() {
-        groups.push(facets.loaders.iter().map(|l| format!("loaders:{l}")).collect());
+        groups.push(facets.loaders.iter().map(|l| format!("categories:{l}")).collect());
     }
     let index = match sort.as_str() {
         "downloads" | "follows" | "newest" | "updated" => sort.clone(),
@@ -99,6 +123,88 @@ pub async fn search_modpacks(
     })
 }
 
+// ── tags ───────────────────────────────────────────────────────────────────
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GameVersionTagDto {
+    pub version: String,
+    pub version_type: String,
+    pub major: bool,
+}
+
+/// The filter vocabularies for one browse page: Modrinth's own categories
+/// for the project type (grouped by header), every loader that applies to
+/// it, and the full game-version list — releases and snapshots alike, so
+/// the UI decides what to show.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectTagsDto {
+    pub categories: Vec<CategoryTagDto>,
+    pub loaders: Vec<String>,
+    pub game_versions: Vec<GameVersionTagDto>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CategoryTagDto {
+    pub name: String,
+    pub header: String,
+}
+
+struct TagCache {
+    categories: Vec<mr::CategoryTag>,
+    loaders: Vec<mr::LoaderTag>,
+    game_versions: Vec<mr::GameVersionTag>,
+}
+
+/// The three tag lists change a few times a year; one fetch per process
+/// is plenty. A failed fetch is not cached, so a flaky first call retries.
+static TAGS: tokio::sync::OnceCell<TagCache> = tokio::sync::OnceCell::const_new();
+
+#[tauri::command]
+pub async fn modrinth_tags(state: State<'_, AppState>, kind: String) -> Result<ProjectTagsDto, String> {
+    let project_type = match kind.as_str() {
+        "modpack" | "mod" | "resourcepack" | "shader" => kind.as_str(),
+        _ => return Err("unknown project kind (want modpack|mod|resourcepack|shader)".into()),
+    };
+    let client = state.client.clone();
+    let cache = TAGS
+        .get_or_try_init(|| async {
+            let (categories, loaders, game_versions) = tokio::try_join!(
+                mr::category_tags(&client),
+                mr::loader_tags(&client),
+                mr::game_version_tags(&client),
+            )?;
+            Ok::<_, fasterlauncher_core::Error>(TagCache { categories, loaders, game_versions })
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(ProjectTagsDto {
+        categories: cache
+            .categories
+            .iter()
+            .filter(|c| c.project_type == project_type)
+            .map(|c| CategoryTagDto { name: c.name.clone(), header: c.header.clone() })
+            .collect(),
+        loaders: cache
+            .loaders
+            .iter()
+            .filter(|l| l.supported_project_types.iter().any(|t| t == project_type))
+            .map(|l| l.name.clone())
+            .collect(),
+        game_versions: cache
+            .game_versions
+            .iter()
+            .map(|v| GameVersionTagDto {
+                version: v.version.clone(),
+                version_type: v.version_type.clone(),
+                major: v.major,
+            })
+            .collect(),
+    })
+}
+
 /// Install a modpack: creates a profile with pinned versions, downloads all
 /// modpack files (mods/configs) plus required dependencies, extracts
 /// overrides. Emits `launch-progress` events with stage `mods`.
@@ -114,7 +220,7 @@ pub async fn install_modpack(
     let version = versions
         .first()
         .ok_or_else(|| "modpack has no versions".to_string())?;
-    install_version_inner(app, state, version).await
+    install_version_inner(app, state, version, None).await
 }
 
 #[derive(Serialize)]
@@ -127,6 +233,8 @@ pub struct ModpackVersionDto {
     pub game_versions: Vec<String>,
     pub loaders: Vec<String>,
     pub published: Option<String>,
+    pub version_type: String,
+    pub downloads: u64,
 }
 
 /// Themed version picker data: every Modrinth version of a pack with the
@@ -150,6 +258,8 @@ pub async fn list_modpack_versions(
             game_versions: v.game_versions,
             loaders: v.loaders,
             published: v.published,
+            version_type: v.version_type,
+            downloads: v.downloads,
         })
         .collect())
 }
@@ -231,6 +341,7 @@ pub async fn install_modpack_version(
     state: State<'_, AppState>,
     id: String,
     version_id: String,
+    name: Option<String>,
 ) -> Result<ProfileDto, String> {
     let version = mr::version(&state.client, &version_id)
         .await
@@ -239,19 +350,96 @@ pub async fn install_modpack_version(
     // the API shape here; the id param documents intent and keeps the
     // frontend call self-describing.
     let _ = id;
-    install_version_inner(app, state, &version).await
+    install_version_inner(app, state, &version, name).await
 }
 
+/// `name`: what the user typed in the install dialog; `None` falls back to
+/// the pack's own title.
 async fn install_version_inner(
     app: AppHandle,
     state: State<'_, AppState>,
     version: &mr::Version,
+    name: Option<String>,
 ) -> Result<ProfileDto, String> {
-
     let bytes = mr::download_mrpack(&state.client, version)
         .await
         .map_err(|e| e.to_string())?;
-    let index = mr::parse_mrpack_index(&bytes).map_err(|e| e.to_string())?;
+
+    // required dependency mods (fabric-api and friends)
+    let mut dep_versions = Vec::new();
+    for dep in &version.dependencies {
+        if dep.dependency_type == "required" {
+            if let Some(vid) = &dep.version_id {
+                if let Ok(v) = mr::version(&state.client, vid).await {
+                    dep_versions.push(v);
+                }
+            }
+        }
+    }
+    install_mrpack_bytes(app, state, &bytes, &dep_versions, name).await
+}
+
+/// Import a modpack from a local `.mrpack` (native picker). Same install as
+/// a Modrinth pack — only the bytes come from disk instead of the API.
+/// Resolves `None` when the picker is cancelled.
+#[tauri::command]
+pub async fn import_mrpack(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Option<ProfileDto>, String> {
+    let picked = app
+        .dialog()
+        .file()
+        .add_filter("Modrinth modpack", &["mrpack", "zip"])
+        .blocking_pick_file();
+    let Some(file) = picked else { return Ok(None) };
+    let path = file.into_path().map_err(|e| e.to_string())?;
+    let bytes = std::fs::read(&path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
+    install_mrpack_bytes(app, state, &bytes, &[], None).await.map(Some)
+}
+
+/// Where a pack shipped inside the app bundle lives
+/// (`resources/modpacks/<pack>.mrpack`; see cosmetics::bundled_client_mod_jar
+/// for the same lookup ladder).
+fn bundled_pack_path(app: &AppHandle, data_dir: &Path, pack: &str) -> Option<PathBuf> {
+    let filename = format!("{pack}.mrpack");
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Ok(res) = app.path().resource_dir() {
+        candidates.push(res.join("resources").join("modpacks").join(&filename));
+        candidates.push(res.join("modpacks").join(&filename));
+    }
+    if cfg!(debug_assertions) {
+        let src_tauri = Path::new(env!("CARGO_MANIFEST_DIR"));
+        candidates.push(src_tauri.join("resources").join("modpacks").join(&filename));
+    }
+    candidates.push(data_dir.join("bundled").join(&filename));
+    candidates.into_iter().find(|p| p.is_file())
+}
+
+/// Install one of the packs bundled with the launcher — currently
+/// `dusk-essentials`, the default instance seeded on first run.
+#[tauri::command]
+pub async fn install_bundled_pack(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    pack: String,
+) -> Result<ProfileDto, String> {
+    let path = bundled_pack_path(&app, &state.data_dir, &pack)
+        .ok_or_else(|| format!("bundled pack \"{pack}\" is not packaged in this build"))?;
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    install_mrpack_bytes(app, state, &bytes, &[], None).await
+}
+
+/// Install an .mrpack already in memory: a profile pinned to the pack's
+/// versions, its overrides extracted, its files (and `deps`) downloaded.
+async fn install_mrpack_bytes(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    bytes: &[u8],
+    dep_versions: &[mr::Version],
+    name: Option<String>,
+) -> Result<ProfileDto, String> {
+    let index = mr::parse_mrpack_index(bytes).map_err(|e| e.to_string())?;
 
     let mc_version = index
         .minecraft_version()
@@ -262,8 +450,11 @@ async fn install_version_inner(
         _ => (Loader::Vanilla, None), // neoforge/forge not supported yet (roadmap)
     };
 
-    // unique name from the pack title
-    let base_name = index.name.to_uppercase();
+    // unique name from what the user typed, else the pack title
+    let base_name = name
+        .map(|n| n.trim().to_string())
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| index.name.to_uppercase());
     let name = {
         let store = state.profiles.lock().unwrap();
         let mut n = base_name.clone();
@@ -305,6 +496,8 @@ async fn install_version_inner(
         server: None,
         created_at: now_millis(),
         last_played: None,
+        memory_mb: None,
+        java_path: None,
     };
     let dirs = profile.dirs(&state.data_dir);
     {
@@ -313,24 +506,24 @@ async fn install_version_inner(
         state.save_profiles(&store);
     }
 
-    // overrides (configs, shaderpacks, resourcepacks)
+    // overrides (configs, shaderpacks, resourcepacks — and, for a pack
+    // exported from here or Prism, the mods themselves)
     std::fs::create_dir_all(&dirs.root).map_err(|e| e.to_string())?;
-    let _ = mr::extract_overrides(&bytes, &dirs.root);
-
-    // required dependency mods (fabric-api and friends)
-    let mut dep_versions = Vec::new();
-    for dep in &version.dependencies {
-        if dep.dependency_type == "required" {
-            if let Some(vid) = &dep.version_id {
-                if let Ok(v) = mr::version(&state.client, vid).await {
-                    dep_versions.push(v);
+    let _ = mr::extract_overrides(bytes, &dirs.root);
+    // mods that arrived as overrides count too
+    let _ = state.patch_profile(&profile.id, |p| {
+        if let Ok(rd) = std::fs::read_dir(&dirs.mods) {
+            for e in rd.flatten() {
+                let name = e.file_name().to_string_lossy().to_string();
+                if name.ends_with(".jar") && !p.mod_filenames.contains(&name) {
+                    p.mod_filenames.push(name);
                 }
             }
         }
-    }
+    });
 
     let mut downloads = mr::index_downloads(&index, &dirs.root);
-    downloads.extend(mr::dependency_downloads(&dep_versions, &dirs.root));
+    downloads.extend(mr::dependency_downloads(dep_versions, &dirs.root));
     let total = downloads.len() as u64;
     let profile_id = profile.id.clone();
     let app2 = app.clone();
@@ -353,6 +546,121 @@ async fn install_version_inner(
 
     let _ = state.patch_profile(&profile.id, |_| {});
     Ok(dto(&profile))
+}
+
+// ── export ─────────────────────────────────────────────────────────────────
+
+/// What travels with an exported instance. Everything under these goes into
+/// the pack's `overrides/`; the game's own installs (versions, natives) and
+/// the shared caches never do, and neither do worlds, logs or screenshots —
+/// the same cut Prism makes.
+const EXPORT_DIRS: &[&str] = &["mods", "config", "resourcepacks", "shaderpacks", "datapacks"];
+const EXPORT_FILES: &[&str] = &["options.txt", "servers.dat"];
+
+/// Export an instance as a `.mrpack` (native save dialog): the version and
+/// loader pinned in `modrinth.index.json`, the folder contents as
+/// overrides — so it opens in Prism, the Modrinth app, or back here.
+/// Resolves to the written path, or `None` when the dialog is cancelled.
+#[tauri::command]
+pub async fn export_instance(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    profile_id: String,
+) -> Result<Option<String>, String> {
+    let profile = {
+        let store = state.profiles.lock().unwrap();
+        store
+            .profiles
+            .iter()
+            .find(|p| p.id == profile_id)
+            .cloned()
+            .ok_or("profile not found")?
+    };
+    let safe_name: String = profile
+        .name
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+    let picked = app
+        .dialog()
+        .file()
+        .add_filter("Modrinth modpack", &["mrpack"])
+        .set_file_name(format!("{}.mrpack", safe_name.trim()))
+        .blocking_save_file();
+    let Some(file) = picked else { return Ok(None) };
+    let out_path = file.into_path().map_err(|e| e.to_string())?;
+
+    let mut dependencies = std::collections::HashMap::new();
+    dependencies.insert("minecraft".to_string(), profile.game_version.clone());
+    if profile.loader == Loader::Fabric {
+        if let Some(v) = &profile.loader_version {
+            dependencies.insert("fabric-loader".to_string(), v.clone());
+        }
+    }
+    let index = mr::MrpackIndex {
+        format_version: 1,
+        game: "minecraft".into(),
+        version_id: "1.0.0".into(),
+        name: profile.name.clone(),
+        files: Vec::new(),
+        dependencies,
+    };
+    let index_json = serde_json::to_string_pretty(&index).map_err(|e| e.to_string())?;
+
+    let dirs = profile.dirs(&state.data_dir);
+    let root = dirs.root.clone();
+    let written = tokio::task::spawn_blocking(move || -> Result<usize, String> {
+        let file = std::fs::File::create(&out_path).map_err(|e| e.to_string())?;
+        let mut zip = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        zip.start_file("modrinth.index.json", opts).map_err(|e| e.to_string())?;
+        zip.write_all(index_json.as_bytes()).map_err(|e| e.to_string())?;
+        let mut count = 0;
+        for dir in EXPORT_DIRS {
+            count += zip_tree(&mut zip, &root, &root.join(dir), opts)?;
+        }
+        for name in EXPORT_FILES {
+            let p = root.join(name);
+            if p.is_file() {
+                zip.start_file(format!("overrides/{name}"), opts).map_err(|e| e.to_string())?;
+                zip.write_all(&std::fs::read(&p).map_err(|e| e.to_string())?)
+                    .map_err(|e| e.to_string())?;
+                count += 1;
+            }
+        }
+        zip.finish().map_err(|e| e.to_string())?;
+        Ok(count)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    tracing::info!(pack = %profile.name, files = written, "instance exported");
+    Ok(Some(format!("{written} files")))
+}
+
+/// Recursively add `dir` to the zip under `overrides/<path relative to root>`.
+fn zip_tree(
+    zip: &mut zip::ZipWriter<std::fs::File>,
+    root: &Path,
+    dir: &Path,
+    opts: zip::write::SimpleFileOptions,
+) -> Result<usize, String> {
+    let Ok(rd) = std::fs::read_dir(dir) else { return Ok(0) };
+    let mut count = 0;
+    for entry in rd.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            count += zip_tree(zip, root, &path, opts)?;
+            continue;
+        }
+        let rel = path.strip_prefix(root).map_err(|e| e.to_string())?;
+        let name = format!("overrides/{}", rel.to_string_lossy().replace('\\', "/"));
+        zip.start_file(name, opts).map_err(|e| e.to_string())?;
+        zip.write_all(&std::fs::read(&path).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+        count += 1;
+    }
+    Ok(count)
 }
 
 fn now_millis() -> u64 {

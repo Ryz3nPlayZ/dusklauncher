@@ -1,12 +1,23 @@
 /**
- * The play triangle (spec §2). Sized in em off whatever row it sits in, so
- * it tracks the label beside it through every window size — a fixed pixel
- * height stopped matching the moment the shell rescaled.
+ * The play triangle — Figma vector 27:136, a 15×27 pixel arrow on a 3px
+ * grid: a full-height bar on the left, seven 3×3 steps out and back. Gold
+ * above the midline, orange below, hard split. Sized in em off whatever row
+ * it sits in, so it tracks the label beside it through every window size.
  */
-export default function PixelArrow({ size = '0.62em' }: { size?: string }) {
+const STEPS: [number, number][] = [
+  [3, 3],
+  [6, 6],
+  [9, 9],
+  [12, 12],
+  [9, 15],
+  [6, 18],
+  [3, 21],
+];
+
+export default function PixelArrow({ size = '1.35em' }: { size?: string }) {
   return (
     <svg
-      viewBox="0 0 28 36"
+      viewBox="0 0 15 27"
       shapeRendering="crispEdges"
       aria-hidden="true"
       style={{ height: size, width: 'auto', flex: 'none' }}
@@ -17,7 +28,10 @@ export default function PixelArrow({ size = '0.62em' }: { size?: string }) {
           <stop offset="0.5" stopColor="var(--accent-lo)" />
         </linearGradient>
       </defs>
-      <polygon points="0,0 0,36 28,18" fill="url(#px-arrow)" />
+      <rect x="0" y="0" width="3" height="27" fill="url(#px-arrow)" />
+      {STEPS.map(([x, y]) => (
+        <rect key={`${x},${y}`} x={x} y={y} width="3" height="3" fill="url(#px-arrow)" />
+      ))}
     </svg>
   );
 }

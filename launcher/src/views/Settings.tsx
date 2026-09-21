@@ -1,58 +1,11 @@
 import { useEffect, useState } from 'react';
 import { NavCell, PxBox, PxButton, TT } from '../components/px/Px';
+import { Choice, Row } from '../components/px/Form';
 import { api, type AppInfo, type Settings } from '../lib/api';
+import Wallpapers, { wallpaperLabel } from './Wallpapers';
 
 const TABS = ['GENERAL', 'JAVA', 'DISPLAY', 'FILES'] as const;
 type Tab = (typeof TABS)[number];
-
-function Row({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="srow">
-      <div className="srow__text">
-        <TT size={20} tone="plain">
-          {label}
-        </TT>
-        {hint && <span className="meta">{hint}</span>}
-      </div>
-      <div className="srow__control">{children}</div>
-    </div>
-  );
-}
-
-function Choice<T extends string | number>({
-  value,
-  options,
-  onPick,
-}: {
-  value: T;
-  options: { value: T; label: string }[];
-  onPick: (v: T) => void;
-}) {
-  return (
-    <>
-      {options.map((o) => (
-        <PxButton
-          key={String(o.value)}
-          family={value === o.value ? 'accent' : 'grey'}
-          height="md"
-          onClick={() => onPick(o.value)}
-        >
-          <TT size={16} tone={value === o.value ? 'accent' : undefined}>
-            {o.label}
-          </TT>
-        </PxButton>
-      ))}
-    </>
-  );
-}
 
 export default function SettingsView({
   settings,
@@ -63,11 +16,23 @@ export default function SettingsView({
 }) {
   const [tab, setTab] = useState<Tab>('GENERAL');
   const [info, setInfo] = useState<AppInfo | null>(null);
+  /* the wallpaper library is its own page (the instances layout) */
+  const [gallery, setGallery] = useState(false);
   const set = (patch: Partial<Settings>) => onSave({ ...settings, ...patch });
 
   useEffect(() => {
     void api.getAppInfo().then(setInfo);
   }, []);
+
+  if (gallery) {
+    return (
+      <Wallpapers
+        current={settings.customBackground}
+        onPick={(customBackground) => set({ customBackground })}
+        onBack={() => setGallery(false)}
+      />
+    );
+  }
 
   return (
     <div className="page">
@@ -95,6 +60,20 @@ export default function SettingsView({
                     { value: 'nether', label: 'NETHER' },
                   ]}
                 />
+              </Row>
+              <Row
+                label="WALLPAPER"
+                hint={
+                  settings.customBackground
+                    ? `${wallpaperLabel(settings.customBackground)} — imports live in the data folder.`
+                    : 'The built-in scene. Imports live in the data folder.'
+                }
+              >
+                <PxButton family="blue" height="md" onClick={() => setGallery(true)}>
+                  <TT size={16} tone="blue">
+                    CHOOSE…
+                  </TT>
+                </PxButton>
               </Row>
               <Row label="REDUCE MOTION" hint="Freezes the scene and the player animation.">
                 <Choice
@@ -222,7 +201,7 @@ export default function SettingsView({
                   family="blue"
                   height="md"
                   disabled={!info}
-                  onClick={() => info && void api.showInFolder(info.dataDir)}
+                  onClick={() => void api.openDataDir()}
                 >
                   <TT size={16} tone="blue">
                     REVEAL

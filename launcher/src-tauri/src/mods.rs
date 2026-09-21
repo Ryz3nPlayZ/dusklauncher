@@ -356,23 +356,29 @@ pub async fn install_content_to_profile(
     Ok(dto_for(&dest, filename, true))
 }
 
-/// Copy the bundled FasterClient mod (if present next to the launcher data)
-/// into a profile. Packaging fills this in at release time; until then it is
-/// a clear no-op message rather than a silent skip.
+/// Copy the bundled DuskClient mod (the build for the profile's game line)
+/// into its `mods/`. Fabric instances get the mod force-loaded at launch
+/// anyway (see `install_and_launch`); this exists for users who want a
+/// visible copy they can disable from the mods list — a copy in `mods/`
+/// takes precedence over the forced one so the jar is never loaded twice.
 #[tauri::command]
 pub fn install_bundled_client_mod(
+    app: AppHandle,
     state: State<AppState>,
     profile_id: String,
 ) -> Result<Option<ProfileModDto>, String> {
-    let candidates = [
-        state.data_dir.join("client-mod.jar"),
-        state.data_dir.join("bundled").join("client-mod.jar"),
-    ];
-    let Some(src) = candidates.into_iter().find(|p| p.exists()) else {
+    let (profile, mods) = profile_and_mods(&state, &profile_id)?;
+    let Some(filename) = crate::cosmetics::client_mod_jar_for(&profile.game_version) else {
+        return Err(format!(
+            "DuskClient is built for {} — not for {}.",
+            crate::cosmetics::CLIENT_MOD_GAME_VERSIONS,
+            profile.game_version
+        ));
+    };
+    let Some(src) = crate::cosmetics::bundled_client_mod_jar(&app, &state.data_dir, filename) else {
         return Err("Bundled client mod is not packaged in this build yet.".into());
     };
-    let (_, mods) = profile_and_mods(&state, &profile_id)?;
-    let filename = "fasterclient.jar".to_string();
+    let filename = filename.to_string();
     std::fs::create_dir_all(&mods).map_err(|e| e.to_string())?;
     std::fs::copy(&src, mods.join(&filename)).map_err(|e| e.to_string())?;
     let _ = state.patch_profile(&profile_id, |p| {

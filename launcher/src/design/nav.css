@@ -19,52 +19,68 @@
 .nav__cell {
   flex: 0 1 auto;
   min-width: 0;
-  padding: 0 calc(19 * var(--t));
+  /* Figma: HOME sits 19px in from the cell edge on both sides */
+  padding: 0 calc(36 * var(--u));
   gap: calc(12 * var(--t));
-  overflow: hidden;
+  /* clip, not hidden: a hidden box is still a scroll container, and a
+     scrollIntoView on the label (focus, tooling) shoves the text sideways */
+  overflow: clip;
 }
 
-/* the wordmark cell — a label, not a control, so it never takes the
-   active/idle band treatment */
+/* the wordmark: the exported DAWN plate, which carries its own black frame
+   and grey band — so it overlaps the bar's padding and its right edge IS
+   the divider before HOME (Figma: plate 0–117, HOME's black from 116) */
 .nav__brand {
-  padding: 0 calc(22 * var(--t));
+  flex: none;
+  gap: calc(14 * var(--u));
+  padding: 0 calc(28 * var(--u)) 0 calc(20 * var(--u));
   cursor: default;
+  user-select: none;
+}
+/* the app icon at the bar's height, pixel-scaled */
+.nav__brand-mark {
+  flex: none;
+  width: calc(var(--nav-h) - 12 * var(--u));
+  height: calc(var(--nav-h) - 12 * var(--u));
+  image-rendering: pixelated;
+  -webkit-user-drag: none;
 }
 /* The strip has to hold every cell at once, so its type takes a second cap
    tied to the window's width: it grows with --u like everything else until
-   the row would stop fitting, and never past that. */
+   the row would stop fitting, and never past that. Figma: 16px vectors
+   stretched 1.4× (HOME = 60×12) — and those vectors have single-pixel stems,
+   so the cell labels are the Regular cut: the Bold face every other label
+   wears read as double-weight here and made the label-sized cells longer
+   than the plates they sit on. A half-pixel stroke firms the single-pixel
+   stems back up without the width — bare Regular read as too thin. */
+.nav .tt,
+.win__bar .tt {
+  font-weight: 400;
+  --tt-stroke: 0.5px;
+  /* Figma 8:28 centres the 12px cap in the 46px cell; the Regular face's
+     line box sits it a pixel low */
+  top: calc(-2 * var(--u));
+}
+/* The vw caps only ever bite below ~990px — narrower than the app's own
+   minimum — and left alone they ran the labels down to 5px at a phone-like
+   aspect. 12px is the floor: at that point the strip scrolls (below) rather
+   than the type shrinking any further. */
 .nav .tt {
-  font-size: min(calc(25 * var(--t)), 1.45vw);
+  font-size: max(12px, min(calc(28 * var(--t)), 1.3vw));
 }
 .win__bar .tt {
-  font-size: min(calc(26 * var(--t)), 1.9vw);
+  font-size: max(12px, min(calc(28 * var(--t)), 1.9vw));
 }
 
-.nav__word {
-  font-family: var(--font-pixel);
-  font-size: min(calc(26 * var(--t)), 1.45vw);
-  letter-spacing: calc(3 * var(--t));
-  /* same trailing-gap trim as .tt — see px.css */
-  margin-right: calc(-3 * var(--t));
-  text-transform: uppercase;
-  white-space: nowrap;
-  color: var(--accent-up);
-  -webkit-text-stroke: var(--tt-w) var(--accent-up);
-  paint-order: stroke fill;
-}
-.nav__word b {
-  color: #fff;
-  -webkit-text-stroke: var(--tt-w) #fff;
-  font-weight: inherit;
-}
-
-/* A cell is as wide as its own label plus the shared padding — HOME is short,
-   PROFILE is long, exactly as the spec strip reads. They must NOT share one
-   width: flex-growing them to fill the bar is what stretched every tab to
-   ~460px on a wide window. The gap panel takes all the slack instead. */
+/* The three page tabs are fixed-width plates (Figma 1:3: HOME / INSTANCES /
+   COSMETICS bands of 98 / 168 / 171px, set inline from Nav.tsx) with the
+   label centred; the right group stays label-sized. They must NOT flex-grow:
+   the gap panel takes all the slack instead. */
 .nav__tab {
   flex: 0 0 auto;
   min-width: 0;
+  padding: 0;
+  justify-content: center;
 }
 
 /* the gap: a plain generic panel — bands top and bottom only, since the
@@ -83,6 +99,22 @@
   background-size:
     100% var(--px-band),
     100% var(--px-band);
+}
+
+/* the window controls: label-less cells, square-ish, pinned after SETTINGS */
+.nav__win {
+  flex: none;
+  width: calc(var(--nav-h) * 1.1);
+  padding: 0;
+  justify-content: center;
+}
+.nav__win--close {
+  --surf-top: var(--r-lo);
+  --surf-bot: var(--r-lo);
+}
+.nav__win--close:hover {
+  --surf-top: var(--r-up);
+  --surf-bot: var(--r-up);
 }
 
 /* profile cell: head + IGN */
@@ -109,22 +141,40 @@
    type steps down with --u on its own; below 1120 the padding tightens past
    that too, rather than anything dropping out */
 @media (max-width: 1120px) {
-  .nav__cell {
+  .nav__cell:not(.nav__tab) {
     padding: 0 12px;
     gap: 8px;
-  }
-  .nav__word b {
-    display: none;
   }
 }
 @media (max-width: 1000px) {
   /* narrower than the app's own minimum — only reachable in a browser
-     preview. The wordmark goes first; all six cells stay reachable. */
+     preview. The wordmark goes first; all six cells stay reachable, at full
+     size: the tabs give up their fixed plates for label-sized cells, nothing
+     shrinks below its label, and once the row is wider than the window the
+     strip scrolls sideways instead of fit-to-cell squashing the type. */
+  .nav {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
   .nav__brand {
     display: none;
   }
   .nav__cell {
+    flex-shrink: 0;
+  }
+  .nav__tab {
+    width: auto !important; /* beats the inline Figma plate width */
+    padding: 0 12px;
+  }
+  .nav__cell:not(.nav__tab) {
     padding: 0 8px;
+  }
+  .nav__gap {
+    min-width: 8px;
   }
   /* the account cell keeps its head and drops the name */
   .nav__profile .tt {
@@ -179,7 +229,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: rgba(30, 30, 30, 0.85);
+  background: rgba(30, 30, 30, 0.9); /* Figma 28:343 — the cell at 90% */
   padding: var(--gap);
 }
 /* settings and other reading surfaces stay opaque */

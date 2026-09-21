@@ -20,6 +20,18 @@
   pointer-events: none;
 }
 
+/* an imported wallpaper (video/image) — same plate, but smooth: live
+   wallpapers are cinematic renders, not pixel art */
+.scene__media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--black);
+  pointer-events: none;
+}
+
 /* vignette so foreground UI stays readable over any scene */
 .scene::after {
   content: '';

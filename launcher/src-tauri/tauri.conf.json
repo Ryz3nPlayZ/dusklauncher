@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "DuskLauncher",
-  "version": "0.2.0",
   "identifier": "app.tryzwork.dusklauncher",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -23,12 +22,20 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$DATA/FasterLauncher/**"]
+      }
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg"],
+    "targets": [
+      "app",
+      "dmg",
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/64x64.png",
@@ -36,6 +43,18 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": [
+      "resources/"
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEwODk5NENBRDIzRDY3Q0UKUldUT1p6M1N5cFNKRUdaNjZDWVdqM2lFdm9TeHVRcDNTUHZGS2UydFdlV2gyQ0hid0VMR2Z3UHQK",
+      "endpoints": [
+        "https://github.com/ryz3nplayz/dusklauncher/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

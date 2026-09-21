@@ -4,41 +4,53 @@
    layout keeps its proportions instead of one machine's pixel counts. */
 
 /* ══ HOME ═══════════════════════════════════════════════════════════════
-   The player and the console are ONE centred object: the character sits just
-   above the midline, the CTA row just below it, and the pair is centred both
-   ways in the stage. */
+   Figma 1:3 @ 1280×832, below the 46px navbar: nametag 30 · 26 · player
+   227×303 · 59 · console row 62 — one column, centred in the stage both
+   ways (146 above, 160 below). Every number is that frame's px × 1.91 --u. */
 .home {
   flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  justify-items: center;
-  padding: var(--gap) calc(72 * var(--u)) calc(var(--h-sm) + var(--gap));
-}
-
-/* the character owns the upper half and sits on the midline; the console
-   owns the lower half and hangs from it */
-.home__stage {
   min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
-  gap: calc(10 * var(--u));
-  padding-bottom: 0;
+  justify-content: center;
+  /* the frame centres the column 7px high of true centre; the status bar
+     (not in the frame) takes the bottom, so the top gives back the rest */
+  padding: calc(66 * var(--u)) calc(72 * var(--u)) calc(var(--h-sm) + var(--gap));
 }
 
-/* the nametag: a small panel, same stack as everything else */
+.home__stage {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(50 * var(--u));
+}
+
+/* the nametag (28:145): 30px plate, rgba(0,0,0,.5), Monocraft 16px white
+   with 0.8px tracking, padded 10px and lifted 4px so the glyphs sit centred */
 .home__tag {
   flex: none;
-  height: calc(52 * var(--u));
-  padding: 0 calc(16 * var(--u));
+  height: calc(57 * var(--u));
+  padding: 0 calc(19 * var(--u)) calc(8 * var(--u));
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.5);
+  font-family: var(--font-pixel);
+  font-weight: 700;
+  font-size: calc(28 * var(--t));
+  letter-spacing: 0.05em;
+  color: #fff;
+  white-space: nowrap;
 }
 
-/* the player is a button — the whole silhouette is the hit area */
+/* the player is a button, but the hit area is the CHARACTER: PlayerRender
+   ray-tests the pointer against the mesh and flips `is-hit`; the click
+   only counts while it's on. So no cursor on the box, and no :hover — the
+   outline and the hint follow the figure, not the rectangle around it. */
 .home__player {
-  flex: 1 1 0;
-  min-height: 0;
+  position: relative;
+  flex: none;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -46,114 +58,178 @@
   border: 0;
   padding: 0;
   background: none;
-  cursor: pointer;
+  cursor: default;
   -webkit-app-region: no-drag;
 }
-/* the box that decides how big the render is. The canvas measures its
-   parent, so the parent must have a size of its own — never one derived
-   from the canvas sitting inside it. */
+.home__player.is-hit {
+  cursor: pointer;
+}
+/* the render box (28:142, 227×303). skinview3d measures this canvas's
+   PARENT and writes an inline width and height back onto the canvas, so
+   the parent's size must never depend on the canvas. */
 .home__stage-box {
   position: relative;
-  flex: 1 1 0;
-  min-height: 0;
   display: block;
-  width: calc(460 * var(--u));
-  max-height: calc(540 * var(--u));
+  width: calc(490 * var(--u));
+  height: calc(650 * var(--u));
   overflow: hidden;
 }
-/* skinview3d measures this canvas's PARENT and writes an inline width and
-   height back onto the canvas. So the parent's size must never depend on
-   the canvas: .home__stage-box has a fixed width and a flex-basis of 0, and
-   clips, so the two can't ratchet each other up the way they were. */
 .home__canvas {
   display: block;
   max-width: 100%;
   max-height: 100%;
-  transition: filter 120ms steps(2);
 }
-/* hover outlines the CHARACTER: four drop-shadows dilate the rendered
-   alpha, so the outline is the silhouette — never a rectangle */
-.home__player:hover .home__canvas,
+/* hover: the figure darkens and gets an outline around the CHARACTER, not
+   its box. The canvas is transparent, so four 2px drop-shadows dilate the
+   rendered alpha into a hard white edge that follows the silhouette through
+   the pose; brightness() runs first so the edge itself stays white. Snaps
+   in, never fades. */
+.home__player.is-hit .home__canvas,
 .home__player:focus-visible .home__canvas {
-  filter:
-    drop-shadow(2px 0 0 var(--accent-co)) drop-shadow(-2px 0 0 var(--accent-co))
-    drop-shadow(0 2px 0 var(--accent-co)) drop-shadow(0 -2px 0 var(--accent-co));
+  filter: brightness(0.6) drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff)
+    drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff);
 }
-/* height comes from the label — a fixed row here just clipped it */
+/* the wardrobe hint overlays the bottom of the render so it adds no height
+   of its own — the Figma column has nothing between the player and the CTA */
 .home__wardrobe {
-  flex: none;
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  padding: calc(6 * var(--u)) calc(16 * var(--u)) calc(9 * var(--u));
+  /* the same half-black plate as the name tag, so it reads on any wallpaper */
+  background: rgba(0, 0, 0, 0.6);
+  font-family: var(--font-pixel);
+  font-weight: 400;
+  font-size: calc(20 * var(--t));
+  letter-spacing: 0.04em;
+  color: #fff;
+  white-space: nowrap;
   opacity: 0;
   transition: opacity 120ms steps(2);
+  pointer-events: none;
 }
-.home__player:hover .home__wardrobe,
+.home__player.is-hit .home__wardrobe,
 .home__player:focus-visible .home__wardrobe {
   opacity: 1;
 }
 
-/* the console row: PLAY NOW + the quick-profile popout, one height */
+/* the console row (27:138 + 28:243): PLAY NOW 238×62, a 13px gap, the
+   62×62 picker — 59px under the player */
 .home__console {
   flex: none;
   display: flex;
   align-items: stretch;
-  gap: var(--gap);
+  gap: calc(25 * var(--u));
 }
+/* 30px in from the band on both sides; arrow · 37 · text block */
 .home__play {
-  width: calc(545 * var(--u));
+  width: calc(455 * var(--u));
   max-width: 60vw;
-  flex-direction: column;
-  gap: calc(4 * var(--u));
+  padding: 0 calc(57 * var(--u));
+  gap: calc(71 * var(--u));
+  /* the arrow is sized in em off this — 27px against a 20px label */
+  font-size: calc(34 * var(--t));
 }
-/* the hero line sets the type size for its own row, so the arrow can be
-   sized in em off the label instead of a fixed pixel height that stops
-   tracking the label the moment the shell rescales */
-.home__play-line {
+.home__play-text {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  font-size: calc(42 * var(--t));
-  gap: calc(14 * var(--u));
+}
+/* PERFORMIUM (27:104): 12px Monocraft, flat white, 0.6px tracking */
+.home__play-sub {
+  font-family: var(--font-pixel);
+  font-weight: 700;
+  font-size: calc(15 * var(--t));
+  line-height: 1.4;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .home__quick {
   width: var(--h-xl);
-  flex-direction: column;
-  gap: calc(7 * var(--u));
+  padding: 0;
 }
-.home__quick-bar {
-  width: calc(42 * var(--u));
-  height: calc(6 * var(--u));
-  background: var(--tab-text-top);
-}
-.home__quick-bar:nth-child(even) {
-  background: var(--tab-text-bot);
+.home__quick-glyph {
+  width: calc(44 * var(--u));
+  height: calc(27 * var(--u));
 }
 
-/* quick-profile popout: a window (same stack at 87%) */
+/* the instance picker's popout: a window the width of the console row,
+   sitting on the row's top edge — a bar (what it is · MANAGE) over
+   a list of one-line rows, each the instance's name and its meta line, the
+   selected one on the accent stack */
 .home__popout {
   position: absolute;
   right: 0;
-  bottom: calc(var(--h-xl) + var(--gap));
-  width: calc(460 * var(--u));
-  max-height: calc(380 * var(--u));
+  bottom: calc(var(--h-xl) + var(--gap-sm));
+  width: calc(598 * var(--u));
+  max-width: 90vw;
+  max-height: calc(430 * var(--u));
+  display: flex;
   flex-direction: column;
-  align-items: stretch;
-  padding: var(--px-band);
-  gap: 2px;
-  overflow-y: auto;
   z-index: var(--z-modal);
+}
+.home__popout-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-nav);
+  background: var(--black);
 }
 .home__popout-row {
   flex: none;
   justify-content: space-between;
-  padding: 0 calc(18 * var(--u));
+  gap: calc(24 * var(--u));
+  padding: 0 calc(24 * var(--u));
   text-align: left;
+}
+.home__popout-name {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.home__popout-name .meta {
+  font-size: calc(17 * var(--t));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.home__popout-mark {
+  flex: none;
+  width: calc(18 * var(--u));
+  height: calc(18 * var(--u));
+  background: linear-gradient(var(--accent-up) 50%, var(--accent-lo) 50%);
+  box-shadow: 0 0 0 2px var(--black);
+}
+.home__popout-empty {
+  flex: none;
+  flex-direction: column;
+  gap: calc(14 * var(--u));
+  padding: calc(30 * var(--u)) calc(24 * var(--u));
 }
 .home__console-wrap {
   position: relative;
-  align-self: start;
+  flex: none;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--gap-sm);
-  padding-top: calc(var(--gap) / 2);
+  margin-top: calc(113 * var(--u));
+  -webkit-app-region: no-drag;
 }
 .home__error {
   width: calc(713 * var(--u));
@@ -194,7 +270,9 @@
 .home__popout,
 .stack,
 .column,
-.account {
+.account,
+.browse__filters,
+.browse__results {
   justify-content: flex-start;
 }
 
@@ -226,52 +304,98 @@
 }
 
 /* ══ INSTANCES ══════════════════════════════════════════════════════════
-   Tiles are the generic panel: #1E1E1E body, 6px band, 5px black. Each one
-   carries a PLAY NOW bar and a square gear, equal spacing all round. */
+   Figma 28:249. The window body holds the tiles 33px in from its edge and
+   38px under the bar; each tile (96:2) is a 307×223 grey plate — the nav
+   cell's construction — carrying a framed picture, the name, one info line
+   and a PLAY NOW bar with a square beside it. All px × 1.91 --u. */
+.win__body--tiles {
+  padding: calc(73 * var(--u)) calc(63 * var(--u));
+}
 .grid {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(calc(690 * var(--u)), 1fr));
+  grid-template-columns: repeat(auto-fill, calc(587 * var(--u)));
   grid-auto-rows: min-content;
-  gap: var(--gap);
+  gap: calc(30 * var(--u));
   align-content: start;
   overflow-y: auto;
 }
 
 .card {
+  height: calc(426 * var(--u));
   flex-direction: column;
   align-items: stretch;
-  gap: var(--gap-sm);
-  padding: var(--gap-sm);
+  /* 11px above the picture, 12px each side, 11px under the button row —
+     measured from the plate's outer edge, so the 2px outline comes off */
+  padding: calc(21 * var(--u) - var(--px-black)) calc(23 * var(--u) - var(--px-black));
 }
-.card__banner {
+/* 30:374 — 283×108: 2px black, 3px #323232, the picture inside */
+.card__banner-frame {
   flex: none;
-  width: 100%;
-  height: calc(190 * var(--u));
   display: block;
+  height: calc(206 * var(--u));
+  padding: var(--px-band);
   border: var(--px-black) solid var(--black);
+  background: var(--panel-bd);
 }
+/* 30:372 — the picture is the scene's middle band, exported at that crop,
+   so it simply fills the frame */
+.card__banner {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+/* 36:3 — Monocraft Bold 14px, flat white, 13px under the picture */
 .card__name {
-  padding: calc(2 * var(--u)) calc(4 * var(--u)) 0;
+  margin-top: calc(25 * var(--u));
+  font-family: var(--font-pixel);
+  font-weight: 700;
+  font-size: calc(24 * var(--t));
+  line-height: 1.5;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.card__meta {
-  padding: 0 calc(4 * var(--u));
+/* 36:4 — Monocraft Regular 10px, -1px tracking */
+.card__info {
+  font-family: var(--font-pixel);
+  font-weight: 400;
+  font-size: calc(17 * var(--t));
+  line-height: 1.5;
+  letter-spacing: -0.1em;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-/* the CTA row: a bar that takes what is left, then an 80×80 square */
+/* 38:5 — the row: a 233×40 bar, 10px, a 40×40 square, 4px under the info */
 .card__row {
   display: flex;
   align-items: stretch;
-  gap: var(--gap-sm);
-  height: calc(80 * var(--u));
+  gap: calc(19 * var(--u));
+  height: calc(76 * var(--u));
+  margin-top: calc(8 * var(--u));
 }
 .card__play {
   flex: 1;
   min-width: 0;
+  padding: 0;
+  --surf-bot: var(--tile-surf-bot);
+  --surf-hold: 35.6%;
 }
 .card__gear {
-  flex: 0 0 calc(80 * var(--u));
+  flex: 0 0 calc(76 * var(--u));
   padding: 0;
+}
+/* 93:132 — 16 Figma px of white pixel art, scaled like everything else */
+.card__gear-glyph {
+  width: calc(31 * var(--u));
+  height: calc(31 * var(--u));
+  image-rendering: pixelated;
 }
 
 /* new-profile / confirm dialogs: window variant, centred */
@@ -296,10 +420,11 @@
   display: flex;
   align-items: stretch;
   gap: calc(12 * var(--u));
-  height: var(--h-sm);
+  height: var(--h-md);
 }
 .modal__row > .px {
   flex: 1;
+  min-width: 0;
 }
 .modal__row--tall,
 .modal__row:has(> .h-md) {
@@ -309,6 +434,546 @@
   flex: 0 0 calc(160 * var(--u));
   display: flex;
   align-items: center;
+}
+.modal__spacer {
+  flex: 1;
+}
+
+/* ── the NEW INSTANCE picker + its custom form ─────────────────────────── */
+/* Figma 98:88 — the chooser is 307×223: 21px in from the ring to the
+   buttons, the title 42px down, the rows 10px apart */
+.modal--pick {
+  width: calc(587 * var(--u));
+  gap: calc(19 * var(--u));
+  padding: calc(40 * var(--u));
+}
+.modal--pick__title {
+  align-self: center;
+  margin: calc(20 * var(--u)) 0 calc(26 * var(--u));
+}
+.newinst__option {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  height: calc(110 * var(--u));
+  padding: 0 calc(24 * var(--u));
+}
+.newinst__option-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(6 * var(--u));
+  min-width: 0;
+}
+/* the custom form: one label column sized by its longest label, so every
+   field starts on the same line and nothing has to wrap to fit */
+.newinst {
+  width: calc(1040 * var(--u));
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  column-gap: calc(18 * var(--u));
+}
+.newinst > * {
+  grid-column: 1 / -1;
+}
+.newinst > .modal__row:has(> .modal__label) {
+  display: contents;
+}
+.newinst > .modal__row:has(> .modal__label) > .px {
+  height: var(--h-md);
+  min-width: 0;
+}
+.newinst .modal__label {
+  flex: none;
+  white-space: nowrap;
+}
+/* the resolved fabric row: value + a trailing note, left-aligned */
+.newinst__resolved {
+  justify-content: flex-start;
+  gap: calc(10 * var(--u));
+  white-space: nowrap;
+}
+.newinst__resolved .meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── the pixel checkbox ────────────────────────────────────────────────────
+   The spec's construction in miniature: grey ring + panel body; checking
+   swaps the band to the green family and drops a green block in the middle. */
+.check {
+  display: flex;
+  align-items: center;
+  gap: calc(14 * var(--u));
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  text-align: left;
+}
+.check--row {
+  gap: calc(10 * var(--u));
+}
+.check__box {
+  --corner: 0px;
+  flex: none;
+  width: calc(34 * var(--u));
+  height: calc(34 * var(--u));
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+}
+.check__box.is-on {
+  --up: var(--g-up);
+  --lo: var(--g-lo);
+}
+.check__tick {
+  width: 38%;
+  height: 38%;
+  background: var(--g-up);
+  opacity: 0;
+}
+.check__box.is-on .check__tick {
+  opacity: 1;
+}
+
+/* ══ BROWSE MODPACKS (spec screenshots: filters sidebar + result rows) ══ */
+.browse__back {
+  flex: 0 0 auto;
+  gap: calc(10 * var(--u));
+}
+/* the search owns the rest of the head once BACK has replaced the title */
+.browse__search {
+  flex: 1 1 auto;
+  max-width: none;
+}
+.browse__input {
+  font-size: calc(26 * var(--t));
+}
+.browse {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: var(--gap);
+}
+/* 98:594 — the sidebar is 253 of the 1280 */
+.browse__filters {
+  flex: 0 0 calc(500 * var(--u));
+  flex-direction: column;
+  align-items: stretch;
+  gap: calc(20 * var(--u));
+  padding: calc(16 * var(--u));
+  overflow-y: auto;
+}
+.browse__filters-head {
+  flex: none;
+  position: relative;
+  height: calc(56 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 2px solid var(--panel-bd);
+}
+.browse__clear {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  border: 0;
+  padding: 0 calc(6 * var(--u));
+  background: none;
+  cursor: pointer;
+}
+.browse__group {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: calc(10 * var(--u));
+  padding-bottom: calc(18 * var(--u));
+  border-bottom: 1px solid var(--panel-bd);
+}
+.browse__group:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.browse__options {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(10 * var(--u));
+}
+/* every release since 2011 is a long list — it scrolls in its own box */
+.browse__options--scroll {
+  max-height: calc(560 * var(--u));
+  overflow-y: auto;
+  padding-right: calc(6 * var(--u));
+}
+/* the sidebar checkboxes run a size up from the settings ones */
+.browse__group .check__box {
+  width: calc(42 * var(--u));
+  height: calc(42 * var(--u));
+}
+.browse__results {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: calc(12 * var(--u));
+  padding: calc(14 * var(--u));
+}
+.browse__toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: calc(12 * var(--u));
+  height: var(--h-sm);
+}
+.browse__select {
+  flex: 0 0 auto;
+  min-width: calc(150 * var(--u));
+}
+.select {
+  appearance: none;
+  cursor: pointer;
+}
+.select option {
+  background: var(--panel);
+  color: var(--text-1);
+}
+.browse__count {
+  margin-left: auto;
+  letter-spacing: 0.08em;
+}
+.browse__list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(12 * var(--u));
+  overflow-y: auto;
+}
+/* 98:527 — the row, a size up from the spec: a 120px icon and room for
+   two lines of description plus the loader / version chips */
+.browse__row {
+  flex: none;
+  height: calc(290 * var(--u));
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: calc(36 * var(--u));
+  padding: 0 calc(29 * var(--u));
+  cursor: pointer;
+}
+.browse__row:hover,
+.browse__row:focus-visible {
+  --surf-top: #222;
+  --surf-bot: #222;
+  outline: 0;
+}
+/* the instance already holds this one — a green edge so it reads before
+   the button does, and the row sits back a touch */
+.browse__row--installed {
+  box-shadow: inset calc(8 * var(--u)) 0 0 var(--g-lo);
+}
+.browse__row--installed .browse__icon,
+.browse__row--installed .browse__text {
+  opacity: 0.72;
+}
+.browse__icon {
+  flex: none;
+  width: calc(230 * var(--u));
+  height: calc(230 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--px-black) solid var(--black);
+  background: var(--listing-body);
+  overflow: hidden;
+}
+.browse__icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.browse__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: calc(6 * var(--u));
+}
+.browse__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: calc(4 * var(--u)) calc(14 * var(--u));
+  min-width: 0;
+  max-width: 100%;
+}
+.browse__name .tt {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.browse__by {
+  flex: none;
+  font-size: calc(21 * var(--t));
+}
+.browse__desc {
+  max-width: 100%;
+  font-size: calc(24 * var(--t));
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* the loader + first versions, as small plates under the description */
+.browse__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(8 * var(--u));
+  max-height: calc(34 * var(--u));
+  overflow: hidden;
+}
+.browse__chip {
+  display: inline-flex;
+  align-items: center;
+  height: calc(34 * var(--u));
+  padding: 0 calc(12 * var(--u));
+  border: var(--px-black) solid var(--black);
+  background: var(--listing-body);
+  font-family: var(--font-pixel);
+  font-size: calc(18 * var(--t));
+  letter-spacing: 0.04em;
+  color: var(--text-2);
+  text-transform: uppercase;
+}
+/* 172:74 — 173×41, 12px in from the row's band */
+.browse__install {
+  flex: none;
+  min-width: calc(330 * var(--u));
+  margin-right: calc(6 * var(--u));
+}
+/* 172:295 — page selection lives at the toolbar's right; the count sits
+   just before it so the two read as one cluster */
+.browse__pager {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  height: var(--h-sm);
+  margin-left: calc(12 * var(--u));
+}
+.browse__page {
+  flex: none;
+  min-width: var(--h-sm);
+  padding: 0 calc(16 * var(--u));
+}
+
+/* ══ INSTANCE EDITOR (the gear) ═════════════════════════════════════════
+   One solid window: SETTINGS reuses the settings rows; the content tabs are
+   a toolbar, an optional Modrinth search pane, and a list of file rows. */
+/* 172:352 — the head grows to fit the 90px icon; BACK and PLAY sit on its
+   centre line instead of stretching */
+.editor__head {
+  height: calc(172 * var(--u));
+  align-items: center;
+  gap: var(--gap);
+}
+.editor__icon {
+  flex: none;
+  width: calc(172 * var(--u));
+  height: calc(172 * var(--u));
+  border: var(--px-black) solid var(--black);
+  background: var(--panel);
+  overflow: hidden;
+}
+.editor__icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  image-rendering: pixelated;
+}
+.editor__ident {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(10 * var(--u));
+}
+.editor__ident-row {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  min-width: 0;
+}
+.editor__title {
+  flex: 0 1 auto;
+  margin-right: 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* 172:602 — the moss plate beside the name */
+.editor__badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 calc(24 * var(--u));
+}
+.editor__meta {
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.editor__body {
+  gap: calc(14 * var(--u));
+}
+/* the nested kind strip (ALL / MODS / …) sits inside the window body */
+.editor__kinds {
+  flex: none;
+}
+.editor__kinds .win__fill {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 var(--gap-sm);
+}
+.editor__count {
+  white-space: nowrap;
+}
+.editor__num {
+  width: calc(150 * var(--u));
+  flex: none;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+.editor__num::-webkit-outer-spin-button,
+.editor__num::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+.editor__x {
+  display: flex;
+  align-items: center;
+  font-size: calc(24 * var(--t));
+}
+.editor__foot {
+  margin-top: auto;
+  border-top: 2px solid var(--panel-bd);
+  border-bottom: 0;
+}
+.editor__list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(8 * var(--u));
+  overflow-y: auto;
+}
+/* 172:634 — rows run the full width; icon, name + file, type, toggle, REMOVE */
+.editor__row {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: calc(28 * var(--u));
+  height: calc(149 * var(--u));
+  padding: 0 calc(26 * var(--u));
+  border: var(--px-black) solid var(--black);
+  background: var(--listing-body);
+}
+.editor__row.is-off .editor__filename {
+  text-decoration: line-through;
+}
+.editor__row-icon {
+  flex: none;
+  width: calc(96 * var(--u));
+  height: calc(96 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--px-black) solid var(--black);
+  background: var(--panel);
+}
+.editor__row-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.editor__file {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(6 * var(--u));
+}
+.editor__filename {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.editor__kind {
+  flex: none;
+  width: calc(260 * var(--u));
+  display: flex;
+  flex-direction: column;
+  gap: calc(6 * var(--u));
+}
+.editor__remove {
+  flex: none;
+}
+/* the LOG tab: a panel-bodied console, monospace, errors tinted red */
+.editor__log {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: calc(6 * var(--u));
+}
+.editor__log-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  padding: calc(14 * var(--u)) calc(18 * var(--u));
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: calc(19 * var(--t));
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.editor__log-line {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.editor__log-line.is-err {
+  color: var(--r-up);
+}
+.editor__log-follow {
+  position: absolute;
+  right: calc(40 * var(--u));
+  bottom: calc(24 * var(--u));
+  padding: calc(8 * var(--u)) calc(16 * var(--u));
+  border: var(--px-black) solid var(--black);
+  background: var(--panel);
+  cursor: pointer;
 }
 
 /* ══ COSMETICS ══════════════════════════════════════════════════════════
@@ -355,13 +1020,9 @@
 .viewer__actions .px {
   flex: 1;
   min-width: 0;
-  padding: 0 calc(8 * var(--u));
-}
-/* the viewer is a narrow column by design, so its two CTAs take the same
-   width-aware cap the navbar does rather than overrunning their buttons */
-.viewer__actions .tt {
-  font-size: min(calc(26 * var(--t)), 1.1vw);
-  letter-spacing: min(calc(2 * var(--t)), 0.08vw);
+  /* the column is narrow, so the pair keeps only the band plus a hair of
+     face on each side; the label fits itself to what is left */
+  padding: 0 calc(var(--px-band) + 8 * var(--u));
 }
 .wardrobe__note {
   flex: none;
@@ -399,14 +1060,17 @@
   /* the same canvas/parent feedback as .home__stage-box — see the note there */
   overflow: hidden;
 }
-.skin-tile__stage > canvas {
+.skin-tile__stage > canvas,
+.skin-tile__stage > .snap {
   max-width: 100%;
   max-height: 100%;
 }
-/* a long skin name must shrink to fit rather than clip off both ends */
-.skin-tile__name .tt {
-  font-size: min(calc(26 * var(--t)), 1.15vw);
-  letter-spacing: min(calc(2 * var(--t)), 0.08vw);
+/* the offscreen still: rendered at 256×416 and scaled down, smooth */
+.snap {
+  display: block;
+  width: auto;
+  height: 100%;
+  object-fit: contain;
 }
 .skin-tile__name {
   flex: none;
@@ -416,19 +1080,6 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-}
-.skin-tile__badge .tt {
-  --tt-top: #ffffff;
-  --tt-bot: var(--g-co);
-}
-.skin-tile__badge {
-  flex: none;
-  width: 100%;
-  height: calc(30 * var(--u));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--g-lo);
 }
 .skin-tile__plus {
   width: calc(56 * var(--u));
@@ -503,9 +1154,82 @@
 .srow__control .px--wide {
   min-width: calc(360 * var(--u));
 }
+/* rows whose control set can grow (the wallpaper chips) wrap instead of
+   pushing the label out of the window */
+.srow__control--wrap {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-start;
+  height: auto;
+  max-width: calc(760 * var(--u));
+}
+/* the wallpaper tiles: the picture keeps the card's crop; a video shows its
+   first frame; the preview's stand-in is the panel's own grey */
+.wall .card__banner {
+  image-rendering: auto;
+}
+.wall__stub {
+  display: block;
+  background: linear-gradient(160deg, var(--panel-bd), var(--panel));
+}
 .slider {
   width: calc(300 * var(--u));
   accent-color: var(--accent-up);
+}
+
+/* ══ SIGN-IN ════════════════════════════════════════════════════════════
+   The gate covers the whole shell (nav included) until an account exists;
+   the same device-code panel sits inside the Profile page afterwards. */
+.signin {
+  position: fixed;
+  z-index: calc(var(--z-nav) + 20);
+  background: rgba(0, 0, 0, 0.7);
+}
+.signin__box {
+  width: calc(880 * var(--u));
+  gap: calc(22 * var(--u));
+  padding: calc(40 * var(--u));
+}
+.signin__cta {
+  flex: 1;
+}
+.signin__panel {
+  flex: none;
+  flex-direction: column;
+  align-items: stretch;
+  gap: calc(16 * var(--u));
+  padding: calc(24 * var(--u));
+}
+.signin__code-row {
+  display: flex;
+  align-items: stretch;
+  gap: calc(12 * var(--u));
+  height: var(--h-md);
+}
+/* the code is the one thing the user may have to read off the screen —
+   flat white, wide-tracked, never two-toned */
+.signin__code-row > .px {
+  flex: none;
+}
+.signin__code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  padding: 0 calc(24 * var(--u));
+  border: var(--px-black) solid var(--black);
+  background: var(--listing-body);
+  font-family: var(--font-pixel);
+  font-weight: 700;
+  font-size: calc(40 * var(--t));
+  letter-spacing: 0.18em;
+  color: #fff;
+  user-select: all;
+  -webkit-user-select: all;
+}
+.signin__err {
+  flex: none;
 }
 
 /* ══ PROFILE ════════════════════════════════════════════════════════════ */
@@ -550,4 +1274,368 @@
   align-items: center;
   justify-content: center;
   text-align: center;
+}
+
+/* cape tiles share the skin-tile frame; the swatch is a flat pixel sheet */
+.cape-swatch {
+  image-rendering: pixelated;
+  max-width: 100%;
+  max-height: 100%;
+}
+.skin-tile__none {
+  width: calc(56 * var(--u));
+  height: calc(90 * var(--u));
+  border: 2px dashed var(--text-2);
+  opacity: 0.5;
+}
+
+/* ── STORE ─────────────────────────────────────────────────────────────
+   the wardrobe layout with an item card between the stage
+   and the CTA: name + status on one line, the traits as one dim line under
+   it. The column is narrow, so no chips — a "·" list reads at 13 and never
+   wraps. A second, quieter row under the CTA carries the PNG export. */
+.store__item {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: calc(6 * var(--u));
+  padding: calc(6 * var(--u)) calc(4 * var(--u)) calc(2 * var(--u));
+  border-top: var(--px-black) solid var(--black);
+}
+.store__item-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap-sm);
+}
+.store__item-name,
+.store__item-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.store__export {
+  height: var(--h-sm);
+}
+/* tiles carry one more line than the wardrobe's: FREE / OWNED / WORN */
+.store-tile {
+  aspect-ratio: 45 / 54;
+}
+.store-tile__tag {
+  flex: none;
+  width: 100%;
+  height: calc(26 * var(--u));
+  margin-top: calc(-6 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── PROJECT PAGE (frame 5) ────────────────────────────────────────────
+   the window with the tabs on the left, the 253/1280-wide details
+   column on the right */
+.project__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.project__install {
+  margin-left: 0;
+}
+.project {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  gap: calc(48 * var(--u));
+}
+.project__win {
+  flex: 1;
+  min-width: 0;
+}
+.project__lead {
+  width: calc(12 * var(--u));
+  flex: none;
+}
+.project__body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: calc(12 * var(--u));
+  padding: calc(18 * var(--u)) calc(22 * var(--u));
+  min-height: 0;
+}
+.project__prose,
+.project__versions,
+.project__gallery {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.project__side {
+  flex: 0 0 calc(484 * var(--u));
+  justify-content: flex-start;
+  align-items: stretch;
+  flex-direction: column;
+  gap: calc(28 * var(--u));
+  padding: calc(24 * var(--u)) calc(22 * var(--u));
+  overflow-y: auto;
+  min-height: 0;
+}
+.project__detail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: calc(10 * var(--u));
+}
+.project__row {
+  display: flex;
+  justify-content: space-between;
+  gap: calc(12 * var(--u));
+}
+.project__val {
+  color: var(--text-1);
+  text-align: right;
+}
+.project__chips {
+  flex-wrap: wrap;
+}
+.project__link {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  padding: calc(4 * var(--u)) 0;
+}
+.project__link:hover .tt {
+  text-decoration: underline;
+}
+
+/* the VERSIONS list: type plate · name + numbers · INSTALL */
+.project__versions {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10 * var(--u));
+}
+.project__version {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: calc(20 * var(--u));
+  padding: calc(14 * var(--u)) calc(18 * var(--u));
+}
+.project__vtype {
+  flex: none;
+  width: calc(120 * var(--u));
+  display: inline-flex;
+  justify-content: center;
+  padding: calc(4 * var(--u)) 0;
+  border: var(--px-black) solid var(--black);
+  background: #111;
+}
+.project__vtext {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(6 * var(--u));
+}
+.project__vtext .meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.project__vinstall {
+  flex: none;
+  padding: 0 calc(28 * var(--u));
+}
+
+/* GALLERY: a two-up grid, click for the big one */
+.project__gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(14 * var(--u));
+  align-content: start;
+}
+.project__shot {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: calc(6 * var(--u));
+  border: var(--px-black) solid var(--black);
+  background: #111;
+  overflow: hidden;
+}
+.project__shot img {
+  /* natural proportions: screenshots come in every shape, so nothing is
+     cropped — the row just takes the tallest one */
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.project__shot-title {
+  padding: 0 calc(10 * var(--u)) calc(8 * var(--u));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.project__lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+}
+.project__lightbox img {
+  max-width: 92vw;
+  max-height: 88vh;
+  border: var(--px-black) solid var(--black);
+}
+
+/* rendered Modrinth markdown */
+.md {
+  font-family: var(--font-body, inherit);
+  font-size: calc(24 * var(--t));
+  line-height: 1.55;
+  color: var(--text-1);
+  padding-right: calc(12 * var(--u));
+}
+.md > :first-child { margin-top: 0; }
+.md h1, .md h2, .md h3, .md h4 {
+  margin: 1.2em 0 0.5em;
+  line-height: 1.2;
+  color: var(--white, #fff);
+}
+.md h1 { font-size: 1.6em; }
+.md h2 { font-size: 1.35em; border-bottom: var(--px-black) solid var(--black); padding-bottom: 0.25em; }
+.md h3 { font-size: 1.15em; }
+.md p, .md ul, .md ol, .md blockquote, .md pre, .md table { margin: 0.7em 0; }
+.md ul, .md ol { padding-left: 1.6em; }
+.md li + li { margin-top: 0.25em; }
+.md a { color: var(--blue, #5aa9ff); text-decoration: underline; cursor: pointer; }
+.md img { max-width: 100%; height: auto; display: block; margin: 0.6em 0; }
+.md code { background: #111; padding: 0.1em 0.35em; font-size: 0.9em; }
+.md pre { background: #111; padding: 0.8em; overflow-x: auto; border: var(--px-black) solid var(--black); }
+.md pre code { background: none; padding: 0; }
+.md blockquote { border-left: calc(4 * var(--u)) solid var(--text-3); padding-left: 0.8em; color: var(--text-2); }
+.md hr { border: 0; border-top: var(--px-black) solid var(--black); margin: 1em 0; }
+.md table { border-collapse: collapse; }
+.md th, .md td { border: var(--px-black) solid var(--black); padding: 0.3em 0.6em; }
+.md center, .md div { display: block; }
+.md details summary { cursor: pointer; color: var(--text-2); }
+
+/* ── INSTALL MODPACK (Figma 187:222) ─────────────────────────────────────
+   a 729×649 window over the page: title row with the X, the icon beside
+   the name field, the pack's versions as a pickable list, CANCEL / INSTALL */
+.install {
+  width: calc(1394 * var(--u));
+  height: calc(1241 * var(--u));
+  max-height: 94%;
+  gap: calc(36 * var(--u));
+  padding: calc(50 * var(--u)) calc(66 * var(--u)) calc(56 * var(--u));
+}
+.install__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(30 * var(--u));
+  min-height: var(--h-sm);
+}
+.install__close {
+  flex: none;
+  width: var(--h-sm);
+  padding: 0;
+}
+.install__ident {
+  display: flex;
+  align-items: center;
+  gap: calc(50 * var(--u));
+}
+.install__icon {
+  flex: none;
+  width: calc(191 * var(--u));
+  height: calc(191 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--px-black) solid var(--black);
+  background: #111;
+  overflow: hidden;
+}
+.install__icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+  display: block;
+}
+.install__field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(14 * var(--u));
+}
+.install__field > .px {
+  height: var(--h-md);
+}
+.install__note {
+  line-height: 1.35;
+}
+.install__toolbar {
+  display: flex;
+  align-items: center;
+  gap: calc(26 * var(--u));
+  height: var(--h-sm);
+}
+.install__toolbar .browse__select {
+  width: calc(460 * var(--u));
+}
+.install__count {
+  margin-left: auto;
+}
+.install__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(16 * var(--u));
+}
+.install__version {
+  cursor: pointer;
+  padding: calc(16 * var(--u)) calc(28 * var(--u));
+}
+.install__version:not(.is-on):hover {
+  background: #232323;
+}
+/* the pick: the moss family's tint plus a moss ring inside the band */
+.install__version.is-on {
+  outline: calc(4 * var(--u)) solid var(--m-up);
+  outline-offset: calc(-4 * var(--u));
+}
+.install__foot {
+  height: var(--h-md);
+  justify-content: flex-end;
+}
+.install__foot > .install__btn {
+  flex: 0 0 calc(320 * var(--u));
+}
+.install__foot > .install__back {
+  flex-basis: calc(220 * var(--u));
+}
+.install__picked {
+  flex: 1;
+  min-width: 0;
+  align-self: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.install__err {
+  color: var(--r-co);
 }

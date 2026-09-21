@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import SceneBackground from './background/SceneBackground';
+import CustomWallpaper from './background/CustomWallpaper';
 import Nav from './components/Nav';
-import { PxBox, PxButton, TT } from './components/px/Px';
-import PixelGlyph from './components/px/PixelGlyph';
+import { PxBox, TT } from './components/px/Px';
+import UpdateButton from './components/UpdateButton';
 import type { Pose } from './components/PlayerRender';
 import { api, isTauri, listen, type Account, type GameState, type Profile, type Progress, type Settings } from './lib/api';
+import { startGameLog } from './lib/gamelog';
+import { useUpdater } from './lib/updater';
 import type { Route } from './routes';
 import Home from './views/Home';
 import Instances from './views/Instances';
@@ -13,13 +15,16 @@ import Cosmetics from './views/Cosmetics';
 import Store from './views/Store';
 import ProfileView from './views/Profile';
 import SettingsView from './views/Settings';
+import SignInGate from './components/SignIn';
 
 /** The window is undecorated (tauri.conf.json), so the shell owns its chrome. */
-const appWindow = () => getCurrentWindow();
 
 export default function App() {
   const [route, setRoute] = useState<Route>('home');
   const [account, setAccount] = useState<Account | null>(null);
+  // null until the first account read lands — the gate must not flash
+  // before we know whether a session exists
+  const [accountKnown, setAccountKnown] = useState(false);
   const [skin, setSkin] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -27,10 +32,12 @@ export default function App() {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [game, setGame] = useState<GameState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const updater = useUpdater();
 
   const refreshProfiles = useCallback(async () => setProfiles(await api.listProfiles()), []);
   const refreshAccount = useCallback(async () => {
     setAccount(await api.getAccount());
+    setAccountKnown(true);
     setSkin(await api.accountSkin());
   }, []);
 
@@ -40,12 +47,33 @@ export default function App() {
     void api.getSettings().then(setSettings);
   }, [refreshProfiles, refreshAccount]);
 
+  // first run: seed the bundled default pack (Dusk Essentials) so the
+  // launcher never opens empty. One attempt per install — a failed download
+  // (offline etc.) just retries on a fresh install or via the store.
+  useEffect(() => {
+    void (async () => {
+      const list = await api.listProfiles();
+      if (list.length > 0 || localStorage.getItem('dusk.defaultPackSeeded')) return;
+      localStorage.setItem('dusk.defaultPackSeeded', '1');
+      try {
+        const p = await api.installBundledPack('dusk-essentials');
+        setProfiles(await api.listProfiles());
+        const s = await api.getSettings();
+        if (!s.selectedProfileId) void saveSettings({ ...s, selectedProfileId: p.id });
+      } catch (e) {
+        console.warn('default pack install failed:', e);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // theme drives both the accent family and which scene plays behind
   useEffect(() => {
     if (settings) document.documentElement.dataset.theme = settings.theme;
   }, [settings?.theme]);
 
   useEffect(() => {
+    startGameLog();
     const unlisten = [
       listen<Progress>('launch-progress', setProgress),
       listen<GameState>('game-state', (s) => {
@@ -92,7 +120,15 @@ export default function App() {
 
   return (
     <div className="app">
-      <SceneBackground scene={settings?.theme === 'nether' ? 'mcpvp' : 'dawn'} />
+      {settings?.customBackground ? (
+        <CustomWallpaper
+          name={settings.customBackground}
+          scene={settings.theme === 'nether' ? 'mcpvp' : 'dawn'}
+          paused={settings.reduceMotion}
+        />
+      ) : (
+        <SceneBackground scene={settings?.theme === 'nether' ? 'mcpvp' : 'dawn'} />
+      )}
 
       <Nav route={route} onRoute={setRoute} account={account} skin={skin} />
 
@@ -110,21 +146,41 @@ export default function App() {
             onLaunch={launch}
             onSelect={selectProfile}
             onWardrobe={() => setRoute('cosmetics')}
+            onManage={() => setRoute('instances')}
             onStop={() => void api.stopGame()}
           />
         )}
         {route === 'instances' && (
-          <Instances profiles={profiles} selected={selected} onRefresh={refreshProfiles} onLaunch={launch} onSelect={selectProfile} />
+          <Instances
+            profiles={profiles}
+            selected={selected}
+            game={game}
+            onRefresh={refreshProfiles}
+            onLaunch={launch}
+            onSelect={selectProfile}
+            onStop={() => void api.stopGame()}
+          />
         )}
         {route === 'cosmetics' && (
-          <Cosmetics account={account} pose={pose} onPose={setPose} onSkinChange={refreshAccount} />
+          <Cosmetics
+            account={account}
+            pose={pose}
+            onPose={setPose}
+            onSkinChange={refreshAccount}
+            onStore={() => setRoute('store')}
+          />
         )}
-        {route === 'store' && <Store />}
+        {route === 'store' && (
+          <Store account={account} skin={skin} pose={pose} onPose={setPose} onWardrobe={() => setRoute('cosmetics')} />
+        )}
         {route === 'profile' && <ProfileView account={account} skin={skin} onChange={refreshAccount} />}
         {route === 'settings' && settings && <SettingsView settings={settings} onSave={saveSettings} />}
       </main>
 
+      {accountKnown && !account?.authenticated && <SignInGate onDone={refreshAccount} />}
+
       <div className="status-bar">
+        <UpdateButton status={updater.status} onInstall={() => void updater.install()} onRestart={() => void updater.restart()} />
         <PxBox family="panel" height="sm" className="status-pill">
           <span className={`status-pill__dot ${account?.authenticated ? '' : 'status-pill__dot--off'}`} />
           <TT size={13} tone="dim">
@@ -138,19 +194,6 @@ export default function App() {
           </TT>
         </PxBox>
 
-        {isTauri && (
-          <div className="win-controls">
-            <PxButton family="panel" height="sm" title="Minimize" onClick={() => void appWindow().minimize()}>
-              <PixelGlyph glyph="minimize" size={14} color="var(--text-2)" />
-            </PxButton>
-            <PxButton family="panel" height="sm" title="Maximize" onClick={() => void appWindow().toggleMaximize()}>
-              <PixelGlyph glyph="maximize" size={14} color="var(--text-2)" />
-            </PxButton>
-            <PxButton family="red" height="sm" title="Close" onClick={() => void appWindow().close()}>
-              <PixelGlyph glyph="close" size={14} color="var(--r-up)" />
-            </PxButton>
-          </div>
-        )}
       </div>
     </div>
   );
