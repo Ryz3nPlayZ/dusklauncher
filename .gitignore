@@ -1,5 +1,6 @@
 # --- Rust / Tauri ---
 launcher/target/
+server/target/
 launcher/src-tauri/gen/schemas/
 
 # --- Node / Vite ---
@@ -10,6 +11,7 @@ launcher/dist/
 # --- Gradle / Java (client-mod) ---
 .gradle/
 build/
+client-mod/run/
 *.iml
 
 # --- macOS / editors ---
@@ -28,3 +30,6 @@ reference/
 # local agent/tool state
 .zcode/
 .freebuff/
+
+# --- bundled client mod (built by client-mod, shipped by the launcher) ---
+launcher/src-tauri/resources/*.jar
