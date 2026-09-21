@@ -1,0 +1,22 @@
+# Runs next to the existing `cloud` stack on the box: joins its network so the
+# shared Caddy can reverse-proxy `dusk_api:8787` (see Caddyfile.snippet).
+services:
+  dusk_api:
+    build: .
+    container_name: dusk_api
+    restart: unless-stopped
+    environment:
+      - RUST_LOG=info
+      # extra redeem codes, e.g. DUSK_CODES=launchparty:500
+      - DUSK_CODES=${DUSK_CODES:-}
+    volumes:
+      - dusk_data:/data
+    networks:
+      - cloud_default
+
+volumes:
+  dusk_data:
+
+networks:
+  cloud_default:
+    external: true

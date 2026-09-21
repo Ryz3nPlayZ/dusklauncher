@@ -1,0 +1,18 @@
+{
+  "capes": [
+    { "id": 5,  "name": "Animated Fire",        "animated": true },
+    { "id": 6,  "name": "Astelic Badlion",      "animated": true },
+    { "id": 7,  "name": "Astelic Purple Sky",   "animated": true },
+    { "id": 8,  "name": "Ender Dragon",         "animated": false },
+    { "id": 9,  "name": "Energy Wings",         "animated": false },
+    { "id": 10, "name": "Galaxy",               "animated": false },
+    { "id": 11, "name": "HD Galaxy",            "animated": false },
+    { "id": 12, "name": "Intel Edits Cloaks",   "animated": false },
+    { "id": 13, "name": "Pastel Aesthetic",     "animated": false },
+    { "id": 14, "name": "ThirtyVirus Code Red", "animated": true },
+    { "id": 15, "name": "Glitchstorm",          "animated": true }
+  ],
+  "accessories": [
+    { "id": 16, "name": "Red Fire Arm", "animated": false }
+  ]
+}

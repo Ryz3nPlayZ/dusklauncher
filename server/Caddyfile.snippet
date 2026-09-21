@@ -1,0 +1,6 @@
+# Dusk cosmetics API — appended to ~/cloud/Caddyfile by deploy.sh.
+# sslip.io resolves the name to the box; Caddy issues the certificate.
+dusk.129-213-43-152.sslip.io {
+    encode gzip
+    reverse_proxy dusk_api:8787
+}
