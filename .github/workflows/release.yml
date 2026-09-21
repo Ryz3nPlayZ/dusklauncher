@@ -1,0 +1,157 @@
+# Tag a commit `vX.Y.Z` (matching launcher/Cargo.toml's workspace version —
+# `launcher/scripts/release.sh` does the bump + tag) and this builds the
+# client mod jars the launcher bundles, then every desktop target (macOS
+# arm64 + Intel, Windows, Linux), signs the updater bundles with the minisign
+# key in TAURI_SIGNING_PRIVATE_KEY, and opens a DRAFT GitHub Release carrying
+# the installers plus `latest.json`. Running launchers poll that file (see
+# plugins.updater.endpoints in launcher/src-tauri/tauri.conf.json) — but
+# only once the draft is published: `launcher/scripts/publish.sh vX.Y.Z`
+# checks the assets and flips it live.
+#
+# Repo secrets required:
+#   TAURI_SIGNING_PRIVATE_KEY           contents of ~/.tauri/dusklauncher.key
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  its password (empty string if none)
+#
+# Optional — Apple Developer ID signing + notarization, so the first install
+# opens without the "unidentified developer" dance (updates never need it):
+#   APPLE_CERTIFICATE                   base64 of the Developer ID .p12
+#   APPLE_CERTIFICATE_PASSWORD          the .p12 password
+#   APPLE_SIGNING_IDENTITY              "Developer ID Application: … (TEAMID)"
+#   APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID   for notarytool (app-specific password)
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches the workspace version
+        run: |
+          set -eu
+          want="${GITHUB_REF_NAME#v}"
+          have="$(sed -n 's/^version = "\(.*\)"/\1/p' launcher/Cargo.toml | head -1)"
+          if [ "$want" != "$have" ]; then
+            echo "::error::tag $GITHUB_REF_NAME but launcher/Cargo.toml says $have — run launcher/scripts/release.sh"
+            exit 1
+          fi
+
+  # The launcher ships duskclient-<mc>.jar for both Minecraft targets as a
+  # Tauri resource (launcher/src-tauri/resources, gitignored) — same build
+  # as `gradle build -Pmc=…` in client-mod.
+  client-mod:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 9.7.1
+      - name: Build both client jars
+        working-directory: client-mod
+        run: |
+          gradle build -Pmc=1.21.11 -x test --console=plain
+          gradle build -Pmc=26.2 -x test --console=plain
+          ls -la ../launcher/src-tauri/resources/*.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-jars
+          path: launcher/src-tauri/resources/*.jar
+          if-no-files-found: error
+
+  build:
+    needs: [check, client-mod]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest # Apple Silicon
+            target: aarch64-apple-darwin
+            bundles: app,dmg
+          - os: macos-13 # Intel
+            target: x86_64-apple-darwin
+            bundles: app,dmg
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+          - os: ubuntu-22.04 # oldest glibc we ship against
+            target: x86_64-unknown-linux-gnu
+            bundles: appimage,deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: client-jars
+          path: launcher/src-tauri/resources
+
+      - name: Linux webkit + appindicator deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: launcher/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: launcher
+
+      - run: npm ci
+        working-directory: launcher
+
+      # tauri-bundler signs + notarizes as soon as APPLE_CERTIFICATE is in the
+      # environment, and chokes on an empty one — so the Apple secrets only
+      # reach the build step when they're actually set.
+      - name: macOS signing (when the Apple secrets exist)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "no APPLE_CERTIFICATE secret — building unsigned"
+            exit 0
+          fi
+          for k in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            { echo "$k<<__EOV__"; printf '%s\n' "${!k}"; echo "__EOV__"; } >> "$GITHUB_ENV"
+          done
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: launcher
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+          tagName: ${{ github.ref_name }}
+          releaseName: DuskLauncher ${{ github.ref_name }}
+          releaseBody: 'Draft — `launcher/scripts/publish.sh ${{ github.ref_name }}` fills in the notes and publishes.'
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
