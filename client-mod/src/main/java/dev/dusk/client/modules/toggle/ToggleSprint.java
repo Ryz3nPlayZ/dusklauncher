@@ -1,6 +1,6 @@
-package dev.fasterlauncher.client.modules.toggle;
+package dev.dusk.client.modules.toggle;
 
-import dev.fasterlauncher.client.module.Module;
+import dev.dusk.client.module.Module;
 
 /**
  * ToggleSprint/ToggleSneak. Implemented at the input-preference layer only:

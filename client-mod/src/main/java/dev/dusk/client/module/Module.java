@@ -1,10 +1,10 @@
-package dev.fasterlauncher.client.module;
+package dev.dusk.client.module;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Base class for all FasterClient modules. A module is either a HUD element
+ * Base class for all DuskClient modules. A module is either a HUD element
  * (has a draggable anchor position) or a behavior toggle.
  */
 public abstract class Module {

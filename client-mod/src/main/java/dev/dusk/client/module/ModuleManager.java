@@ -1,4 +1,4 @@
-package dev.fasterlauncher.client.module;
+package dev.dusk.client.module;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -36,7 +36,7 @@ public class ModuleManager {
     }
 
     private Path configFile() {
-        return FabricLoader.getInstance().getConfigDir().resolve("fasterclient.json");
+        return FabricLoader.getInstance().getConfigDir().resolve("duskclient.json");
     }
 
     public void loadConfig() {

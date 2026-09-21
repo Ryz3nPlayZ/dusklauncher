@@ -1,6 +1,6 @@
-package dev.fasterlauncher.client.modules.hud;
+package dev.dusk.client.modules.hud;
 
-import dev.fasterlauncher.client.module.Module;
+import dev.dusk.client.module.Module;
 
 /** FPS display HUD element. Value is sampled from the client's frame stats. */
 public class FpsDisplay extends Module {

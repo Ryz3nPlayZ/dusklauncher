@@ -1,9 +1,25 @@
+// One source tree, two Minecraft targets. `gradle build -Pmc=1.21.11` and
+// `gradle build -Pmc=26.2` each drop a duskclient-<mc>.jar into the launcher
+// resources; the launcher injects whichever matches the profile's version.
 plugins {
-    id 'fabric-loom' version '1.17.20'
+    // Same plugin, two ids: the legacy id keeps the obfuscated (mappings)
+    // pipeline that 1.21.11 needs; the new id assumes an unobfuscated game.
+    id 'fabric-loom' version '1.17.20' apply false
+    id 'net.fabricmc.fabric-loom' version '1.17.20' apply false
     id 'maven-publish'
 }
 
-version = project.mod_version
+def mc = project.mc
+def mcKey = mc.replace('.', '_')
+def loaderVersion = project."mc_${mcKey}_loader"
+def fabricVersion = project."mc_${mcKey}_fabric"
+// 26.x ships unobfuscated, so it needs no mappings and only the Java it
+// requires; 1.21.11 still runs through Mojang mappings on Java 21.
+def unobfuscated = !mc.startsWith('1.')
+def javaRelease = unobfuscated ? 25 : 21
+apply plugin: (unobfuscated ? 'net.fabricmc.fabric-loom' : 'fabric-loom')
+
+version = "${project.mod_version}+${mc}"
 group = project.maven_group
 
 base { archivesName = project.archives_base_name }
@@ -11,25 +27,64 @@ base { archivesName = project.archives_base_name }
 repositories {}
 
 dependencies {
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    minecraft "com.mojang:minecraft:${mc}"
+    if (!unobfuscated) {
+        mappings loom.officialMojangMappings()
+    }
+    // the unobfuscated pipeline has no remapping, so mods are plain deps
+    def modConfig = unobfuscated ? 'implementation' : 'modImplementation'
+    "$modConfig"("net.fabricmc:fabric-loader:${loaderVersion}")
+    "$modConfig"("net.fabricmc.fabric-api:fabric-api:${fabricVersion}")
 }
+
+sourceSets.main.java.srcDir "src/mc${mcKey}/java"
 
 processResources {
     inputs.property "version", project.version
+    inputs.property "mc", mc
+    inputs.property "javaRelease", javaRelease
     filesMatching("fabric.mod.json") {
-        expand "version": project.version
+        expand "version": project.version, "mc_range": (unobfuscated ? "~${mc}" : "~1.21"), "java": ">=${javaRelease}"
+    }
+    filesMatching("duskclient.mixins.json") {
+        expand "java_level": "JAVA_${javaRelease}"
     }
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
+    it.options.release = javaRelease
 }
 
 java {
     withSourcesJar()
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.toVersion(javaRelease)
+    targetCompatibility = JavaVersion.toVersion(javaRelease)
 }
+
+// Copy the finished jar into the launcher's Tauri resources so it gets
+// bundled and force-loaded into every Fabric instance (docs/COSMETICS.md §5).
+def finalJar = tasks.named(unobfuscated ? 'jar' : 'remapJar')
+tasks.register('installToLauncher', Copy) {
+    dependsOn finalJar
+    from(finalJar.map { it.archiveFile })
+    into(rootProject.file('../launcher/src-tauri/resources'))
+    rename { "duskclient-${mc}.jar" }
+}
+tasks.named('build') { finalizedBy 'installToLauncher' }
+
+// In-game verification: `gradle runClientGameTest` boots the client with the
+// mod, makes a world, equips the loadout below and screenshots the player
+// (build/run/clientGameTest/screenshots). See src/gametest.
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'duskclient-gametest'
+        enableGameTests = false
+        enableClientGameTests = true
+        eula = true
+        clearRunDirectory = true
+        username = 'Dusk'
+    }
+}
+// The gametest harness API moved between the two Fabric versions too.
+sourceSets.named("gametest") { java.srcDir "src/mc${mcKey}/gametest" }

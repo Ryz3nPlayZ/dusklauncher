@@ -1,7 +1,8 @@
-package dev.fasterlauncher.client.config;
+package dev.dusk.client.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import dev.dusk.client.cosmetics.CosmeticsConfig;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.nio.file.Files;
@@ -18,6 +19,8 @@ public final class DuskConfig {
     /** Absolute path to a PNG/JPG background. Empty = vanilla panorama. */
     public String backgroundPath = "";
     public boolean showAccountTile = true;
+    /** Cosmetics loadout + toggles (docs/COSMETICS.md). Written by the launcher. */
+    public CosmeticsConfig cosmetics = new CosmeticsConfig();
 
     private static DuskConfig instance;
 
@@ -27,6 +30,12 @@ public final class DuskConfig {
         if (instance == null) {
             instance = load();
         }
+        return instance;
+    }
+
+    /** Re-read the file (the launcher rewrites the cosmetics block before each launch). */
+    public static synchronized DuskConfig reload() {
+        instance = load();
         return instance;
     }
 
@@ -50,7 +59,10 @@ public final class DuskConfig {
             Path path = file();
             if (Files.exists(path)) {
                 DuskConfig parsed = GSON.fromJson(Files.readString(path), DuskConfig.class);
-                if (parsed != null) return parsed;
+                if (parsed != null) {
+                    if (parsed.cosmetics == null) parsed.cosmetics = new CosmeticsConfig();
+                    return parsed;
+                }
             }
         } catch (Exception e) {
             // corrupt config: start fresh rather than crash

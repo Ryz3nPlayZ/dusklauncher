@@ -1,0 +1,30 @@
+FasterClient — GPL-3.0-or-later (see fabric.mod.json).
+
+The cosmetics package (dev.fasterlauncher.client.cosmetics and
+mixin/cosmetics) reimplements the on-the-wire and on-screen behaviour of
+two projects so that Dusk players are interoperable with them:
+
+- MinecraftCapes mod — https://github.com/MinecraftCapes/minecraftcapes-mod
+  LGPL-2.1. Replicated: the profile API contract (api.minecraftcapes.net),
+  the offline-UUID resolution rule, the on-disk cache layout
+  (<type>/<hash[0:2]>/<hash>), the animated-cape frame rule
+  (height != width/2 -> frames of width/2 rows, 100 ms each), the static
+  cape padding rule, the 14x7 ears model UVs and the cape render types.
+  No source files were copied.
+
+- cosmetica-core — https://github.com/Cosmetica-cc/cosmetica-core
+  Apache-2.0 (Isaiah "Eyezah" Meek, Mekal "Valoeghese" Covic et al.).
+  Replicated: the PlayerSkin substitution approach for capes/elytra, and
+  the accessory model format and placement rules described in
+  docs/COSMETICS.md §1.2 — the block-model face/corner/UV conventions of
+  CosmeticaModel and BlockFaceUV (cosmetics/model/AccessoryModel.java) and
+  the attachment transform chain of Accessory.attachmentTransform /
+  CosmeticaModel.submitOnPart (cosmetics/AccessoriesLayer.java), so that
+  models authored for Cosmetica render in the same place here. The
+  launcher's preview (launcher/src/lib/accessoryMesh.ts) bakes the same
+  rules. No source files were copied.
+
+Bundled cosmetics (src/main/resources/assets/fasterclient/cosmetics) are
+community capes and one Cosmetica accessory ("Red Fire Arm", cosmetica
+id ufa1T) imported with tools/import_cosmetics.py; they are content, not
+code, and are not covered by the licences above.

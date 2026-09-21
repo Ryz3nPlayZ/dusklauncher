@@ -1,6 +1,6 @@
-package dev.fasterlauncher.client.modules.hud;
+package dev.dusk.client.modules.hud;
 
-import dev.fasterlauncher.client.module.Module;
+import dev.dusk.client.module.Module;
 
 import java.util.ArrayDeque;
 import java.util.Deque;

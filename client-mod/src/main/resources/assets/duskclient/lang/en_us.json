@@ -1,4 +1,4 @@
 {
-  "category.fasterclient": "FasterClient",
-  "key.fasterclient.settings": "Open Dusk Settings"
+  "category.duskclient": "DuskClient",
+  "key.duskclient.settings": "Open Dusk Settings"
 }

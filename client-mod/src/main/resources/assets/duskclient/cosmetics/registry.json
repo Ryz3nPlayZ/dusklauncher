@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "capes": [
+    {
+      "id": 5,
+      "name": "Animated Fire",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 6,
+      "name": "Astelic Badlion",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 150
+    },
+    {
+      "id": 7,
+      "name": "Astelic Purple Sky",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 8,
+      "name": "Ender Dragon",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 9,
+      "name": "Energy Wings",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 10,
+      "name": "Galaxy",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 11,
+      "name": "HD Galaxy",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 12,
+      "name": "Intel Edits Cloaks",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 13,
+      "name": "Pastel Aesthetic",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 14,
+      "name": "ThirtyVirus Code Red",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 15,
+      "name": "Glitchstorm",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 60
+    }
+  ],
+  "accessories": [
+    {
+      "id": 16,
+      "name": "Red Fire Arm",
+      "attachment": "right_arm",
+      "offset": [
+        1.0,
+        11.5,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 0,
+      "source": "cosmetica:ufa1T"
+    }
+  ]
+}

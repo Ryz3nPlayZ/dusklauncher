@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "duskclient-gametest",
+  "version": "1.0.0",
+  "name": "DuskClient game tests",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": [
+      "dev.dusk.client.gametest.CosmeticsGameTest",
+      "dev.dusk.client.gametest.CrossModCapesGameTest"
+    ]
+  },
+  "depends": {
+    "duskclient": "*",
+    "fabric-client-gametest-api-v1": "*"
+  }
+}

@@ -1,9 +1,14 @@
 {
   "required": true,
-  "package": "dev.fasterlauncher.client.mixin",
-  "compatibilityLevel": "JAVA_21",
+  "package": "dev.dusk.client.mixin",
+  "compatibilityLevel": "${java_level}",
   "client": [
-    "MinecraftClientMixin"
+    "TitleRouteMixin",
+    "cosmetics.AbstractClientPlayerMixin",
+    "cosmetics.AvatarRenderStateMixin",
+    "cosmetics.AvatarRendererMixin",
+    "cosmetics.CapeLayerMixin",
+    "cosmetics.Deadmau5EarsLayerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

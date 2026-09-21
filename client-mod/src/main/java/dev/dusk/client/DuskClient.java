@@ -1,19 +1,19 @@
-package dev.fasterlauncher.client;
+package dev.dusk.client;
 
-import dev.fasterlauncher.client.module.Module;
-import dev.fasterlauncher.client.module.ModuleManager;
-import dev.fasterlauncher.client.config.DuskConfig;
-import dev.fasterlauncher.client.gui.DuskSettingsScreen;
-import dev.fasterlauncher.client.modules.hud.CpsCounter;
-import dev.fasterlauncher.client.modules.hud.FpsDisplay;
-import dev.fasterlauncher.client.modules.hud.Keystrokes;
-import dev.fasterlauncher.client.modules.toggle.ToggleSprint;
+import dev.dusk.client.module.Module;
+import dev.dusk.client.module.ModuleManager;
+import dev.dusk.client.config.DuskConfig;
+import dev.dusk.client.gui.DuskSettingsScreen;
+import dev.dusk.client.modules.hud.CpsCounter;
+import dev.dusk.client.modules.hud.FpsDisplay;
+import dev.dusk.client.modules.hud.Keystrokes;
+import dev.dusk.client.modules.toggle.ToggleSprint;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.util.Identifier;
+import dev.dusk.client.compat.Compat;
+import dev.dusk.client.cosmetics.CosmeticsManager;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,8 +23,8 @@ import org.slf4j.LoggerFactory;
  * modules are client-side-only (rendering/HUD/input) and never alter
  * outbound packets or movement math.
  */
-public class FasterClient implements ClientModInitializer {
-    public static final Logger LOGGER = LoggerFactory.getLogger("fasterclient");
+public class DuskClient implements ClientModInitializer {
+    public static final Logger LOGGER = LoggerFactory.getLogger("duskclient");
     private static ModuleManager modules;
 
     public static ModuleManager modules() {
@@ -38,21 +38,21 @@ public class FasterClient implements ClientModInitializer {
         modules.register(new CpsCounter());
         modules.register(new FpsDisplay());
         modules.register(new ToggleSprint());
-        modules.register(new dev.fasterlauncher.client.modules.hud.ArmorStatus());
-        modules.register(new dev.fasterlauncher.client.modules.hud.ComboDisplay());
+        modules.register(new dev.dusk.client.modules.hud.ArmorStatus());
+        modules.register(new dev.dusk.client.modules.hud.ComboDisplay());
         // TODO: HitDelayFix (mixin), Zoom, CustomScoreboard, HUD layout editor screen
         modules.loadConfig();
         DuskConfig.get(); // ensure duskclient.json exists for the launcher bridge
-        KeyBinding settingsKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.fasterclient.settings", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_RIGHT_SHIFT,
-                KeyBinding.Category.create(Identifier.of("fasterclient", "client"))));
+        CosmeticsManager.init();
+        KeyMapping settingsKey = Compat.registerKey("key.duskclient.settings", GLFW.GLFW_KEY_RIGHT_SHIFT,
+                KeyMapping.Category.register(Identifier.fromNamespaceAndPath("duskclient", "client")));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (settingsKey.wasPressed()) {
-                if (client.player != null || client.world != null) {
-                    client.setScreen(new DuskSettingsScreen(client.currentScreen));
+            while (settingsKey.consumeClick()) {
+                if (client.player != null || client.level != null) {
+                    Compat.setScreen(client, new DuskSettingsScreen(Compat.currentScreen(client)));
                 }
             }
         });
-        LOGGER.info("FasterClient initialized with {} modules", modules.all().size());
+        LOGGER.info("DuskClient initialized with {} modules", modules.all().size());
     }
 }
