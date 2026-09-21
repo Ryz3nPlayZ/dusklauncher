@@ -11,10 +11,10 @@ A modern, PvP-oriented Minecraft launcher for **1.21.11** and **26.2** (more ver
 **macOS** (Apple Silicon + Intel), via Homebrew:
 
 ```bash
-brew install --cask --no-quarantine ryz3nplayz/tap/dusklauncher
+brew install --cask ryz3nplayz/tap/dusklauncher
 ```
 
-`--no-quarantine` matters: the builds aren't Apple-notarized yet, and without it Gatekeeper refuses the first launch. Installed from the DMG instead? Same idea — `xattr -dr com.apple.quarantine /Applications/DuskLauncher.app`, or right-click → Open once. Either way the launcher updates itself from then on (`brew upgrade` skips it on purpose).
+The builds aren't Apple-notarized yet, so the cask strips the quarantine flag itself (Homebrew 7 dropped `--no-quarantine`) — it opens first try. Installed from the DMG instead? Do it by hand: `xattr -dr com.apple.quarantine /Applications/DuskLauncher.app`, or right-click → Open once. Either way the launcher updates itself from then on (`brew upgrade` skips it on purpose).
 
 **Windows** and **Linux**: grab the installer / AppImage from the [latest release](https://github.com/ryz3nplayz/dusklauncher/releases/latest).
 

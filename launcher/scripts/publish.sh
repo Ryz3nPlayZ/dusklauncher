@@ -122,9 +122,17 @@ cask "dusklauncher" do
   # The launcher updates itself (Tauri updater against latest.json), so
   # \`brew upgrade\` leaves it alone unless run with --greedy.
   auto_updates true
-  depends_on macos: ">= :catalina"
+  depends_on macos: :big_sur
 
   app "DuskLauncher.app"
+
+  # Not Apple-notarized (yet), so drop the quarantine flag Homebrew puts on
+  # the download — otherwise Gatekeeper refuses the first launch. Homebrew
+  # removed --no-quarantine in 7.0, so the cask has to do it.
+  postflight_steps do
+    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/DuskLauncher.app"],
+                          writable_paths: ["DuskLauncher.app"], writable_base: :appdir
+  end
 
   zap trash: [
     "~/Library/Application Support/app.tryzwork.dusklauncher",
