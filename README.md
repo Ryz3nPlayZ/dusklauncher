@@ -21,7 +21,7 @@ brew install --cask --no-quarantine ryz3nplayz/tap/dusklauncher
 ## Layout
 
 - `launcher/` — Tauri 2 desktop app. Rust core (`src-tauri/core`: meta, download, auth, fabric, modrinth, natives, java, profile, launch) + React/TS pixel-art UI (animated parallax scenes, live 3D player render, Modrinth modpacks, local skins).
-- `client-mod/` — Fabric mod ("FasterClient"): PvP module framework + modules (Keystrokes, CPS counter, FPS display, ToggleSprint, Armor Status, Combo display; HitDelayFix/Zoom/HUD editor pending).
+- `client-mod/` — Fabric mod ("DuskClient", built for 1.21.11 and 26.2): PvP module framework + modules (Keystrokes, CPS counter, FPS display, ToggleSprint, Armor Status, Combo display; HitDelayFix/Zoom/HUD editor pending).
 
 ## Development
 

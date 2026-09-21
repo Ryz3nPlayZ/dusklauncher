@@ -11,15 +11,16 @@ import {
   type AccessoryModelJson,
   type CapeEntry,
   type Loadout,
+  type StoreItem,
 } from '../lib/api';
 
 /**
  * The store: everything the bundled client mod can draw, whether or not the
  * account owns it yet. Picking an item tries it on over the look you wear;
- * GET claims it into the inventory (every bundled item is free — paid
- * unlocks are docs/COSMETICS.md §6 phase 5), EQUIP writes it into the
- * launcher-wide loadout the mod reads. The wardrobe only ever lists what
- * was claimed here.
+ * BUY spends Dusk coins on it (the wallet, the prices and the inventory all
+ * live on the Dusk API — animated capes 750, static items 500; coins come
+ * from redeem codes in Settings), EQUIP writes it into the launcher-wide
+ * loadout the mod reads. The wardrobe only ever lists what was bought here.
  */
 
 type Filter = 'ALL' | 'CAPES' | 'ACCESSORIES';
@@ -56,6 +57,9 @@ export default function Store({
   const [accData, setAccData] = useState<Record<number, { texture: string; model: AccessoryModelJson }>>({});
   const [loadout, setLoadout] = useState<Loadout | null>(null);
   const [owned, setOwned] = useState<Set<number>>(new Set());
+  const [prices, setPrices] = useState<Record<number, StoreItem>>({});
+  const [coins, setCoins] = useState<number | null>(null);
+  const [signedIn, setSignedIn] = useState(true);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [filter, setFilter] = useState<Filter>('ALL');
   const [note, setNote] = useState<string | null>(null);
@@ -64,13 +68,17 @@ export default function Store({
   const load = useCallback(async () => {
     setNote(null);
     try {
-      const [catalog, lo, inv] = await Promise.all([api.listCosmetics(), api.getLoadout(), api.getInventory()]);
+      const [catalog, lo, store] = await Promise.all([api.listCosmetics(), api.getLoadout(), api.getStore()]);
       setCapes(catalog.capes);
       setAccessories(catalog.accessories);
       setLoadout(lo);
-      const own = new Set(inv.owned);
+      const own = new Set(store.owned);
       setOwned(own);
-      // land on something to look at: the first thing not yet claimed
+      setPrices(Object.fromEntries(store.items.map((i) => [i.id, i])));
+      setCoins(store.signedIn ? store.coins : null);
+      setSignedIn(store.signedIn);
+      if (!store.signedIn && store.error) setNote(store.error);
+      // land on something to look at: the first thing not yet bought
       setPicked((cur) => {
         if (cur) return cur;
         const cape = catalog.capes.find((c) => !own.has(c.id));
@@ -144,13 +152,15 @@ export default function Store({
     [previewAccIds, accessories, accData],
   );
 
-  const claim = useCallback(async () => {
+  const buy = useCallback(async () => {
     if (!picked) return;
     setBusy(true);
     setNote(null);
     try {
-      const inv = await api.claimCosmetic(picked.id);
-      setOwned(new Set(inv.owned));
+      const store = await api.buyCosmetic(picked.id);
+      setOwned(new Set(store.owned));
+      setCoins(store.coins);
+      setPrices(Object.fromEntries(store.items.map((i) => [i.id, i])));
     } catch (e) {
       setNote(String(e));
     } finally {
@@ -198,6 +208,12 @@ export default function Store({
   const showAcc = filter !== 'CAPES';
   const total = capes.length + accessories.length;
   const ownedCount = [...capes, ...accessories].filter((i) => owned.has(i.id)).length;
+  const priceOf = (id: number) => prices[id]?.price ?? null;
+  const pickedPrice = picked ? priceOf(picked.id) : null;
+  const canAfford = coins !== null && pickedPrice !== null && coins >= pickedPrice;
+  /* the tile / card tag: what the item is to you, or what it costs */
+  const tagFor = (id: number, worn: boolean) =>
+    worn ? 'WORN' : owned.has(id) ? 'OWNED' : priceOf(id) === null ? '—' : `${priceOf(id)} COINS`;
 
   const detail = pickedCape
     ? [
@@ -230,6 +246,7 @@ export default function Store({
           <NavCell label="CAPES" active={filter === 'CAPES'} onClick={() => setFilter('CAPES')} />
           <NavCell label="ACCESSORIES" active={filter === 'ACCESSORIES'} onClick={() => setFilter('ACCESSORIES')} />
           <div className="win__fill" />
+          <NavLabel label={coins === null ? 'NOT SIGNED IN' : `${coins} COINS`} />
           <NavLabel label={`${ownedCount} / ${total} OWNED`} />
         </div>
 
@@ -260,7 +277,7 @@ export default function Store({
                   </TT>
                   {picked && (
                     <TT size={13} tone={pickedWorn ? 'green' : pickedOwned ? 'sub' : 'accent'}>
-                      {pickedWorn ? 'WORN' : pickedOwned ? 'OWNED' : 'FREE'}
+                      {tagFor(picked.id, pickedWorn)}
                     </TT>
                   )}
                 </div>
@@ -271,8 +288,28 @@ export default function Store({
 
               <div className="viewer__actions">
                 {!pickedOwned ? (
-                  <PxButton family="install" height="fill" disabled={!picked || busy} onClick={() => void claim()}>
-                    <TT size={16}>GET · FREE</TT>
+                  <PxButton
+                    family={canAfford ? 'install' : 'grey'}
+                    height="fill"
+                    disabled={!picked || busy || !signedIn || !canAfford}
+                    title={
+                      !signedIn
+                        ? 'Sign in with a Microsoft account to buy cosmetics'
+                        : canAfford
+                          ? 'Spend Dusk coins on this; it lands in your wardrobe'
+                          : 'Not enough coins — redeem a code under Settings → General'
+                    }
+                    onClick={() => void buy()}
+                  >
+                    <TT size={16} tone={canAfford ? undefined : 'sub'}>
+                      {pickedPrice === null
+                        ? 'BUY'
+                        : !signedIn
+                          ? 'SIGN IN TO BUY'
+                          : canAfford
+                            ? `BUY · ${pickedPrice}`
+                            : `NEED ${pickedPrice - (coins ?? 0)} MORE COINS`}
+                    </TT>
                   </PxButton>
                 ) : pickedWorn ? (
                   <PxButton family="grey" height="fill" disabled={busy} onClick={() => void setWorn(false)}>
@@ -350,7 +387,7 @@ export default function Store({
                           </span>
                           <span className="store-tile__tag">
                             <TT size={13} tone={worn ? 'green' : own ? 'sub' : 'accent'}>
-                              {worn ? 'WORN' : own ? 'OWNED' : 'FREE'}
+                              {tagFor(c.id, worn)}
                             </TT>
                           </span>
                         </PxBox>
@@ -383,7 +420,7 @@ export default function Store({
                           </span>
                           <span className="store-tile__tag">
                             <TT size={13} tone={worn ? 'green' : own ? 'sub' : 'accent'}>
-                              {worn ? 'WORN' : own ? 'OWNED' : 'FREE'}
+                              {tagFor(a.id, worn)}
                             </TT>
                           </span>
                         </PxBox>
@@ -398,8 +435,8 @@ export default function Store({
                 <span className="meta wardrobe__note">
                   {note ??
                     (isTauri
-                      ? 'Everything here is free and drawn in-game by the bundled FasterClient mod. GET puts it in your wardrobe; EQUIP wears it on every Fabric instance you launch.'
-                      : 'Browser preview: the real catalog lives in the client mod jar.')}
+                      ? 'Animated capes are 750 coins, everything else 500. Coins come from redeem codes (Settings → General). BUY puts an item in your wardrobe; EQUIP wears it on every Fabric instance you launch through the bundled DuskClient mod.'
+                      : 'Browser preview: the real catalog lives in the client mod jar; coins and purchases are pretend here.')}
                 </span>
               </div>
             </div>

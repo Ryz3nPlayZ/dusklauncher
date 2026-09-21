@@ -76,7 +76,7 @@ Do **not** build auth/payments/entitlements now. Ship in this order:
   config, anchor + drag editor already) — re-skin panels to §1, strip
   server-specific modules, keep its `HudElement` registry. Our `Module`
   framework (`client-mod/.../module/`) maps 1:1 onto elements; the pending
-  "HUD layout editor screen" TODO in `FasterClient.java` becomes a thin
+  "HUD layout editor screen" TODO in `DuskClient.java` becomes a thin
   adapter over their editor.
 - **Motion blur**: bundle Motschen's open-source motion-blur approach
   (framebuffer accumulation, 1-pass, strength slider) as an optional RENDER

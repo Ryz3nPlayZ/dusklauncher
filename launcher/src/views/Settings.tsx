@@ -19,6 +19,26 @@ export default function SettingsView({
   /* the wallpaper library is its own page (the instances layout) */
   const [gallery, setGallery] = useState(false);
   const set = (patch: Partial<Settings>) => onSave({ ...settings, ...patch });
+  /* redeem codes → Dusk coins; the wallet is server-side, so this only ever
+     reports what the API said */
+  const [code, setCode] = useState('');
+  const [redeeming, setRedeeming] = useState(false);
+  const [redeemNote, setRedeemNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const redeem = async () => {
+    const trimmed = code.trim();
+    if (!trimmed || redeeming) return;
+    setRedeeming(true);
+    setRedeemNote(null);
+    try {
+      const r = await api.redeemCode(trimmed);
+      setRedeemNote({ ok: true, text: `+${r.granted} COINS · BALANCE ${r.coins}` });
+      setCode('');
+    } catch (e) {
+      setRedeemNote({ ok: false, text: String(e).replace(/^Error: /, '').toUpperCase() });
+    } finally {
+      setRedeeming(false);
+    }
+  };
 
   useEffect(() => {
     void api.getAppInfo().then(setInfo);
@@ -95,6 +115,36 @@ export default function SettingsView({
                     { value: 0, label: 'STATIC' },
                   ]}
                 />
+              </Row>
+              <Row
+                label="REDEEM CODE"
+                hint={
+                  redeemNote?.ok === false
+                    ? redeemNote.text
+                    : 'Turns a code into Dusk coins for the store. Each code works once per account.'
+                }
+                controlClassName="srow__control--wrap"
+              >
+                <PxBox family="panel" height="md">
+                  <input
+                    className="input"
+                    value={code}
+                    placeholder="CODE"
+                    disabled={redeeming}
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    onChange={(e) => setCode(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && void redeem()}
+                  />
+                </PxBox>
+                <PxButton family="install" height="md" disabled={!code.trim() || redeeming} onClick={() => void redeem()}>
+                  <TT size={16}>{redeeming ? 'REDEEMING…' : 'REDEEM'}</TT>
+                </PxButton>
+                {redeemNote?.ok && (
+                  <TT size={13} tone="green">
+                    {redeemNote.text}
+                  </TT>
+                )}
               </Row>
               <Row label="VOLUME">
                 <input

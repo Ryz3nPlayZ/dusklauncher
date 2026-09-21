@@ -11,7 +11,7 @@ which resolves every slug below to its newest Fabric/1.21.11 build on
 Modrinth, pulls required dependencies recursively, and zips
 `launcher/src-tauri/resources/modpacks/dusk-essentials.mrpack` (bundled via the
 existing `resources/` rule in `tauri.conf.json`). Rerun + commit whenever the
-lineup changes. The FasterClient jar is **not** in the pack — the launcher
+lineup changes. The DuskClient jar is **not** in the pack — the launcher
 force-loads it into every Fabric profile at launch (`install_and_launch`), so
 the pack carries only third-party mods.
 
@@ -22,10 +22,10 @@ in `App.tsx` guarded by `localStorage['dusk.defaultPackSeeded']`.
 
 The launcher-brand utilities (keystrokes, CPS counter, FPS display,
 toggle-sprint, armor status, combo counter — already registered as modules in
-`FasterClient`) are ours. The pack therefore carries **performance** mods we
+`DuskClient`) are ours. The pack therefore carries **performance** mods we
 could never maintain ourselves, and **utility** mods that are big, subtle, or
 server-adjacent enough that forking them would be a liability. Anything small
-and client-render-only is a candidate to absorb into FasterClient instead
+and client-render-only is a candidate to absorb into DuskClient instead
 (see "Fork / absorb candidates" below).
 
 ## The lineup (27 files: 23 picked + 4 auto-deps)
@@ -79,21 +79,21 @@ Language Reload/Resourcify + ~40 hand-tuned config overrides, and it contains
 
 Differences, deliberately:
 
-- **1.21.11, not 26.2** — that's what FasterClient builds against; revisit
-  together when we move the client mod to 26.x.
+- **1.21.11, not 26.2** — the pack's mod lineup is pinned to 1.21.11 (DuskClient
+  itself builds for both 1.21.11 and 26.2); revisit when the lineup moves to 26.x.
 - **No C2ME / VMP / ScalableLux / Packet Fixer** — chunk-gen and server-side
   throughput don't help a client/utility pack; C2ME is alpha-quality.
 - **No ModernFix** — its Fabric line skips 1.21.11 entirely.
 - **PvP/QoL utilities in the pack** (freelook, crosshair, ping, shulker
   tooltip…) — Performium is perf-only; our pack is the Lunar-style default
-  instance, and the HUD basics come from FasterClient instead of FlexHUD.
+  instance, and the HUD basics come from DuskClient instead of FlexHUD.
 - **No config overrides yet** — Performium's biggest hidden value. Worth
   copying later via `overrides/` in the generator (options.txt presets,
   sodium-options.json, etc.).
 
 ## Fork / absorb candidates (the "build the rest of the utilities" list)
 
-Utilities small and client-render-only enough to **absorb into FasterClient**
+Utilities small and client-render-only enough to **absorb into DuskClient**
 rather than ship third-party — each has a working reference implementation to
 study (all MIT/Zlib/BSD, so reference-and-rewrite is unproblematic):
 

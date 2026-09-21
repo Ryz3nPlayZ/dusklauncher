@@ -114,10 +114,45 @@ export interface AccessoryModelJson {
  *  `settings` object (docs/COSMETICS.md §1.3). */
 export type Loadout = Record<string, number | number[] | Record<string, unknown>>;
 
-/** What the account owns (registry ids); the store claims into it, the
+/** What the account owns (registry ids); the store buys into it, the
  *  wardrobe lists it. Whatever the loadout wears is always included. */
 export interface Inventory {
   owned: number[];
+}
+
+/** One line of the Dusk store: a registry id with its server-side price.
+ *  Animated capes are 750, everything static is 500. */
+export interface StoreItem {
+  id: number;
+  kind: 'cape' | 'accessory';
+  name: string;
+  animated: boolean;
+  price: number;
+}
+
+/** The store as the Dusk API sees this account. `signedIn` is false (and
+ *  `error` says why) when the Mojang-join sign-in did not go through —
+ *  the catalog still lists, nothing can be bought. */
+export interface Store {
+  items: StoreItem[];
+  coins: number;
+  owned: number[];
+  signedIn: boolean;
+  error: string | null;
+}
+
+/** The account's Dusk wallet + inventory (GET /v1/me). */
+export interface Wallet {
+  uuid: string;
+  username: string;
+  coins: number;
+  owned: number[];
+  loadout: Loadout;
+}
+
+export interface Redeemed {
+  granted: number;
+  coins: number;
 }
 
 export interface Version {
@@ -205,7 +240,7 @@ export interface ProjectVersion {
 /** The pack a DUSK PROFILE wraps. For now that is Performium (Modrinth
  *  IDrxZk6D) as-is — a Dusk instance is the whole pack at whichever version
  *  the user picks, plus what the launcher forces into every Fabric instance
- *  at launch (FasterClient + the cosmetics loadout; see commands.rs). The
+ *  at launch (DuskClient + the cosmetics loadout; see commands.rs). The
  *  launcher's own pack takes this slot later. */
 export const DUSK_PACK = {
   id: 'IDrxZk6D',
@@ -215,10 +250,11 @@ export const DUSK_PACK = {
   instanceName: 'DUSK OPTIMIZED',
 } as const;
 
-/** Whether the bundled FasterClient jar loads on a game version — mirrors
- *  cosmetics::client_mod_supports (the jar is built against 1.21.x
- *  mappings; launch skips it elsewhere). */
-export const clientModSupports = (gameVersion: string) => /^1[.-]21([.-]|$)/.test(gameVersion);
+/** Whether a bundled DuskClient jar loads on a game version — mirrors
+ *  cosmetics::client_mod_jar_for (one build per game line: 1.21.x and
+ *  26.2; launch skips the mod elsewhere). */
+export const clientModSupports = (gameVersion: string) =>
+  /^1[.-]21([.-]|$)/.test(gameVersion) || /^26[.-]2([.-]|$)/.test(gameVersion);
 
 /** One file in a profile's mods/ (or resourcepacks/, shaderpacks/) folder */
 export interface ProfileMod {
@@ -666,6 +702,21 @@ function previewFolder(profileId: string, kind: string): ProfileMod[] {
    exactly the capes and accessories the jar ships — nothing synthesized. */
 let previewLoadout: Loadout = { cape: 5, accessories: [16] };
 let previewOwned = new Set<number>([5, 16]);
+let previewCoins = 0;
+let previewRedeemed = false;
+/* the server's pricing rule (server/src/main.rs): animated capes 750, else 500 */
+const PREVIEW_ANIMATED_CAPES = new Set([5, 6, 7, 14, 15]);
+async function previewStore(): Promise<Store> {
+  const cat = await previewCosmetics();
+  const items: StoreItem[] = [
+    ...cat.capes.map((c) => {
+      const animated = PREVIEW_ANIMATED_CAPES.has(c.id);
+      return { id: c.id, kind: 'cape' as const, name: c.name, animated, price: animated ? 750 : 500 };
+    }),
+    ...cat.accessories.map((a) => ({ id: a.id, kind: 'accessory' as const, name: a.name, animated: false, price: 500 })),
+  ];
+  return { items, coins: previewCoins, owned: [...previewOwned].sort((a, b) => a - b), signedIn: true, error: null };
+}
 let previewCatalog: Promise<CosmeticsCatalog> | null = null;
 function previewCosmetics(): Promise<CosmeticsCatalog> {
   previewCatalog ??= fetch('/__cosmetics/registry.json')
@@ -712,9 +763,27 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
   }
   if (cmd === 'get_loadout') return structuredClone(previewLoadout) as T;
   if (cmd === 'get_inventory') return { owned: [...previewOwned].sort((a, b) => a - b) } as T;
-  if (cmd === 'claim_cosmetic') {
-    previewOwned = new Set(previewOwned).add(args?.id as number);
-    return { owned: [...previewOwned].sort((a, b) => a - b) } as T;
+  if (cmd === 'get_store') return (await previewStore()) as T;
+  if (cmd === 'get_wallet') {
+    return { uuid: '', username: 'Preview', coins: previewCoins, owned: [...previewOwned], loadout: previewLoadout } as T;
+  }
+  if (cmd === 'redeem_code') {
+    if (String(args?.code).trim().toLowerCase() !== 'yourewelcome') throw new Error('unknown code');
+    if (previewRedeemed) throw new Error('code already redeemed');
+    previewRedeemed = true;
+    previewCoins += 1000;
+    return { granted: 1000, coins: previewCoins } as T;
+  }
+  if (cmd === 'buy_cosmetic') {
+    const store = await previewStore();
+    const item = store.items.find((i) => i.id === args?.id);
+    if (!item) throw new Error('no such item');
+    if (!previewOwned.has(item.id)) {
+      if (previewCoins < item.price) throw new Error('not enough coins');
+      previewCoins -= item.price;
+      previewOwned = new Set(previewOwned).add(item.id);
+    }
+    return (await previewStore()) as T;
   }
   if (cmd === 'export_cosmetic_texture') return null as T;
   if (cmd === 'set_loadout') {
@@ -910,8 +979,13 @@ export const api = {
   getLoadout: () => invoke<Loadout>('get_loadout'),
   setLoadout: (loadout: Loadout) => invoke<Loadout>('set_loadout', { loadout }),
   getInventory: () => invoke<Inventory>('get_inventory'),
-  /** the store's GET: adds a (free) catalog item to the inventory */
-  claimCosmetic: (id: number) => invoke<Inventory>('claim_cosmetic', { id }),
+  /** the Dusk store: catalog with prices, this account's coins and inventory */
+  getStore: () => invoke<Store>('get_store'),
+  getWallet: () => invoke<Wallet>('get_wallet'),
+  /** turn a code into coins (server-side; each code once per account) */
+  redeemCode: (code: string) => invoke<Redeemed>('redeem_code', { code }),
+  /** spend coins on a catalog item; resolves to the refreshed store */
+  buyCosmetic: (id: number) => invoke<Store>('buy_cosmetic', { id }),
   /** save dialog → the PNG out of the jar (for uploading to minecraftcapes.net);
    *  resolves to the written path, or null if cancelled */
   exportCosmeticTexture: (kind: 'cape' | 'ears' | 'accessory', id: number) =>

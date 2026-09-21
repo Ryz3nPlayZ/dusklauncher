@@ -402,8 +402,8 @@ function NewInstance({
         defaultName={DUSK_PACK.instanceName}
         note={(chosen) =>
           !chosen || clientModSupports(chosen.gameVersions[0] ?? '')
-            ? `All of ${DUSK_PACK.title} at that release, plus FasterClient and your cosmetics at every launch.`
-            : `All of ${DUSK_PACK.title} at that release. FasterClient and cosmetics need a 1.21.x release for now.`
+            ? `All of ${DUSK_PACK.title} at that release, plus DuskClient and your cosmetics at every launch.`
+            : `All of ${DUSK_PACK.title} at that release. DuskClient and cosmetics need a 1.21.x or 26.2 release.`
         }
         onBack={() => setStep('pick')}
         onClose={onClose}
@@ -476,7 +476,7 @@ function NewInstance({
         <button
           className="check"
           onClick={() => setOptimized((v) => !v)}
-          title="Fabric loader; FasterClient rides along"
+          title="Fabric loader; DuskClient rides along"
         >
           <span className={['px px--grey check__box', optimized ? 'is-on' : ''].join(' ')}>
             <span className="check__tick" />
@@ -485,7 +485,7 @@ function NewInstance({
             <TT size={16}>FABRIC LOADER</TT>
             <span className="meta">
               {optimized
-                ? 'Pinned automatically for that version; FasterClient rides along.'
+                ? 'Pinned automatically for that version; DuskClient rides along.'
                 : 'Off — plain vanilla, no modloader.'}
             </span>
           </span>

@@ -6,7 +6,7 @@ import { extname, join, normalize, resolve } from "node:path";
 /* The browser preview has no jar to read the cosmetics catalog from, so the
    dev server hands out the client mod's source assets at /__cosmetics — the
    same registry.json + PNGs `cosmetics.rs` reads out of the bundled jar. */
-const COSMETICS_DIR = resolve(__dirname, "../client-mod/src/main/resources/assets/fasterclient/cosmetics");
+const COSMETICS_DIR = resolve(__dirname, "../client-mod/src/main/resources/assets/duskclient/cosmetics");
 const MIME: Record<string, string> = { ".json": "application/json", ".png": "image/png" };
 
 function serveCosmetics(): Plugin {

@@ -9,7 +9,7 @@
  *
  * Rerun whenever the lineup changes or mods update; commit the new .mrpack.
  * License notes for every entry live in docs/MODPACK.md — keep the two in
- * sync. The FasterClient jar is NOT in the pack: the launcher force-loads it
+ * sync. The DuskClient jar is NOT in the pack: the launcher force-loads it
  * into every Fabric profile at launch (see install_and_launch).
  */
 import { execSync } from 'node:child_process';
@@ -40,7 +40,7 @@ const MODS = [
   'krypton',
   'badoptimizations',
   // QoL / utilities (HUD basics — keystrokes, CPS, FPS, armor, combo,
-  // toggle-sprint — come from the bundled FasterClient, not the pack)
+  // toggle-sprint — come from the bundled DuskClient, not the pack)
   'modmenu',
   'zoomify',
   'freelook',

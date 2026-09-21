@@ -1,4 +1,4 @@
-FasterClient — GPL-3.0-or-later (see fabric.mod.json).
+DuskClient — GPL-3.0-or-later (see fabric.mod.json).
 
 The cosmetics package (dev.fasterlauncher.client.cosmetics and
 mixin/cosmetics) reimplements the on-the-wire and on-screen behaviour of
@@ -24,7 +24,7 @@ two projects so that Dusk players are interoperable with them:
   launcher's preview (launcher/src/lib/accessoryMesh.ts) bakes the same
   rules. No source files were copied.
 
-Bundled cosmetics (src/main/resources/assets/fasterclient/cosmetics) are
+Bundled cosmetics (src/main/resources/assets/duskclient/cosmetics) are
 community capes and one Cosmetica accessory ("Red Fire Arm", cosmetica
 id ufa1T) imported with tools/import_cosmetics.py; they are content, not
 code, and are not covered by the licences above.

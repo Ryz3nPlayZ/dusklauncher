@@ -37,7 +37,7 @@ export default function Cosmetics({
   pose: Pose;
   onPose: (p: Pose) => void;
   onSkinChange: () => Promise<void> | void;
-  /** the wardrobe only lists what the store has claimed; this is the way there */
+  /** the wardrobe only lists what the store has bought; this is the way there */
   onStore: () => void;
 }) {
   const [skins, setSkins] = useState<Skin[]>([]);
@@ -338,8 +338,8 @@ export default function Cosmetics({
                     {capeNote ??
                       (isTauri
                         ? tab === 'CAPES'
-                          ? 'Capes are drawn in-game by the bundled FasterClient mod. Players without a cape here still show their MinecraftCapes one. Claim more in the store.'
-                          : 'Accessories are Cosmetica models drawn on your body parts by the bundled FasterClient mod. Pick as many as you like; claim more in the store.'
+                          ? 'Capes are drawn in-game by the bundled DuskClient mod. Players without a cape here still show their MinecraftCapes one. Buy more in the store.'
+                          : 'Accessories are Cosmetica models drawn on your body parts by the bundled DuskClient mod. Pick as many as you like; buy more in the store.'
                         : 'Browser preview: the real cosmetics live in the client mod jar.')}
                   </span>
                 </div>

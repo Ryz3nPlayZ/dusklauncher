@@ -30,7 +30,7 @@ import urllib.request
 from PIL import Image, ImageSequence
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "..", "src", "main", "resources", "assets", "fasterclient", "cosmetics")
+OUT = os.path.join(HERE, "..", "src", "main", "resources", "assets", "duskclient", "cosmetics")
 REGISTRY = os.path.join(OUT, "registry.json")
 
 MAX_ANIM_PIXELS = 8_000_000
