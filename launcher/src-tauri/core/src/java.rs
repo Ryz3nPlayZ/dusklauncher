@@ -178,7 +178,17 @@ pub async fn provision(
     crate::download::download_all(client, downloads, 12, on_progress).await?;
     for (dest, target) in links {
         let _ = tokio::fs::remove_file(&dest).await;
+        #[cfg(unix)]
         tokio::fs::symlink(&target, &dest).await?;
+        // Mojang's Windows runtimes carry no links; should one appear, a copy
+        // of what it points at does the job without needing symlink privilege.
+        #[cfg(not(unix))]
+        {
+            let src = dest.parent().map(|p| p.join(&target)).unwrap_or_else(|| target.clone().into());
+            if src.is_file() {
+                tokio::fs::copy(&src, &dest).await?;
+            }
+        }
     }
     #[cfg(unix)]
     {
