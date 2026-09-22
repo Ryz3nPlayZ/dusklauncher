@@ -135,7 +135,9 @@ cask "dusklauncher" do
   end
 
   zap trash: [
-    "~/Library/Application Support/app.tryzwork.dusklauncher",
+    # app data dir (dirs::data_dir()/FasterLauncher — see appstate.rs), not
+    # the bundle id; Caches/WebKit below ARE keyed by the bundle id.
+    "~/Library/Application Support/FasterLauncher",
     "~/Library/Caches/app.tryzwork.dusklauncher",
     "~/Library/WebKit/app.tryzwork.dusklauncher",
   ]
