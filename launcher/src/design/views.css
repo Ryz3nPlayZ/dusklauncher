@@ -215,6 +215,15 @@
   background: linear-gradient(var(--accent-up) 50%, var(--accent-lo) 50%);
   box-shadow: 0 0 0 2px var(--black);
 }
+/* the row whose game is up: a red square instead of the accent one, and the
+   "RUNNING" word in the meta line picks up the same red */
+.home__popout-mark--live {
+  background: linear-gradient(var(--r-up) 50%, var(--r-lo) 50%);
+}
+.home__popout-name .is-live,
+.card__info .is-live {
+  color: var(--r-co);
+}
 .home__popout-empty {
   flex: none;
   flex-direction: column;
@@ -329,6 +338,13 @@
   /* 11px above the picture, 12px each side, 11px under the button row —
      measured from the plate's outer edge, so the 2px outline comes off */
   padding: calc(21 * var(--u) - var(--px-black)) calc(23 * var(--u) - var(--px-black));
+}
+/* the card whose game is up wears the red band, so it reads as active from
+   across the grid, not just from its button */
+.card.is-live {
+  --up: var(--r-up);
+  --lo: var(--r-lo);
+  --co: var(--r-co);
 }
 /* 30:374 — 283×108: 2px black, 3px #323232, the picture inside */
 .card__banner-frame {

@@ -559,7 +559,6 @@ function ContentTab({
     }
   };
 
-  const enabled = rows?.filter((r) => r.file.enabled).length ?? 0;
   const vanilla = kindTab === 'MODS' && profile.loader === 'vanilla';
 
   return (
@@ -569,11 +568,7 @@ function ContentTab({
         {KINDS.map((k) => (
           <NavCell key={k} label={k} active={kindTab === k} onClick={() => onKindTab(k)} />
         ))}
-        <div className="win__fill">
-          <span className="meta editor__count">
-            {rows ? `${rows.length} ${noun.toUpperCase()} · ${enabled} ON` : '…'}
-          </span>
-        </div>
+        <div className="win__fill" />
         {kindTab === 'MODS' && isTauri && (
           <NavCell label="ADD FILE" onClick={() => void act(() => api.importLocalMod(profile.id))} />
         )}

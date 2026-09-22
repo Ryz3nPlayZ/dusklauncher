@@ -3,6 +3,7 @@ package dev.dusk.client.gui;
 import dev.dusk.client.DuskClient;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.config.DuskConfig;
+import dev.dusk.client.hud.HudElement;
 import dev.dusk.client.module.Module;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -12,7 +13,7 @@ import net.minecraft.network.chat.Component;
 /**
  * Our own mod menu: every registered module with an on/off toggle, the
  * background path field (shared with the launcher via duskclient.json),
- * and a HUD-layout entry point (drag editor lands here next).
+ * and the entry point to the module window / HUD layout editor.
  */
 public class DuskSettingsScreen extends DuskScreen {
     private static final int ROW_W = 260;
@@ -32,8 +33,16 @@ public class DuskSettingsScreen extends DuskScreen {
         int cx = this.width / 2;
         int y = 48;
 
+        this.addRenderableWidget(Button.builder(Component.literal("Modules & HUD Editor..."), b -> {
+                    if (this.minecraft != null) Compat.setScreen(this.minecraft, new HudEditorScreen(this));
+                })
+                .bounds(cx - ROW_W / 2, y, ROW_W, ROW_H).build());
+        y += 24;
+
+        // Quick toggles for the non-HUD modules; HUD elements live in the editor.
         var modules = DuskClient.modules() != null ? DuskClient.modules().all() : java.util.List.<Module>of();
         for (Module m : modules) {
+            if (m instanceof HudElement) continue;
             String label = m.name() + ": " + (m.enabled() ? "ON" : "OFF");
             this.addRenderableWidget(Button.builder(Component.literal(label), b -> {
                         m.setEnabled(!m.enabled());
@@ -42,7 +51,7 @@ public class DuskSettingsScreen extends DuskScreen {
                     })
                     .bounds(cx - ROW_W / 2, y, ROW_W, ROW_H).build());
             y += 24;
-            if (y > this.height - 110) break; // first page only; scrolling list lands with the HUD editor
+            if (y > this.height - 110) break;
         }
 
         y = Math.max(y + 8, this.height - 104);

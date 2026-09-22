@@ -24,13 +24,19 @@ impl Default for Account {
     }
 }
 
+pub struct RunningGame {
+    pub profile_id: String,
+    pub child: tokio::process::Child,
+}
+
 pub struct AppState {
     pub data_dir: PathBuf,
     pub profiles: Mutex<ProfileStore>,
     pub settings: Mutex<Settings>,
     pub account: Mutex<Option<Account>>,
-    /// handle to the running game, so it can be stopped from the UI
-    pub running_game: tokio::sync::Mutex<Option<tokio::process::Child>>,
+    /// the running game, so it can be stopped from the UI and the UI can
+    /// ask which profile owns it (`game_state`) instead of trusting events
+    pub running_game: tokio::sync::Mutex<Option<RunningGame>>,
     /// held across install+spawn so double-clicking PLAY NOW can't launch twice
     pub launch_lock: tokio::sync::Mutex<()>,
     /// held across the interactive login flow so only one browser flow runs

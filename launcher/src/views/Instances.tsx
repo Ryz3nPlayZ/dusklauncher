@@ -210,7 +210,11 @@ export default function Instances({
                 <PxBox
                   key={p.id}
                   family="grey"
-                  className={['card', p.id === selected?.id ? 'is-selected' : ''].join(' ')}
+                  className={[
+                    'card',
+                    p.id === selected?.id ? 'is-selected' : '',
+                    live?.profileId === p.id ? 'is-live' : '',
+                  ].join(' ')}
                 >
                   {/* 30:374 — a 2px black + 3px band frame around the picture */}
                   <span className="card__banner-frame">
@@ -218,7 +222,8 @@ export default function Instances({
                   </span>
                   <span className="card__name">{p.name}</span>
                   <span className="card__info">
-                    {loaderLabel(p)} · {p.gameVersion} · {ago(p.lastPlayed)}
+                    {loaderLabel(p)} · {p.gameVersion} ·{' '}
+                    {live?.profileId === p.id ? <span className="is-live">RUNNING</span> : ago(p.lastPlayed)}
                     {p.modCount > 0 ? ` · ${p.modCount} mods` : ''}
                   </span>
                   <div className="card__row">
@@ -403,7 +408,7 @@ function NewInstance({
         note={(chosen) =>
           !chosen || clientModSupports(chosen.gameVersions[0] ?? '')
             ? `All of ${DUSK_PACK.title} at that release, plus DuskClient and your cosmetics at every launch.`
-            : `All of ${DUSK_PACK.title} at that release. DuskClient and cosmetics need a 1.21.x or 26.2 release.`
+            : `All of ${DUSK_PACK.title} at that release. DuskClient and cosmetics need a 1.21.11 – 26.2 release.`
         }
         onBack={() => setStep('pick')}
         onClose={onClose}

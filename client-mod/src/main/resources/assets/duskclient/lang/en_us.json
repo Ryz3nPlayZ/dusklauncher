@@ -1,4 +1,9 @@
 {
+  "key.categories.duskclient": "DuskClient",
   "category.duskclient": "DuskClient",
-  "key.duskclient.settings": "Open Dusk Settings"
+  "key.duskclient.settings": "Open Dusk HUD Editor",
+  "key.duskclient.fullbright": "Toggle Fullbright",
+  "key.duskclient.gamma_up": "Fullbright Brighter",
+  "key.duskclient.gamma_down": "Fullbright Darker",
+  "key.duskclient.togglesprint": "Toggle Sprint On/Off"
 }

@@ -1,36 +1,21 @@
 package dev.dusk.client.modules.hud;
 
-import dev.dusk.client.module.Module;
+import dev.dusk.client.hud.ClickTracker;
+import dev.dusk.client.hud.HudContext;
+import dev.dusk.client.hud.TextHud;
+import dev.dusk.client.module.setting.BoolSetting;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-
-/** Left/right clicks-per-second counter over a rolling 1s window. */
-public class CpsCounter extends Module {
-    private static final long WINDOW_MS = 1000;
-    private final Deque<Long> leftClicks = new ArrayDeque<>();
-    private final Deque<Long> rightClicks = new ArrayDeque<>();
+public class CpsCounter extends TextHud {
+    private final BoolSetting showRight = add(new BoolSetting("showRight", "Show right clicks", true));
 
     public CpsCounter() {
-        super("cps", "CPS Counter", Category.HUD);
-        setPosition(5, 80);
+        super("cps", "CPS", "CPS", "Clicks per second (left | right).");
+        setPosition(5, 16);
+        setEnabled(true);
     }
 
-    public void recordLeft() { record(leftClicks); }
-    public void recordRight() { record(rightClicks); }
-
-    private void record(Deque<Long> deque) {
-        long now = System.currentTimeMillis();
-        deque.addLast(now);
-        while (!deque.isEmpty() && now - deque.peekFirst() > WINDOW_MS) deque.pollFirst();
-    }
-
-    public int leftCps() { return count(leftClicks); }
-    public int rightCps() { return count(rightClicks); }
-
-    private int count(Deque<Long> deque) {
-        long now = System.currentTimeMillis();
-        deque.removeIf(t -> now - t > WINDOW_MS);
-        return deque.size();
+    @Override
+    protected String value(HudContext ctx) {
+        return showRight.get() ? ClickTracker.leftCps() + " | " + ClickTracker.rightCps() : Integer.toString(ClickTracker.leftCps());
     }
 }

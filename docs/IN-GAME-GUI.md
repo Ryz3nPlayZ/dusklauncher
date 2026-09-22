@@ -5,76 +5,59 @@ How custom GUI works in DuskClient (MC **1.21.11** and **26.2** from one source 
 `net.minecraft.resources.Identifier`). Written against what's already in the
 tree; every "exists" line is a real anchor.
 
-## What already exists
+## What exists (implemented Sept 2026)
 
 | Piece | Where |
 |---|---|
 | Custom title screen (vanilla widgets + fill/drawString) | `gui/DuskTitleScreen.java` |
-| In-game settings screen, opened by Right Shift keybind | `gui/DuskSettingsScreen.java`, `DuskClient.java:48-57` |
-| Title-screen takeover (setScreen mixin) | `mixin/MinecraftClientMixin.java` |
-| Module system: id, category, enabled, **x/y anchors**, Gson persistence | `module/Module.java`, `module/ModuleManager.java` |
-| 6 registered modules (keystrokes, CPS, FPS, toggle-sprint, armor, combo) — state-only stubs | `DuskClient.java:37-43` |
-| Texture upload precedent (NativeImage → DynamicTexture under `duskclient:`) | `cosmetics/CapeTexture.java` |
-| Background-texture hook, deliberately unimplemented | `DuskTitleScreen.renderCustomBackground` (lines 88-95) + `DuskConfig.backgroundPath` |
+| In-game settings screen (background path, non-HUD toggles, "Modules & HUD Editor" button) | `gui/DuskSettingsScreen.java` |
+| **HUD editor** — Right Shift in game; drag/scroll/arrow-nudge elements, right-click for settings | `gui/HudEditorScreen.java` |
+| **Module window** — the single centred, bound window (list ↔ settings, minimise, scroll) | `gui/ModuleWindow.java`, `gui/widget/*` (toggle, slider, cycle, colour hex field) |
+| Module system: id, category, description, enabled, x/y, typed settings, Gson persistence (`config/duskclient-hud.json`) | `module/Module.java`, `module/ModuleManager.java`, `module/setting/*` |
+| HUD element base classes + renderer | `hud/HudElement.java` (scale/background settings), `hud/TextHud.java` ("Label: value"), `hud/HudRenderer.java` |
+| HUD layer registration + crosshair replacement (per-MC) | `src/mc*/java/.../hud/HudHooks.java` |
+| Fullbright lightmap mixin (per-MC: `LightTexture.updateLightTexture` / `LightmapRenderStateExtractor.extract`) | `src/mc*/java/.../mixin/FullbrightMixin.java` |
+| Draw abstraction so modules are version-agnostic | `gui/Canvas.java`, per-MC `gui/GraphicsCanvas.java` |
+| Click edge-detection shared by CPS/keystrokes/reach/combo | `hud/ClickTracker.java` |
 
-The one thing missing for "custom GUI in game": **nothing renders the modules**
-— there is no HUD layer registration anywhere in the mod.
+### Modules
 
-## The three surfaces
+- **HUD** (`modules/hud/`): Keystrokes, CPS, FPS, Ping, Armor Status, Held Item,
+  Potion Effects, Shield Status, Combo Counter, Reach, Sprint Status,
+  Coordinates, Nether Coordinates, Direction, Rotation, Speed, Biome, Light
+  Level, Clock, Game Time, Day Counter, Weather, Playtime, Entity Count,
+  Memory, Server Address. Each is a `HudElement` with its own settings; the
+  starter set (FPS, CPS, Ping, XYZ, Keystrokes, Armor, Effects, Sprint Status)
+  is on by default.
+- **Movement**: Toggle Sprint (+ toggle sneak). Holds the vanilla key down
+  client-side; nothing about movement packets changes.
+- **Render**: Custom Crosshair (cross/square/dot/circle, gap/size/thickness,
+  outline, rainbow, colour-by-target, bow/attack-cooldown gap), Fullbright
+  (gamma 100–1500 %, keybinds G / unbound up-down), Motion Blur
+  (natural-motionblur style frame accumulation, strength 1–100 %; runs at
+  the tail of `GameRenderer.renderLevel` so the HUD/GUI is never blurred —
+  `render/MotionBlurRenderer.java` + `post_effect/motion_blur.json`).
 
-### 1. Screens (menus) — already proven
+### Adding a module
 
-A `Screen` subclass: build widgets in `init()`, draw in `render()` with
-`renderBackground(...)` → `super.render()` → `fill`/`drawString` on top. Open
-with `minecraft.setScreen(...)` (see the keybind handler). Vanilla widgets
-(`Button.builder(...).bounds(x,y,w,h).build()`, `EditBox`) are free; custom
-looks come from drawing your own chrome behind/around them. `DuskTitleScreen`
-is the reference.
+1. Subclass `TextHud` (one-liner value) or `HudElement` (custom `width/height/render` on a `Canvas`), or `Module` for non-HUD.
+2. Declare settings with `add(new BoolSetting/IntSetting/ChoiceSetting/ColorSetting(...))`; the module window builds its widgets from them.
+3. `modules.register(new X())` in `DuskClient.onInitializeClient`. Persistence, the editor and the window pick it up automatically.
 
-### 2. HUD — the missing layer (do this first)
+Version-specific Minecraft calls go through `compat/Compat.java` (`currentScreen`, `setScreen`, `dayTime`, …); everything under `src/main` must compile against all three targets.
 
-Register one Fabric API HUD layer in `onInitializeClient` that renders every
-enabled module:
+### Verifying
 
-```java
-HudLayerRegistrationCallback.EVENT.register(attach ->
-    attach.attachLayerAfter(IdentifiedLayer.MISC_OVERLAYS,
-        Identifier.fromNamespaceAndPath("duskclient", "modules"),
-        (guiGraphics, delta) -> DuskClient.modules().renderAll(guiGraphics, delta)));
-```
+`gradle build -Pmc=<mc>` for each target. `gradle runClientGameTest -Pmc=1.21.11`
+runs `HudGameTest`, which enters a world, asserts crosshair/fullbright state,
+that the motion-blur post pass actually ran, and screenshots the live HUD plus the editor's list and settings views into
+`build/run/clientGameTest/screenshots/`.
 
-(`HudLayerRegistrationCallback` is Fabric API's current HUD API — it orders us
-after a named vanilla layer instead of fighting other mods on the legacy
-`HudRenderCallback`.) Then give `Module` a render method and implement it per
-module with `GuiGraphics` primitives — `fill` for plates, `drawString` with
-`Minecraft.getInstance().font`, `renderItem`/`renderItemDecorations` for the
-armor module. Modules already persist x/y anchors (`Module.saveState()`), so
-positions survive restarts for free. Draw text with the vanilla font at GUI
-scale; if we want the launcher's two-tone pixel type in-game, that's a custom
-font provider JSON under `assets/duskclient/font/` — later.
+## Not bundled (from the reference mod list)
 
-Rules of thumb: respect `client.options.hideGui`, skip when
-`client.options.renderDebug` if a module would overlap F3, and multiply
-plate alpha by the vanilla text opacity option so the HUD honors accessibility
-settings.
-
-### 3. The HUD editor (drag-to-place)
-
-A plain `Screen` (open it from `DuskSettingsScreen`): render the game world
-via `renderBackground` (in-world it already shows through), then render every
-module at its anchor exactly as the HUD layer does, each inside a drawn
-border (`fill` corners). Interactions:
-
-- `mouseClicked` → hit-test modules against their `(x, y, w, h)`; give
-  `Module` `width()`/`height()` (fixed per module — keystrokes is one grid,
-  CPS/FPS one line, armor a column).
-- `mouseDragged` → move the grabbed module (clamp to the scaled window), set
-  `enabled`, mark dirty.
-- `onClose` → `ModuleManager.saveConfig()` (already writes `{enabled, x, y}`
-  per module).
-
-This is the same design FlexHUD (MIT, github.com/Azz-9/Flex-HUD) ships; ours
-can stay much smaller because anchors/categories/persistence already exist.
+- **Simple Voice Chat** — needs its server-side protocol; nothing to
+  reimplement client-only. Ship it as a regular mod in the modpack.
+- **bactromod** extras beyond the HUD (TPS estimation etc.) — not done.
 
 ## Textured custom chrome (when fill/drawString isn't enough)
 
@@ -112,12 +95,3 @@ Not GUI, but the same mixin discipline as the cosmetics package:
   delta in `MouseHandler` before vanilla consumes it, restore on release.
   Needs care in third-person + smoothing; freelook is AGPL-licensed, so this
   is reference-only (read their repo, write our own).
-
-## Suggested build order
-
-1. HUD layer registration + render for the six existing modules.
-2. HUD editor screen (drag + persist).
-3. `DuskSettingsScreen` becomes a scroll list of modules (the current
-   one-page toggle loop is already at its limit) + "layout…" button for (2).
-4. Title-screen background texture from `DuskConfig.backgroundPath`.
-5. Launcher ↔ client mod wallpaper/config bridge.

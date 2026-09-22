@@ -56,7 +56,11 @@ export default function Home({
       document.removeEventListener('keydown', onKey);
     };
   }, [popout]);
-  const running = game?.state === 'running';
+  /* the game in flight, whichever instance it belongs to — the console is
+     about *that* instance while it is up, not the one picked in the popout */
+  const live = game && game.state !== 'exited' ? game : null;
+  const running = live?.state === 'running';
+  const liveProfile = live ? (profiles.find((p) => p.id === live.profileId) ?? null) : null;
   const pct = progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
 
   return (
@@ -109,18 +113,26 @@ export default function Home({
         ) : (
           <div className="home__console">
             <PxButton
-              family="accent"
+              family={live ? 'red' : 'accent'}
               height="xl"
               className="home__play"
-              disabled={!selected}
-              onClick={() => (running ? onStop() : selected && onLaunch(selected.id))}
+              // `starting` with no progress box is the gap between the spawn
+              // and the first event — nothing sensible to click yet
+              disabled={live ? !running : !selected}
+              onClick={() => (live ? running && onStop() : selected && onLaunch(selected.id))}
             >
-              {!running && <PixelArrow />}
+              {!live && <PixelArrow />}
               <span className="home__play-text">
-                <TT size={22} tone="accent" sx={1.15}>
-                  {running ? 'STOP GAME' : 'PLAY NOW'}
+                <TT size={22} tone={live ? 'red' : 'accent'} sx={1.15}>
+                  {live ? (running ? 'STOP GAME' : 'STARTING…') : 'PLAY NOW'}
                 </TT>
-                <span className="home__play-sub">{selected ? selected.name : 'NO INSTANCE — CREATE ONE'}</span>
+                <span className="home__play-sub">
+                  {live
+                    ? `${liveProfile?.name ?? 'INSTANCE'} — RUNNING`
+                    : selected
+                      ? selected.name
+                      : 'NO INSTANCE — CREATE ONE'}
+                </span>
               </span>
             </PxButton>
 
@@ -146,6 +158,7 @@ export default function Home({
             <div className="home__popout-list scroll">
               {profiles.map((p) => {
                 const current = p.id === selected?.id;
+                const active = p.id === live?.profileId;
                 return (
                   <PxButton
                     key={p.id}
@@ -164,10 +177,15 @@ export default function Home({
                         {p.name}
                       </TT>
                       <span className="meta">
-                        {loaderLabel(p)} · {p.gameVersion} · {ago(p.lastPlayed)}
+                        {loaderLabel(p)} · {p.gameVersion} ·{' '}
+                        {active ? <span className="is-live">RUNNING</span> : ago(p.lastPlayed)}
                       </span>
                     </span>
-                    {current && <span className="home__popout-mark" aria-hidden="true" />}
+                    {active ? (
+                      <span className="home__popout-mark home__popout-mark--live" title="Running" />
+                    ) : (
+                      current && <span className="home__popout-mark" aria-hidden="true" />
+                    )}
                   </PxButton>
                 );
               })}

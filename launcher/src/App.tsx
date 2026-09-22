@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SceneBackground from './background/SceneBackground';
 import CustomWallpaper from './background/CustomWallpaper';
 import Nav from './components/Nav';
@@ -33,6 +33,22 @@ export default function App() {
   const [game, setGame] = useState<GameState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const updater = useUpdater();
+  // mirrors `game` for the event handlers, which are registered once
+  const gameRef = useRef<GameState | null>(null);
+  gameRef.current = game;
+
+  /* PLAY / STOP follows the backend, not the last event we happened to see:
+     ask it outright on mount and after every launch attempt, so a missed or
+     late event can't strand the button in an install or running state */
+  const syncGame = useCallback(async () => {
+    try {
+      const live = await api.gameState();
+      setGame((prev) => live ?? (prev?.state === 'starting' ? prev : null));
+      if (live) setProgress(null);
+    } catch (e) {
+      console.warn('game state query failed:', e);
+    }
+  }, []);
 
   const refreshProfiles = useCallback(async () => setProfiles(await api.listProfiles()), []);
   const refreshAccount = useCallback(async () => {
@@ -44,8 +60,9 @@ export default function App() {
   useEffect(() => {
     void refreshProfiles();
     void refreshAccount();
+    void syncGame();
     void api.getSettings().then(setSettings);
-  }, [refreshProfiles, refreshAccount]);
+  }, [refreshProfiles, refreshAccount, syncGame]);
 
   // first run: seed the bundled default pack (Dusk Essentials) so the
   // launcher never opens empty. One attempt per install — a failed download
@@ -75,10 +92,16 @@ export default function App() {
   useEffect(() => {
     startGameLog();
     const unlisten = [
-      listen<Progress>('launch-progress', setProgress),
+      // the install bar only makes sense before the process exists; a
+      // straggling progress event after `running` must not bring it back
+      listen<Progress>('launch-progress', (p) => {
+        const g = gameRef.current;
+        if (g && g.profileId === p.profileId && g.state === 'running') return;
+        setProgress(p);
+      }),
       listen<GameState>('game-state', (s) => {
         setGame(s);
-        if (s.state === 'exited') setProgress(null);
+        if (s.state !== 'starting') setProgress(null);
       }),
     ];
     return () => {
@@ -106,17 +129,36 @@ export default function App() {
   const launch = useCallback(
     async (id: string) => {
       setError(null);
+      setGame({ profileId: id, state: 'starting', code: null });
       setProgress({ profileId: id, stage: 'starting', done: 0, total: 0, doneBytes: 0, totalBytes: 0 });
       try {
+        // resolves once the process has spawned — from here on the game is
+        // running whatever order the events landed in
         await api.launch(id);
+        setProgress(null);
+        setGame({ profileId: id, state: 'running', code: null });
         void refreshProfiles();
       } catch (e) {
         setProgress(null);
         setError(String(e));
+        // e.g. "already running": the backend knows what is actually up
+        setGame(null);
+        void syncGame();
       }
     },
-    [refreshProfiles],
+    [refreshProfiles, syncGame],
   );
+
+  const stop = useCallback(async () => {
+    try {
+      await api.stopGame();
+    } catch (e) {
+      setError(String(e));
+    }
+    // the supervisor's `exited` event clears the button; this covers a kill
+    // that raced it
+    void syncGame();
+  }, [syncGame]);
 
   return (
     <div className="app">
@@ -147,7 +189,7 @@ export default function App() {
             onSelect={selectProfile}
             onWardrobe={() => setRoute('cosmetics')}
             onManage={() => setRoute('instances')}
-            onStop={() => void api.stopGame()}
+            onStop={() => void stop()}
           />
         )}
         {route === 'instances' && (
@@ -158,7 +200,7 @@ export default function App() {
             onRefresh={refreshProfiles}
             onLaunch={launch}
             onSelect={selectProfile}
-            onStop={() => void api.stopGame()}
+            onStop={() => void stop()}
           />
         )}
         {route === 'cosmetics' && (

@@ -1,6 +1,6 @@
 # DuskLauncher
 
-A modern, PvP-oriented Minecraft launcher for **1.21.11** and **26.2** (more versions later). Lean where Lunar is bloated, transparent where Dawn is closed-source. No ads, ever.
+A modern, PvP-oriented Minecraft launcher for **1.21.11 through 26.2** (more versions later). Lean where Lunar is bloated, transparent where Dawn is closed-source. No ads, ever.
 
 - `docs/RESEARCH.md` — competitive analysis of Lunar, Badlion, Feather→Dawn (with sources)
 - `docs/ARCHITECTURE.md` — technical design, verified API details, IPC contract
@@ -21,7 +21,7 @@ The builds aren't Apple-notarized yet, so the cask strips the quarantine flag it
 ## Layout
 
 - `launcher/` — Tauri 2 desktop app. Rust core (`src-tauri/core`: meta, download, auth, fabric, modrinth, natives, java, profile, launch) + React/TS pixel-art UI (animated parallax scenes, live 3D player render, Modrinth modpacks, local skins).
-- `client-mod/` — Fabric mod ("DuskClient", built for 1.21.11 and 26.2): PvP module framework + modules (Keystrokes, CPS counter, FPS display, ToggleSprint, Armor Status, Combo display; HitDelayFix/Zoom/HUD editor pending).
+- `client-mod/` — Fabric mod ("DuskClient", built for 1.21.11, 26.1 and 26.2): module framework, 26 HUD elements (keystrokes, CPS, FPS, ping, armor, effects, shield, combo, coords, clock, …), Toggle Sprint, Custom Crosshair, Fullbright, and an in-game HUD editor (Right Shift) with a single centred module window. See `docs/IN-GAME-GUI.md`.
 
 ## Development
 
@@ -47,7 +47,7 @@ cd launcher && node scripts/gen-art.mjs
 cd launcher && npm run tauri build
 
 # Client mod (both Minecraft targets; Gradle 9.7 + JDK 25 — CI uses the same)
-cd client-mod && gradle build -Pmc=1.21.11 && gradle build -Pmc=26.2
+cd client-mod && gradle build -Pmc=1.21.11 && gradle build -Pmc=26.1 && gradle build -Pmc=26.2
 ```
 
 ## Roadmap

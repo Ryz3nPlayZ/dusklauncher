@@ -1,6 +1,13 @@
-// One source tree, two Minecraft targets. `gradle build -Pmc=1.21.11` and
-// `gradle build -Pmc=26.2` each drop a duskclient-<mc>.jar into the launcher
-// resources; the launcher injects whichever matches the profile's version.
+// One source tree, nine Minecraft targets (1.21.1, 1.21.3, 1.21.4, 1.21.5,
+// 1.21.8, 1.21.10, 1.21.11, 26.1, 26.2 — see gradle.properties for which
+// game versions each one covers). `gradle build -Pmc=<target>` drops a
+// duskclient-<target>.jar into the launcher resources; the launcher injects
+// whichever matches the profile's version (cosmetics::client_mod_jar_for).
+//
+// Version-specific code is layered: src/main is shared by everything, and
+// each target lists the src/mc<key> dirs that are stacked on top of it
+// (mc_<key>_layers, later entries override earlier ones, file by file).
+// The stack is synced into build/layered before compiling.
 plugins {
     // Same plugin, two ids: the legacy id keeps the obfuscated (mappings)
     // pipeline that 1.21.11 needs; the new id assumes an unobfuscated game.
@@ -13,6 +20,9 @@ def mc = project.mc
 def mcKey = mc.replace('.', '_')
 def loaderVersion = project."mc_${mcKey}_loader"
 def fabricVersion = project."mc_${mcKey}_fabric"
+def mcRange = project."mc_${mcKey}_range"
+def layers = project."mc_${mcKey}_layers".split(',').collect { it.trim() }
+def clientGameTests = project.findProperty("mc_${mcKey}_gametest") != 'false'
 // 26.x ships unobfuscated, so it needs no mappings and only the Java it
 // requires; 1.21.11 still runs through Mojang mappings on Java 21.
 def unobfuscated = !mc.startsWith('1.')
@@ -37,14 +47,39 @@ dependencies {
     "$modConfig"("net.fabricmc.fabric-api:fabric-api:${fabricVersion}")
 }
 
-sourceSets.main.java.srcDir "src/mc${mcKey}/java"
+def layeredDir = layout.buildDirectory.dir("layered/${mcKey}")
+// A layer may also carry a `layer.exclude` file: one path glob per line (relative to the
+// layer root, e.g. java/dev/dusk/client/mixin/cosmetics/Avatar*) that hides matching files
+// from every layer stacked *below* it, for files that were renamed rather than replaced.
+def layerDirs = layers.collect { file("src/mc${it.replace('.', '_')}") }
+def layerExcludes = layerDirs.collect { dir ->
+    def f = new File(dir, 'layer.exclude')
+    f.exists() ? f.readLines().collect { it.trim() }.findAll { it && !it.startsWith('#') } : []
+}
+tasks.register('layerSources', Sync) {
+    description = "Stacks the per-version source layers for ${mc} (${layers.join(' < ')})"
+    layerDirs.eachWithIndex { dir, i ->
+        def hidden = layerExcludes.drop(i + 1).flatten()
+        from(dir) {
+            exclude 'layer.exclude'
+            if (hidden) exclude hidden
+        }
+    }
+    into layeredDir
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE // later layers win
+}
+sourceSets.main.java.srcDir layeredDir.map { it.dir('java') }
+sourceSets.main.resources.srcDir layeredDir.map { it.dir('resources') }
+tasks.withType(JavaCompile).configureEach { dependsOn 'layerSources' }
+tasks.withType(ProcessResources).configureEach { dependsOn 'layerSources' }
+tasks.withType(Jar).configureEach { dependsOn 'layerSources' }
 
 processResources {
     inputs.property "version", project.version
     inputs.property "mc", mc
     inputs.property "javaRelease", javaRelease
     filesMatching("fabric.mod.json") {
-        expand "version": project.version, "mc_range": (unobfuscated ? "~${mc}" : "~1.21"), "java": ">=${javaRelease}"
+        expand "version": project.version, "mc_range": mcRange, "java": ">=${javaRelease}"
     }
     filesMatching("duskclient.mixins.json") {
         expand "java_level": "JAVA_${javaRelease}"
@@ -75,16 +110,20 @@ tasks.named('build') { finalizedBy 'installToLauncher' }
 // In-game verification: `gradle runClientGameTest` boots the client with the
 // mod, makes a world, equips the loadout below and screenshots the player
 // (build/run/clientGameTest/screenshots). See src/gametest.
-fabricApi {
-    configureTests {
-        createSourceSet = true
-        modId = 'duskclient-gametest'
-        enableGameTests = false
-        enableClientGameTests = true
-        eula = true
-        clearRunDirectory = true
-        username = 'Dusk'
+// The client gametest API only exists from Fabric API 1.21.4 on
+// (mc_<key>_gametest=false opts a target out).
+if (clientGameTests) {
+    fabricApi {
+        configureTests {
+            createSourceSet = true
+            modId = 'duskclient-gametest'
+            enableGameTests = false
+            enableClientGameTests = true
+            eula = true
+            clearRunDirectory = true
+            username = 'Dusk'
+        }
     }
+    // The gametest harness API moves between Fabric versions too.
+    sourceSets.named("gametest") { java.srcDir layeredDir.map { it.dir('gametest') } }
 }
-// The gametest harness API moved between the two Fabric versions too.
-sourceSets.named("gametest") { java.srcDir "src/mc${mcKey}/gametest" }

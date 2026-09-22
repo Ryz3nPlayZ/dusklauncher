@@ -42,7 +42,7 @@ jobs:
             exit 1
           fi
 
-  # The launcher ships duskclient-<mc>.jar for both Minecraft targets as a
+  # The launcher ships duskclient-<mc>.jar for every Minecraft target as a
   # Tauri resource (launcher/src-tauri/resources, gitignored) — same build
   # as `gradle build -Pmc=…` in client-mod.
   client-mod:
@@ -56,10 +56,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 9.7.1
-      - name: Build both client jars
+      - name: Build the client jars
         working-directory: client-mod
         run: |
           gradle build -Pmc=1.21.11 -x test --console=plain
+          gradle build -Pmc=26.1 -x test --console=plain
           gradle build -Pmc=26.2 -x test --console=plain
           ls -la ../launcher/src-tauri/resources/*.jar
       - uses: actions/upload-artifact@v4

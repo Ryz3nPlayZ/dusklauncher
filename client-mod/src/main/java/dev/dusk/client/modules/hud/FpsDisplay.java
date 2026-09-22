@@ -1,16 +1,17 @@
 package dev.dusk.client.modules.hud;
 
-import dev.dusk.client.module.Module;
+import dev.dusk.client.hud.HudContext;
+import dev.dusk.client.hud.TextHud;
 
-/** FPS display HUD element. Value is sampled from the client's frame stats. */
-public class FpsDisplay extends Module {
-    private int fps;
-
+public class FpsDisplay extends TextHud {
     public FpsDisplay() {
-        super("fps", "FPS Display", Category.HUD);
-        setPosition(5, 100);
+        super("fps", "FPS", "FPS", "Frames per second.");
+        setPosition(5, 5);
+        setEnabled(true);
     }
 
-    public int fps() { return fps; }
-    public void setFps(int fps) { this.fps = fps; }
+    @Override
+    protected String value(HudContext ctx) {
+        return Integer.toString(ctx.mc().getFps());
+    }
 }
