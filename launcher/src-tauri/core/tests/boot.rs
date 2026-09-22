@@ -175,6 +175,8 @@ async fn boot_to_menu() {
         username: "Player".into(),
         xuid: String::new(),
         refresh_token: String::new(),
+        skin_url: String::new(),
+        skin_variant: String::new(),
     };
     let spec = launch::build_launch_spec(
         &java_bin,

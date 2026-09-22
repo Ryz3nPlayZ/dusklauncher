@@ -49,6 +49,11 @@ fn default_resolution() -> u32 {
 }
 
 fn default_auth_mode() -> String {
+    // Official title + device code: works with zero external dependencies.
+    // "azure" (browser + loopback, no codes) stays opt-in until our client
+    // ID lands on Mojang Enforcement's Xbox allow list — verified blocked
+    // (opaque XBL 400) as of 2026-09-21, re-test with
+    // `cargo run -p fasterlauncher-core --example azure_live`.
     "official".into()
 }
 

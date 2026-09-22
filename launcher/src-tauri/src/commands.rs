@@ -1,4 +1,4 @@
-use crate::appstate::{Account, AppState};
+use crate::appstate::{Account, AppState, RunningGame};
 use crate::settings::Settings;
 use crate::{auth_flow, auth_store};
 use fasterlauncher_core::auth::Session;
@@ -645,7 +645,7 @@ pub async fn install_and_launch(
             let state = app3.state::<AppState>();
             let mut guard = state.running_game.lock().await;
             let status = match guard.as_mut() {
-                Some(child) => child.wait().await,
+                Some(game) => game.child.wait().await,
                 None => return,
             };
             *guard = None;
@@ -654,7 +654,7 @@ pub async fn install_and_launch(
             let code = status.ok().and_then(|s| s.code());
             emit_state(&app3, &pid2, "exited", code);
         });
-        *state.running_game.lock().await = Some(child);
+        *state.running_game.lock().await = Some(RunningGame { profile_id: profile_id.clone(), child });
     }
 
     emit_state(&app, &profile_id, "running", None);
@@ -676,11 +676,22 @@ fn emit_state(app: &AppHandle, profile_id: &str, state: &str, code: Option<i32>)
 #[tauri::command]
 pub async fn stop_game(state: State<'_, AppState>) -> Result<(), String> {
     let mut guard = state.running_game.lock().await;
-    if let Some(child) = guard.as_mut() {
-        child.kill().await.map_err(|e| e.to_string())?;
+    if let Some(game) = guard.as_mut() {
+        game.child.kill().await.map_err(|e| e.to_string())?;
     }
     *guard = None;
     Ok(())
+}
+
+/// The game currently running, if any — what the UI syncs its PLAY / STOP
+/// button to on mount and whenever it doubts the event stream.
+#[tauri::command]
+pub async fn game_state(state: State<'_, AppState>) -> Result<Option<GameStatePayload>, String> {
+    Ok(state.running_game.lock().await.as_ref().map(|g| GameStatePayload {
+        profile_id: g.profile_id.clone(),
+        state: "running".into(),
+        code: None,
+    }))
 }
 
 type InstallResult = Result<
@@ -950,6 +961,27 @@ pub async fn begin_login(app: AppHandle, state: State<'_, AppState>) -> Result<A
         .try_lock()
         .map_err(|_| "a sign-in is already in progress".to_string())?;
     let session = auth_flow::run_login(&app, &state).await?;
+    let dto = account_dto(&session);
+    *state.account.lock().unwrap() = Some(Account {
+        username: session.username.clone(),
+        uuid: session.uuid.clone(),
+        authenticated: true,
+    });
+    Ok(dto)
+}
+
+/// The user-chosen device-code sign-in (the alternative offered when the
+/// webview sign-in window can't run).
+#[tauri::command]
+pub async fn begin_code_login(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<AccountDto, String> {
+    let _login_guard = state
+        .login_lock
+        .try_lock()
+        .map_err(|_| "a sign-in is already in progress".to_string())?;
+    let session = auth_flow::run_code_login(&app, &state).await?;
     let dto = account_dto(&session);
     *state.account.lock().unwrap() = Some(Account {
         username: session.username.clone(),

@@ -251,10 +251,11 @@ export const DUSK_PACK = {
 } as const;
 
 /** Whether a bundled DuskClient jar loads on a game version — mirrors
- *  cosmetics::client_mod_jar_for (one build per game line: 1.21.x and
- *  26.2; launch skips the mod elsewhere). */
+ *  cosmetics::client_mod_jar_for (one build per game line: 1.21.x, 26.1.x
+ *  and 26.2.x, i.e. every release from 1.21.11 through 26.2; launch skips
+ *  the mod elsewhere). */
 export const clientModSupports = (gameVersion: string) =>
-  /^1[.-]21([.-]|$)/.test(gameVersion) || /^26[.-]2([.-]|$)/.test(gameVersion);
+  /^1[.-]21([.-]|$)/.test(gameVersion) || /^26[.-][12]([.-]|$)/.test(gameVersion);
 
 /** One file in a profile's mods/ (or resourcepacks/, shaderpacks/) folder */
 export interface ProfileMod {
@@ -648,6 +649,7 @@ const sideEffects = new Set([
   'install_modpack_version',
   'install_content_version_to_profile',
   'begin_login',
+  'begin_code_login',
   'begin_reconsent_login',
   'upload_skin',
   'import_skin',
@@ -888,6 +890,9 @@ export const api = {
   deleteProfile: (id: string) => invoke<void>('delete_profile', { id }),
   launch: (profileId: string) => invoke<void>('install_and_launch', { profileId }),
   stopGame: () => invoke<void>('stop_game'),
+  /** the game the backend is running right now, or null — the UI's source
+   *  of truth for PLAY / STOP whenever the event stream may have been missed */
+  gameState: async () => (await invoke<GameState | null | undefined>('game_state')) ?? null,
   listVersions: () => invoke<Version[]>('list_versions'),
   fabricLoaderVersion: () => invoke<string>('fabric_loader_version'),
   searchModpacks: (
@@ -959,6 +964,7 @@ export const api = {
 
   getAccount: () => invoke<Account | null>('get_current_account'),
   login: () => invoke<Account>('begin_login'),
+  loginWithCode: () => invoke<Account>('begin_code_login'),
   logout: () => invoke<void>('logout'),
   getAppInfo: () => invoke<AppInfo>('get_app_info'),
 

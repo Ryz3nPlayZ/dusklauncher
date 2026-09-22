@@ -1,14 +1,19 @@
-//! Desktop login orchestration: loopback auth-code capture → token exchange
-//! → Minecraft session. The Azure app must be registered as a native
-//! ("Mobile and desktop applications") client with redirect URI
-//! `http://127.0.0.1:19735` (see docs/ARCHITECTURE.md). A fixed port is used
-//! deliberately: it matches the registered URI byte-for-byte, so login works
-//! regardless of how strictly Entra matches loopback URIs.
+//! Desktop login orchestration. Official mode: an in-app webview runs the
+//! legacy browser-control flow (title ID → oauth20_desktop.srf, code read
+//! from the redirect fragment — no code for the user to type, no app
+//! approval). There is no silent fallback: if the webview path can't run,
+//! the user is asked (webview again vs device-code) instead. Azure mode:
+//! loopback auth-code capture → token exchange → Minecraft session. The
+//! Azure app must be registered as a native ("Mobile and desktop
+//! applications") client with redirect URI `http://127.0.0.1:19735` (see
+//! docs/ARCHITECTURE.md). A fixed port is used deliberately: it matches the
+//! registered URI byte-for-byte, so login works regardless of how strictly
+//! Entra matches loopback URIs.
 
 use crate::appstate::AppState;
 use fasterlauncher_core::auth::{self, AuthConfig, AuthMode, Session};
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Fixed loopback port for the OAuth callback. Registered in Azure as
@@ -90,13 +95,35 @@ async fn run_login_with_prompt(
     let mut config = resolve_auth_config(state);
     config.validate().map_err(|e| e.to_string())?;
     match config.mode {
-        // Azure app: browser + loopback redirect (the app registration pins
-        // the exact loopback URI).
+        // Azure app: system browser + loopback redirect (the app registration
+        // pins the exact loopback URI).
         AuthMode::AzureApp => run_loopback_login(app, state, &mut config, prompt).await,
-        // Official title ID: device-code flow. live.com only registers
-        // `oauth20_desktop.srf` as this title's redirect — loopback URIs are
-        // rejected — so the user confirms at the verification page instead.
+        // Official title ID: in-app webview on the legacy desktop.srf
+        // redirect (no code to type, no approval needed). No silent
+        // fallback — if the webview can't run, the user chooses between
+        // retrying it and the device-code flow (`begin_code_login`).
+        AuthMode::OfficialTitle => match run_webview_login(app, state, &config).await {
+            WebviewOutcome::Done(session) => Ok(session),
+            WebviewOutcome::Fallback(reason) => {
+                let _ = app.emit(
+                    "auth-state",
+                    serde_json::json!({ "state": "webviewFailed", "reason": reason }),
+                );
+                Err(reason)
+            }
+            WebviewOutcome::Abort(err) => Err(err),
+        },
+    }
+}
+
+/// The user-chosen alternative to the webview flow: RFC 8628 device-code
+/// sign-in (Official mode) or the loopback browser flow (Azure mode).
+pub async fn run_code_login(app: &AppHandle, state: &AppState) -> Result<Session, String> {
+    let mut config = resolve_auth_config(state);
+    config.validate().map_err(|e| e.to_string())?;
+    match config.mode {
         AuthMode::OfficialTitle => run_device_code_login(app, state, &config).await,
+        AuthMode::AzureApp => run_loopback_login(app, state, &mut config, "select_account").await,
     }
 }
 
@@ -155,7 +182,127 @@ async fn run_loopback_login(
     finish_login(app, state, config, ms_token, refresh).await
 }
 
-/// Official-mode interactive login: RFC 8628 device-code flow against
+/// Outcome of the official-mode webview login attempt. `Fallback` marks
+/// "the webview itself couldn't run" (window, timeout, exchange) — the UI
+/// offers the user a choice: retry the window or use the device code.
+/// `Abort` is terminal (user cancelled, Microsoft refused, the Xbox chain
+/// failed) and surfaces as a plain error.
+enum WebviewOutcome {
+    Done(Session),
+    Fallback(String),
+    Abort(String),
+}
+
+/// Official-mode interactive login without a device code: an in-app webview
+/// loads the title-ID authorize page; when live.com redirects to
+/// oauth20_desktop.srf the navigation interceptor reads the code from the
+/// fragment, the window closes, and the normal token → SISU chain takes
+/// over. This is the same flow the official launcher's embedded browser
+/// uses — no Azure app, no approval, nothing for the user to type.
+async fn run_webview_login(app: &AppHandle, state: &AppState, config: &AuthConfig) -> WebviewOutcome {
+    let flow_state = auth::new_flow_state();
+    let url = auth::title_desktop_authorize_url(&flow_state);
+
+    // One sign-in window at a time — a stale window from a cancelled attempt
+    // would collide on the label.
+    if let Some(old) = app.get_webview_window("msa-signin") {
+        let _ = old.close();
+    }
+
+    let _ = app.emit("auth-state", serde_json::json!({ "state": "webview" }));
+
+    enum Msg {
+        Code(String),
+        Error(String),
+        Cancelled,
+    }
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Msg>();
+    let parsed = match tauri::Url::parse(&url) {
+        Ok(u) => u,
+        Err(e) => return WebviewOutcome::Fallback(format!("authorize URL unparseable: {e}")),
+    };
+
+    let expected = flow_state.clone();
+    let tx_nav = tx.clone();
+    let builder = tauri::WebviewWindowBuilder::new(
+        app,
+        "msa-signin",
+        tauri::WebviewUrl::External(parsed),
+    )
+    .title("Sign in with Microsoft")
+    .inner_size(480.0, 680.0)
+    .min_inner_size(420.0, 560.0)
+    .resizable(true)
+    .on_navigation(move |url| {
+        let landed = url.host_str() == Some("login.live.com")
+            && url.path().contains("oauth20_desktop.srf");
+        if !landed {
+            return true;
+        }
+        match auth::parse_desktop_callback(&url.to_string(), &expected) {
+            Ok(code) => {
+                let _ = tx_nav.send(Msg::Code(code));
+            }
+            Err(e) => {
+                let _ = tx_nav.send(Msg::Error(e.to_string()));
+            }
+        }
+        // Never render the bare desktop.srf landing page — the login is done.
+        false
+    });
+    let window = match builder.build() {
+        Ok(w) => w,
+        Err(e) => {
+            return WebviewOutcome::Fallback(format!("could not open the sign-in window: {e}"))
+        }
+    };
+
+    // Closing the window is an explicit cancel — don't shove a code page at
+    // a user who just dismissed sign-in.
+    let tx_close = tx.clone();
+    window.on_window_event(move |event| {
+        if matches!(
+            event,
+            tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+        ) {
+            let _ = tx_close.send(Msg::Cancelled);
+        }
+    });
+
+    let msg = match tokio::time::timeout(LOGIN_TIMEOUT, rx.recv()).await {
+        Ok(Some(m)) => m,
+        // All senders dropped without an outcome — treat as a cancel.
+        Ok(None) => Msg::Cancelled,
+        Err(_) => {
+            let _ = window.close();
+            return WebviewOutcome::Fallback("the sign-in window timed out".into());
+        }
+    };
+    let _ = window.close();
+    match msg {
+        Msg::Cancelled => {
+            WebviewOutcome::Abort("Sign-in was cancelled — try again when ready.".into())
+        }
+        Msg::Error(e) => WebviewOutcome::Abort(e),
+        Msg::Code(code) => {
+            let mut config = config.clone();
+            config.redirect_uri = auth::TITLE_DESKTOP_REDIRECT_URI.to_string();
+            match auth::exchange_code(&state.client, &config, &code).await {
+                Ok((ms_token, refresh)) => {
+                    match finish_login(app, state, &config, ms_token, refresh).await {
+                        Ok(session) => WebviewOutcome::Done(session),
+                        Err(e) => WebviewOutcome::Abort(e),
+                    }
+                }
+                // A code that fails to exchange is usually transient (expired
+                // or single-use) — the device flow gets a fresh one.
+                Err(e) => WebviewOutcome::Fallback(format!("token exchange failed: {e}")),
+            }
+        }
+    }
+}
+
+/// Official-mode fallback login: RFC 8628 device-code flow against
 /// login.live.com. The browser opens the verification page; the UI shows the
 /// code to type (emitted via `auth-state`); we poll until Microsoft hands
 /// out tokens. No redirect URI, no callback port.

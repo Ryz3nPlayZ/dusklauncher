@@ -45,6 +45,7 @@ pub fn run() {
             // launch
             commands::install_and_launch,
             commands::stop_game,
+            commands::game_state,
             // settings
             commands::get_settings,
             commands::set_settings,
@@ -54,6 +55,7 @@ pub fn run() {
             wallpapers::remove_wallpaper,
             // account
             commands::begin_login,
+            commands::begin_code_login,
             commands::begin_reconsent_login,
             commands::logout,
             commands::get_current_account,

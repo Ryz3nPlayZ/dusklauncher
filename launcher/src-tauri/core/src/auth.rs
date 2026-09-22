@@ -50,6 +50,10 @@ pub const OFFICIAL_TITLE_CLIENT_ID: &str = "00000000402b5328";
 /// refresh tokens implicitly for public clients, so no offline_access-style
 /// scope is requested.
 pub const LIVE_SCOPES: &str = "service::user.auth.xboxlive.com::MBI_SSL";
+/// The only redirect live.com registers for the title ID: the legacy
+/// "browser control" landing page that receives the auth code in the URL
+/// fragment. Loopback/custom-scheme redirects are rejected for this client.
+pub const TITLE_DESKTOP_REDIRECT_URI: &str = "https://login.live.com/oauth20_desktop.srf";
 
 /// Which Microsoft identity the launcher signs in with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -620,6 +624,79 @@ pub fn new_flow_state() -> String {
     hex::encode(bytes)
 }
 
+/// Authorize URL for the title-ID embedded-webview flow: the legacy
+/// browser-control pattern. live.com redirects to
+/// [`TITLE_DESKTOP_REDIRECT_URI`] with the code in the *fragment*. No
+/// `response_mode`/`prompt` — the legacy endpoint ignores v2-only params for
+/// this redirect and always uses the fragment, and a fresh webview shows the
+/// account picker anyway.
+pub fn title_desktop_authorize_url(state: &str) -> String {
+    let mut url = reqwest::Url::parse(LIVE_AUTHORIZE_URL).expect("const URL parses");
+    url.query_pairs_mut()
+        .append_pair("client_id", OFFICIAL_TITLE_CLIENT_ID)
+        .append_pair("response_type", "code")
+        .append_pair("redirect_uri", TITLE_DESKTOP_REDIRECT_URI)
+        .append_pair("scope", LIVE_SCOPES)
+        .append_pair("state", state);
+    url.to_string()
+}
+
+/// Parse the `oauth20_desktop.srf` landing URL from the embedded-webview
+/// flow: the code arrives in the URL *fragment* (`#code=…&state=…`); the
+/// query is checked as a fallback because some consent hops land there.
+/// `state` is verified when the endpoint echoes it — the legacy redirect
+/// does not always do so, and the code only ever arrives inside the app's
+/// own webview window, so a missing echo is not a CSRF vector here. Microsoft
+/// errors (`#error=access_denied…`) become `Error::Auth`.
+pub fn parse_desktop_callback(target: &str, expected_state: &str) -> Result<String> {
+    let fragment = target.split_once('#').map(|(_, f)| f).unwrap_or("");
+    let query = target
+        .split_once('?')
+        .map(|(_, q)| q.split_once('#').map(|(q, _)| q).unwrap_or(q))
+        .unwrap_or("");
+    for part in [fragment, query] {
+        if !part.contains("code=") && !part.contains("error=") {
+            continue;
+        }
+        let mut code: Option<String> = None;
+        let mut error: Option<String> = None;
+        let mut description: Option<String> = None;
+        let mut state: Option<String> = None;
+        for pair in part.split('&') {
+            let (k, v) = pair.split_once('=').unwrap_or((pair, ""));
+            match k {
+                "code" => code = Some(percent_decode(v)),
+                "error" => error = Some(percent_decode(v)),
+                "error_description" => description = Some(percent_decode(v)),
+                "state" => state = Some(percent_decode(v)),
+                _ => {}
+            }
+        }
+        if let Some(e) = error {
+            let desc = description
+                .map(|d| format!(": {d}"))
+                .unwrap_or_default();
+            return Err(Error::Auth(format!(
+                "Microsoft sign-in was not completed ({e}{desc})."
+            )));
+        }
+        if let Some(c) = code {
+            if let Some(s) = &state {
+                if s != expected_state {
+                    return Err(Error::Auth(
+                        "Microsoft returned a sign-in code for a different login attempt — retry."
+                            .into(),
+                    ));
+                }
+            }
+            return Ok(c);
+        }
+    }
+    Err(Error::Auth(
+        "The Microsoft sign-in page finished without returning a code.".into(),
+    ))
+}
+
 /// Percent-decode a query component (`+` becomes space).
 pub fn percent_decode(s: &str) -> String {
     let mut out = Vec::with_capacity(s.len());
@@ -938,13 +1015,21 @@ pub async fn exchange_code(
     let body = raw.text().await.unwrap_or_default();
     let resp: MsaTokenResponse = serde_json::from_str(&body)
         .map_err(|e| Error::Auth(format!("Microsoft returned an unreadable token response: {e}")))?;
-    let refresh = resp.refresh_token.ok_or_else(|| {
-        Error::Auth(
-            "Microsoft did not return a refresh token (the offline_access permission was not \
-             consented) — run the Re-consent sign-in and approve the permissions, then retry."
-                .into(),
-        )
-    })?;
+    // Azure v2 requires the offline_access grant, so a missing refresh token
+    // there is a consent problem worth explaining. The legacy title endpoint
+    // issues refresh tokens implicitly and may omit one (the device flow
+    // tolerates that too) — an empty refresh just costs silent re-login.
+    let refresh = match (config.mode, resp.refresh_token) {
+        (_, Some(r)) => r,
+        (AuthMode::OfficialTitle, None) => String::new(),
+        (AuthMode::AzureApp, None) => {
+            return Err(Error::Auth(
+                "Microsoft did not return a refresh token (the offline_access permission was not \
+                 consented) — run the Re-consent sign-in and approve the permissions, then retry."
+                    .into(),
+            ))
+        }
+    };
     Ok((resp.access_token, refresh))
 }
 
@@ -1290,6 +1375,62 @@ mod tests {
     fn callback_decodes_percent_encoding() {
         let code = parse_auth_callback("/auth/callback?code=A%2BB%20C&state=s", "s").unwrap();
         assert_eq!(code, "A+B C");
+    }
+
+    #[test]
+    fn desktop_callback_reads_fragment() {
+        let url = "https://login.live.com/oauth20_desktop.srf#code=ABC123&state=s1";
+        assert_eq!(parse_desktop_callback(url, "s1").unwrap(), "ABC123");
+    }
+
+    #[test]
+    fn desktop_callback_accepts_missing_state_echo() {
+        // The legacy redirect does not always echo `state`; the code only
+        // arrives inside the app's own webview, so absence is not CSRF.
+        let url = "https://login.live.com/oauth20_desktop.srf#code=ABC123";
+        assert_eq!(parse_desktop_callback(url, "s1").unwrap(), "ABC123");
+    }
+
+    #[test]
+    fn desktop_callback_rejects_state_mismatch() {
+        let url = "https://login.live.com/oauth20_desktop.srf#code=A&state=evil";
+        assert!(parse_desktop_callback(url, "s1").is_err());
+    }
+
+    #[test]
+    fn desktop_callback_maps_access_denied() {
+        let url = "https://login.live.com/oauth20_desktop.srf#error=access_denied&error_description=declined+consent";
+        let err = parse_desktop_callback(url, "s1").unwrap_err();
+        assert!(err.to_string().contains("access_denied"));
+        assert!(err.to_string().contains("declined consent"));
+    }
+
+    #[test]
+    fn desktop_callback_falls_back_to_query() {
+        let url = "https://login.live.com/oauth20_desktop.srf?code=Q1&state=s";
+        assert_eq!(parse_desktop_callback(url, "s").unwrap(), "Q1");
+    }
+
+    #[test]
+    fn desktop_callback_requires_a_code_or_error() {
+        let url = "https://login.live.com/oauth20_desktop.srf";
+        assert!(parse_desktop_callback(url, "s1").is_err());
+    }
+
+    #[test]
+    fn title_desktop_url_pins_redirect_and_scope() {
+        let url = title_desktop_authorize_url("st");
+        assert!(url.starts_with(LIVE_AUTHORIZE_URL));
+        assert!(url.contains("client_id=00000000402b5328"));
+        // The redirect must be percent-encoded inside the query string.
+        assert!(url.contains(
+            "redirect_uri=https%3A%2F%2Flogin.live.com%2Foauth20_desktop.srf"
+        ));
+        assert!(url.contains("scope=service%3A%3Auser.auth.xboxlive.com%3A%3AMBI_SSL"));
+        assert!(url.contains("state=st"));
+        // Legacy endpoint: no v2-only params that could make it 400.
+        assert!(!url.contains("response_mode"));
+        assert!(!url.contains("prompt="));
     }
 
     #[test]
