@@ -62,6 +62,7 @@ export default function Store({
   const [signedIn, setSignedIn] = useState(true);
   const [picked, setPicked] = useState<Picked | null>(null);
   const [filter, setFilter] = useState<Filter>('ALL');
+  const [elytra, setElytra] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -264,6 +265,9 @@ export default function Store({
                   accessories={previewAccessories}
                   pose={pose}
                   zoom={0.62}
+                  backEquipment={elytra ? 'elytra' : 'cape'}
+                  /* a cape is a back-piece: turn the model around to show it */
+                  back={picked?.kind === 'cape'}
                   interactive
                   className="viewer__canvas"
                 />
@@ -347,6 +351,7 @@ export default function Store({
             <div className="win win--inner wardrobe__gallery">
               <div className="win__bar">
                 <NavCell label={pose} onClick={() => onPose(POSES[(POSES.indexOf(pose) + 1) % POSES.length])} />
+                <NavCell label="ELYTRA" active={elytra} onClick={() => setElytra((v) => !v)} />
                 <div className="win__fill" />
                 <NavLabel
                   label={
@@ -432,12 +437,7 @@ export default function Store({
                   )}
                 </div>
 
-                <span className="meta wardrobe__note">
-                  {note ??
-                    (isTauri
-                      ? 'Animated capes are 750 coins, everything else 500. Coins come from redeem codes (Settings → General). BUY puts an item in your wardrobe; EQUIP wears it on every Fabric instance you launch through the bundled DuskClient mod.'
-                      : 'Browser preview: the real catalog lives in the client mod jar; coins and purchases are pretend here.')}
-                </span>
+                {note && <span className="meta wardrobe__note">{note}</span>}
               </div>
             </div>
           </div>

@@ -92,6 +92,10 @@ interface Props {
   model?: SkinModel | 'auto';
   pose?: Pose;
   zoom?: number;
+  /** what the cape texture is worn as — 'elytra' swaps the cape for wings */
+  backEquipment?: 'cape' | 'elytra';
+  /** true faces the camera at the character's back (the cape side) */
+  back?: boolean;
   /** allow drag-to-rotate (wardrobe inspector) */
   interactive?: boolean;
   paused?: boolean;
@@ -113,6 +117,8 @@ export default function PlayerRender({
   model = 'auto',
   pose = 'IDLE',
   zoom = 0.85,
+  backEquipment = 'cape',
+  back = false,
   interactive = false,
   paused = false,
   className,
@@ -296,12 +302,12 @@ export default function PlayerRender({
       .then((frames) => {
         if (cancelled || viewer.disposed) return;
         let i = 0;
-        viewer.loadCape(frames[0], { backEquipment: 'cape' });
+        viewer.loadCape(frames[0], { backEquipment });
         if (frames.length > 1) {
           timer = window.setInterval(() => {
             if (viewer.disposed) return;
             i = (i + 1) % frames.length;
-            viewer.loadCape(frames[i], { backEquipment: 'cape' });
+            viewer.loadCape(frames[i], { backEquipment });
           }, Math.max(20, capeFrameMs));
         }
       })
@@ -310,7 +316,20 @@ export default function PlayerRender({
       cancelled = true;
       if (timer !== null) window.clearInterval(timer);
     };
-  }, [cape, capeFrameMs, ready]);
+  }, [cape, capeFrameMs, backEquipment, ready]);
+
+  // which side the camera looks at: the front, or the back the cape hangs on
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    const three = threeRef.current;
+    if (!viewer || viewer.disposed || !three) return;
+    const target = viewer.controls.target;
+    const sph = new three.Spherical().setFromVector3(viewer.camera.position.clone().sub(target));
+    if (Number.isNaN(sph.radius) || sph.radius === 0) return;
+    sph.theta = back ? Math.PI : 0;
+    viewer.camera.position.setFromSpherical(sph).add(target);
+    viewer.controls.update();
+  }, [back, ready]);
 
   useEffect(() => {
     const viewer = viewerRef.current;

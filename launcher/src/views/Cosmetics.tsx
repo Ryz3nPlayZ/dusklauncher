@@ -57,6 +57,7 @@ export default function Cosmetics({
   const [loadout, setLoadout] = useState<Loadout | null>(null);
   const [pickedCape, setPickedCape] = useState<number | null>(null);
   const [pickedAcc, setPickedAcc] = useState<number[]>([]);
+  const [elytra, setElytra] = useState(false);
   const [capeNote, setCapeNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -217,6 +218,7 @@ export default function Cosmetics({
                     accessories={previewAccessories}
                     pose={pose}
                     zoom={0.62}
+                    backEquipment={elytra ? 'elytra' : 'cape'}
                     interactive
                     className="viewer__canvas"
                   />
@@ -244,6 +246,7 @@ export default function Cosmetics({
                     label={pose}
                     onClick={() => onPose(POSES[(POSES.indexOf(pose) + 1) % POSES.length])}
                   />
+                  <NavCell label="ELYTRA" active={elytra} onClick={() => setElytra((v) => !v)} />
                   <div className="win__fill" />
                   <NavLabel
                     label={
@@ -334,14 +337,7 @@ export default function Cosmetics({
                     </div>
                   )}
 
-                  <span className="meta wardrobe__note">
-                    {capeNote ??
-                      (isTauri
-                        ? tab === 'CAPES'
-                          ? 'Capes are drawn in-game by the bundled DuskClient mod. Players without a cape here still show their MinecraftCapes one. Buy more in the store.'
-                          : 'Accessories are Cosmetica models drawn on your body parts by the bundled DuskClient mod. Pick as many as you like; buy more in the store.'
-                        : 'Browser preview: the real cosmetics live in the client mod jar.')}
-                  </span>
+                  {capeNote && <span className="meta wardrobe__note">{capeNote}</span>}
                 </div>
               </div>
             </div>

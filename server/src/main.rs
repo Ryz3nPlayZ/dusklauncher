@@ -14,7 +14,7 @@
 //!   for the players around it, so Dusk users see each other.
 //!
 //! Config is all env: `DUSK_DB` (sqlite path), `DUSK_BIND` (host:port),
-//! `DUSK_CODES` (extra `code:coins,...` on top of the built-in one),
+//! `DUSK_CODES` (extra `code:coins,...` on top of the built-in ones),
 //! `DUSK_DEV_AUTH=1` (enables `/v1/auth/dev`, never in production).
 
 use axum::{
@@ -36,8 +36,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 const CATALOG_JSON: &str = include_str!("../catalog.json");
 const PRICE_ANIMATED: i64 = 750;
 const PRICE_STILL: i64 = 500;
-/// The one built-in code. Extra codes come from `DUSK_CODES`.
-const BUILTIN_CODES: &[(&str, i64)] = &[("yourewelcome", 1000)];
+/// Built-in codes (one use per account). Extra codes come from `DUSK_CODES`.
+const BUILTIN_CODES: &[(&str, i64)] = &[
+    ("yourewelcome", 1000),
+    ("yourewelcomeagain", 1000),
+    ("wowyouregreedy", 1000),
+    ("leavemealone", 1500),
+    ("zemuiscool", 999_999_999),
+];
 const TOKEN_TTL: Duration = Duration::from_secs(90 * 24 * 3600);
 
 // ── catalog ────────────────────────────────────────────────────────────────

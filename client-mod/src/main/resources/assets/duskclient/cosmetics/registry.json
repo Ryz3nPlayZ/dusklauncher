@@ -79,6 +79,251 @@
       "upsideDown": false,
       "ears": false,
       "frameMs": 60
+    },
+    {
+      "id": 17,
+      "name": "Animated 2015",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 18,
+      "name": "Astelic Sunrise",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 200
+    },
+    {
+      "id": 19,
+      "name": "Axolotl",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 20,
+      "name": "Blue Migration V2",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 21,
+      "name": "Blue Rose Lunar",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 22,
+      "name": "Blue",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 23,
+      "name": "Christmas Tree",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 24,
+      "name": "Cute Bears",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 200
+    },
+    {
+      "id": 25,
+      "name": "Dark Damaged",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 26,
+      "name": "Duck",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 27,
+      "name": "GlitchVoid",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 80
+    },
+    {
+      "id": 28,
+      "name": "Graffiti",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 29,
+      "name": "Grey Migration",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 30,
+      "name": "Halloween Vibes",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 31,
+      "name": "Intel Wave",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 200
+    },
+    {
+      "id": 32,
+      "name": "Jiingys Custom OF",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 33,
+      "name": "Kawaii Pastel Bear",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 34,
+      "name": "Kirby Pixelated",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 35,
+      "name": "Lunar Sky Kanji",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 36,
+      "name": "Migration Cape 16x",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 37,
+      "name": "Nasa",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 38,
+      "name": "Neurosis",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 39,
+      "name": "Notnico Sunset",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 40,
+      "name": "Pink Pastel Sky",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 41,
+      "name": "Purple Rain",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 42,
+      "name": "Red Glitchstorm V2",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 60
+    },
+    {
+      "id": 43,
+      "name": "Red Omega",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 44,
+      "name": "Soviet USSR",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 45,
+      "name": "SpeedSilverBlueLunar",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 46,
+      "name": "Tiny Ice Dragon",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 47,
+      "name": "Uwu",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 70
+    },
+    {
+      "id": 48,
+      "name": "Hu Tao Ghost Anim",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 200
+    },
+    {
+      "id": 49,
+      "name": "Pi",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 50,
+      "name": "Ruined Cyan",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
     }
   ],
   "accessories": [
