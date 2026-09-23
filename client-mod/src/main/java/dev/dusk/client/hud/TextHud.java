@@ -30,6 +30,16 @@ public abstract class TextHud extends HudElement {
         return "-";
     }
 
+    /** Live label colour; overridden by elements that colour themselves. */
+    protected int labelColor() {
+        return labelColor.argb();
+    }
+
+    /** Live value colour; overridden by elements that colour themselves. */
+    protected int valueColor() {
+        return valueColor.argb();
+    }
+
     protected String labelText() {
         return showLabel.get() && !label.isEmpty() ? label + ": " : "";
     }
@@ -63,9 +73,9 @@ public abstract class TextHud extends HudElement {
         String l = labelText();
         int x = 0;
         if (!l.isEmpty()) {
-            c.text(l, 0, 0, labelColor.argb(), shadow.get());
+            c.text(l, 0, 0, labelColor(), shadow.get());
             x = ctx.textWidth(l);
         }
-        c.text(v, x, 0, valueColor.argb(), shadow.get());
+        c.text(v, x, 0, valueColor(), shadow.get());
     }
 }

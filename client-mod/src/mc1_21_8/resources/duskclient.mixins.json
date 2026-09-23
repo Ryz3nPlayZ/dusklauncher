@@ -4,8 +4,11 @@
   "compatibilityLevel": "${java_level}",
   "client": [
     "TitleRouteMixin",
+    "TpsMixin",
     "FullbrightMixin",
     "MotionBlurMixin",
+    "CrosshairGuiMixin",
+    "RenderPipelinesAccessor",
     "PostChainAccessor",
     "PostPassAccessor",
     "cosmetics.AbstractClientPlayerMixin",

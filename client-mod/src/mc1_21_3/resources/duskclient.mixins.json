@@ -1,0 +1,22 @@
+{
+  "required": true,
+  "package": "dev.dusk.client.mixin",
+  "compatibilityLevel": "${java_level}",
+  "client": [
+    "TitleRouteMixin",
+    "TpsMixin",
+    "CrosshairMixin",
+    "FullbrightMixin",
+    "MotionBlurMixin",
+    "PostChainAccessor",
+    "PostPassAccessor",
+    "cosmetics.AbstractClientPlayerMixin",
+    "cosmetics.PlayerRenderStateMixin",
+    "cosmetics.PlayerRendererMixin",
+    "cosmetics.CapeLayerMixin",
+    "cosmetics.Deadmau5EarsLayerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

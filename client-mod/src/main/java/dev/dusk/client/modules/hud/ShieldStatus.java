@@ -1,5 +1,6 @@
 package dev.dusk.client.modules.hud;
 
+import dev.dusk.client.compat.Compat;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.hud.Fmt;
 import dev.dusk.client.hud.HudContext;
@@ -43,8 +44,8 @@ public class ShieldStatus extends HudElement {
         var p = ctx.player();
         ItemStack s = shield(ctx);
         if (p == null || s.isEmpty()) return new State(readyColor.argb(), "Ready", 1f);
-        if (p.getCooldowns().isOnCooldown(s)) {
-            float pct = p.getCooldowns().getCooldownPercent(s, ctx.partialTick());
+        if (Compat.isOnCooldown(p, s)) {
+            float pct = Compat.cooldownPercent(p, s, ctx.partialTick());
             return new State(cooldownColor.argb(), "Cooldown " + Fmt.fixed(pct * 5, 1) + "s", 1 - pct);
         }
         if (p.isUsingItem() && p.getUseItem() == s) {

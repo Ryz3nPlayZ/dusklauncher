@@ -1,0 +1,17 @@
+{
+  "targets": {},
+  "passes": [
+    {
+      "vertex_shader": "minecraft:post/screenquad",
+      "fragment_shader": "duskclient:post/motion_blur",
+      "inputs": [
+        {"sampler_name": "Main", "target": "minecraft:main"},
+        {"sampler_name": "Prev", "target": "minecraft:main"}
+      ],
+      "output": "minecraft:main",
+      "uniforms": [
+        {"name": "blendFactor", "type": "float", "value": [0.0]}
+      ]
+    }
+  ]
+}

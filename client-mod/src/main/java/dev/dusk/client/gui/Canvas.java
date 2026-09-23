@@ -19,6 +19,8 @@ public interface Canvas {
 
     void text(Component text, int x, int y, int argb);
 
+    void text(Component text, int x, int y, int argb, boolean shadow);
+
     void text(String text, int x, int y, int argb, boolean shadow);
 
     void centeredText(Component text, int x, int y, int argb);
@@ -27,12 +29,22 @@ public interface Canvas {
 
     int textWidth(String text);
 
+    int textWidth(Component text);
+
     int lineHeight();
 
     void item(ItemStack stack, int x, int y);
 
     /** Durability bar, count and cooldown overlay for an item slot. */
     void itemDecorations(ItemStack stack, int x, int y);
+
+    /**
+     * Draws a region of a texture sheet. {@code texture} is a namespaced id
+     * ("minecraft:textures/gui/container/inventory.png"), {@code u}/{@code v}
+     * the top-left of the region inside a {@code texW} x {@code texH} sheet and
+     * {@code argb} a tint (ignored on 1.21.1, which has no tinted blit).
+     */
+    void blit(String texture, int x, int y, float u, float v, int w, int h, int texW, int texH, int argb);
 
     void push();
 
@@ -41,6 +53,9 @@ public interface Canvas {
     void translate(float x, float y);
 
     void scale(float x, float y);
+
+    /** Rotates around the current origin, clockwise, in radians. */
+    void rotate(float radians);
 
     /** Clip to a box (in the current transform, like every other call). */
     void scissor(int x0, int y0, int x1, int y1);
@@ -53,6 +68,10 @@ public interface Canvas {
 
     default void centeredText(String text, int x, int y, int argb) {
         centeredText(text, x, y, argb, true);
+    }
+
+    default void blit(String texture, int x, int y, float u, float v, int w, int h, int texW, int texH) {
+        blit(texture, x, y, u, v, w, h, texW, texH, 0xFFFFFFFF);
     }
 
     /** Draws a horizontal line one pixel high from x0 to x1 inclusive. */

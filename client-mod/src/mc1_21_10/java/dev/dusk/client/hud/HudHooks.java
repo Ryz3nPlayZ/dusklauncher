@@ -3,15 +3,15 @@ package dev.dusk.client.hud;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.gui.GraphicsCanvas;
 import dev.dusk.client.gui.HudEditorScreen;
-import dev.dusk.client.modules.render.CustomCrosshair;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 
 /**
  * Wires the shared HUD into Fabric's HUD element list. 1.21.9–1.21.10 flavour:
- * elements render through GuiGraphics.
+ * elements render through GuiGraphics. The crosshair is not replaced
+ * here: CrosshairGuiMixin swaps just the vanilla sprite so the attack
+ * indicator keeps rendering.
  */
 public final class HudHooks {
     private HudHooks() {}
@@ -24,17 +24,6 @@ public final class HudHooks {
             HudContext ctx = new HudContext(mc, graphics.guiWidth(), graphics.guiHeight(),
                     tick.getGameTimeDeltaPartialTick(true), false);
             HudRenderer.render(new GraphicsCanvas(graphics, mc.font), ctx);
-        });
-        HudElementRegistry.replaceElement(VanillaHudElements.CROSSHAIR, vanilla -> (graphics, tick) -> {
-            Minecraft mc = Minecraft.getInstance();
-            CustomCrosshair crosshair = CustomCrosshair.instance();
-            if (crosshair != null && crosshair.enabled()) {
-                if (crosshair.shouldDraw(mc)) {
-                    crosshair.render(new GraphicsCanvas(graphics, mc.font), graphics.guiWidth() / 2, graphics.guiHeight() / 2, mc);
-                }
-            } else {
-                vanilla.render(graphics, tick);
-            }
         });
     }
 }

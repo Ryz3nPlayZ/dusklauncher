@@ -1,0 +1,49 @@
+# The natural-motionblur port needs 1.21.11's LevelRenderer/CameraRenderState
+# shape; everything below 1.21.11 keeps its own renderer and shader, which
+# this layer carries (motion_blur.json/.fsh live here, not in mc1_21_11).
+java/dev/dusk/client/render/motionblur/**
+java/dev/dusk/client/mixin/MotionBlurLevelMixin.java
+resources/assets/duskclient/post_effect/velocity_pre.json
+resources/assets/duskclient/post_effect/velocity_f5.json
+resources/assets/duskclient/post_effect/velocity_post.json
+resources/assets/duskclient/post_effect/frame_blending.json
+resources/assets/duskclient/post_effect/accumulation_max.json
+resources/assets/duskclient/post_effect/accumulation_mix.json
+resources/assets/duskclient/shaders/post/velocity_pre.fsh
+resources/assets/duskclient/shaders/post/velocity_f5.fsh
+resources/assets/duskclient/shaders/post/velocity_post.fsh
+resources/assets/duskclient/shaders/post/frame_blending.fsh
+resources/assets/duskclient/shaders/post/accumulation_max.fsh
+resources/assets/duskclient/shaders/post/accumulation_mix.fsh
+
+# The BactroMod ports target the 1.21.11+ renderer (SubmitNodeCollector,
+# FogEnvironment, the permission checks); older targets keep vanilla here.
+java/dev/dusk/client/mixin/CameraOverlayMixin.java
+java/dev/dusk/client/mixin/FogMixin.java
+java/dev/dusk/client/mixin/GameModeSwitcherMixin.java
+java/dev/dusk/client/mixin/ItemInHandMixin.java
+java/dev/dusk/client/mixin/KeyboardDebugMixin.java
+java/dev/dusk/client/mixin/NightVisionMixin.java
+java/dev/dusk/client/mixin/ScreenEffectMixin.java
+java/dev/dusk/client/mixin/TimeChangerMixin.java
+java/dev/dusk/client/mixin/WeatherAttributesMixin.java
+java/dev/dusk/client/mixin/WeatherFogMixin.java
+java/dev/dusk/client/mixin/WeatherRenderMixin.java
+java/dev/dusk/client/mixin/WeatherSkyMixin.java
+java/dev/dusk/client/mixin/WeatherTickMixin.java
+java/dev/dusk/client/mixin/AnimatePacketMixin.java
+java/dev/dusk/client/mixin/DamageEventMixin.java
+java/dev/dusk/client/mixin/DamageOverlayMixin.java
+java/dev/dusk/client/mixin/OverlayTextureMixin.java
+java/dev/dusk/client/render/DamageVariants.java
+java/dev/dusk/client/mixin/SprintMixin.java
+java/dev/dusk/client/mixin/HitboxMixin.java
+java/dev/dusk/client/mixin/HitboxStrokeMixin.java
+java/dev/dusk/client/mixin/HitboxToggleMixin.java
+java/dev/dusk/client/render/HitboxHooks.java
+
+# ColorSaturation's grade is a 1.21.11-style post chain (std140 uniform blocks
+# in the effect json), so it stays off the older targets too.
+java/dev/dusk/client/render/ColorSaturationRenderer.java
+resources/assets/duskclient/post_effect/color_saturation.json
+resources/assets/duskclient/shaders/post/color_saturation.fsh

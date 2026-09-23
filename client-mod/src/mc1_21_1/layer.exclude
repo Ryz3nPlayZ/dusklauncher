@@ -1,0 +1,9 @@
+# Below 1.21.9 the PlayerRenderer mixins replace the Avatar* ones
+java/dev/dusk/client/mixin/cosmetics/AvatarRendererMixin.java
+java/dev/dusk/client/mixin/cosmetics/AvatarRenderStateMixin.java
+# 1.21–1.21.1 have no render states and use the legacy PostChain (no accessors, no post_effect)
+java/dev/dusk/client/mixin/cosmetics/PlayerRenderStateMixin.java
+java/dev/dusk/client/mixin/PostChainAccessor.java
+java/dev/dusk/client/mixin/PostPassAccessor.java
+resources/assets/duskclient/post_effect/motion_blur.json
+resources/assets/duskclient/shaders/post/motion_blur.fsh

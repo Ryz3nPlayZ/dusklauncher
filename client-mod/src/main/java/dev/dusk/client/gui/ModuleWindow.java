@@ -5,15 +5,18 @@ import dev.dusk.client.gui.widget.ButtonWidget;
 import dev.dusk.client.gui.widget.ColorWidget;
 import dev.dusk.client.gui.widget.CycleWidget;
 import dev.dusk.client.gui.widget.LabelWidget;
+import dev.dusk.client.gui.widget.PixelGridWidget;
 import dev.dusk.client.gui.widget.SliderWidget;
 import dev.dusk.client.gui.widget.ToggleWidget;
 import dev.dusk.client.gui.widget.Widget;
 import dev.dusk.client.hud.HudElement;
 import dev.dusk.client.module.Module;
+import dev.dusk.client.modules.render.CustomCrosshair;
 import dev.dusk.client.module.setting.BoolSetting;
 import dev.dusk.client.module.setting.ChoiceSetting;
 import dev.dusk.client.module.setting.ColorSetting;
 import dev.dusk.client.module.setting.IntSetting;
+import dev.dusk.client.module.setting.PixelGridSetting;
 import dev.dusk.client.module.setting.Setting;
 import net.minecraft.client.gui.Font;
 
@@ -158,9 +161,10 @@ public class ModuleWindow {
         enabled.h = ROW_H;
         widgets.add(enabled);
         for (Setting<?> s : m.settings()) {
-            Widget wd = widgetFor(s);
+            Widget wd = widgetFor(m, s);
             if (wd == null) continue;
-            wd.h = wd instanceof SliderWidget ? ROW_H + 4 : ROW_H;
+            if (wd instanceof PixelGridWidget grid) wd.h = grid.preferredHeight();
+            else wd.h = wd instanceof SliderWidget ? ROW_H + 4 : ROW_H;
             widgets.add(wd);
         }
         LabelWidget gap = new LabelWidget("");
@@ -176,11 +180,14 @@ public class ModuleWindow {
         widgets.add(reset);
     }
 
-    private Widget widgetFor(Setting<?> s) {
+    private Widget widgetFor(Module module, Setting<?> s) {
         if (s instanceof BoolSetting b) return new ToggleWidget(b.name(), b::get, v -> { b.set(v); onChange.run(); });
         if (s instanceof IntSetting i) return new SliderWidget(i, onChange);
         if (s instanceof ChoiceSetting c) return new CycleWidget(c, onChange);
         if (s instanceof ColorSetting c) return new ColorWidget(c, onChange);
+        if (s instanceof PixelGridSetting g && module instanceof CustomCrosshair crosshair) {
+            return new PixelGridWidget(g, crosshair.pixelColor(), onChange, crosshair::markCustom);
+        }
         return null;
     }
 

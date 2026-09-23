@@ -1,6 +1,6 @@
 # DuskLauncher
 
-A modern, PvP-oriented Minecraft launcher for **1.21.11 through 26.2** (more versions later). Lean where Lunar is bloated, transparent where Dawn is closed-source. No ads, ever.
+A modern, PvP-oriented Minecraft launcher for **1.21 through 26.2**. Lean where Lunar is bloated, transparent where Dawn is closed-source. No ads, ever.
 
 - `docs/RESEARCH.md` — competitive analysis of Lunar, Badlion, Feather→Dawn (with sources)
 - `docs/ARCHITECTURE.md` — technical design, verified API details, IPC contract
@@ -21,7 +21,7 @@ The builds aren't Apple-notarized yet, so the cask strips the quarantine flag it
 ## Layout
 
 - `launcher/` — Tauri 2 desktop app. Rust core (`src-tauri/core`: meta, download, auth, fabric, modrinth, natives, java, profile, launch) + React/TS pixel-art UI (animated parallax scenes, live 3D player render, Modrinth modpacks, local skins).
-- `client-mod/` — Fabric mod ("DuskClient", built for 1.21.11, 26.1 and 26.2): module framework, 26 HUD elements (keystrokes, CPS, FPS, ping, armor, effects, shield, combo, coords, clock, …), Toggle Sprint, Custom Crosshair, Fullbright, and an in-game HUD editor (Right Shift) with a single centred module window. See `docs/IN-GAME-GUI.md`.
+- `client-mod/` — Fabric mod ("DuskClient", nine builds covering every release from 1.21 through 26.2, force-injected into every Fabric instance the launcher starts): module framework, 26 HUD elements (keystrokes, CPS, FPS, ping, armor, effects, shield, combo, coords, clock, …), Toggle Sprint, Custom Crosshair, Fullbright, and an in-game HUD editor (Right Shift) with a single centred module window. See `docs/IN-GAME-GUI.md`.
 
 ## Development
 
@@ -46,8 +46,8 @@ cd launcher && node scripts/gen-art.mjs
 # Release build (.app + .dmg on macOS; regenerates icons via `npx tauri icon`)
 cd launcher && npm run tauri build
 
-# Client mod (both Minecraft targets; Gradle 9.7 + JDK 25 — CI uses the same)
-cd client-mod && gradle build -Pmc=1.21.11 && gradle build -Pmc=26.1 && gradle build -Pmc=26.2
+# Client mod (all nine Minecraft targets; Gradle 9.7 + JDK 21 for 1.21.x, JDK 25 for 26.x — CI uses the same)
+cd client-mod && for mc in 1.21.1 1.21.3 1.21.4 1.21.5 1.21.8 1.21.10 1.21.11 26.1 26.2; do gradle build -Pmc=$mc || break; done
 ```
 
 ## Roadmap

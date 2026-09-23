@@ -2,7 +2,9 @@ package dev.dusk.client.gui;
 
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
 /** {@link Canvas} over GuiGraphics (1.21.11). */
@@ -30,6 +32,16 @@ public record GraphicsCanvas(GuiGraphics g, Font font) implements Canvas {
     @Override
     public void text(String text, int x, int y, int argb, boolean shadow) {
         g.drawString(font, text, x, y, argb, shadow);
+    }
+
+    @Override
+    public void text(Component text, int x, int y, int argb, boolean shadow) {
+        g.drawString(font, text, x, y, argb, shadow);
+    }
+
+    @Override
+    public int textWidth(Component text) {
+        return font.width(text);
     }
 
     @Override
@@ -63,6 +75,11 @@ public record GraphicsCanvas(GuiGraphics g, Font font) implements Canvas {
     }
 
     @Override
+    public void blit(String texture, int x, int y, float u, float v, int w, int h, int texW, int texH, int argb) {
+        g.blit(RenderPipelines.GUI_TEXTURED, Identifier.parse(texture), x, y, u, v, w, h, texW, texH, argb);
+    }
+
+    @Override
     public void push() {
         g.pose().pushMatrix();
     }
@@ -75,6 +92,11 @@ public record GraphicsCanvas(GuiGraphics g, Font font) implements Canvas {
     @Override
     public void translate(float x, float y) {
         g.pose().translate(x, y);
+    }
+
+    @Override
+    public void rotate(float radians) {
+        g.pose().rotate(radians);
     }
 
     @Override

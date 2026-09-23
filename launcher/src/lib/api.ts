@@ -251,11 +251,15 @@ export const DUSK_PACK = {
 } as const;
 
 /** Whether a bundled DuskClient jar loads on a game version — mirrors
- *  cosmetics::client_mod_jar_for (one build per game line: 1.21.x, 26.1.x
- *  and 26.2.x, i.e. every release from 1.21.11 through 26.2; launch skips
- *  the mod elsewhere). */
-export const clientModSupports = (gameVersion: string) =>
-  /^1[.-]21([.-]|$)/.test(gameVersion) || /^26[.-][12]([.-]|$)/.test(gameVersion);
+ *  cosmetics::client_mod_jar_for (one build per API line: 1.21–1.21.1,
+ *  1.21.2–3, 1.21.4, 1.21.5, 1.21.6–8, 1.21.9–10, 1.21.11, 26.1.x, 26.2.x,
+ *  i.e. every release from 1.21 through 26.2; launch skips the mod
+ *  elsewhere). */
+export const clientModSupports = (gameVersion: string) => {
+  const [major, minor, patch] = gameVersion.split(/[.-]/);
+  if (major === '1' && minor === '21') return (Number.parseInt(patch ?? '', 10) || 0) <= 11;
+  return major === '26' && (minor === '1' || minor === '2');
+};
 
 /** One file in a profile's mods/ (or resourcepacks/, shaderpacks/) folder */
 export interface ProfileMod {

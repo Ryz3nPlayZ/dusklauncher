@@ -1,0 +1,13 @@
+{
+  "targets": {},
+  "passes": [
+    {
+      "program": "duskclient:post/motion_blur",
+      "inputs": [
+        {"sampler_name": "Main", "target": "minecraft:main"},
+        {"sampler_name": "Prev", "target": "minecraft:main"}
+      ],
+      "output": "minecraft:main"
+    }
+  ]
+}

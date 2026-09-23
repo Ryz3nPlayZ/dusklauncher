@@ -1,0 +1,8 @@
+# 1.21.2–1.21.8 use PlayerRenderer/PlayerRenderState mixins instead of the Avatar* ones
+java/dev/dusk/client/mixin/cosmetics/AvatarRendererMixin.java
+java/dev/dusk/client/mixin/cosmetics/AvatarRenderStateMixin.java
+# The Flex-HUD crosshair port hooks GuiGraphics.blitSprite, which only
+# exists from 1.21.8; older lines draw it through HudHooks instead.
+java/dev/dusk/client/mixin/CrosshairGuiMixin.java
+java/dev/dusk/client/mixin/RenderPipelinesAccessor.java
+java/dev/dusk/client/render/CrosshairRenderer.java

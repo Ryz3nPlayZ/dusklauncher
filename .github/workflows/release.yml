@@ -59,9 +59,10 @@ jobs:
       - name: Build the client jars
         working-directory: client-mod
         run: |
-          gradle build -Pmc=1.21.11 -x test --console=plain
-          gradle build -Pmc=26.1 -x test --console=plain
-          gradle build -Pmc=26.2 -x test --console=plain
+          # one jar per API line, see client-mod/gradle.properties
+          for mc in 1.21.1 1.21.3 1.21.4 1.21.5 1.21.8 1.21.10 1.21.11 26.1 26.2; do
+            gradle build -Pmc=$mc -x test --console=plain
+          done
           ls -la ../launcher/src-tauri/resources/*.jar
       - uses: actions/upload-artifact@v4
         with:

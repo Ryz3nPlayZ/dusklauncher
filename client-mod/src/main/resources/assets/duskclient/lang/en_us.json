@@ -5,5 +5,7 @@
   "key.duskclient.fullbright": "Toggle Fullbright",
   "key.duskclient.gamma_up": "Fullbright Brighter",
   "key.duskclient.gamma_down": "Fullbright Darker",
-  "key.duskclient.togglesprint": "Toggle Sprint On/Off"
+  "key.duskclient.togglesprint": "Toggle Sprint On/Off",
+  "key.duskclient.time_forward": "Time Changer Forward",
+  "key.duskclient.time_backward": "Time Changer Backward"
 }

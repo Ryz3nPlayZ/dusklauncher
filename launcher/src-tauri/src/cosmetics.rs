@@ -23,27 +23,46 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 /// The jars this build ships, one per game line: intermediary mappings are
-/// per-version (a 1.21.x build fails to even load on 26.x) and 26.1 → 26.2
-/// moved screen ownership, so the mod is compiled per target
-/// (`client-mod/build.gradle -Pmc=…`) and the launcher picks the one
-/// matching the profile. Together they cover every release from 1.21.11
+/// per-version (a 1.21.x build fails to even load on 26.x) and the
+/// rendering/HUD APIs the mod hooks moved between lines (post chains,
+/// render states, HUD layers, screen ownership), so the mod is compiled per
+/// target (`client-mod/build.gradle -Pmc=…`) and the launcher picks the one
+/// matching the profile. Together they cover every release from 1.21
 /// through 26.2. Keep in step with `client-mod/gradle.properties`.
-pub const CLIENT_MOD_JARS: [&str; 3] = [
-    "duskclient-1.21.11.jar",
-    "duskclient-26.1.jar",
-    "duskclient-26.2.jar",
+pub const CLIENT_MOD_JARS: [&str; 9] = [
+    "duskclient-1.21.1.jar",  // 1.21, 1.21.1
+    "duskclient-1.21.3.jar",  // 1.21.2, 1.21.3
+    "duskclient-1.21.4.jar",  // 1.21.4
+    "duskclient-1.21.5.jar",  // 1.21.5
+    "duskclient-1.21.8.jar",  // 1.21.6 – 1.21.8
+    "duskclient-1.21.10.jar", // 1.21.9, 1.21.10
+    "duskclient-1.21.11.jar", // 1.21.11
+    "duskclient-26.1.jar",    // 26.1.x
+    "duskclient-26.2.jar",    // 26.2.x
 ];
 /// Human-readable list of the game versions those jars cover.
-pub const CLIENT_MOD_GAME_VERSIONS: &str = "1.21.11 through 26.2";
+pub const CLIENT_MOD_GAME_VERSIONS: &str = "1.21 through 26.2";
 
 /// The bundled jar to inject into a `game_version`, or `None` when this
 /// build has nothing compiled for it.
 pub fn client_mod_jar_for(game_version: &str) -> Option<&'static str> {
     let mut parts = game_version.split(['.', '-']);
-    match (parts.next(), parts.next()) {
-        (Some("1"), Some("21")) => Some(CLIENT_MOD_JARS[0]),
-        (Some("26"), Some("1")) => Some(CLIENT_MOD_JARS[1]),
-        (Some("26"), Some("2")) => Some(CLIENT_MOD_JARS[2]),
+    let major = parts.next();
+    let minor = parts.next();
+    let patch = parts.next().and_then(|p| p.parse::<u32>().ok()).unwrap_or(0);
+    match (major, minor) {
+        (Some("1"), Some("21")) => Some(match patch {
+            0 | 1 => CLIENT_MOD_JARS[0],
+            2 | 3 => CLIENT_MOD_JARS[1],
+            4 => CLIENT_MOD_JARS[2],
+            5 => CLIENT_MOD_JARS[3],
+            6..=8 => CLIENT_MOD_JARS[4],
+            9 | 10 => CLIENT_MOD_JARS[5],
+            11 => CLIENT_MOD_JARS[6],
+            _ => return None,
+        }),
+        (Some("26"), Some("1")) => Some(CLIENT_MOD_JARS[7]),
+        (Some("26"), Some("2")) => Some(CLIENT_MOD_JARS[8]),
         _ => None,
     }
 }
@@ -405,8 +424,19 @@ mod tests {
 
     #[test]
     fn jar_follows_the_game_line() {
+        assert_eq!(client_mod_jar_for("1.21"), Some("duskclient-1.21.1.jar"));
+        assert_eq!(client_mod_jar_for("1.21.1"), Some("duskclient-1.21.1.jar"));
+        assert_eq!(client_mod_jar_for("1.21.2"), Some("duskclient-1.21.3.jar"));
+        assert_eq!(client_mod_jar_for("1.21.3"), Some("duskclient-1.21.3.jar"));
+        assert_eq!(client_mod_jar_for("1.21.4"), Some("duskclient-1.21.4.jar"));
+        assert_eq!(client_mod_jar_for("1.21.5"), Some("duskclient-1.21.5.jar"));
+        assert_eq!(client_mod_jar_for("1.21.6"), Some("duskclient-1.21.8.jar"));
+        assert_eq!(client_mod_jar_for("1.21.7"), Some("duskclient-1.21.8.jar"));
+        assert_eq!(client_mod_jar_for("1.21.8"), Some("duskclient-1.21.8.jar"));
+        assert_eq!(client_mod_jar_for("1.21.9"), Some("duskclient-1.21.10.jar"));
+        assert_eq!(client_mod_jar_for("1.21.10"), Some("duskclient-1.21.10.jar"));
         assert_eq!(client_mod_jar_for("1.21.11"), Some("duskclient-1.21.11.jar"));
-        assert_eq!(client_mod_jar_for("1.21.4"), Some("duskclient-1.21.11.jar"));
+        assert_eq!(client_mod_jar_for("1.21.12"), None);
         assert_eq!(client_mod_jar_for("26.2"), Some("duskclient-26.2.jar"));
         assert_eq!(client_mod_jar_for("26.2.1"), Some("duskclient-26.2.jar"));
         assert_eq!(client_mod_jar_for("26.1"), Some("duskclient-26.1.jar"));
