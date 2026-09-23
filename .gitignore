@@ -33,3 +33,6 @@ reference/
 
 # --- bundled client mod (built by client-mod, shipped by the launcher) ---
 launcher/src-tauri/resources/*.jar
+
+# local AI-session exports, never for publish
+*claudesession*
