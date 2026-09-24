@@ -5,7 +5,7 @@ import Nav from './components/Nav';
 import { PxBox, TT } from './components/px/Px';
 import UpdateButton from './components/UpdateButton';
 import type { Pose } from './components/PlayerRender';
-import { api, isTauri, listen, type Account, type GameState, type Profile, type Progress, type Settings } from './lib/api';
+import { api, DUSK_PACK, isTauri, listen, type Account, type GameState, type Profile, type Progress, type Settings } from './lib/api';
 import { startGameLog } from './lib/gamelog';
 import { useUpdater } from './lib/updater';
 import type { Route } from './routes';
@@ -64,16 +64,28 @@ export default function App() {
     void api.getSettings().then(setSettings);
   }, [refreshProfiles, refreshAccount, syncGame]);
 
-  // first run: seed the bundled default pack (Dusk Essentials) so the
-  // launcher never opens empty. One attempt per install — a failed download
-  // (offline etc.) just retries on a fresh install or via the store.
+  // first run: seed the same instance NEW INSTANCE → DUSK PROFILE makes —
+  // the pack's newest release build for the default game version — so the
+  // launcher never opens empty. The bundled Dusk Essentials pack is only the
+  // offline fallback. One attempt per install.
   useEffect(() => {
     void (async () => {
       const list = await api.listProfiles();
       if (list.length > 0 || localStorage.getItem('dusk.defaultPackSeeded')) return;
       localStorage.setItem('dusk.defaultPackSeeded', '1');
+      const seedDusk = async () => {
+        const versions = await api.listProjectVersions(DUSK_PACK.id);
+        const v = versions.find(
+          (x) => x.versionType === 'release' && x.gameVersions.includes(DUSK_PACK.defaultGameVersion),
+        );
+        if (!v) throw new Error(`no ${DUSK_PACK.title} release for ${DUSK_PACK.defaultGameVersion}`);
+        return api.installModpackVersion(DUSK_PACK.id, v.id, DUSK_PACK.instanceName);
+      };
       try {
-        const p = await api.installBundledPack('dusk-essentials');
+        const p = await seedDusk().catch((e) => {
+          console.warn('dusk profile seed failed, using the bundled pack:', e);
+          return api.installBundledPack('dusk-essentials');
+        });
         setProfiles(await api.listProfiles());
         const s = await api.getSettings();
         if (!s.selectedProfileId) void saveSettings({ ...s, selectedProfileId: p.id });

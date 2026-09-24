@@ -424,6 +424,11 @@
   justify-content: center;
   background: rgba(0, 0, 0, 0.55);
 }
+/* dialogs sit over busy pages: the window variant's 87% lets the page
+   ghost through the text, so a modal draws fully opaque */
+.modal.px--window {
+  opacity: 1;
+}
 .modal {
   width: calc(640 * var(--u));
   max-width: 92vw;

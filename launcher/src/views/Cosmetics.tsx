@@ -10,6 +10,7 @@ import {
   type Account,
   type AccessoryEntry,
   type AccessoryModelJson,
+  type AccountCape,
   type CapeEntry,
   type Loadout,
   type Skin,
@@ -59,6 +60,36 @@ export default function Cosmetics({
   const [pickedAcc, setPickedAcc] = useState<number[]>([]);
   const [elytra, setElytra] = useState(false);
   const [capeNote, setCapeNote] = useState<string | null>(null);
+  // the capes Mojang gave the account itself (Migrator, events…): switched
+  // live through the profile API, no relog
+  const [capeSource, setCapeSource] = useState<'DUSK' | 'MINECRAFT'>('DUSK');
+  const [mcCapes, setMcCapes] = useState<AccountCape[] | null>(null);
+  const [mcBusy, setMcBusy] = useState(false);
+  const loadMcCapes = useCallback(async () => {
+    try {
+      setMcCapes(await api.listAccountCapes());
+    } catch (e) {
+      setMcCapes([]);
+      setCapeNote(String(e));
+    }
+  }, []);
+  useEffect(() => {
+    if (tab === 'CAPES' && capeSource === 'MINECRAFT' && mcCapes === null) void loadMcCapes();
+  }, [tab, capeSource, mcCapes, loadMcCapes]);
+  const wearMcCape = async (id: string | null) => {
+    if (mcBusy) return;
+    setMcBusy(true);
+    setCapeNote(null);
+    try {
+      await api.setAccountCape(id);
+      await loadMcCapes();
+    } catch (e) {
+      setCapeNote(String(e));
+    } finally {
+      setMcBusy(false);
+    }
+  };
+  const mcWorn = mcCapes?.find((c) => c.active)?.id ?? null;
 
   const load = useCallback(async () => {
     const list = await api.listSkins();
@@ -247,10 +278,21 @@ export default function Cosmetics({
                     onClick={() => onPose(POSES[(POSES.indexOf(pose) + 1) % POSES.length])}
                   />
                   <NavCell label="ELYTRA" active={elytra} onClick={() => setElytra((v) => !v)} />
+                  {tab === 'CAPES' && (
+                    <NavCell
+                      label={capeSource}
+                      onClick={() => {
+                        setCapeNote(null);
+                        setCapeSource((s) => (s === 'DUSK' ? 'MINECRAFT' : 'DUSK'));
+                      }}
+                    />
+                  )}
                   <div className="win__fill" />
                   <NavLabel
                     label={
-                      tab === 'CAPES'
+                      tab === 'CAPES' && capeSource === 'MINECRAFT'
+                        ? `${mcCapes?.length ?? 0} MINECRAFT CAPE${mcCapes?.length === 1 ? '' : 'S'}`
+                        : tab === 'CAPES'
                         ? `${capes.length} CAPE${capes.length === 1 ? '' : 'S'}`
                         : `${accessories.length} ACCESSOR${accessories.length === 1 ? 'Y' : 'IES'}`
                     }
@@ -258,7 +300,55 @@ export default function Cosmetics({
                 </div>
 
                 <div className="win__body">
-                  {tab === 'CAPES' ? (
+                  {tab === 'CAPES' && capeSource === 'MINECRAFT' ? (
+                    <div className="skin-grid scroll">
+                      {/* applied on click: Mojang has no "draft", and it needs no relog */}
+                      <PxBox
+                        family={mcWorn === null ? 'green' : 'panel'}
+                        className="skin-tile"
+                        onClick={() => void wearMcCape(null)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => e.key === 'Enter' && void wearMcCape(null)}
+                      >
+                        <div className="skin-tile__stage">
+                          <span className="skin-tile__none" />
+                        </div>
+                        <span className="skin-tile__name">
+                          <TT size={16} tone={mcWorn === null ? 'green' : 'dim'}>
+                            NONE
+                          </TT>
+                        </span>
+                      </PxBox>
+                      {(mcCapes ?? []).map((c) => (
+                        <PxBox
+                          key={c.id}
+                          family={c.active ? 'green' : 'panel'}
+                          className="skin-tile"
+                          onClick={() => void wearMcCape(c.id)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => e.key === 'Enter' && void wearMcCape(c.id)}
+                        >
+                          <div className="skin-tile__stage">
+                            <CapeSwatch src={c.texture} scale={6} />
+                          </div>
+                          <span className="skin-tile__name">
+                            <TT size={16} tone={c.active ? 'green' : 'dim'}>
+                              {c.name.toUpperCase()}
+                            </TT>
+                          </span>
+                        </PxBox>
+                      ))}
+                      <span className="meta wardrobe__note" style={{ gridColumn: '1 / -1' }}>
+                        {mcCapes === null
+                          ? 'Loading your Minecraft capes…'
+                          : mcCapes.length === 0
+                          ? 'This account has no Minecraft capes.'
+                          : 'Changes apply right away. Others see them after they rejoin. A worn Dusk cape shows over this one for Dusk players.'}
+                      </span>
+                    </div>
+                  ) : tab === 'CAPES' ? (
                     <div className="skin-grid scroll">
                       <PxBox
                         /* "none" is a real choice: the green ring when nothing is worn */

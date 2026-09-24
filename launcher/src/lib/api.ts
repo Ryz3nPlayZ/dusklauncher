@@ -155,6 +155,31 @@ export interface Redeemed {
   coins: number;
 }
 
+/** this account's referral code and who brought it (server-side) */
+export interface Referral {
+  code: string;
+  /** who invited this account, once a code was entered */
+  referredBy: string | null;
+  referralPaid: boolean;
+  /** new accounts only, once */
+  canClaim: boolean;
+  /** accounts that entered this one's code / of those, how many paid out */
+  invited: number;
+  paid: number;
+  referrerReward: number;
+  refereeReward: number;
+  coins: number;
+}
+
+/** a Mojang cape the account owns (Migrator, Pan, …) */
+export interface AccountCape {
+  id: string;
+  name: string;
+  active: boolean;
+  /** 64×32 PNG data URL; empty if it couldn't be fetched */
+  texture: string;
+}
+
 export interface Version {
   id: string;
   type: string;
@@ -248,6 +273,8 @@ export const DUSK_PACK = {
   title: 'Performium',
   /** what the instance is called unless the user renames it */
   instanceName: 'DUSK OPTIMIZED',
+  /** the game version the first-run instance is created on */
+  defaultGameVersion: '1.21.11',
 } as const;
 
 /** Whether a bundled DuskClient jar loads on a game version — mirrors
@@ -666,6 +693,7 @@ const sideEffects = new Set([
   'install_bundled_pack',
   'import_wallpaper',
   'remove_wallpaper',
+  'set_account_cape',
 ]);
 
 /* the preview's mod folders — one list per profile+kind, so enable/remove
@@ -710,6 +738,17 @@ let previewLoadout: Loadout = { cape: 5, accessories: [16] };
 let previewOwned = new Set<number>([5, 16]);
 let previewCoins = 0;
 let previewRedeemed = false;
+let previewReferral: Referral = {
+  code: 'DUSK2PRV',
+  referredBy: null,
+  referralPaid: false,
+  canClaim: true,
+  invited: 2,
+  paid: 1,
+  referrerReward: 500,
+  refereeReward: 250,
+  coins: 0,
+};
 /* the server's pricing rule (server/src/main.rs): animated capes 750, else 500 */
 const PREVIEW_ANIMATED_CAPES = new Set([5, 6, 7, 14, 15]);
 async function previewStore(): Promise<Store> {
@@ -773,6 +812,13 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
   if (cmd === 'get_wallet') {
     return { uuid: '', username: 'Preview', coins: previewCoins, owned: [...previewOwned], loadout: previewLoadout } as T;
   }
+  if (cmd === 'get_referral') return structuredClone(previewReferral) as T;
+  if (cmd === 'claim_referral') {
+    if (!previewReferral.canClaim) throw new Error('you already entered a referral code');
+    previewReferral = { ...previewReferral, referredBy: 'Preview Friend', canClaim: false };
+    return structuredClone(previewReferral) as T;
+  }
+  if (cmd === 'list_account_capes') return [] as T;
   if (cmd === 'redeem_code') {
     if (String(args?.code).trim().toLowerCase() !== 'yourewelcome') throw new Error('unknown code');
     if (previewRedeemed) throw new Error('code already redeemed');
@@ -994,6 +1040,14 @@ export const api = {
   getWallet: () => invoke<Wallet>('get_wallet'),
   /** turn a code into coins (server-side; each code once per account) */
   redeemCode: (code: string) => invoke<Redeemed>('redeem_code', { code }),
+  /** this account's referral code + status; creates the code on first ask */
+  getReferral: () => invoke<Referral>('get_referral'),
+  /** name who invited you (new accounts only, once); pays on first launch */
+  claimReferral: (code: string) => invoke<Referral>('claim_referral', { code }),
+  /** the Mojang capes on the signed-in account */
+  listAccountCapes: () => invoke<AccountCape[]>('list_account_capes'),
+  /** show a Mojang cape on the account, or hide it with null — no re-login */
+  setAccountCape: (id: string | null) => invoke<void>('set_account_cape', { id }),
   /** spend coins on a catalog item; resolves to the refreshed store */
   buyCosmetic: (id: number) => invoke<Store>('buy_cosmetic', { id }),
   /** save dialog → the PNG out of the jar (for uploading to minecraftcapes.net);

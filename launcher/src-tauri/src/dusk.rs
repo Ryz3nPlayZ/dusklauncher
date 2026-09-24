@@ -228,7 +228,49 @@ pub async fn publish_loadout(state: &AppState, loadout: &Loadout) -> Result<Load
     call(state, reqwest::Method::PUT, "/v1/me/loadout", Some(Value::Object(loadout.clone()))).await
 }
 
+/// `GET/POST /v1/me/referral` — this account's code and who brought it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Referral {
+    pub code: String,
+    pub referred_by: Option<String>,
+    pub referral_paid: bool,
+    pub can_claim: bool,
+    pub invited: i64,
+    pub paid: i64,
+    pub referrer_reward: i64,
+    pub referee_reward: i64,
+    pub coins: i64,
+}
+
+#[derive(Deserialize)]
+struct Launched {
+    granted: i64,
+}
+
+/// Tell the service a game launched; the first launch settles a pending
+/// referral. Returns the coins that paid this account (usually 0).
+pub async fn report_launch(state: &AppState) -> Result<i64, String> {
+    let l: Launched = call(state, reqwest::Method::POST, "/v1/me/launched", None).await?;
+    Ok(l.granted)
+}
+
 // ── commands ───────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_referral(state: State<'_, AppState>) -> Result<Referral, String> {
+    call(&state, reqwest::Method::GET, "/v1/me/referral", None).await
+}
+
+/// Name the player who invited this account (new accounts only, once).
+#[tauri::command]
+pub async fn claim_referral(state: State<'_, AppState>, code: String) -> Result<Referral, String> {
+    let code = code.trim();
+    if code.is_empty() {
+        return Err("Enter a referral code first.".into());
+    }
+    call(&state, reqwest::Method::POST, "/v1/me/referral", Some(json!({ "code": code }))).await
+}
 
 #[tauri::command]
 pub async fn get_store(state: State<'_, AppState>) -> Result<Store, String> {

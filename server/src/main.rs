@@ -13,6 +13,12 @@
 //!   (only owned ids are accepted); every Dusk client asks `/v1/loadout/<uuid>`
 //!   for the players around it, so Dusk users see each other.
 //!
+//! * **who brought you** — every account gets a referral code. A new account
+//!   (first seen within `REFERRAL_WINDOW`) can name the code of whoever
+//!   invited it, once; both are paid on the new player's first game launch
+//!   (`POST /v1/me/launched`), so a sign-in alone earns nothing. Every coin
+//!   movement lands in `ledger`.
+//!
 //! Config is all env: `DUSK_DB` (sqlite path), `DUSK_BIND` (host:port),
 //! `DUSK_CODES` (extra `code:coins,...` on top of the built-in ones),
 //! `DUSK_DEV_AUTH=1` (enables `/v1/auth/dev`, never in production).
@@ -45,6 +51,16 @@ const BUILTIN_CODES: &[(&str, i64)] = &[
     ("zemuiscool", 999_999_999),
 ];
 const TOKEN_TTL: Duration = Duration::from_secs(90 * 24 * 3600);
+/// What a referral pays, once the new player has launched the game.
+const REFERRER_REWARD: i64 = 500;
+const REFEREE_REWARD: i64 = 250;
+/// How long after its first sign-in an account may still name a referrer.
+const REFERRAL_WINDOW: Duration = Duration::from_secs(7 * 24 * 3600);
+/// Paid referrals per referrer; past this the new player is still paid.
+const MAX_PAID_REFERRALS: i64 = 100;
+/// Referral codes: no 0/O, 1/I/L, so they survive being read aloud.
+const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const CODE_LEN: usize = 8;
 
 // ── catalog ────────────────────────────────────────────────────────────────
 
@@ -123,10 +139,34 @@ fn open_db(path: &str) -> Connection {
            redeemed_at INTEGER NOT NULL, PRIMARY KEY (uuid, code));
          CREATE TABLE IF NOT EXISTS ledger (
            id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT NOT NULL, delta INTEGER NOT NULL,
-           reason TEXT NOT NULL, at INTEGER NOT NULL);",
+           reason TEXT NOT NULL, at INTEGER NOT NULL);
+         CREATE TABLE IF NOT EXISTS referral_codes (
+           uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), code TEXT NOT NULL UNIQUE);
+         CREATE TABLE IF NOT EXISTS referrals (
+           referee TEXT PRIMARY KEY REFERENCES accounts(uuid), referrer TEXT NOT NULL REFERENCES accounts(uuid),
+           claimed_at INTEGER NOT NULL, paid_at INTEGER);
+         CREATE INDEX IF NOT EXISTS referrals_by_referrer ON referrals (referrer);",
     )
     .expect("schema");
+    add_column(&db, "accounts", "launches", "INTEGER NOT NULL DEFAULT 0");
     db
+}
+
+/// `ALTER TABLE ... ADD COLUMN` for databases created before the column
+/// existed; a no-op once it is there.
+fn add_column(db: &Connection, table: &str, column: &str, decl: &str) {
+    let exists: bool = db
+        .query_row(
+            &format!("SELECT 1 FROM pragma_table_info('{table}') WHERE name = ?1"),
+            params![column],
+            |_| Ok(true),
+        )
+        .optional()
+        .expect("table info")
+        .unwrap_or(false);
+    if !exists {
+        db.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {decl}")).expect("migrate");
+    }
 }
 
 // ── errors ─────────────────────────────────────────────────────────────────
@@ -447,6 +487,196 @@ async fn put_loadout(
     Ok(Json(loadout))
 }
 
+// ── referrals ──────────────────────────────────────────────────────────────
+
+/// This account's referral code, minted on first ask.
+fn referral_code(db: &Connection, uuid: &str) -> Result<String, rusqlite::Error> {
+    let have: Option<String> = db
+        .query_row("SELECT code FROM referral_codes WHERE uuid = ?1", params![uuid], |r| r.get(0))
+        .optional()?;
+    if let Some(code) = have {
+        return Ok(code);
+    }
+    let mut rng = rand::thread_rng();
+    loop {
+        let code: String = (0..CODE_LEN)
+            .map(|_| CODE_ALPHABET[(rng.next_u32() as usize) % CODE_ALPHABET.len()] as char)
+            .collect();
+        // a collision (31^8 codes) just draws again
+        if db.execute("INSERT OR IGNORE INTO referral_codes (uuid, code) VALUES (?1, ?2)", params![uuid, code])? == 1 {
+            return Ok(code);
+        }
+    }
+}
+
+fn grant(db: &Connection, uuid: &str, amount: i64, reason: &str) -> Result<(), rusqlite::Error> {
+    db.execute("UPDATE accounts SET coins = coins + ?1 WHERE uuid = ?2", params![amount, uuid])?;
+    db.execute(
+        "INSERT INTO ledger (uuid, delta, reason, at) VALUES (?1, ?2, ?3, ?4)",
+        params![uuid, amount, reason, now()],
+    )?;
+    Ok(())
+}
+
+/// Pay out `referee`'s referral if it is claimed, unpaid and the referee has
+/// launched the game. Returns what the referee got.
+fn settle_referral(db: &Connection, referee: &str) -> Result<i64, rusqlite::Error> {
+    let pending: Option<String> = db
+        .query_row(
+            "SELECT r.referrer FROM referrals r JOIN accounts a ON a.uuid = r.referee
+             WHERE r.referee = ?1 AND r.paid_at IS NULL AND a.launches > 0",
+            params![referee],
+            |r| r.get(0),
+        )
+        .optional()?;
+    let Some(referrer) = pending else { return Ok(0) };
+    let paid: i64 = db.query_row(
+        "SELECT COUNT(*) FROM referrals WHERE referrer = ?1 AND paid_at IS NOT NULL",
+        params![referrer],
+        |r| r.get(0),
+    )?;
+    grant(db, referee, REFEREE_REWARD, &format!("referred-by:{referrer}"))?;
+    if paid < MAX_PAID_REFERRALS {
+        grant(db, &referrer, REFERRER_REWARD, &format!("referral:{referee}"))?;
+    }
+    db.execute("UPDATE referrals SET paid_at = ?1 WHERE referee = ?2", params![now(), referee])?;
+    tracing::info!("referral paid: {referrer} brought {referee}");
+    Ok(REFEREE_REWARD)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Referral {
+    /// share this
+    code: String,
+    /// who invited this account, once claimed
+    referred_by: Option<String>,
+    /// whether that referral has paid out yet
+    referral_paid: bool,
+    /// whether this account may still claim a code
+    can_claim: bool,
+    /// accounts that named this one's code / of those, how many paid out
+    invited: i64,
+    paid: i64,
+    referrer_reward: i64,
+    referee_reward: i64,
+    coins: i64,
+}
+
+fn read_referral(db: &Connection, uuid: &str) -> Result<Referral, ApiError> {
+    let code = referral_code(db, uuid)?;
+    let (created_at, coins): (i64, i64) = db
+        .query_row("SELECT created_at, coins FROM accounts WHERE uuid = ?1", params![uuid], |r| Ok((r.get(0)?, r.get(1)?)))
+        .optional()?
+        .ok_or_else(unauthorized)?;
+    let mine: Option<(String, bool)> = db
+        .query_row(
+            "SELECT a.username, r.paid_at IS NOT NULL FROM referrals r JOIN accounts a ON a.uuid = r.referrer
+             WHERE r.referee = ?1",
+            params![uuid],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?;
+    let (invited, paid): (i64, i64) = db.query_row(
+        "SELECT COUNT(*), COUNT(paid_at) FROM referrals WHERE referrer = ?1",
+        params![uuid],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    Ok(Referral {
+        code,
+        can_claim: mine.is_none() && now() - created_at <= REFERRAL_WINDOW.as_secs() as i64,
+        referral_paid: mine.as_ref().is_some_and(|m| m.1),
+        referred_by: mine.map(|m| m.0),
+        invited,
+        paid,
+        referrer_reward: REFERRER_REWARD,
+        referee_reward: REFEREE_REWARD,
+        coins,
+    })
+}
+
+async fn get_referral(State(app): State<Shared>, headers: HeaderMap) -> ApiResult<Referral> {
+    let uuid = authed(&app, &headers)?;
+    let db = app.db.lock().unwrap();
+    Ok(Json(read_referral(&db, &uuid)?))
+}
+
+#[derive(Deserialize)]
+struct ClaimReferral {
+    code: String,
+}
+
+/// Name who invited you. Pays out now if this account has already
+/// launched the game, else on its first launch.
+async fn claim_referral(
+    State(app): State<Shared>,
+    headers: HeaderMap,
+    Json(body): Json<ClaimReferral>,
+) -> ApiResult<Referral> {
+    let uuid = authed(&app, &headers)?;
+    let code = body.code.trim().to_uppercase();
+    if code.is_empty() || code.len() > 16 {
+        return Err(bad("enter a referral code"));
+    }
+    let mut db = app.db.lock().unwrap();
+    let tx = db.transaction()?;
+    let referrer: String = tx
+        .query_row("SELECT uuid FROM referral_codes WHERE code = ?1", params![code], |r| r.get(0))
+        .optional()?
+        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "that referral code does not exist".into()))?;
+    if referrer == uuid {
+        return Err(bad("that is your own code"));
+    }
+    let status = read_referral(&tx, &uuid)?;
+    if status.referred_by.is_some() {
+        return Err(ApiError(StatusCode::CONFLICT, "you already entered a referral code".into()));
+    }
+    if !status.can_claim {
+        return Err(ApiError(StatusCode::FORBIDDEN, "referral codes are for new accounts only".into()));
+    }
+    // two accounts naming each other would pay twice for one friendship
+    let reverse: bool = tx
+        .query_row("SELECT 1 FROM referrals WHERE referee = ?1 AND referrer = ?2", params![referrer, uuid], |_| Ok(true))
+        .optional()?
+        .unwrap_or(false);
+    if reverse {
+        return Err(bad("you invited them"));
+    }
+    tx.execute(
+        "INSERT INTO referrals (referee, referrer, claimed_at) VALUES (?1, ?2, ?3)",
+        params![uuid, referrer, now()],
+    )?;
+    settle_referral(&tx, &uuid)?;
+    let out = read_referral(&tx, &uuid)?;
+    tx.commit()?;
+    Ok(Json(out))
+}
+
+#[derive(Serialize)]
+struct Launched {
+    launches: i64,
+    /// coins a referral paid this account just now (0 if none)
+    granted: i64,
+    coins: i64,
+}
+
+/// The launcher reports each game launch; the first one settles a
+/// pending referral.
+async fn launched(State(app): State<Shared>, headers: HeaderMap) -> ApiResult<Launched> {
+    let uuid = authed(&app, &headers)?;
+    let mut db = app.db.lock().unwrap();
+    let tx = db.transaction()?;
+    tx.execute("UPDATE accounts SET launches = launches + 1 WHERE uuid = ?1", params![uuid])?;
+    let granted = settle_referral(&tx, &uuid)?;
+    let (launches, coins): (i64, i64) = tx.query_row(
+        "SELECT launches, coins FROM accounts WHERE uuid = ?1",
+        params![uuid],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    tx.commit()?;
+    Ok(Json(Launched { launches, granted, coins }))
+}
+
 // ── public ─────────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]
@@ -531,6 +761,8 @@ async fn main() {
         .route("/v1/me/redeem", post(redeem))
         .route("/v1/me/buy", post(buy))
         .route("/v1/me/loadout", put(put_loadout))
+        .route("/v1/me/referral", get(get_referral).post(claim_referral))
+        .route("/v1/me/launched", post(launched))
         .route("/v1/loadout/{uuid}", get(public_loadout))
         .layer(axum::extract::DefaultBodyLimit::max(16 * 1024))
         .with_state(app);
@@ -581,5 +813,60 @@ mod tests {
         let me = read_me(&db, &uuid).unwrap();
         assert_eq!(me.coins, 0);
         assert!(me.owned.is_empty());
+    }
+
+    const A: &str = "aaaaaaaa-0000-0000-0000-000000000001";
+    const B: &str = "bbbbbbbb-0000-0000-0000-000000000002";
+
+    fn coins(db: &Connection, uuid: &str) -> i64 {
+        db.query_row("SELECT coins FROM accounts WHERE uuid = ?1", params![uuid], |r| r.get(0)).unwrap()
+    }
+
+    #[test]
+    fn referral_pays_on_first_launch() {
+        let db = open_db(":memory:");
+        issue_token(&db, A, "Inviter").unwrap();
+        issue_token(&db, B, "Friend").unwrap();
+        let code = referral_code(&db, A).unwrap();
+        assert_eq!(code, referral_code(&db, A).unwrap(), "a code is minted once");
+        assert_eq!(code.len(), CODE_LEN);
+
+        db.execute("INSERT INTO referrals (referee, referrer, claimed_at) VALUES (?1, ?2, ?3)", params![B, A, now()]).unwrap();
+        assert_eq!(settle_referral(&db, B).unwrap(), 0, "no launch yet, no payout");
+        assert_eq!(coins(&db, A), 0);
+
+        db.execute("UPDATE accounts SET launches = 1 WHERE uuid = ?1", params![B]).unwrap();
+        assert_eq!(settle_referral(&db, B).unwrap(), REFEREE_REWARD);
+        assert_eq!(coins(&db, A), REFERRER_REWARD);
+        assert_eq!(coins(&db, B), REFEREE_REWARD);
+        assert_eq!(settle_referral(&db, B).unwrap(), 0, "pays once");
+        assert_eq!(coins(&db, A), REFERRER_REWARD);
+
+        let a = read_referral(&db, A).unwrap();
+        assert_eq!((a.invited, a.paid), (1, 1));
+        let b = read_referral(&db, B).unwrap();
+        assert_eq!(b.referred_by.as_deref(), Some("Inviter"));
+        assert!(b.referral_paid && !b.can_claim);
+    }
+
+    #[test]
+    fn old_accounts_cannot_claim() {
+        let db = open_db(":memory:");
+        issue_token(&db, A, "Old").unwrap();
+        db.execute("UPDATE accounts SET created_at = 0 WHERE uuid = ?1", params![A]).unwrap();
+        assert!(!read_referral(&db, A).unwrap().can_claim);
+    }
+
+    #[test]
+    fn launches_column_migrates() {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch(
+            "CREATE TABLE accounts (uuid TEXT PRIMARY KEY, username TEXT NOT NULL, coins INTEGER NOT NULL DEFAULT 0,
+             created_at INTEGER NOT NULL, last_seen INTEGER NOT NULL);",
+        )
+        .unwrap();
+        add_column(&db, "accounts", "launches", "INTEGER NOT NULL DEFAULT 0");
+        add_column(&db, "accounts", "launches", "INTEGER NOT NULL DEFAULT 0");
+        db.query_row("SELECT launches FROM accounts", [], |_| Ok(())).optional().unwrap();
     }
 }

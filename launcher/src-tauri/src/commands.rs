@@ -657,6 +657,17 @@ pub async fn install_and_launch(
         *state.running_game.lock().await = Some(RunningGame { profile_id: profile_id.clone(), child });
     }
 
+    // count the launch on the Dusk account (the first one settles a
+    // referral); offline or signed out it simply isn't counted
+    {
+        let app3 = app.clone();
+        tokio::spawn(async move {
+            if let Err(e) = crate::dusk::report_launch(&app3.state::<AppState>()).await {
+                tracing::debug!("launch not reported to Dusk: {e}");
+            }
+        });
+    }
+
     emit_state(&app, &profile_id, "running", None);
     let _ = state.patch_profile(&profile_id, |p| p.last_played = Some(now_millis()));
     Ok(())

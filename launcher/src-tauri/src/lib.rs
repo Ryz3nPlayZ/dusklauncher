@@ -95,6 +95,8 @@ pub fn run() {
             dusk::get_store,
             dusk::get_wallet,
             dusk::redeem_code,
+            dusk::get_referral,
+            dusk::claim_referral,
             dusk::buy_cosmetic,
             cosmetics::export_cosmetic_texture,
             // skins
@@ -107,6 +109,8 @@ pub fn run() {
             skins::upload_skin,
             skins::reset_skin,
             skins::get_account_skin,
+            skins::list_account_capes,
+            skins::set_account_cape,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -539,6 +539,8 @@ pub struct CapeEntry {
     pub id: String,
     pub state: String,
     #[serde(default)]
+    pub url: String,
+    #[serde(default)]
     pub alias: Option<String>,
 }
 
@@ -1161,6 +1163,24 @@ pub async fn reset_skin(client: &reqwest::Client, session: &Session) -> Result<(
             "skin reset failed (HTTP {status}): {}",
             truncate(&body, 300)
         )));
+    }
+    Ok(())
+}
+
+/// Show one of the account's Mojang capes (`PUT .../capes/active`), or hide
+/// whichever is shown (`DELETE`) when `cape_id` is `None`. Takes effect
+/// at once; there's no need to sign in again.
+pub async fn set_active_cape(client: &reqwest::Client, session: &Session, cape_id: Option<&str>) -> Result<()> {
+    let url = format!("{MCS_PROFILE_URL}/capes/active");
+    let req = match cape_id {
+        Some(id) => client.put(&url).json(&serde_json::json!({ "capeId": id })),
+        None => client.delete(&url),
+    };
+    let resp = req.bearer_auth(&session.access_token).send().await?;
+    if !resp.status().is_success() {
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(Error::Auth(format!("cape change failed (HTTP {status}): {}", truncate(&body, 300))));
     }
     Ok(())
 }

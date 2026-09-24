@@ -246,6 +246,57 @@ pub async fn get_account_skin(state: State<'_, AppState>) -> Result<Option<Strin
     Ok(Some(account_skin_data_url(&state, &skin_url).await?))
 }
 
+/// One Mojang cape the account owns (Migrator, Pan, …), with its texture.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountCapeDto {
+    pub id: String,
+    pub name: String,
+    pub active: bool,
+    /// the 64x32 PNG as a data URL; empty if it could not be fetched
+    pub texture: String,
+}
+
+/// The Mojang capes on the signed-in account. Empty for an offline or
+/// signed-out session.
+#[tauri::command]
+pub async fn list_account_capes(state: State<'_, AppState>) -> Result<Vec<AccountCapeDto>, String> {
+    use base64::Engine;
+    let session = crate::commands::ensure_play_session(&state).await?;
+    if session.access_token.is_empty() {
+        return Ok(Vec::new());
+    }
+    let profile = fasterlauncher_core::auth::fetch_profile(&state.client, &session.access_token)
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::with_capacity(profile.capes.len());
+    for c in profile.capes {
+        let texture = match fasterlauncher_core::auth::fetch_skin_png(&state.client, &c.url).await {
+            Ok(png) => format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)),
+            Err(_) => String::new(),
+        };
+        out.push(AccountCapeDto {
+            name: c.alias.clone().unwrap_or_else(|| "Cape".into()),
+            active: c.state.eq_ignore_ascii_case("ACTIVE"),
+            id: c.id,
+            texture,
+        });
+    }
+    Ok(out)
+}
+
+/// Show a Mojang cape on the account (`id`), or hide it (`null`).
+#[tauri::command]
+pub async fn set_account_cape(state: State<'_, AppState>, id: Option<String>) -> Result<(), String> {
+    let session = crate::commands::ensure_play_session(&state).await?;
+    if session.access_token.is_empty() {
+        return Err("sign in with Microsoft to change your cape".into());
+    }
+    fasterlauncher_core::auth::set_active_cape(&state.client, &session, id.as_deref())
+        .await
+        .map_err(|e| e.to_string())
+}
+
 async fn refresh_account_skin_cache(state: &AppState, skin_url: &str) {
     let _ = account_skin_data_url(state, skin_url).await;
 }

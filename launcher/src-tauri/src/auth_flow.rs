@@ -150,6 +150,14 @@ async fn finish_login(
 
     crate::auth_store::save_session(&state.data_dir, &session);
     let _ = app.emit("auth-state", serde_json::json!({ "state": "signedIn" }));
+    // register the Dusk account now, not on the first store visit: its
+    // creation date is what the referral window counts from
+    let app2 = app.clone();
+    tokio::spawn(async move {
+        if let Err(e) = crate::dusk::fetch_me(&app2.state::<AppState>()).await {
+            tracing::warn!("Dusk account registration failed: {e}");
+        }
+    });
     Ok(session)
 }
 

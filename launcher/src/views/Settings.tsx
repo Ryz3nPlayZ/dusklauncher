@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavCell, PxBox, PxButton, TT } from '../components/px/Px';
 import { Choice, Row } from '../components/px/Form';
-import { api, type AppInfo, type Settings } from '../lib/api';
+import { api, type AppInfo, type Referral, type Settings } from '../lib/api';
 import Wallpapers, { wallpaperLabel } from './Wallpapers';
 
 const TABS = ['GENERAL', 'JAVA', 'DISPLAY', 'FILES'] as const;
@@ -40,8 +40,43 @@ export default function SettingsView({
     }
   };
 
+  /* referrals: your code to share, and (new accounts, once) who invited you */
+  const [referral, setReferral] = useState<Referral | null>(null);
+  const [referralErr, setReferralErr] = useState<string | null>(null);
+  const [refCode, setRefCode] = useState('');
+  const [claiming, setClaiming] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const claim = async () => {
+    const trimmed = refCode.trim();
+    if (!trimmed || claiming) return;
+    setClaiming(true);
+    setReferralErr(null);
+    try {
+      setReferral(await api.claimReferral(trimmed));
+      setRefCode('');
+    } catch (e) {
+      setReferralErr(String(e).replace(/^Error: /, '').toUpperCase());
+    } finally {
+      setClaiming(false);
+    }
+  };
+  const copyCode = async () => {
+    if (!referral) return;
+    try {
+      await navigator.clipboard.writeText(referral.code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* no clipboard: the code is on screen anyway */
+    }
+  };
+
   useEffect(() => {
     void api.getAppInfo().then(setInfo);
+    void api
+      .getReferral()
+      .then(setReferral)
+      .catch((e) => setReferralErr(String(e).replace(/^Error: /, '')));
   }, []);
 
   if (gallery) {
@@ -146,6 +181,67 @@ export default function SettingsView({
                   </TT>
                 )}
               </Row>
+              <Row
+                label="INVITE FRIENDS"
+                hint={
+                  referral
+                    ? `A friend who enters your code and launches the game earns you ${referral.referrerReward} coins and them ${referral.refereeReward}. ${referral.invited} invited · ${referral.paid} paid out.`
+                    : (referralErr ?? 'Loading your referral code…')
+                }
+                controlClassName="srow__control--wrap"
+              >
+                {referral && (
+                  <>
+                    <PxBox family="panel" height="md">
+                      <TT size={16} tone="accent">
+                        {referral.code}
+                      </TT>
+                    </PxBox>
+                    <PxButton family="grey" height="md" onClick={() => void copyCode()}>
+                      <TT size={16}>{copied ? 'COPIED' : 'COPY'}</TT>
+                    </PxButton>
+                  </>
+                )}
+              </Row>
+              {referral && (referral.canClaim || referral.referredBy) && (
+                <Row
+                  label="INVITED BY"
+                  hint={
+                    referral.referredBy
+                      ? referral.referralPaid
+                        ? `${referral.referredBy} invited you. The bonus is paid.`
+                        : `${referral.referredBy} invited you. You both get paid when you first launch the game.`
+                      : referralErr && referral
+                      ? referralErr
+                      : `Got a code from a friend? You get ${referral.refereeReward} coins after your first launch. New accounts only.`
+                  }
+                  controlClassName="srow__control--wrap"
+                >
+                  {referral.referredBy ? (
+                    <TT size={16} tone={referral.referralPaid ? 'green' : 'dim'}>
+                      {referral.referredBy.toUpperCase()}
+                    </TT>
+                  ) : (
+                    <>
+                      <PxBox family="panel" height="md">
+                        <input
+                          className="input"
+                          value={refCode}
+                          placeholder="FRIEND'S CODE"
+                          disabled={claiming}
+                          spellCheck={false}
+                          autoCapitalize="characters"
+                          onChange={(e) => setRefCode(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && void claim()}
+                        />
+                      </PxBox>
+                      <PxButton family="install" height="md" disabled={!refCode.trim() || claiming} onClick={() => void claim()}>
+                        <TT size={16}>{claiming ? 'CHECKING…' : 'ENTER'}</TT>
+                      </PxButton>
+                    </>
+                  )}
+                </Row>
+              )}
               <Row label="VOLUME">
                 <input
                   className="slider"
