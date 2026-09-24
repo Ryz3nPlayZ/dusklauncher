@@ -21,10 +21,9 @@ public class ButtonWidget extends Widget {
     @Override
     public void render(Canvas c, int mouseX, int mouseY) {
         boolean hover = contains(mouseX, mouseY);
-        int bg = primary ? (hover ? Theme.ACCENT : Theme.ACCENT_DIM) : (hover ? 0xFF34343F : Theme.TOGGLE_OFF);
-        c.fill(x, y, x + w, y + h, bg);
-        int fg = primary ? 0xFF14140A : Theme.TEXT;
-        c.centeredText(label, x + w / 2, y + (h - c.lineHeight()) / 2 + 1, fg, false);
+        Theme.Kind kind = primary ? Theme.Kind.PRIMARY : Theme.Kind.NORMAL;
+        Theme.button(c, x, y, w, h, hover, kind);
+        Theme.buttonLabel(c, label, x, y, w, h, hover, kind);
     }
 
     @Override

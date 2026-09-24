@@ -10,6 +10,7 @@ public abstract class Setting<T> {
     private final String name;
     private final T defaultValue;
     protected T value;
+    private String group;
 
     protected Setting(String id, String name, T defaultValue) {
         this.id = id;
@@ -21,6 +22,15 @@ public abstract class Setting<T> {
     public String id() { return id; }
     public String name() { return name; }
     public T get() { return value; }
+
+    /**
+     * Optional section heading. Consecutive settings sharing a group render
+     * as one collapsible block (OverflowParticles' per-particle entries).
+     */
+    public String group() { return group; }
+
+    public void setGroup(String group) { this.group = group; }
+
     public T defaultValue() { return defaultValue; }
     public void set(T value) { this.value = value; }
     public void reset() { this.value = defaultValue; }

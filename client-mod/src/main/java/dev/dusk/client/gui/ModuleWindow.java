@@ -1,26 +1,13 @@
 package dev.dusk.client.gui;
 
 import dev.dusk.client.DuskClient;
-import dev.dusk.client.gui.widget.ButtonWidget;
-import dev.dusk.client.gui.widget.ColorWidget;
-import dev.dusk.client.gui.widget.CycleWidget;
-import dev.dusk.client.gui.widget.LabelWidget;
-import dev.dusk.client.gui.widget.PixelGridWidget;
-import dev.dusk.client.gui.widget.SliderWidget;
+import dev.dusk.client.gui.widget.GroupHeaderWidget;
+import dev.dusk.client.gui.widget.ScrollPane;
 import dev.dusk.client.gui.widget.ToggleWidget;
 import dev.dusk.client.gui.widget.Widget;
-import dev.dusk.client.hud.HudElement;
 import dev.dusk.client.module.Module;
-import dev.dusk.client.modules.render.CustomCrosshair;
-import dev.dusk.client.module.setting.BoolSetting;
-import dev.dusk.client.module.setting.ChoiceSetting;
-import dev.dusk.client.module.setting.ColorSetting;
-import dev.dusk.client.module.setting.IntSetting;
-import dev.dusk.client.module.setting.PixelGridSetting;
-import dev.dusk.client.module.setting.Setting;
 import net.minecraft.client.gui.Font;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -45,13 +32,10 @@ public class ModuleWindow {
     private final Consumer<Module> onFocusElement;
     private final Runnable onClose;
 
-    private final List<Widget> widgets = new ArrayList<>();
+    private final ScrollPane pane = new ScrollPane();
     private View view = View.LIST;
     private Module selected;
-    private int scroll;
-    private int contentHeight;
     private boolean minimized;
-    private Widget dragTarget;
 
     public int x, y, w, h;
 
@@ -77,14 +61,14 @@ public class ModuleWindow {
     public void showList() {
         view = View.LIST;
         selected = null;
-        scroll = 0;
+        pane.resetScroll();
         rebuild();
     }
 
     public void open(Module module) {
         view = View.SETTINGS;
         selected = module;
-        scroll = 0;
+        pane.resetScroll();
         minimized = false;
         rebuild();
         onFocusElement.accept(module);
@@ -104,29 +88,18 @@ public class ModuleWindow {
         h = Math.min(MAX_HEIGHT, screenH - 30);
         x = (screenW - w) / 2;
         y = (screenH - h) / 2;
-        int cy = contentTop() - scroll;
-        int cx = x + PADDING;
-        int cw = w - PADDING * 2 - 4; // room for the scrollbar
-        for (Widget wd : widgets) {
-            wd.setBounds(cx, cy, cw, wd.h);
-            cy += wd.h;
-        }
-        contentHeight = cy + scroll - contentTop();
-        clampScroll();
+        pane.layout(x + PADDING, contentTop(), w - PADDING * 2 + 2, contentBottom() - contentTop());
     }
 
     private int contentTop() { return y + TITLE_H + 2; }
 
     private int contentBottom() { return y + h - 4; }
 
-    private void clampScroll() {
-        int max = Math.max(0, contentHeight - (contentBottom() - contentTop()));
-        scroll = Math.max(0, Math.min(max, scroll));
-    }
-
     private void rebuild() {
-        widgets.clear();
-        if (view == View.LIST) buildList(); else buildSettings(selected);
+        pane.clear();
+        if (view == View.LIST) buildList();
+        else SettingsBuilder.build(pane, selected, font, w > 0 ? w - PADDING * 2 : WIDTH - PADDING * 2, "",
+                true, onChange, this::rebuild);
     }
 
     private void buildList() {
@@ -135,85 +108,22 @@ public class ModuleWindow {
         for (Module.Category cat : Module.Category.values()) {
             List<Module> inCat = modules.all().stream().filter(m -> m.category() == cat).toList();
             if (inCat.isEmpty()) continue;
-            LabelWidget header = new LabelWidget(cat.label.toUpperCase(), Theme.ACCENT);
-            header.h = 14;
-            widgets.add(header);
+            GroupHeaderWidget header = new GroupHeaderWidget("hud-editor/" + cat.name(), cat.label, false, () -> {});
+            pane.add(header, 16);
             for (Module m : inCat) {
                 ModuleRow row = new ModuleRow(m);
-                row.h = ROW_H;
-                widgets.add(row);
+                row.group = header;
+                pane.add(row, ROW_H);
             }
         }
-    }
-
-    private void buildSettings(Module m) {
-        if (!m.description().isEmpty()) {
-            for (String line : wrap(m.description(), WIDTH - PADDING * 2 - 8)) {
-                LabelWidget l = new LabelWidget(line);
-                l.h = 11;
-                widgets.add(l);
-            }
-            LabelWidget gap = new LabelWidget("");
-            gap.h = 4;
-            widgets.add(gap);
-        }
-        ToggleWidget enabled = new ToggleWidget("Enabled", m::enabled, v -> { m.setEnabled(v); onChange.run(); });
-        enabled.h = ROW_H;
-        widgets.add(enabled);
-        for (Setting<?> s : m.settings()) {
-            Widget wd = widgetFor(m, s);
-            if (wd == null) continue;
-            if (wd instanceof PixelGridWidget grid) wd.h = grid.preferredHeight();
-            else wd.h = wd instanceof SliderWidget ? ROW_H + 4 : ROW_H;
-            widgets.add(wd);
-        }
-        LabelWidget gap = new LabelWidget("");
-        gap.h = 6;
-        widgets.add(gap);
-        ButtonWidget reset = new ButtonWidget(m instanceof HudElement ? "Reset settings & position" : "Reset settings", () -> {
-            for (Setting<?> s : m.settings()) s.reset();
-            if (m instanceof HudElement) m.setPosition(10, 10);
-            onChange.run();
-            rebuild();
-        });
-        reset.h = ROW_H - 2;
-        widgets.add(reset);
-    }
-
-    private Widget widgetFor(Module module, Setting<?> s) {
-        if (s instanceof BoolSetting b) return new ToggleWidget(b.name(), b::get, v -> { b.set(v); onChange.run(); });
-        if (s instanceof IntSetting i) return new SliderWidget(i, onChange);
-        if (s instanceof ChoiceSetting c) return new CycleWidget(c, onChange);
-        if (s instanceof ColorSetting c) return new ColorWidget(c, onChange);
-        if (s instanceof PixelGridSetting g && module instanceof CustomCrosshair crosshair) {
-            return new PixelGridWidget(g, crosshair.pixelColor(), onChange, crosshair::markCustom);
-        }
-        return null;
-    }
-
-    private List<String> wrap(String text, int maxWidth) {
-        List<String> lines = new ArrayList<>();
-        StringBuilder line = new StringBuilder();
-        for (String word : text.split(" ")) {
-            String candidate = line.isEmpty() ? word : line + " " + word;
-            if (font.width(candidate) > maxWidth && !line.isEmpty()) {
-                lines.add(line.toString());
-                line = new StringBuilder(word);
-            } else {
-                line = new StringBuilder(candidate);
-            }
-        }
-        if (!line.isEmpty()) lines.add(line.toString());
-        return lines;
     }
 
     // ---- drawing ------------------------------------------------------
 
     public void render(Canvas c, int mouseX, int mouseY) {
-        c.fill(x, y, x + w, y + h, Theme.WINDOW_BG);
-        c.outline(x, y, w, h, Theme.BORDER);
-        c.fill(x, y, x + w, y + TITLE_H, Theme.HEADER_BG);
-        c.fill(x, y + TITLE_H - 1, x + w, y + TITLE_H, Theme.BORDER);
+        Theme.panel(c, x, y, w, h);
+        c.fill(x + 2, y + 2, x + w - 2, y + TITLE_H, Theme.HEADER_BG);
+        Theme.divider(c, x + 2, x + w - 2, y + TITLE_H);
 
         int ty = y + (TITLE_H - font.lineHeight) / 2 + 1;
         if (minimized) {
@@ -226,30 +136,15 @@ public class ModuleWindow {
             c.text("<", x + 6, ty, hoverBack ? Theme.ACCENT : Theme.TEXT_MUTED, false);
             c.text(selected.name(), x + 16, ty, Theme.TEXT, false);
         } else {
-            c.text("Dusk Client", x + 6, ty, Theme.ACCENT, false);
-            c.text("Modules", x + 6 + font.width("Dusk Client ") , ty, Theme.TEXT, false);
+            c.text("Dusk", x + 6, ty, Theme.ACCENT, false);
+            c.text("Modules", x + 6 + font.width("Dusk ") , ty, Theme.TEXT, false);
         }
         // title-bar buttons: minimise, close
         int bx = x + w - TITLE_BTN * 2 - 4;
         drawTitleButton(c, bx, "-", inTitleButton(mouseX, mouseY, 0));
         drawTitleButton(c, bx + TITLE_BTN, "x", inTitleButton(mouseX, mouseY, 1));
 
-        // scrolled content
-        c.scissor(x + 1, contentTop(), x + w - 1, contentBottom());
-        for (Widget wd : widgets) {
-            if (wd.y + wd.h < contentTop() || wd.y > contentBottom()) continue;
-            wd.render(c, inContent(mouseX, mouseY) ? mouseX : -1, inContent(mouseX, mouseY) ? mouseY : -1);
-        }
-        c.unscissor();
-
-        int viewH = contentBottom() - contentTop();
-        if (contentHeight > viewH) {
-            int sx = x + w - 4;
-            c.fill(sx, contentTop(), sx + 2, contentBottom(), Theme.TRACK);
-            int barH = Math.max(8, viewH * viewH / contentHeight);
-            int barY = contentTop() + (viewH - barH) * scroll / Math.max(1, contentHeight - viewH);
-            c.fill(sx, barY, sx + 2, barY + barH, Theme.TEXT_MUTED);
-        }
+        pane.render(c, mouseX, mouseY);
     }
 
     private void drawTitleButton(Canvas c, int bx, String glyph, boolean hover) {
@@ -296,46 +191,35 @@ public class ModuleWindow {
         if (button == 0 && inBackButton(mx, my)) { showList(); return true; }
         if (button == 1 && view == View.SETTINGS && my < contentTop()) { showList(); return true; }
         if (!inContent(mx, my)) return true;
-        for (Widget wd : widgets) {
-            if (wd.click(mx, my, button)) {
-                dragTarget = wd;
-                return true;
-            }
-        }
+        pane.click(mx, my, button);
         return true;
     }
 
     public void drag(double mx, double my) {
-        if (dragTarget != null) dragTarget.drag(mx, my);
+        pane.drag(mx, my);
     }
 
     public void release() {
-        if (dragTarget != null) {
-            dragTarget.release();
-            dragTarget = null;
-        }
+        pane.release();
     }
 
     public boolean scroll(double mx, double my, double amount) {
         if (!inContent(mx, my)) return contains(mx, my);
-        scroll -= (int) Math.signum(amount) * ROW_H;
-        clampScroll();
+        pane.scroll(mx, my, amount);
         return true;
     }
 
     public boolean keyPressed(int key, int modifiers) {
-        for (Widget wd : widgets) if (wd.focused() && wd.keyPressed(key, modifiers)) return true;
-        return false;
+        return pane.keyPressed(key, modifiers);
     }
 
     public boolean charTyped(char ch) {
-        for (Widget wd : widgets) if (wd.focused() && wd.charTyped(ch)) return true;
-        return false;
+        return pane.charTyped(ch);
     }
 
     /** Drops text-field focus (commits pending edits). */
     public void blur() {
-        for (Widget wd : widgets) if (wd.focused()) wd.setFocused(false);
+        pane.blur();
     }
 
     /** One module in the list: name (click = open settings) and its switch. */

@@ -57,6 +57,12 @@ public abstract class Module {
         return setting;
     }
 
+    /** Adds a setting under a collapsible section of the settings page. */
+    protected <S extends Setting<?>> S add(S setting, String group) {
+        setting.setGroup(group);
+        return add(setting);
+    }
+
     public List<Setting<?>> settings() {
         return Collections.unmodifiableList(settings);
     }
@@ -93,7 +99,7 @@ public abstract class Module {
     }
 
     public enum Category {
-        HUD("HUD"), MOVEMENT("Movement"), RENDER("Render"), MISC("Misc");
+        HUD("HUD"), MOVEMENT("Movement"), RENDER("Render"), MISC("Utility");
 
         public final String label;
 

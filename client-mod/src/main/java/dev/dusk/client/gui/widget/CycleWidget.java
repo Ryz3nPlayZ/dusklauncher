@@ -24,7 +24,7 @@ public class CycleWidget extends Widget {
         if (hover) c.fill(x, y, x + w, y + h, Theme.ROW_HOVER);
         c.text(setting.name(), x + 4, y + (h - c.lineHeight()) / 2 + 1, Theme.TEXT, false);
         int bx = btnX(), by = y + 3, bh = h - 6;
-        c.fill(bx, by, bx + BTN_W, by + bh, hover ? 0xFF34343F : Theme.TOGGLE_OFF);
+        Theme.button(c, bx, by, BTN_W, bh, hover, Theme.Kind.NORMAL);
         c.centeredText("< " + setting.get() + " >", bx + BTN_W / 2, by + (bh - c.lineHeight()) / 2 + 1, Theme.TEXT, false);
     }
 

@@ -1,11 +1,13 @@
 {
   "key.categories.duskclient": "DuskClient",
   "category.duskclient": "DuskClient",
-  "key.duskclient.settings": "Open Dusk HUD Editor",
+  "key.duskclient.settings": "Open Dusk Menu",
   "key.duskclient.fullbright": "Toggle Fullbright",
   "key.duskclient.gamma_up": "Fullbright Brighter",
   "key.duskclient.gamma_down": "Fullbright Darker",
   "key.duskclient.togglesprint": "Toggle Sprint On/Off",
   "key.duskclient.time_forward": "Time Changer Forward",
-  "key.duskclient.time_backward": "Time Changer Backward"
+  "key.duskclient.time_backward": "Time Changer Backward",
+  "key.duskclient.behindyou_back": "Behind You: Back View",
+  "key.duskclient.behindyou_front": "Behind You: Front View"
 }

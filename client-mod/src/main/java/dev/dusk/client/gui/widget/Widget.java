@@ -10,6 +10,12 @@ import dev.dusk.client.gui.Canvas;
 public abstract class Widget {
     public int x, y, w, h;
     protected boolean focused;
+    /** The collapsible section this widget sits in, if any; hidden while it is folded. */
+    public GroupHeaderWidget group;
+
+    public boolean hidden() {
+        return group != null && group.collapsed();
+    }
 
     public void setBounds(int x, int y, int w, int h) {
         this.x = x; this.y = y; this.w = w; this.h = h;

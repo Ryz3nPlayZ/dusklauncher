@@ -8,7 +8,7 @@ import java.util.function.Consumer;
 
 /** Labelled on/off switch drawn as a pill with a sliding knob. */
 public class ToggleWidget extends Widget {
-    public static final int SWITCH_W = 22, SWITCH_H = 10;
+    public static final int SWITCH_W = Theme.SWITCH_W, SWITCH_H = Theme.SWITCH_H;
 
     private final String label;
     private final BooleanSupplier get;
@@ -28,9 +28,7 @@ public class ToggleWidget extends Widget {
     }
 
     public static void drawSwitch(Canvas c, int sx, int sy, boolean on) {
-        c.fill(sx, sy, sx + SWITCH_W, sy + SWITCH_H, on ? Theme.ACCENT : Theme.TOGGLE_OFF);
-        int kx = on ? sx + SWITCH_W - SWITCH_H + 1 : sx + 1;
-        c.fill(kx, sy + 1, kx + SWITCH_H - 2, sy + SWITCH_H - 1, on ? 0xFF14140A : Theme.TEXT_MUTED);
+        Theme.switchBox(c, sx, sy, on);
     }
 
     @Override

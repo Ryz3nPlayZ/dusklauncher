@@ -34,8 +34,7 @@ public class ColorWidget extends Widget {
         int sx = fx - SWATCH - 4;
         c.fill(sx, fy, sx + SWATCH, fy + fh, 0xFFFFFFFF);
         c.fill(sx + 1, fy + 1, sx + SWATCH - 1, fy + fh - 1, setting.argb());
-        c.fill(fx, fy, fx + FIELD_W, fy + fh, Theme.FIELD_BG);
-        c.outline(fx, fy, FIELD_W, fh, focused ? Theme.ACCENT : Theme.BORDER);
+        Theme.field(c, fx, fy, FIELD_W, fh, focused);
         String shown = buffer + (focused && (System.currentTimeMillis() / 500) % 2 == 0 ? "_" : "");
         c.text(shown, fx + 3, ty, focused ? Theme.TEXT : Theme.TEXT_MUTED, false);
     }

@@ -15,7 +15,11 @@
     "cosmetics.PlayerRenderStateMixin",
     "cosmetics.PlayerRendererMixin",
     "cosmetics.CapeLayerMixin",
-    "cosmetics.Deadmau5EarsLayerMixin"
+    "cosmetics.Deadmau5EarsLayerMixin",
+    "behindyou.BehindYouCameraTypeMixin",
+    "behindyou.BehindYouF5Mixin",
+    "behindyou.BehindYouFovMixin",
+    "behindyou.BehindYouLevelMixin"
   ],
   "injectors": {
     "defaultRequire": 1

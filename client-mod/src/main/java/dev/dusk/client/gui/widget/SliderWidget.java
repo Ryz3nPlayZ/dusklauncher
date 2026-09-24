@@ -25,7 +25,7 @@ public class SliderWidget extends Widget {
     public void render(Canvas c, int mouseX, int mouseY) {
         if (contains(mouseX, mouseY) || dragging) c.fill(x, y, x + w, y + h, Theme.ROW_HOVER);
         c.text(setting.name(), x + 4, y + 3, Theme.TEXT, false);
-        String v = setting.get() + setting.suffix();
+        String v = setting.display();
         c.text(v, x + w - 4 - c.textWidth(v), y + 3, Theme.ACCENT, false);
         int tx = trackX(), ty = trackY(), tw = trackW();
         c.fill(tx, ty, tx + tw, ty + TRACK_H, Theme.TRACK);

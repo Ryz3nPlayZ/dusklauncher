@@ -3,6 +3,7 @@ package dev.dusk.client;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.cosmetics.CosmeticsManager;
+import dev.dusk.client.gui.DuskSettingsScreen;
 import dev.dusk.client.gui.HudEditorScreen;
 import dev.dusk.client.hud.HudHooks;
 import dev.dusk.client.hud.Raycast;
@@ -55,6 +56,9 @@ import dev.dusk.client.modules.render.ItemScale;
 import dev.dusk.client.modules.render.LowFire;
 import dev.dusk.client.modules.render.LowShield;
 import dev.dusk.client.modules.render.MotionBlur;
+import dev.dusk.client.modules.render.Nametags;
+import dev.dusk.client.modules.render.BehindYou;
+import dev.dusk.client.modules.render.Particles;
 import dev.dusk.client.modules.render.NoNightVision;
 import dev.dusk.client.modules.render.NoPumpkinBlur;
 import dev.dusk.client.modules.render.RiptideShieldFix;
@@ -65,6 +69,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.gui.screens.Screen;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -149,7 +154,11 @@ public class DuskClient implements ClientModInitializer {
             modules.register(new DamageTint());
             modules.register(new ColorSaturation());
             modules.register(new Hitbox());
+            modules.register(new Particles());
+            modules.register(new Nametags());
         }
+        BehindYou behindYou = new BehindYou();
+        modules.register(behindYou);
         modules.loadConfig();
         DuskConfig.get(); // ensure duskclient.json exists for the launcher bridge
         CosmeticsManager.init();
@@ -164,11 +173,14 @@ public class DuskClient implements ClientModInitializer {
         // PolyTime's own defaults; they step the Time Changer slider by an hour.
         KeyMapping timeForwardKey = Compat.registerKey("key.duskclient.time_forward", GLFW.GLFW_KEY_RIGHT_BRACKET);
         KeyMapping timeBackwardKey = Compat.registerKey("key.duskclient.time_backward", GLFW.GLFW_KEY_LEFT_BRACKET);
+        KeyMapping behindBackKey = Compat.registerKey("key.duskclient.behindyou_back", GLFW.GLFW_KEY_UNKNOWN);
+        KeyMapping behindFrontKey = Compat.registerKey("key.duskclient.behindyou_front", GLFW.GLFW_KEY_UNKNOWN);
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (settingsKey.consumeClick()) {
-                if (client.player != null && !(Compat.currentScreen(client) instanceof HudEditorScreen)) {
-                    Compat.setScreen(client, new HudEditorScreen(Compat.currentScreen(client)));
+                Screen current = Compat.currentScreen(client);
+                if (client.player != null && !(current instanceof DuskSettingsScreen) && !(current instanceof HudEditorScreen)) {
+                    Compat.setScreen(client, new DuskSettingsScreen(current));
                 }
             }
             boolean changed = false;
@@ -203,6 +215,7 @@ public class DuskClient implements ClientModInitializer {
                 }
             }
             if (changed) modules.saveConfig();
+            behindYou.tickKeys(behindBackKey, behindFrontKey);
             if (modules.get(Distance.class).enabled() || modules.get(SignReader.class).enabled()) {
                 Raycast.tick(client);
             }

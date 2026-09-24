@@ -3,7 +3,6 @@ package dev.dusk.client.render.motionblur;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.systems.RenderSystem;
-import org.lwjgl.system.MemoryUtil;
 
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
@@ -17,7 +16,13 @@ import java.util.function.Supplier;
  */
 public final class GpuBufferUtil {
 
-    private static final int UBO_USAGE = GpuBuffer.USAGE_UNIFORM | GpuBuffer.USAGE_COPY_DST;
+    /**
+     * natural-motionblur's raw usage value (UNIFORM|MAP_WRITE): the buffers
+     * are filled through a mapped view, never staged. 26.2 removed mapping
+     * from the command encoder, so that game line ships its own copy of
+     * this class that stages through {@code writeToBuffer} instead.
+     */
+    private static final int UBO_USAGE = 130;
     private static Method createBufferMethod = null;
 
     private GpuBufferUtil() {}
@@ -38,19 +43,18 @@ public final class GpuBufferUtil {
     }
 
     /**
-     * Fills a uniform buffer with std140 data. Writing through a staging
-     * ByteBuffer rather than mapping the buffer works on every backend
-     * (26.2 moved mapping off the command encoder entirely).
+     * Fills a uniform buffer with std140 data, exactly like
+     * natural-motionblur: through a mapped view that stays alive for the
+     * whole write. A stage-and-free pattern does not work here — on
+     * backends with deferred command execution the upload races the free
+     * and every velocity pass reads garbage matrices (full-screen smear
+     * that never settles).
      */
     public static void writeStd140(GpuBuffer buffer, int sizeBytes, Consumer<Std140Builder> writer) {
-        ByteBuffer data = MemoryUtil.memCalloc(sizeBytes);
-        try {
+        try (GpuBuffer.MappedView view = RenderSystem.getDevice().createCommandEncoder().mapBuffer(buffer, false, true)) {
+            ByteBuffer data = view.data();
+            data.clear();
             writer.accept(Std140Builder.intoBuffer(data));
-            data.position(0);
-            data.limit(sizeBytes);
-            RenderSystem.getDevice().createCommandEncoder().writeToBuffer(buffer.slice(0L, sizeBytes), data);
-        } finally {
-            MemoryUtil.memFree(data);
         }
     }
 

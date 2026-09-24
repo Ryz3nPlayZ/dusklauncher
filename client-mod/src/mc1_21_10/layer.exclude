@@ -38,7 +38,9 @@ java/dev/dusk/client/mixin/OverlayTextureMixin.java
 java/dev/dusk/client/render/DamageVariants.java
 java/dev/dusk/client/mixin/SprintMixin.java
 java/dev/dusk/client/mixin/HitboxMixin.java
-java/dev/dusk/client/mixin/HitboxStrokeMixin.java
+java/dev/dusk/client/mixin/HitboxRenderMixin.java
+java/dev/dusk/client/mixin/StuckArrowMixin.java
+java/dev/dusk/client/mixin/StuckStingerMixin.java
 java/dev/dusk/client/mixin/HitboxToggleMixin.java
 java/dev/dusk/client/render/HitboxHooks.java
 
@@ -47,3 +49,10 @@ java/dev/dusk/client/render/HitboxHooks.java
 java/dev/dusk/client/render/ColorSaturationRenderer.java
 resources/assets/duskclient/post_effect/color_saturation.json
 resources/assets/duskclient/shaders/post/color_saturation.fsh
+
+# The OverflowParticles port hooks the 1.21.11+ particle extract pipeline.
+java/dev/dusk/client/mixin/particles/**
+java/dev/dusk/client/render/particles/**
+# The PolyNametag port hooks the 1.21.11+ nametag feature renderer.
+java/dev/dusk/client/mixin/nametag/**
+java/dev/dusk/client/render/nametag/**

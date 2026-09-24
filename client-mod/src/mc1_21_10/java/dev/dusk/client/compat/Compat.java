@@ -93,4 +93,21 @@ public final class Compat {
     public static int signDarkColor(SignText text) {
         return AbstractSignRenderer.getDarkColor(text);
     }
+
+    private static java.util.function.Supplier<net.minecraft.world.entity.player.PlayerSkin> skin;
+
+    /** The local player's skin texture as "namespace:path" (the default skin until it has loaded). */
+    public static String localSkin(Minecraft mc) {
+        return skin(mc).body().texturePath().toString();
+    }
+
+    /** Whether the local player's skin uses the slim (3px) arms. */
+    public static boolean localSkinSlim(Minecraft mc) {
+        return skin(mc).model() == net.minecraft.world.entity.player.PlayerModelType.SLIM;
+    }
+
+    private static net.minecraft.world.entity.player.PlayerSkin skin(Minecraft mc) {
+        if (skin == null) skin = mc.getSkinManager().createLookup(mc.getGameProfile(), false);
+        return skin.get();
+    }
 }

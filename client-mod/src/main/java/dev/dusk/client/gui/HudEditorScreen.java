@@ -8,9 +8,6 @@ import dev.dusk.client.hud.HudRenderer;
 import dev.dusk.client.module.Module;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.CharacterEvent;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
@@ -112,10 +109,9 @@ public class HudEditorScreen extends DuskScreen {
     // ---- input --------------------------------------------------------
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent e, boolean doubleClick) {
-        double mx = e.x(), my = e.y();
+    protected boolean onClick(double mx, double my, int button) {
         if (window.contains(mx, my)) {
-            window.click(mx, my, e.button());
+            window.click(mx, my, button);
             return true;
         }
         window.blur();
@@ -125,29 +121,29 @@ public class HudEditorScreen extends DuskScreen {
             return true;
         }
         selected = hit;
-        if (e.button() == 0) {
+        if (button == 0) {
             dragging = hit;
             dragOffX = (int) mx - hit.x();
             dragOffY = (int) my - hit.y();
-        } else if (e.button() == 1) {
+        } else if (button == 1) {
             window.open(hit);
         }
         return true;
     }
 
     @Override
-    public boolean mouseDragged(MouseButtonEvent e, double dx, double dy) {
+    protected boolean onDrag(double mx, double my, int button) {
         if (dragging != null) {
-            dragging.setPosition((int) e.x() - dragOffX, (int) e.y() - dragOffY);
+            dragging.setPosition((int) mx - dragOffX, (int) my - dragOffY);
             HudRenderer.clampToScreen(dragging, context(0));
             return true;
         }
-        window.drag(e.x(), e.y());
+        window.drag(mx, my);
         return true;
     }
 
     @Override
-    public boolean mouseReleased(MouseButtonEvent e) {
+    protected boolean onRelease(double mx, double my, int button) {
         if (dragging != null) {
             dragging = null;
             save();
@@ -157,11 +153,11 @@ public class HudEditorScreen extends DuskScreen {
     }
 
     @Override
-    public boolean mouseScrolled(double mx, double my, double dx, double dy) {
-        if (window.scroll(mx, my, dy)) return true;
+    protected boolean onScroll(double mx, double my, double amount) {
+        if (window.scroll(mx, my, amount)) return true;
         HudElement target = elementAt(mx, my, context(0));
-        if (target != null && dy != 0) {
-            target.setScalePercent(target.scalePercent() + (dy > 0 ? 5 : -5));
+        if (target != null && amount != 0) {
+            target.setScalePercent(target.scalePercent() + (amount > 0 ? 5 : -5));
             HudRenderer.clampToScreen(target, context(0));
             save();
             return true;
@@ -170,33 +166,31 @@ public class HudEditorScreen extends DuskScreen {
     }
 
     @Override
-    public boolean keyPressed(KeyEvent e) {
-        if (window.keyPressed(e.key(), e.modifiers())) return true;
-        if (DuskClient.settingsKey() != null && DuskClient.settingsKey().matches(e)) {
+    protected boolean onKey(int key, int scancode, int modifiers) {
+        if (window.keyPressed(key, modifiers)) return true;
+        if (isSettingsKey(key, scancode)) {
             onClose();
             return true;
         }
-        if (selected != null) {
-            int step = (e.modifiers() & NUDGE_MODS) != 0 ? 10 : 1;
-            int nx = selected.x(), ny = selected.y();
-            switch (e.key()) {
-                case GLFW.GLFW_KEY_LEFT -> nx -= step;
-                case GLFW.GLFW_KEY_RIGHT -> nx += step;
-                case GLFW.GLFW_KEY_UP -> ny -= step;
-                case GLFW.GLFW_KEY_DOWN -> ny += step;
-                default -> { return super.keyPressed(e); }
-            }
-            selected.setPosition(nx, ny);
-            HudRenderer.clampToScreen(selected, context(0));
-            save();
-            return true;
+        if (selected == null) return false;
+        int step = (modifiers & NUDGE_MODS) != 0 ? 10 : 1;
+        int nx = selected.x(), ny = selected.y();
+        switch (key) {
+            case GLFW.GLFW_KEY_LEFT -> nx -= step;
+            case GLFW.GLFW_KEY_RIGHT -> nx += step;
+            case GLFW.GLFW_KEY_UP -> ny -= step;
+            case GLFW.GLFW_KEY_DOWN -> ny += step;
+            default -> { return false; }
         }
-        return super.keyPressed(e);
+        selected.setPosition(nx, ny);
+        HudRenderer.clampToScreen(selected, context(0));
+        save();
+        return true;
     }
 
     @Override
-    public boolean charTyped(CharacterEvent e) {
-        return window.charTyped((char) e.codepoint());
+    protected boolean onChar(char ch) {
+        return window.charTyped(ch);
     }
 
     /** Opens straight into a module's settings (used by the title-screen menu). */

@@ -7,6 +7,8 @@ import net.fabricmc.loader.api.FabricLoader;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Launcher-shared client settings (background override, menu prefs).
@@ -19,8 +21,14 @@ public final class DuskConfig {
     /** Absolute path to a PNG/JPG background. Empty = vanilla panorama. */
     public String backgroundPath = "";
     public boolean showAccountTile = true;
+    /** Look of every Dusk screen: "dusk" (the launcher's pixel frames) or "dawn" (flat dark buttons). */
+    public String uiStyle = "dusk";
+    /** Title screen: the launcher's animated scene (true) or the vanilla panorama. */
+    public boolean titleScene = true;
     /** Cosmetics loadout + toggles (docs/COSMETICS.md). Written by the launcher. */
     public CosmeticsConfig cosmetics = new CosmeticsConfig();
+    /** Module ids hearted in the Dusk menu, shown under its favourites tab. */
+    public List<String> favorites = new ArrayList<>();
 
     private static DuskConfig instance;
 

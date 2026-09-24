@@ -36,6 +36,7 @@ public class MotionBlurLevelMixin {
     @Unique private final Matrix4f duskclient$scratchProjection = new Matrix4f();
     @Unique private double duskclient$prevCamX, duskclient$prevCamY, duskclient$prevCamZ;
     @Unique private boolean duskclient$previousFrameReady = false;
+    @Unique private boolean duskclient$wasActive = false;
 
     @Inject(method = "renderLevel", at = @At("HEAD"))
     private void duskclient$onRenderLevelHead(GraphicsResourceAllocator resourceAllocator, DeltaTracker deltaTracker,
@@ -44,6 +45,12 @@ public class MotionBlurLevelMixin {
                                               Vector4f fogColor, boolean shouldRenderSky, CallbackInfo ci) {
         MotionBlur config = MotionBlur.instance();
         boolean blurActive = config != null && config.active();
+
+        // natural-motionblur resets its UBOs and frame history whenever the
+        // blur is (re-)enabled, so stale matrices can never smear the first
+        // frames back on.
+        if (blurActive && !duskclient$wasActive) MotionBlurPipeline.invalidate();
+        duskclient$wasActive = blurActive;
 
         var camPos = camera.position();
         double cx = camPos.x();

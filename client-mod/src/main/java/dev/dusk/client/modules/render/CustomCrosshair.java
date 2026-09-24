@@ -82,7 +82,26 @@ public class CustomCrosshair extends Module {
         if (mc.player == null) return false;
         if (mc.options.getCameraType() != CameraType.FIRST_PERSON) return false;
         if (mc.getDebugOverlay().showDebugScreen()) return false;
+        // An empty grid draws zero fragments; fall back to vanilla rather
+        // than suppressing it into total invisibility. The grid can end up
+        // empty via right-click clear, an alpha-0 paint colour, or a
+        // malformed config load.
+        if (!hasVisiblePixels()) return false;
         return true;
+    }
+
+    /** True when at least one grid pixel is opaque. */
+    public boolean hasVisiblePixels() {
+        // A preset picked since the last frame has to land first, or an
+        // emptied grid would keep the vanilla fallback forever: the sync
+        // otherwise only runs from forEachPixel, which this check gates.
+        syncPreset();
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                if ((pixels.pixel(x, y) >>> 24) != 0) return true;
+            }
+        }
+        return false;
     }
 
     public void forEachPixel(PixelSink sink) {
