@@ -15,9 +15,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * OverflowParticles: Mixin_TrackRenderState, Mixin_ParticleFading,
  * Mixin_ApplyCustomParticleColors and Mixin_ParticleScaling. The colour and
- * size reads only occur in the six-argument extractRotatedQuad overload, so
- * the name alone selects it on both 1.21.11 and 26.x (whose render-state
- * class moved package).
+ * size reads only occur in the six-argument extractRotatedQuad overload. The
+ * full descriptor is required: a bare name matches both overloads in dev, but
+ * Loom remaps it to just one intermediary name (the four-argument one), which
+ * fails the required injection and crashes a production launch.
  */
 @Mixin(SingleQuadParticle.class)
 public abstract class SingleQuadParticleMixin {
@@ -35,31 +36,31 @@ public abstract class SingleQuadParticleMixin {
         this.alpha = ParticleHooks.fadedAlpha(entry, ((ParticleAccessor) self).duskclient$age(), self.getLifetime(), this.alpha);
     }
 
-    @ModifyExpressionValue(method = "extractRotatedQuad",
+    @ModifyExpressionValue(method = "extractRotatedQuad(Lnet/minecraft/client/renderer/state/QuadParticleRenderState;Lorg/joml/Quaternionf;FFFF)V",
             at = @At(value = "FIELD", target = "Lnet/minecraft/client/particle/SingleQuadParticle;rCol:F"))
     private float duskclient$red(float original) {
         return duskclient$adjust(original, 16);
     }
 
-    @ModifyExpressionValue(method = "extractRotatedQuad",
+    @ModifyExpressionValue(method = "extractRotatedQuad(Lnet/minecraft/client/renderer/state/QuadParticleRenderState;Lorg/joml/Quaternionf;FFFF)V",
             at = @At(value = "FIELD", target = "Lnet/minecraft/client/particle/SingleQuadParticle;gCol:F"))
     private float duskclient$green(float original) {
         return duskclient$adjust(original, 8);
     }
 
-    @ModifyExpressionValue(method = "extractRotatedQuad",
+    @ModifyExpressionValue(method = "extractRotatedQuad(Lnet/minecraft/client/renderer/state/QuadParticleRenderState;Lorg/joml/Quaternionf;FFFF)V",
             at = @At(value = "FIELD", target = "Lnet/minecraft/client/particle/SingleQuadParticle;bCol:F"))
     private float duskclient$blue(float original) {
         return duskclient$adjust(original, 0);
     }
 
-    @ModifyExpressionValue(method = "extractRotatedQuad",
+    @ModifyExpressionValue(method = "extractRotatedQuad(Lnet/minecraft/client/renderer/state/QuadParticleRenderState;Lorg/joml/Quaternionf;FFFF)V",
             at = @At(value = "FIELD", target = "Lnet/minecraft/client/particle/SingleQuadParticle;alpha:F"))
     private float duskclient$alpha(float original) {
         return duskclient$adjust(original, 24);
     }
 
-    @ModifyExpressionValue(method = "extractRotatedQuad",
+    @ModifyExpressionValue(method = "extractRotatedQuad(Lnet/minecraft/client/renderer/state/QuadParticleRenderState;Lorg/joml/Quaternionf;FFFF)V",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/particle/SingleQuadParticle;getQuadSize(F)F"))
     private float duskclient$scale(float original) {
         Particles.Entry entry = ParticleHooks.of((Particle) (Object) this);
