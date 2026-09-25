@@ -78,6 +78,8 @@ async fn boot_to_menu() {
         loader: profile::Loader::Vanilla,
         loader_version: None,
         jvm_args: profile::default_jvm_args(),
+        memory_mb: None,
+        java_path: None,
         resolution: (1280, 720),
         mod_filenames: vec![],
         server: None,

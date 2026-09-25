@@ -3,25 +3,33 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-/// Default JVM args derived from Mojang's 26.2 `default-user-jvm` block,
-/// tuned for PvP frame-time consistency (ZGC + AlwaysPreTouch).
-/// Safe for every Java Mojang ships (17+): version-gated flags live in
+/// Default JVM args: G1, the collector Mojang's own launcher and Prism run
+/// the game on. (Non-generational ZGC on Java 21 plus AlwaysPreTouch cost
+/// throughput and a heap-sized page touch at startup for little gain.)
+/// Safe for every Java Mojang ships (8+): version-gated flags live in
 /// [`modern_jvm_extras`], not here.
 pub fn default_jvm_args() -> Vec<String> {
-    let zgc = if cfg!(target_os = "windows") && cfg!(target_arch = "aarch64") {
-        vec![]
-    } else {
-        vec!["-XX:+UseZGC".into(), "-XX:+AlwaysPreTouch".into()]
-    };
-    [
-        vec![
-            "-Xms2G".into(),
-            "-Xmx4G".into(),
-            "-XX:+UnlockExperimentalVMOptions".into(),
-        ],
-        zgc,
+    vec![
+        "-Xms2G".into(),
+        "-Xmx4G".into(),
+        "-XX:+UnlockExperimentalVMOptions".into(),
+        "-XX:+UseG1GC".into(),
     ]
-    .concat()
+}
+
+/// Swap the launcher's old ZGC defaults for G1 in args that still carry
+/// them untouched (heap sizes aside). Returns whether anything changed.
+pub fn migrate_legacy_gc(args: &mut Vec<String>) -> bool {
+    let old = |a: &String| a == "-XX:+UseZGC" || a == "-XX:+AlwaysPreTouch";
+    let only_defaults = args.iter().all(|a| {
+        old(a) || a.starts_with("-Xms") || a.starts_with("-Xmx") || a == "-XX:+UnlockExperimentalVMOptions"
+    });
+    if !only_defaults || !args.iter().any(|a| a == "-XX:+UseZGC") {
+        return false;
+    }
+    args.retain(|a| !old(a));
+    args.push("-XX:+UseG1GC".into());
+    true
 }
 
 /// Extra JVM flags that only exist on newer Java releases, keyed by the

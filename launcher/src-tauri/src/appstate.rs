@@ -52,9 +52,22 @@ impl AppState {
             .unwrap_or_else(|| PathBuf::from("."))
             .join("FasterLauncher");
         let profiles_path = data_dir.join("profiles.json");
-        let profiles =
+        let mut profiles =
             ProfileStore::load(&profiles_path).unwrap_or(ProfileStore { profiles: Vec::new() });
-        let settings = Settings::load(&data_dir.join("settings.json"));
+        let mut settings = Settings::load(&data_dir.join("settings.json"));
+        if settings.jvm_defaults_rev < crate::settings::JVM_DEFAULTS_REV {
+            // move installs off the old ZGC defaults, leaving hand-tuned args alone
+            let mut args: Vec<String> = settings.default_jvm_args.split_whitespace().map(str::to_string).collect();
+            if fasterlauncher_core::profile::migrate_legacy_gc(&mut args) {
+                settings.default_jvm_args = args.join(" ");
+            }
+            for p in &mut profiles.profiles {
+                fasterlauncher_core::profile::migrate_legacy_gc(&mut p.jvm_args);
+            }
+            settings.jvm_defaults_rev = crate::settings::JVM_DEFAULTS_REV;
+            let _ = profiles.save(&profiles_path);
+            let _ = settings.save(&data_dir.join("settings.json"));
+        }
         Self {
             data_dir,
             profiles: Mutex::new(profiles),

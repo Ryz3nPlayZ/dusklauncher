@@ -1,11 +1,9 @@
 package dev.dusk.client.gui;
 
 import dev.dusk.client.DuskClient;
-import dev.dusk.client.compat.Compat;
 import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.hud.HudElement;
 import dev.dusk.client.hud.HudRenderer;
-import dev.dusk.client.module.Module;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -17,30 +15,22 @@ import java.util.List;
 /**
  * In-game HUD layout editor. The world keeps rendering under a light
  * overlay; every enabled HUD element is drawn live and can be dragged,
- * scaled with the wheel, or right-clicked for its settings. The module
- * list and settings live in one centered {@link ModuleWindow} rather than
- * a full-screen menu.
+ * scaled with the wheel, or right-clicked for its settings.
  */
-public class HudEditorScreen extends DuskScreen {
+public class HudEditorScreen extends MenuScreen {
     private static final int NUDGE_MODS = GLFW.GLFW_MOD_SHIFT;
 
-    @Nullable
-    private final Screen parent;
-    private final ModuleWindow window;
     private HudElement hovered;
     private HudElement selected;
     private HudElement dragging;
     private int dragOffX, dragOffY;
 
     public HudEditorScreen(@Nullable Screen parent) {
-        super(Component.literal("Dusk HUD Editor"));
-        this.parent = parent;
-        this.window = new ModuleWindow(Minecraft.getInstance().font, this::save,
-                m -> { if (m instanceof HudElement e) selected = e; }, this::onClose);
+        super(Component.literal("Dusk HUD Editor"), parent);
     }
 
     private void save() {
-        if (DuskClient.modules() != null) DuskClient.modules().saveConfig();
+        saveModules();
     }
 
     private HudContext context(float delta) {
@@ -79,42 +69,32 @@ public class HudEditorScreen extends DuskScreen {
     }
 
     @Override
-    protected void drawOverlay(Canvas c, int mouseX, int mouseY, float delta) {
+    protected void drawMenu(Canvas c, int mouseX, int mouseY, float delta) {
         HudContext ctx = context(delta);
-        window.layout(this.width, this.height);
-        boolean overWindow = window.contains(mouseX, mouseY);
-        hovered = overWindow ? null : elementAt(mouseX, mouseY, ctx);
+        hovered = elementAt(mouseX, mouseY, ctx);
 
         for (HudElement e : elements()) {
             if (!e.enabled()) continue;
             HudRenderer.draw(c, e, ctx);
             int w = e.screenWidth(ctx), h = e.screenHeight(ctx);
-            int color = (e == selected || e == dragging) ? Theme.OUTLINE_HOT
-                    : e == hovered ? Theme.OUTLINE : 0x40FFFFFF;
+            int color = (e == selected || e == dragging) ? 0xFFFFFFFF : e == hovered ? 0x80FFFFFF : 0x40FFFFFF;
             c.outline(e.x() - 1, e.y() - 1, w + 2, h + 2, color);
             if (e == hovered || e == dragging) {
                 String tag = e.name() + " " + e.scalePercent() + "%";
                 int tx = Math.min(e.x(), this.width - c.textWidth(tag) - 2);
                 int tyy = e.y() + h + 3 > this.height - 10 ? e.y() - 11 : e.y() + h + 3;
-                c.text(tag, tx, tyy, Theme.ACCENT, true);
+                c.text(tag, tx, tyy, Vanilla.TEXT, true);
             }
         }
 
-        String hint = "Drag to move  |  Scroll to scale  |  Right-click for settings  |  Esc to close";
-        c.centeredText(hint, this.width / 2, this.height - (window.minimized() ? 34 : 12), Theme.TEXT_MUTED, true);
-
-        window.render(c, mouseX, mouseY);
+        String hint = "Drag to move  |  Scroll to scale  |  Right-click for settings  |  Esc to go back";
+        c.centeredText(hint, this.width / 2, this.height - 12, Vanilla.TEXT_DIM, true);
     }
 
     // ---- input --------------------------------------------------------
 
     @Override
-    protected boolean onClick(double mx, double my, int button) {
-        if (window.contains(mx, my)) {
-            window.click(mx, my, button);
-            return true;
-        }
-        window.blur();
+    protected boolean menuClick(double mx, double my, int button) {
         HudElement hit = elementAt(mx, my, context(0));
         if (hit == null) {
             selected = null;
@@ -126,35 +106,29 @@ public class HudEditorScreen extends DuskScreen {
             dragOffX = (int) mx - hit.x();
             dragOffY = (int) my - hit.y();
         } else if (button == 1) {
-            window.open(hit);
+            open(ConfigScreen.module(this, hit));
         }
         return true;
     }
 
     @Override
-    protected boolean onDrag(double mx, double my, int button) {
-        if (dragging != null) {
-            dragging.setPosition((int) mx - dragOffX, (int) my - dragOffY);
-            HudRenderer.clampToScreen(dragging, context(0));
-            return true;
-        }
-        window.drag(mx, my);
+    protected boolean menuDrag(double mx, double my, int button) {
+        if (dragging == null) return false;
+        dragging.setPosition((int) mx - dragOffX, (int) my - dragOffY);
+        HudRenderer.clampToScreen(dragging, context(0));
         return true;
     }
 
     @Override
-    protected boolean onRelease(double mx, double my, int button) {
-        if (dragging != null) {
-            dragging = null;
-            save();
-        }
-        window.release();
+    protected boolean menuRelease(double mx, double my, int button) {
+        if (dragging == null) return false;
+        dragging = null;
+        save();
         return true;
     }
 
     @Override
-    protected boolean onScroll(double mx, double my, double amount) {
-        if (window.scroll(mx, my, amount)) return true;
+    protected boolean menuScroll(double mx, double my, double amount) {
         HudElement target = elementAt(mx, my, context(0));
         if (target != null && amount != 0) {
             target.setScalePercent(target.scalePercent() + (amount > 0 ? 5 : -5));
@@ -166,12 +140,7 @@ public class HudEditorScreen extends DuskScreen {
     }
 
     @Override
-    protected boolean onKey(int key, int scancode, int modifiers) {
-        if (window.keyPressed(key, modifiers)) return true;
-        if (isSettingsKey(key, scancode)) {
-            onClose();
-            return true;
-        }
+    protected boolean menuKey(int key, int scancode, int modifiers) {
         if (selected == null) return false;
         int step = (modifiers & NUDGE_MODS) != 0 ? 10 : 1;
         int nx = selected.x(), ny = selected.y();
@@ -186,23 +155,5 @@ public class HudEditorScreen extends DuskScreen {
         HudRenderer.clampToScreen(selected, context(0));
         save();
         return true;
-    }
-
-    @Override
-    protected boolean onChar(char ch) {
-        return window.charTyped(ch);
-    }
-
-    /** Opens straight into a module's settings (used by the title-screen menu). */
-    public HudEditorScreen focus(Module module) {
-        window.open(module);
-        return this;
-    }
-
-    @Override
-    public void onClose() {
-        window.blur();
-        save();
-        if (this.minecraft != null) Compat.setScreen(this.minecraft, parent);
     }
 }

@@ -2,6 +2,7 @@ package dev.dusk.client.gametest;
 
 import dev.dusk.client.DuskClient;
 import dev.dusk.client.compat.Compat;
+import dev.dusk.client.gui.ConfigScreen;
 import dev.dusk.client.gui.HudEditorScreen;
 import dev.dusk.client.modules.hud.HeldItem;
 import dev.dusk.client.modules.hud.ShieldStatus;
@@ -74,7 +75,7 @@ public final class HudGameTest implements FabricClientGameTest {
             Path editor = ctx.takeScreenshot("hud-editor-list");
 
             ctx.runOnClient(client -> {
-                if (Compat.currentScreen(client) instanceof HudEditorScreen s) s.focus(CustomCrosshair.instance());
+                Compat.setScreen(client, ConfigScreen.module(Compat.currentScreen(client), CustomCrosshair.instance()));
             });
             ctx.waitTicks(5);
             Path settings = ctx.takeScreenshot("hud-editor-settings");

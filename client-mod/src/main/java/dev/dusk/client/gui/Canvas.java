@@ -82,4 +82,12 @@ public interface Canvas {
     default void vLine(int x, int y0, int y1, int argb) {
         fill(x, Math.min(y0, y1), x + 1, Math.max(y0, y1) + 1, argb);
     }
+
+    /**
+     * Draws what follows above everything drawn so far, items included
+     * (popups over lists). Pair with {@link #endLayer}.
+     */
+    default void beginLayer() {}
+
+    default void endLayer() {}
 }

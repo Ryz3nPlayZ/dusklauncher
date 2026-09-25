@@ -1,7 +1,7 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
-import dev.dusk.client.gui.Theme;
+import dev.dusk.client.gui.Vanilla;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -33,12 +33,9 @@ public class GroupHeaderWidget extends Widget {
     @Override
     public void render(Canvas c, int mouseX, int mouseY) {
         boolean hover = contains(mouseX, mouseY);
-        if (hover) c.fill(x, y, x + w, y + h, Theme.ROW_HOVER);
-        int ty = y + (h - c.lineHeight()) / 2 + 1;
-        drawChevron(c, x + 4, y + h / 2 - 2, !collapsed(), hover ? Theme.ACCENT : Theme.TEXT_MUTED);
-        c.text(title.toUpperCase(), x + 14, ty, Theme.ACCENT, false);
-        int lx = x + 18 + c.textWidth(title.toUpperCase());
-        if (lx < x + w - 4) Theme.divider(c, lx, x + w - 4, y + h / 2);
+        int ty = y + (h - c.lineHeight()) / 2 + 2;
+        drawChevron(c, x + 6, ty + 1, !collapsed(), hover ? Vanilla.TEXT : Vanilla.TEXT_OFF);
+        c.text(title, x + 16, ty, hover ? 0xFFFFFFA0 : Vanilla.TEXT, true);
     }
 
     /** A 5px pixel chevron: pointing down when open, right when folded. */

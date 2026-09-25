@@ -243,7 +243,9 @@ pub fn read_cosmetic_model(app: AppHandle, state: State<AppState>, id: u32) -> R
 /// never has to know about slots the mod adds later.
 pub type Loadout = Map<String, Value>;
 
-fn loadout_path(data_dir: &Path) -> PathBuf {
+/// Also handed to the game as `-Ddusk.loadout`, which the mod watches so an
+/// equip in the launcher shows up without relaunching.
+pub fn loadout_path(data_dir: &Path) -> PathBuf {
     data_dir.join("cosmetics.json")
 }
 

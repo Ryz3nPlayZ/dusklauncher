@@ -1,7 +1,7 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
-import dev.dusk.client.gui.Theme;
+import dev.dusk.client.gui.Vanilla;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Consumer;
@@ -41,11 +41,11 @@ public class TextFieldWidget extends Widget {
 
     @Override
     public void render(Canvas c, int mouseX, int mouseY) {
-        Theme.field(c, x, y, w, h, focused);
+        Vanilla.editBox(c, x, y, w, h, focused);
         int ty = y + (h - c.lineHeight()) / 2 + 1;
         c.scissor(x + 2, y + 1, x + w - 2, y + h - 1);
         if (buffer.isEmpty() && !focused) {
-            c.text(placeholder, x + 5, ty, Theme.TEXT_FAINT, false);
+            c.text(placeholder, x + 5, ty, 0xFF707070, true);
         } else {
             String caret = focused && (System.currentTimeMillis() / 500) % 2 == 0 ? "_" : "";
             String shown = buffer + caret;
@@ -53,7 +53,7 @@ public class TextFieldWidget extends Widget {
             int avail = w - 10;
             int start = 0;
             while (start < shown.length() && c.textWidth(shown.substring(start)) > avail) start++;
-            c.text(shown.substring(start), x + 5, ty, Theme.TEXT, false);
+            c.text(shown.substring(start), x + 5, ty, 0xFFE0E0E0, true);
         }
         c.unscissor();
     }

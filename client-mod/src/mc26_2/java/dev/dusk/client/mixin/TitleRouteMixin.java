@@ -26,7 +26,7 @@ public abstract class TitleRouteMixin {
     @Inject(method = "setScreen", at = @At("HEAD"), cancellable = true)
     private void duskclient$routeTitle(Screen screen, CallbackInfo ci) {
         Gui self = (Gui) (Object) this;
-        if (screen instanceof TitleScreen && Minecraft.getInstance().level == null && !duskclient$GAMETEST) {
+        if ((screen instanceof TitleScreen || screen == null) && Minecraft.getInstance().level == null && !duskclient$GAMETEST) {
             ci.cancel();
             self.setScreen(new DuskTitleScreen());
         }

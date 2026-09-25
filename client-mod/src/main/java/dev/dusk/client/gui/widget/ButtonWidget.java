@@ -1,29 +1,21 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
-import dev.dusk.client.gui.Theme;
+import dev.dusk.client.gui.Vanilla;
 
+/** A vanilla button filling its bounds. */
 public class ButtonWidget extends Widget {
     private final String label;
     private final Runnable onClick;
-    private boolean primary;
 
     public ButtonWidget(String label, Runnable onClick) {
         this.label = label;
         this.onClick = onClick;
     }
 
-    public ButtonWidget primary() {
-        this.primary = true;
-        return this;
-    }
-
     @Override
     public void render(Canvas c, int mouseX, int mouseY) {
-        boolean hover = contains(mouseX, mouseY);
-        Theme.Kind kind = primary ? Theme.Kind.PRIMARY : Theme.Kind.NORMAL;
-        Theme.button(c, x, y, w, h, hover, kind);
-        Theme.buttonLabel(c, label, x, y, w, h, hover, kind);
+        Vanilla.button(c, label, x, y + (h - Vanilla.BUTTON_H) / 2, w, Vanilla.BUTTON_H, contains(mouseX, mouseY), true);
     }
 
     @Override

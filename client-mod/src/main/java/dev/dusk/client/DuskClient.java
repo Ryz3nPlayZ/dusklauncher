@@ -3,8 +3,9 @@ package dev.dusk.client;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.cosmetics.CosmeticsManager;
-import dev.dusk.client.gui.DuskSettingsScreen;
-import dev.dusk.client.gui.HudEditorScreen;
+import dev.dusk.client.cosmetics.LoadoutWatcher;
+import dev.dusk.client.gui.DuskMenuScreen;
+import dev.dusk.client.gui.MenuScreen;
 import dev.dusk.client.hud.HudHooks;
 import dev.dusk.client.hud.Raycast;
 import dev.dusk.client.hud.TpsTracker;
@@ -177,10 +178,11 @@ public class DuskClient implements ClientModInitializer {
         KeyMapping behindFrontKey = Compat.registerKey("key.duskclient.behindyou_front", GLFW.GLFW_KEY_UNKNOWN);
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            LoadoutWatcher.tick();
             while (settingsKey.consumeClick()) {
                 Screen current = Compat.currentScreen(client);
-                if (client.player != null && !(current instanceof DuskSettingsScreen) && !(current instanceof HudEditorScreen)) {
-                    Compat.setScreen(client, new DuskSettingsScreen(current));
+                if (client.player != null && !(current instanceof MenuScreen)) {
+                    Compat.setScreen(client, new DuskMenuScreen(current));
                 }
             }
             boolean changed = false;

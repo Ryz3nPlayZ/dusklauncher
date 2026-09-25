@@ -1,39 +1,45 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
-import dev.dusk.client.gui.Theme;
+import dev.dusk.client.gui.Vanilla;
 
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
-/** Labelled on/off switch drawn as a pill with a sliding knob. */
-public class ToggleWidget extends Widget {
-    public static final int SWITCH_W = Theme.SWITCH_W, SWITCH_H = Theme.SWITCH_H;
-
-    private final String label;
+/** Flex-HUD's toggle row: the whole row is the button, the tick box sits at its right end. */
+public class ToggleWidget extends SettingRow {
     private final BooleanSupplier get;
     private final Consumer<Boolean> set;
 
     public ToggleWidget(String label, BooleanSupplier get, Consumer<Boolean> set) {
-        this.label = label;
+        super(label);
         this.get = get;
         this.set = set;
     }
 
     @Override
-    public void render(Canvas c, int mouseX, int mouseY) {
-        if (contains(mouseX, mouseY)) c.fill(x, y, x + w, y + h, Theme.ROW_HOVER);
-        if (label != null) c.text(label, x + 4, y + (h - c.lineHeight()) / 2 + 1, Theme.TEXT, false);
-        drawSwitch(c, x + w - SWITCH_W - 4, y + (h - SWITCH_H) / 2, get.getAsBoolean());
-    }
+    protected int controlWidth() { return SQUARE; }
 
-    public static void drawSwitch(Canvas c, int sx, int sy, boolean on) {
-        Theme.switchBox(c, sx, sy, on);
+    private boolean onRow(double mx, double my) {
+        return Vanilla.inside(mx, my, x, top(), controlX() + SQUARE - x, SQUARE);
     }
 
     @Override
-    public boolean click(double mx, double my, int button) {
-        if (button != 0 || !contains(mx, my)) return false;
+    protected void renderRow(Canvas c, int mouseX, int mouseY) {
+        if (!onRow(mouseX, mouseY)) return;
+        int w = controlX() + SQUARE - x;
+        c.fill(x, top(), x + w, top() + SQUARE, Vanilla.ROW_HOVER);
+        c.outline(x - 1, top() - 1, w + 2, SQUARE + 2, 0xFFFFFFFF);
+    }
+
+    @Override
+    protected void renderControl(Canvas c, int mouseX, int mouseY) {
+        Vanilla.toggleBox(c, controlX(), top(), SQUARE, get.getAsBoolean(), onRow(mouseX, mouseY), true);
+    }
+
+    @Override
+    protected boolean clickControl(double mx, double my, int button) {
+        if (button != 0 || !onRow(mx, my)) return false;
         set.accept(!get.getAsBoolean());
         return true;
     }

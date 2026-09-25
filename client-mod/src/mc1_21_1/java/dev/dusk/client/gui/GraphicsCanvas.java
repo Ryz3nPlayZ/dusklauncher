@@ -114,4 +114,15 @@ public record GraphicsCanvas(GuiGraphics g, Font font) implements Canvas {
     public void unscissor() {
         g.disableScissor();
     }
+
+    @Override
+    public void beginLayer() {
+        g.pose().pushPose();
+        g.pose().translate(0, 0, 400);
+    }
+
+    @Override
+    public void endLayer() {
+        g.pose().popPose();
+    }
 }

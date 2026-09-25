@@ -1,7 +1,7 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
-import dev.dusk.client.gui.Theme;
+import dev.dusk.client.gui.Vanilla;
 
 /** Static text, optionally wrapped over several lines by the caller. */
 public class LabelWidget extends Widget {
@@ -9,7 +9,7 @@ public class LabelWidget extends Widget {
     private final int color;
 
     public LabelWidget(String text) {
-        this(text, Theme.TEXT_MUTED);
+        this(text, Vanilla.TEXT_DIM);
     }
 
     public LabelWidget(String text, int color) {
@@ -19,6 +19,6 @@ public class LabelWidget extends Widget {
 
     @Override
     public void render(Canvas c, int mouseX, int mouseY) {
-        c.text(text, x, y + (h - c.lineHeight()) / 2, color, false);
+        c.text(text, x + 6, y + (h - c.lineHeight()) / 2 + 1, color, true);
     }
 }

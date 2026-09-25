@@ -113,4 +113,9 @@ public record GraphicsCanvas(GuiGraphicsExtractor g, Font font) implements Canva
     public void unscissor() {
         g.disableScissor();
     }
+
+    @Override
+    public void beginLayer() {
+        g.nextStratum();
+    }
 }

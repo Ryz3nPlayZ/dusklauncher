@@ -1,7 +1,7 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
-import dev.dusk.client.gui.Theme;
+import dev.dusk.client.gui.Vanilla;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +35,7 @@ public class ScrollPane {
     public void layout(int x, int y, int w, int h) {
         this.x = x; this.y = y; this.w = w; this.h = h;
         int cy = y - scroll;
-        int cw = w - 6; // room for the scrollbar
+        int cw = w - Vanilla.SCROLLBAR_W - 4; // room for the scrollbar
         for (Widget wd : widgets) {
             if (wd.hidden()) continue;
             wd.setBounds(x, cy, cw, wd.h);
@@ -65,9 +65,9 @@ public class ScrollPane {
         }
         c.unscissor();
         if (contentHeight > h) {
-            int barH = Math.max(10, h * h / contentHeight);
+            int barH = Math.max(32, h * h / contentHeight);
             int barY = y + (h - barH) * scroll / Math.max(1, maxScroll());
-            Theme.scrollbar(c, x + w - 3, y, y + h, barY, barH);
+            Vanilla.scrollbar(c, x + w - Vanilla.SCROLLBAR_W, y, y + h, barY, barH);
         }
     }
 
@@ -76,7 +76,7 @@ public class ScrollPane {
             blur();
             return false;
         }
-        if (contentHeight > h && mx >= x + w - 5) {
+        if (contentHeight > h && mx >= x + w - Vanilla.SCROLLBAR_W) {
             draggingBar = true;
             dragBar(my);
             return true;

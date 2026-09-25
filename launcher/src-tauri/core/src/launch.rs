@@ -547,7 +547,7 @@ mod tests {
         }"#;
         let version: meta::VersionJson = serde_json::from_str(json).unwrap();
         let mut profile = test_profile();
-        profile.jvm_args = crate::profile::default_jvm_args(); // includes -XX:+UseZGC
+        profile.jvm_args = vec!["-XX:+UseZGC".into(), "-XX:+AlwaysPreTouch".into()];
         let dirs = profile.dirs(Path::new("/data"));
         let session = Session {
             access_token: "tok".into(),
@@ -577,7 +577,7 @@ mod tests {
         // legacy JVM args present
         assert!(spec.jvm_args.iter().any(|a| a.starts_with("-Djava.library.path")));
         assert!(spec.jvm_args.iter().any(|a| a == "-cp"));
-        // Java 8: the ZGC default must be stripped, AlwaysPreTouch survives
+        // Java 8: ZGC must be stripped, AlwaysPreTouch survives
         assert!(!spec.jvm_args.iter().any(|a| a.contains("UseZGC")), "ZGC is fatal on Java 8");
         assert!(spec.jvm_args.iter().any(|a| a == "-XX:+AlwaysPreTouch"));
         for arg in spec.jvm_args.iter().chain(spec.game_args.iter()) {

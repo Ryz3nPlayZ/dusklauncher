@@ -527,7 +527,9 @@ pub async fn install_and_launch(
     // mod twice. The mod reads other players' loadouts from the Dusk service.
     let profile = {
         let mut p = profile;
-        p.jvm_args.retain(|a| !a.starts_with("-Dfabric.addMods=") && !a.starts_with("-Ddusk.api="));
+        p.jvm_args.retain(|a| {
+            !a.starts_with("-Dfabric.addMods=") && !a.starts_with("-Ddusk.api=") && !a.starts_with("-Ddusk.loadout=")
+        });
         if p.loader == Loader::Fabric {
             let in_mods = crate::cosmetics::client_mod_in_mods(&dirs.mods);
             match crate::cosmetics::client_mod_jar_for(&p.game_version) {
@@ -545,12 +547,14 @@ pub async fn install_and_launch(
                 },
             }
             p.jvm_args.push(format!("-Ddusk.api={}", crate::dusk::api_base()));
+            p.jvm_args.push(format!("-Ddusk.loadout={}", crate::cosmetics::loadout_path(&state.data_dir).display()));
             if let Err(e) = crate::cosmetics::write_loadout_to_instance(&state.data_dir, &dirs.root) {
                 tracing::warn!("could not write cosmetics loadout to instance: {e}");
             }
         }
         p
     };
+    seed_instance_config(&dirs.root);
     let spec = launch::build_launch_spec(&java_bin, &version, &profile, &dirs, &natives_dir, &session, &env);
     let mut child = launch::launch(&spec, &env).await.map_err(|e| e.to_string())?;
 
@@ -898,10 +902,27 @@ pub fn get_settings(state: State<AppState>) -> Settings {
     state.settings.lock().unwrap().clone()
 }
 
+/// First-launch config for a fresh instance, written only where the file
+/// doesn't exist yet so the player's own choices always win. On macOS,
+/// Sodium Extra renders at the display's native (Retina) resolution unless
+/// told otherwise: 4x the pixels of what Prism instances usually run. The
+/// file may be partial: Sodium Extra fills the rest from its defaults.
+fn seed_instance_config(root: &std::path::Path) {
+    if cfg!(target_os = "macos") {
+        let path = root.join("config").join("sodium-extra-options.json");
+        if !path.exists() {
+            let _ = std::fs::create_dir_all(root.join("config"));
+            let _ = std::fs::write(&path, r#"{"extra_settings":{"reduce_resolution_on_mac":true}}"#);
+        }
+    }
+}
+
 #[tauri::command]
-pub fn set_settings(state: State<AppState>, settings: Settings) -> Result<Settings, String> {
+pub fn set_settings(state: State<AppState>, mut settings: Settings) -> Result<Settings, String> {
     {
         let mut s = state.settings.lock().unwrap();
+        // the UI doesn't know this field; don't let a round-trip rewind it
+        settings.jvm_defaults_rev = settings.jvm_defaults_rev.max(s.jvm_defaults_rev);
         *s = settings.clone();
     }
     state.save_settings(&settings);

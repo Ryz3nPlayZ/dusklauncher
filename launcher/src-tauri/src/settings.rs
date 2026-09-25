@@ -3,6 +3,10 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Bumped whenever the launcher's default JVM args change in a way existing
+/// installs should pick up (see `AppState::init`). 1: ZGC -> G1.
+pub const JVM_DEFAULTS_REV: u32 = 1;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -14,6 +18,9 @@ pub struct Settings {
     pub selected_profile_id: Option<String>,
     pub memory_mb: u32,
     pub default_jvm_args: String,
+    /// which launcher JVM-default migration this file has seen
+    #[serde(default)]
+    pub jvm_defaults_rev: u32,
     #[serde(default)]
     pub java_paths: std::collections::HashMap<String, String>,
     #[serde(default)]
@@ -67,7 +74,8 @@ impl Default for Settings {
             fps_cap: 30,
             selected_profile_id: None,
             memory_mb: 4096,
-            default_jvm_args: "-Xms2G -Xmx4G -XX:+UseZGC -XX:+AlwaysPreTouch".into(),
+            default_jvm_args: "-Xms2G -Xmx4G -XX:+UseG1GC".into(),
+            jvm_defaults_rev: JVM_DEFAULTS_REV,
             java_paths: Default::default(),
             env_vars: String::new(),
             prelaunch_hook: String::new(),

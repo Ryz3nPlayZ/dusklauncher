@@ -67,6 +67,13 @@ public class CustomCrosshair extends Module {
         appliedPreset = CUSTOM;
     }
 
+    /** Picks a preset and paints it into the grid now, even if it was already selected. */
+    public void applyPreset(String name) {
+        preset.set(name);
+        appliedPreset = "";
+        syncPreset();
+    }
+
     /** Copies the chosen preset into the grid when the selection changed. */
     public void syncPreset() {
         String chosen = preset.get();
