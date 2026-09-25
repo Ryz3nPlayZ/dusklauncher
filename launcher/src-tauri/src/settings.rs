@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 
 /// Bumped whenever the launcher's default JVM args change in a way existing
 /// installs should pick up (see `AppState::init`). 1: ZGC -> G1.
-pub const JVM_DEFAULTS_REV: u32 = 1;
+/// 2: Mojang's G1 tuning flags.
+pub const JVM_DEFAULTS_REV: u32 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,7 +75,7 @@ impl Default for Settings {
             fps_cap: 30,
             selected_profile_id: None,
             memory_mb: 4096,
-            default_jvm_args: "-Xms2G -Xmx4G -XX:+UseG1GC".into(),
+            default_jvm_args: fasterlauncher_core::profile::default_jvm_args().join(" "),
             jvm_defaults_rev: JVM_DEFAULTS_REV,
             java_paths: Default::default(),
             env_vars: String::new(),

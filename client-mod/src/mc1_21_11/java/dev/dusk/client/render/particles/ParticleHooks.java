@@ -39,12 +39,14 @@ public final class ParticleHooks {
         });
     }
 
+    // Both check active() first: the quad mixins call these five or six times
+    // per particle per frame, and with the module off that must cost nothing.
     public static Particles.Entry of(ParticleType<?> type) {
-        return type == null ? null : Particles.entry(key(type));
+        return type == null || !Particles.active() ? null : Particles.entry(key(type));
     }
 
     public static Particles.Entry of(Particle particle) {
-        return particle instanceof ParticleTypeHolder h ? of(h.duskclient$type()) : null;
+        return Particles.active() && particle instanceof ParticleTypeHolder h ? of(h.duskclient$type()) : null;
     }
 
     public static void tag(Particle particle, ParticleType<?> type) {

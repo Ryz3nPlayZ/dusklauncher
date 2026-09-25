@@ -20,6 +20,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.zip.CRC32;
 
 /**
  * Per-player cosmetics state (docs/COSMETICS.md §2).
@@ -57,6 +58,9 @@ public final class CosmeticsManager {
         volatile PlayerCosmetics current = PlayerCosmetics.NONE;
         volatile long refreshAt = 0;
         final AtomicBoolean loading = new AtomicBoolean();
+        // what {@link #current} was built from; a refresh that resolves to the
+        // same thing keeps the textures instead of decoding and uploading again
+        @Nullable volatile String signature;
         // one-slot cache so getSkin() doesn't allocate a PlayerSkin per frame
         @Nullable PlayerSkin lastIn;
         @Nullable PlayerSkin lastOut;
@@ -134,28 +138,37 @@ public final class CosmeticsManager {
 
     // ── worker thread ─────────────────────────────────────────────────────
 
+    /** A resolved player: what it was built from, and the cosmetics (null: same as before). */
+    private record Resolved(@Nullable String signature, @Nullable PlayerCosmetics cosmetics) {}
+
     private static void load(UUID uuid, @Nullable String name, boolean local, Entry e) {
-        PlayerCosmetics result = PlayerCosmetics.NONE;
+        Resolved r = new Resolved(null, PlayerCosmetics.NONE);
         try {
-            result = resolve(uuid, name, local);
+            r = resolve(uuid, name, local, e.signature);
         } catch (Throwable t) {
             LOG.warn("Cosmetics load failed for {}", uuid, t);
         }
-        final PlayerCosmetics fresh = result;
+        final PlayerCosmetics fresh = r.cosmetics();
+        final String signature = r.signature();
         Minecraft.getInstance().execute(() -> {
+            if (fresh == null) { // unchanged: keep what's drawn
+                if (ENTRIES.get(uuid) == e) e.refreshAt = System.currentTimeMillis() + (e.current == PlayerCosmetics.NONE ? NEGATIVE_TTL_MS : TTL_MS);
+                e.loading.set(false);
+                return;
+            }
             try {
                 fresh.register();
             } catch (Throwable t) {
                 LOG.warn("Texture upload failed for {}", uuid, t);
                 fresh.release();
-                finish(uuid, e, PlayerCosmetics.NONE);
+                finish(uuid, e, PlayerCosmetics.NONE, null);
                 return;
             }
-            finish(uuid, e, fresh);
+            finish(uuid, e, fresh, signature);
         });
     }
 
-    private static void finish(UUID uuid, Entry e, PlayerCosmetics fresh) {
+    private static void finish(UUID uuid, Entry e, PlayerCosmetics fresh, @Nullable String signature) {
         if (ENTRIES.get(uuid) != e) { // cleared (disconnect) while loading
             fresh.release();
             e.loading.set(false);
@@ -163,6 +176,7 @@ public final class CosmeticsManager {
         }
         PlayerCosmetics old = e.current;
         e.current = fresh;
+        e.signature = signature;
         e.lastIn = null;
         e.lastOut = null;
         old.release();
@@ -170,7 +184,7 @@ public final class CosmeticsManager {
         e.loading.set(false);
     }
 
-    private static PlayerCosmetics resolve(UUID uuid, @Nullable String name, boolean local) {
+    private static Resolved resolve(UUID uuid, @Nullable String name, boolean local, @Nullable String previous) {
         CosmeticsConfig cfg = DuskConfig.get().cosmetics;
         String key = uuid.toString().replace("-", "") + "/" + GENERATION.incrementAndGet();
 
@@ -187,9 +201,23 @@ public final class CosmeticsManager {
                 accessoryIds = l.accessories();
             }
         }
-        List<Accessory> accessories = loadAccessories(accessoryIds, key);
 
+        // Settle what to show first (cheap), and only decode when it changed.
         CapeRegistry.CapeEntry entry = CapeRegistry.cape(capeId);
+        MinecraftCapesProvider.Profile mcc = null;
+        if (entry == null) {
+            if (capeId >= 0) LOG.debug("Unknown registry cape {} for {} (older jar?)", capeId, uuid);
+            if (cfg.minecraftCapes && (local || cfg.showOthers)) {
+                MinecraftCapesProvider.Profile p = MinecraftCapesProvider.fetch(uuid, name);
+                if (p != null && !p.isEmpty()) mcc = p;
+            }
+        }
+        String signature = entry != null ? "dusk:" + capeId + accessoryIds
+                : mcc != null ? "mcc:" + crc(mcc.cape()) + "/" + crc(mcc.ears()) + "/" + mcc.glint() + mcc.upsideDown() + accessoryIds
+                : "none:" + accessoryIds;
+        if (signature.equals(previous)) return new Resolved(signature, null);
+
+        List<Accessory> accessories = loadAccessories(accessoryIds, key);
         if (entry != null) {
             byte[] png = CapeRegistry.texture(capeId, "cape.png");
             CapeTexture cape = png == null ? null : CapeTexture.prepareCape(key, png, entry.frameMs());
@@ -201,21 +229,21 @@ public final class CosmeticsManager {
                     byte[] earPng = CapeRegistry.texture(capeId, "ears.png");
                     ears = earPng == null ? null : CapeTexture.prepareEars(key, earPng);
                 }
-                return PlayerCosmetics.of(cape, ears, entry.glint(), entry.upsideDown(), accessories);
+                return new Resolved(signature, PlayerCosmetics.of(cape, ears, entry.glint(), entry.upsideDown(), accessories));
             }
-        } else if (capeId >= 0) {
-            LOG.debug("Unknown registry cape {} for {} (older jar?)", capeId, uuid);
+        } else if (mcc != null) {
+            CapeTexture cape = mcc.cape() == null ? null : CapeTexture.prepareCape(key, mcc.cape());
+            CapeTexture ears = mcc.ears() == null ? null : CapeTexture.prepareEars(key, mcc.ears());
+            return new Resolved(signature, PlayerCosmetics.of(cape, ears, cape != null && mcc.glint(), mcc.upsideDown(), accessories));
         }
+        return new Resolved(signature, PlayerCosmetics.of(null, null, false, false, accessories));
+    }
 
-        if (cfg.minecraftCapes && (local || cfg.showOthers)) {
-            MinecraftCapesProvider.Profile p = MinecraftCapesProvider.fetch(uuid, name);
-            if (p != null && !p.isEmpty()) {
-                CapeTexture cape = p.cape() == null ? null : CapeTexture.prepareCape(key, p.cape());
-                CapeTexture ears = p.ears() == null ? null : CapeTexture.prepareEars(key, p.ears());
-                return PlayerCosmetics.of(cape, ears, cape != null && p.glint(), p.upsideDown(), accessories);
-            }
-        }
-        return PlayerCosmetics.of(null, null, false, false, accessories);
+    private static long crc(byte @Nullable [] bytes) {
+        if (bytes == null) return -1;
+        CRC32 crc = new CRC32();
+        crc.update(bytes);
+        return crc.getValue();
     }
 
     private static List<Accessory> loadAccessories(List<Integer> ids, String key) {

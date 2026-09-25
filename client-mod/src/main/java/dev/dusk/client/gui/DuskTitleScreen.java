@@ -2,11 +2,11 @@ package dev.dusk.client.gui;
 
 import com.mojang.realmsclient.RealmsMainScreen;
 import dev.dusk.client.compat.Compat;
+import dev.dusk.client.compat.SkinCompat;
 import dev.dusk.client.config.DuskConfig;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.packs.PackSelectionScreen;
 import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
 import net.minecraft.client.gui.screens.options.AccessibilityOptionsScreen;
 import net.minecraft.client.gui.screens.options.LanguageSelectScreen;
@@ -70,19 +70,12 @@ public class DuskTitleScreen extends DuskScreen {
         icon(ix, top, ib, Icons.REALMS, "Realms", () -> open(new RealmsMainScreen(this)));
         ix -= ib + ig;
         if (FabricLoader.getInstance().isModLoaded("iris")) {
-            icon(ix, top, ib, Icons.SHADER, "Shaders", this::openShaders);
+            icon(ix, top, ib, Icons.SHADER, "Shaders", () -> open(new PackBrowserScreen(this, PackBrowserScreen.SHADERS)));
             ix -= ib + ig;
         }
-        icon(ix, top, ib, Icons.PACK, "Resource Packs", () -> {
-            if (this.minecraft == null) return;
-            Minecraft mc = this.minecraft;
-            open(new PackSelectionScreen(mc.getResourcePackRepository(), repo -> {
-                mc.options.updateResourcePacks(repo);
-                Compat.setScreen(mc, this);
-            }, mc.getResourcePackDirectory(), Component.translatable("resourcePack.title")));
-        });
+        icon(ix, top, ib, Icons.PACK, "Resource Packs", () -> open(new PackBrowserScreen(this, PackBrowserScreen.RESOURCE_PACKS)));
         ix -= ib + ig;
-        icon(ix, top, ib, Icons.GRID, "Dusk Menu", () -> open(new DuskMenuScreen(this)));
+        icon(ix, top, ib, Icons.GRID, "Dusk Menu", () -> open(new DuskSettingsScreen(this)));
         if (DuskConfig.get().showAccountTile && this.minecraft != null) {
             // 5 | 28 face | 10 | name | 14
             faceScale = Math.max(1, Math.round(28 * v / 8));
@@ -117,8 +110,32 @@ public class DuskTitleScreen extends DuskScreen {
         add(cx - bw / 2, y, bw, bh, "OPTIONS", Icons.GEAR, Theme.Kind.NORMAL,
                 () -> { if (this.minecraft != null) open(Compat.optionsScreen(this, this.minecraft)); });
         y += bh + gap;
+        wardrobe(cx - bw / 2, y - gap - (3 * bh + 2 * gap), 3 * bh + 2 * gap, bh, v);
         add(cx - qw / 2, Math.max(y, quitY), qw, qh, "QUIT GAME", null, Theme.Kind.NORMAL,
                 () -> { if (this.minecraft != null) this.minecraft.stop(); });
+    }
+
+    /**
+     * The player's model, spinnable, with WARDROBE under it, centred on the
+     * bars in the space to their left. Left out when that space is too narrow.
+     */
+    private void wardrobe(int barsX, int barsY, int barsH, int bh, float v) {
+        if (this.minecraft == null) return;
+        int margin = Math.max(8, px(40, v));
+        int btnW = this.font.width("WARDROBE") * labelScale + px(36, v);
+        int bth = Math.max(18, px(34, v)), bgap = Math.max(4, px(10, v));
+        int mw = Math.min(px(150, v), barsX - 2 * margin);
+        if (mw < 60 || btnW > barsX - 2 * margin) return;
+        int mh = Math.min(mw * 2, Math.max(60, barsH + 2 * bh - bth - bgap));
+        mw = Math.min(mw, mh / 2 + 10);
+        int bx = barsX / 2;
+        int top = barsY + barsH / 2 - (mh + bgap + bth) / 2;
+        var model = SkinCompat.widget(this.minecraft, mw, mh, () -> null);
+        model.setX(bx - mw / 2);
+        model.setY(top);
+        this.addRenderableWidget(model);
+        int w = Math.max(btnW, Math.min(mw, px(180, v)));
+        add(bx - w / 2, top + mh + bgap, w, bth, "WARDROBE", null, Theme.Kind.NORMAL, () -> open(new WardrobeScreen(this)));
     }
 
     private static int px(float css, float v) {
@@ -135,18 +152,6 @@ public class DuskTitleScreen extends DuskScreen {
 
     private void open(Screen screen) {
         if (this.minecraft != null) Compat.setScreen(this.minecraft, screen);
-    }
-
-    /** Iris's shader pack screen, through its public API (Iris is optional). */
-    private void openShaders() {
-        try {
-            Class<?> api = Class.forName("net.irisshaders.iris.api.v0.IrisApi");
-            Object iris = api.getMethod("getInstance").invoke(null);
-            Object screen = api.getMethod("openMainIrisScreenObj", Object.class).invoke(iris, this);
-            if (screen instanceof Screen s) open(s);
-        } catch (ReflectiveOperationException | LinkageError e) {
-            // an Iris without the v0 API: no shortcut
-        }
     }
 
     private String username() {
@@ -251,7 +256,7 @@ public class DuskTitleScreen extends DuskScreen {
     @Override
     protected boolean onKey(int key, int scancode, int modifiers) {
         if (isSettingsKey(key, scancode)) {
-            open(new DuskMenuScreen(this));
+            open(new DuskSettingsScreen(this));
             return true;
         }
         return key == GLFW.GLFW_KEY_ESCAPE; // the title screen has nowhere to go back to

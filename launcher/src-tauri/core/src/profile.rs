@@ -9,12 +9,36 @@ use std::path::PathBuf;
 /// Safe for every Java Mojang ships (8+): version-gated flags live in
 /// [`modern_jvm_extras`], not here.
 pub fn default_jvm_args() -> Vec<String> {
-    vec![
-        "-Xms2G".into(),
-        "-Xmx4G".into(),
-        "-XX:+UnlockExperimentalVMOptions".into(),
-        "-XX:+UseG1GC".into(),
-    ]
+    let mut args = vec!["-Xms2G".into(), "-Xmx4G".into()];
+    args.extend(G1_TUNING.iter().map(|a| a.to_string()));
+    args
+}
+
+/// The G1 set Mojang's launcher passes: a bigger young generation and
+/// reserve plus a 50 ms pause target, so the per-frame garbage the game
+/// makes is swept in short young collections instead of long mixed ones.
+/// `G1NewSizePercent` is experimental, hence the unlock flag first.
+const G1_TUNING: &[&str] = &[
+    "-XX:+UnlockExperimentalVMOptions",
+    "-XX:+UseG1GC",
+    "-XX:G1NewSizePercent=20",
+    "-XX:G1ReservePercent=20",
+    "-XX:MaxGCPauseMillis=50",
+    "-XX:G1HeapRegionSize=32M",
+];
+
+/// Give args that are still the launcher's plain G1 defaults (heap sizes
+/// aside) the [`G1_TUNING`] set. Returns whether anything changed.
+pub fn migrate_g1_tuning(args: &mut Vec<String>) -> bool {
+    let only_defaults = args.iter().all(|a| {
+        a.starts_with("-Xms") || a.starts_with("-Xmx") || a == "-XX:+UnlockExperimentalVMOptions" || a == "-XX:+UseG1GC"
+    });
+    if !only_defaults || !args.iter().any(|a| a == "-XX:+UseG1GC") {
+        return false;
+    }
+    args.retain(|a| a.starts_with("-Xms") || a.starts_with("-Xmx"));
+    args.extend(G1_TUNING.iter().map(|a| a.to_string()));
+    true
 }
 
 /// Swap the launcher's old ZGC defaults for G1 in args that still carry
@@ -153,4 +177,36 @@ pub struct ProfileDirs {
     pub libraries: PathBuf,
     /// shared across profiles
     pub runtimes: PathBuf,
+}
+
+#[cfg(test)]
+mod jvm_default_tests {
+    use super::*;
+
+    fn args(s: &str) -> Vec<String> {
+        s.split_whitespace().map(str::to_string).collect()
+    }
+
+    #[test]
+    fn plain_g1_defaults_gain_tuning() {
+        let mut a = args("-Xms1G -Xmx6G -XX:+UseG1GC");
+        assert!(migrate_g1_tuning(&mut a));
+        assert_eq!(a[..2], args("-Xms1G -Xmx6G")[..]);
+        assert_eq!(a[2..], default_jvm_args()[2..]);
+        assert!(!migrate_g1_tuning(&mut a), "already tuned");
+    }
+
+    #[test]
+    fn legacy_zgc_lands_on_tuned_g1() {
+        let mut a = args("-Xms2G -Xmx4G -XX:+UnlockExperimentalVMOptions -XX:+UseZGC -XX:+AlwaysPreTouch");
+        assert!(migrate_legacy_gc(&mut a) | migrate_g1_tuning(&mut a));
+        assert_eq!(a, default_jvm_args());
+    }
+
+    #[test]
+    fn hand_tuned_args_are_left_alone() {
+        let mut a = args("-Xmx4G -XX:+UseG1GC -XX:+ParallelRefProcEnabled");
+        assert!(!migrate_g1_tuning(&mut a));
+        assert_eq!(a, args("-Xmx4G -XX:+UseG1GC -XX:+ParallelRefProcEnabled"));
+    }
 }

@@ -7,7 +7,20 @@ package dev.dusk.client.render.motionblur;
  */
 public final class BlurStrengthCalculator {
 
-    public record Result(float strength, int sampleAmount) {}
+    /**
+     * Upper bound on the taps per pixel. The shader takes speed x samples of
+     * them, and uncapped (100 x fps/refresh: 400 at 240 fps on 60 Hz) a fast
+     * flick cost up to 160 full-screen texture reads per pixel, a frame-time
+     * spike right when motion needs to be smooth. The jittered taps hide the
+     * coarser steps.
+     */
+    public static final int MAX_SAMPLES = 32;
+
+    public record Result(float strength, int sampleAmount) {
+        public Result {
+            sampleAmount = Math.min(sampleAmount, MAX_SAMPLES);
+        }
+    }
 
     public Result calculate(float baseStrength, float fps, int refreshRate, boolean scalingEnabled) {
         if (!scalingEnabled) {

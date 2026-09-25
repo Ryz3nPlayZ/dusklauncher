@@ -456,7 +456,7 @@ function SettingsTab({
         <PxBox family="panel" height="md" className="px--wide">
           <input
             className="input"
-            placeholder="-XX:+UseZGC"
+            placeholder="-XX:MaxGCPauseMillis=50"
             value={jvm}
             onChange={(e) => setJvm(e.target.value)}
           />

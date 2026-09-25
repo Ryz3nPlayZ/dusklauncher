@@ -89,8 +89,6 @@ public final class Compat {
         return AbstractSignRenderer.getDarkColor(text);
     }
 
-    private static java.util.function.Supplier<net.minecraft.client.resources.PlayerSkin> skin;
-
     /** The local player's skin texture as "namespace:path" (the default skin until it has loaded). */
     public static String localSkin(Minecraft mc) {
         return skin(mc).texture().toString();
@@ -102,7 +100,6 @@ public final class Compat {
     }
 
     private static net.minecraft.client.resources.PlayerSkin skin(Minecraft mc) {
-        if (skin == null) skin = mc.getSkinManager().lookupInsecure(mc.getGameProfile());
-        return skin.get();
+        return SkinCompat.current(mc);
     }
 }

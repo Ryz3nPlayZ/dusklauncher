@@ -659,7 +659,7 @@ const fixtures: Record<string, unknown> = {
     fpsCap: 30,
     selectedProfileId: 'p-performium',
     memoryMb: 4096,
-    defaultJvmArgs: '-Xms2G -Xmx4G -XX:+UseZGC -XX:+AlwaysPreTouch',
+    defaultJvmArgs: '-Xms2G -Xmx4G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M',
     javaPaths: {},
     envVars: '',
     prelaunchHook: '',

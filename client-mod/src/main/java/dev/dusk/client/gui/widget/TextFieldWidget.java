@@ -1,6 +1,7 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.gui.Theme;
 import dev.dusk.client.gui.Vanilla;
 import org.lwjgl.glfw.GLFW;
 
@@ -17,6 +18,7 @@ public class TextFieldWidget extends Widget {
     private final boolean live;
     private final int maxLength;
     private String placeholder = "";
+    private boolean themed;
     private String buffer;
 
     public TextFieldWidget(Supplier<String> source, Consumer<String> sink, boolean live, int maxLength) {
@@ -25,6 +27,12 @@ public class TextFieldWidget extends Widget {
         this.live = live;
         this.maxLength = maxLength;
         this.buffer = source.get();
+    }
+
+    /** Draw with the Dusk panel's look instead of vanilla's edit box. */
+    public TextFieldWidget themed() {
+        this.themed = true;
+        return this;
     }
 
     public TextFieldWidget placeholder(String placeholder) {
@@ -41,11 +49,12 @@ public class TextFieldWidget extends Widget {
 
     @Override
     public void render(Canvas c, int mouseX, int mouseY) {
-        Vanilla.editBox(c, x, y, w, h, focused);
+        if (themed) Theme.field(c, x, y, w, h, focused);
+        else Vanilla.editBox(c, x, y, w, h, focused);
         int ty = y + (h - c.lineHeight()) / 2 + 1;
         c.scissor(x + 2, y + 1, x + w - 2, y + h - 1);
         if (buffer.isEmpty() && !focused) {
-            c.text(placeholder, x + 5, ty, 0xFF707070, true);
+            c.text(placeholder, x + 5, ty, themed ? Theme.TEXT_FAINT : 0xFF707070, !themed);
         } else {
             String caret = focused && (System.currentTimeMillis() / 500) % 2 == 0 ? "_" : "";
             String shown = buffer + caret;
@@ -53,7 +62,7 @@ public class TextFieldWidget extends Widget {
             int avail = w - 10;
             int start = 0;
             while (start < shown.length() && c.textWidth(shown.substring(start)) > avail) start++;
-            c.text(shown.substring(start), x + 5, ty, 0xFFE0E0E0, true);
+            c.text(shown.substring(start), x + 5, ty, themed ? Theme.TEXT : 0xFFE0E0E0, !themed);
         }
         c.unscissor();
     }

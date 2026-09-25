@@ -220,7 +220,8 @@ pub async fn install_modpack(
     let version = versions
         .first()
         .ok_or_else(|| "modpack has no versions".to_string())?;
-    install_version_inner(app, state, version, None).await
+    let dusk = id == DUSK_PACK_ID;
+    install_version_inner(app, state, version, None, dusk).await
 }
 
 #[derive(Serialize)]
@@ -346,11 +347,10 @@ pub async fn install_modpack_version(
     let version = mr::version(&state.client, &version_id)
         .await
         .map_err(|e| e.to_string())?;
-    // guard: version must belong to the requested project is not enforced by
-    // the API shape here; the id param documents intent and keeps the
-    // frontend call self-describing.
-    let _ = id;
-    install_version_inner(app, state, &version, name).await
+    // the version isn't checked against the project; `id` only says whether
+    // this is the launcher's own pack
+    let dusk = id == DUSK_PACK_ID;
+    install_version_inner(app, state, &version, name, dusk).await
 }
 
 /// `name`: what the user typed in the install dialog; `None` falls back to
@@ -360,6 +360,7 @@ async fn install_version_inner(
     state: State<'_, AppState>,
     version: &mr::Version,
     name: Option<String>,
+    dusk: bool,
 ) -> Result<ProfileDto, String> {
     let bytes = mr::download_mrpack(&state.client, version)
         .await
@@ -376,7 +377,7 @@ async fn install_version_inner(
             }
         }
     }
-    install_mrpack_bytes(app, state, &bytes, &dep_versions, name).await
+    install_mrpack_bytes(app, state, &bytes, &dep_versions, name, dusk).await
 }
 
 /// Import a modpack from a local `.mrpack` (native picker). Same install as
@@ -395,7 +396,7 @@ pub async fn import_mrpack(
     let Some(file) = picked else { return Ok(None) };
     let path = file.into_path().map_err(|e| e.to_string())?;
     let bytes = std::fs::read(&path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
-    install_mrpack_bytes(app, state, &bytes, &[], None).await.map(Some)
+    install_mrpack_bytes(app, state, &bytes, &[], None, false).await.map(Some)
 }
 
 /// Where a pack shipped inside the app bundle lives
@@ -427,7 +428,60 @@ pub async fn install_bundled_pack(
     let path = bundled_pack_path(&app, &state.data_dir, &pack)
         .ok_or_else(|| format!("bundled pack \"{pack}\" is not packaged in this build"))?;
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
-    install_mrpack_bytes(app, state, &bytes, &[], None).await
+    install_mrpack_bytes(app, state, &bytes, &[], None, pack == "dusk-essentials").await
+}
+
+/// Modrinth project of the pack the launcher installs as its default
+/// instance (`DUSK_PACK` in the frontend).
+const DUSK_PACK_ID: &str = "IDrxZk6D";
+
+/// Video settings the launcher's own instance starts with, tuned like a
+/// Prism setup: auto GUI scale, cheaper shadows/blending/mipmaps/clouds and
+/// a shorter simulation distance. Only for a fresh install, so nothing a
+/// player chose is touched; keys a version doesn't know are ignored.
+const DUSK_OPTIONS: &str = "guiScale:0
+entityShadows:false
+biomeBlendRadius:1
+mipmapLevels:2
+cloudRange:32
+simulationDistance:5
+entityDistanceScaling:0.75
+";
+
+/// Defaults for the launcher's own instance, applied right after its
+/// overrides land. The pack ships a sodium-extra config that renders at
+/// Retina resolution on macOS (4x the pixels), so that flag is merged in
+/// rather than seeded-if-absent like other instances get at launch. Sodium
+/// may queue 3 frames ahead of the GPU; 2 trims a frame of input latency
+/// (about 4 ms at 240 fps) for next to no throughput.
+fn seed_dusk_defaults(root: &Path) {
+    let options = root.join("options.txt");
+    if !options.exists() {
+        let _ = std::fs::write(&options, DUSK_OPTIONS);
+    }
+    merge_config(root, "sodium-options.json", "advanced", "cpu_render_ahead_limit", 2.into());
+    if cfg!(target_os = "macos") {
+        merge_config(root, "sodium-extra-options.json", "extra_settings", "reduce_resolution_on_mac", true.into());
+    }
+}
+
+/// Set `section.key` in `config/<file>`, keeping everything else in it.
+fn merge_config(root: &Path, file: &str, section: &str, key: &str, value: serde_json::Value) {
+    let path = root.join("config").join(file);
+    let mut json: serde_json::Value = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .filter(serde_json::Value::is_object)
+        .unwrap_or_else(|| serde_json::json!({}));
+    let sec = &mut json[section];
+    if !sec.is_object() {
+        *sec = serde_json::json!({});
+    }
+    sec[key] = value;
+    let _ = std::fs::create_dir_all(root.join("config"));
+    if let Ok(s) = serde_json::to_string_pretty(&json) {
+        let _ = std::fs::write(&path, s);
+    }
 }
 
 /// Install an .mrpack already in memory: a profile pinned to the pack's
@@ -438,6 +492,7 @@ async fn install_mrpack_bytes(
     bytes: &[u8],
     dep_versions: &[mr::Version],
     name: Option<String>,
+    dusk: bool,
 ) -> Result<ProfileDto, String> {
     let index = mr::parse_mrpack_index(bytes).map_err(|e| e.to_string())?;
 
@@ -510,6 +565,9 @@ async fn install_mrpack_bytes(
     // exported from here or Prism, the mods themselves)
     std::fs::create_dir_all(&dirs.root).map_err(|e| e.to_string())?;
     let _ = mr::extract_overrides(bytes, &dirs.root);
+    if dusk {
+        seed_dusk_defaults(&dirs.root);
+    }
     // mods that arrived as overrides count too
     let _ = state.patch_profile(&profile.id, |p| {
         if let Ok(rd) = std::fs::read_dir(&dirs.mods) {
@@ -668,4 +726,36 @@ fn now_millis() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dusk_defaults_merge_into_the_packs_config_and_keep_player_options() {
+        let root = std::env::temp_dir().join(format!("dusk-seed-{}", now_millis()));
+        std::fs::create_dir_all(root.join("config")).unwrap();
+        let cfg = root.join("config").join("sodium-extra-options.json");
+        std::fs::write(&cfg, r#"{"extra_settings":{"reduce_resolution_on_mac":false,"cloud_height":160}}"#).unwrap();
+
+        std::fs::write(root.join("config").join("sodium-options.json"), r#"{"quality":{"weather_quality":"FAST"},"advanced":{"cpu_render_ahead_limit":3}}"#).unwrap();
+
+        seed_dusk_defaults(&root);
+        assert!(std::fs::read_to_string(root.join("options.txt")).unwrap().contains("guiScale:0"));
+        let sodium: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.join("config").join("sodium-options.json")).unwrap()).unwrap();
+        assert_eq!(sodium["advanced"]["cpu_render_ahead_limit"], 2);
+        assert_eq!(sodium["quality"]["weather_quality"], "FAST");
+        if cfg!(target_os = "macos") {
+            let v: serde_json::Value = serde_json::from_slice(&std::fs::read(&cfg).unwrap()).unwrap();
+            assert_eq!(v["extra_settings"]["reduce_resolution_on_mac"], true);
+            assert_eq!(v["extra_settings"]["cloud_height"], 160);
+        }
+
+        std::fs::write(root.join("options.txt"), "guiScale:3\n").unwrap();
+        seed_dusk_defaults(&root);
+        assert_eq!(std::fs::read_to_string(root.join("options.txt")).unwrap(), "guiScale:3\n");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

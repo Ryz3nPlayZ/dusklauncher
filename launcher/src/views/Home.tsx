@@ -96,19 +96,16 @@ export default function Home({
         {progress ? (
           <PxBox family="accent" height="xl" className="home__progress">
             <div className="home__progress-head">
-              <TT size={20} tone="accent">
+              <TT size={20} tone="accent" className="home__progress-stage">
                 {progress.stage.toUpperCase()}
               </TT>
-              <TT size={16} tone="sub">{`${pct}%`}</TT>
+              <span className="home__progress-count">
+                {progress.total > 0 ? `${progress.done} / ${progress.total} · ${pct}%` : 'PREPARING…'}
+              </span>
             </div>
             <div className="home__bar">
               <div className="home__bar-fill" style={{ width: `${pct}%` }} />
             </div>
-            <span className="meta">
-              {progress.total > 0
-                ? `${progress.done} / ${progress.total} files`
-                : 'preparing…'}
-            </span>
           </PxBox>
         ) : (
           <div className="home__console">

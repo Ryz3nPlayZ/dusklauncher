@@ -16,6 +16,9 @@ public abstract class TextHud extends HudElement {
     protected final ColorSetting valueColor = add(new ColorSetting("valueColor", "Value colour", 0xFF55FFFF));
 
     private final String label;
+    /** {@link #value} for the frame {@link #cachedFor} was built for: a frame asks for it up to four times. */
+    private HudContext cachedFor;
+    private String cached;
 
     protected TextHud(String id, String name, String label, String description) {
         super(id, name, description);
@@ -44,15 +47,23 @@ public abstract class TextHud extends HudElement {
         return showLabel.get() && !label.isEmpty() ? label + ": " : "";
     }
 
+    private String live(HudContext ctx) {
+        if (cachedFor != ctx) {
+            cached = value(ctx);
+            cachedFor = ctx;
+        }
+        return cached;
+    }
+
     private String current(HudContext ctx) {
-        String v = value(ctx);
+        String v = live(ctx);
         if (v == null && ctx.editing()) v = sample();
         return v;
     }
 
     @Override
     public boolean visible(HudContext ctx) {
-        return ctx.player() != null && value(ctx) != null;
+        return ctx.player() != null && live(ctx) != null;
     }
 
     @Override

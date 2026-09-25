@@ -21,6 +21,11 @@ public final class Theme {
     /** Two-tone label pairs (Figma frames 7/8): idle and active. */
     public static final int LABEL_UP = 0xFFC6C6C6, LABEL_LO = 0xFF7B7B7B;
     public static final int ACTIVE_UP = 0xFFF2F2F2, ACTIVE_LO = 0xFFA6A6A6;
+    /** The module grid's moss "enabled" pair and card surfaces. */
+    public static final int MOSS_UP = 0xFF8CCF2D, MOSS_LO = 0xFF468A28, MOSS_BOT = 0xFF202C1D;
+    public static final int RED_UP = 0xFFFF1100;
+    public static final int SURFACE = SURF_TOP, SURFACE_BOT = SURF_BOT, ACCENT = GOLD_UP;
+    private static final int FIELD_BG = 0xFF101010;
 
     // ---- frames ---------------------------------------------------------
 
@@ -95,6 +100,17 @@ public final class Theme {
         c.scale(scale, scale);
         c.text(text, 0, 0, color, shadow);
         c.pop();
+    }
+
+    /** A text-entry box on a plate: black outline, band (gold while focused), dark well. */
+    public static void field(Canvas c, int x, int y, int w, int h, boolean focused) {
+        c.fill(x, y, x + w, y + h, BLACK);
+        c.fill(x + 1, y + 1, x + w - 1, y + h - 1, focused ? GOLD_LO : BAND);
+        c.fill(x + 2, y + 2, x + w - 2, y + h - 2, FIELD_BG);
+    }
+
+    public static void vDivider(Canvas c, int x, int y0, int y1) {
+        c.fill(x, y0, x + 1, y1, BLACK);
     }
 
     /** The launcher's L-corners: top-right and bottom-left only, on the band. */
