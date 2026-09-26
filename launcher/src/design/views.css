@@ -1681,3 +1681,231 @@
 .install__err {
   color: var(--r-co);
 }
+
+/* ══ SOCIAL ═════════════════════════════════════════════════════════════
+   Friends, requests and chat, opened from the status pill. Same popout
+   mechanics as the instance picker (.home__popout) — a bordered window
+   anchored to the trigger's top edge — just anchored to the pill instead
+   of the console, and wide enough for a row + an inline remove button. */
+.social {
+  /* the status-pill's own margin-left:auto only pushed it against
+     .status-bar's flex row when the pill itself was the flex child —
+     now that it's wrapped for the popout, this wrapper takes over that job */
+  margin-left: auto;
+  position: relative;
+  height: 100%;
+}
+.social__popout {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--gap-sm));
+  /* wider and taller than the instance picker: it hosts a conversation,
+     and at 640u the tab strip alone overflowed */
+  width: calc(880 * var(--u));
+  max-width: calc(100vw - 32px);
+  max-height: calc(1000 * var(--u));
+  display: flex;
+  flex-direction: column;
+  z-index: var(--z-modal);
+}
+.social__tabs {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: var(--px-nav);
+  padding: 0 0 var(--px-nav);
+}
+.social__fill {
+  flex: 1 1 0;
+}
+.social__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--px-nav);
+  background: var(--black);
+}
+.social__row {
+  flex: none;
+  height: calc(76 * var(--u));
+  justify-content: flex-start;
+  gap: calc(14 * var(--u));
+  padding: 0 calc(16 * var(--u));
+  text-align: left;
+}
+/* a request row is a PxBox holding its own buttons — not clickable itself */
+.social__row--static {
+  display: flex;
+  align-items: center;
+  cursor: default;
+}
+.social__row-actions {
+  flex: none;
+  display: flex;
+  gap: var(--px-nav);
+}
+.social__row-actions > .px {
+  flex: 1;
+  padding: 0 calc(14 * var(--u));
+}
+/* a head plus its presence square, bottom-right like the pill's own dot */
+.social__head {
+  flex: none;
+  position: relative;
+  display: inline-flex;
+}
+.social__presence {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: calc(18 * var(--u));
+  height: calc(18 * var(--u));
+  background: var(--g-up);
+  border: 2px solid var(--black);
+}
+/* online is green everywhere — the pill's dot, not the red "live" of a
+   running instance */
+.social .is-online,
+.home__popout-name .is-online {
+  color: var(--g-lo);
+}
+.social__section {
+  flex: none;
+  padding: calc(8 * var(--u)) calc(4 * var(--u)) 0;
+}
+.social__notice {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(12 * var(--u));
+  padding: calc(10 * var(--u)) calc(16 * var(--u));
+}
+.social__empty {
+  flex: none;
+  flex-direction: column;
+  gap: calc(10 * var(--u));
+  padding: calc(30 * var(--u)) calc(24 * var(--u));
+}
+.social__badge {
+  flex: none;
+  min-width: calc(20 * var(--u));
+  height: calc(20 * var(--u));
+  padding: 0 calc(6 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-up);
+}
+
+/* the chat sub-view replaces the tabs+list with a back bar, a scrolling
+   line of bubbles, and a one-row composer — same window shell */
+.social__chat-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 calc(14 * var(--u));
+  border: 0;
+  background: transparent;
+  gap: calc(12 * var(--u));
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+}
+.social__chat-title:hover .tt {
+  filter: brightness(1.2);
+}
+.social__chat {
+  flex: 1 1 auto;
+  /* a conversation keeps a steady window rather than growing line by line */
+  height: calc(620 * var(--u));
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(10 * var(--u));
+  padding: calc(16 * var(--u));
+  background: var(--black);
+}
+.social__chat-empty {
+  align-self: center;
+  margin-top: calc(30 * var(--u));
+}
+.social__line {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10 * var(--u));
+}
+.social__stamp {
+  align-self: center;
+  font-size: calc(15 * var(--t));
+}
+.social__bubble {
+  align-self: flex-start;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 80%;
+  padding: calc(10 * var(--u)) calc(14 * var(--u));
+  background: var(--panel);
+  border: var(--px-black) solid var(--black);
+}
+.social__bubble--mine {
+  align-self: flex-end;
+  background: var(--accent-surf-bot);
+}
+.social__composer {
+  flex: none;
+  display: flex;
+  gap: var(--px-nav);
+  padding-top: var(--px-nav);
+}
+.social__composer-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.social__count {
+  flex: none;
+  padding-right: calc(12 * var(--u));
+}
+
+/* the profile sub-view: a centred card, not a list */
+.social__profile {
+  flex: 1;
+  min-height: calc(560 * var(--u));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(14 * var(--u));
+  padding: calc(40 * var(--u));
+  background: var(--black);
+  text-align: center;
+}
+.social__wearing {
+  max-width: 100%;
+}
+.social__profile-actions {
+  margin-top: calc(10 * var(--u));
+}
+.social__confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(10 * var(--u));
+  margin-top: calc(10 * var(--u));
+}
+
+/* the add-friend dialog reuses .modal, just narrower */
+.social__add {
+  width: calc(520 * var(--u));
+}
+.social__add-form {
+  display: flex;
+  flex-direction: column;
+  gap: inherit;
+}

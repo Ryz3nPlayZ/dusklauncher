@@ -44,7 +44,18 @@
     { "id": 47, "name": "Uwu",                             "animated": true },
     { "id": 48, "name": "Hu Tao Ghost Anim",               "animated": true },
     { "id": 49, "name": "Pi",                              "animated": false },
-    { "id": 50, "name": "Ruined Cyan",                     "animated": false }
+    { "id": 50, "name": "Ruined Cyan",                     "animated": false },
+    { "id": 51, "name": "Absolute Solver",                 "animated": true },
+    { "id": 52, "name": "Animated Sculk",                  "animated": true },
+    { "id": 53, "name": "Astelic Blue",                    "animated": true },
+    { "id": 54, "name": "Badlion Demon",                   "animated": true },
+    { "id": 55, "name": "Badlion Xmas",                    "animated": true },
+    { "id": 56, "name": "Green Chains",                    "animated": true },
+    { "id": 57, "name": "Pink Glitched",                   "animated": true },
+    { "id": 58, "name": "RedRose Lunar",                   "animated": true },
+    { "id": 59, "name": "SpinningRainbowSheep",             "animated": true },
+    { "id": 60, "name": "Zero Two",                        "animated": true },
+    { "id": 61, "name": "Static 2",                        "animated": true }
   ],
   "accessories": [
     { "id": 16, "name": "Red Fire Arm", "animated": false }

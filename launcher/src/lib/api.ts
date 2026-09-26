@@ -180,6 +180,65 @@ export interface AccountCape {
   texture: string;
 }
 
+/** one entry of the friends list (GET /v1/friends) — online first, then by name */
+export interface Friend {
+  uuid: string;
+  username: string;
+  /** heartbeat within the last two minutes */
+  online: boolean;
+  /** the game version they're in; only while online */
+  playing?: string;
+  /** unix seconds */
+  lastSeen: number;
+  /** messages from them not yet fetched */
+  unread: number;
+}
+
+/** the heartbeat's answer (POST /v1/me/presence) — what the status pill badges */
+export interface SocialSummary {
+  /** incoming friend requests */
+  requests: number;
+  /** unread messages across every conversation */
+  unread: number;
+  /** friends online right now */
+  online: number;
+}
+
+/** one pending invite, whichever direction (GET /v1/friends/requests) */
+export interface FriendRequest {
+  id: number;
+  uuid: string;
+  username: string;
+  /** unix seconds */
+  createdAt: number;
+}
+
+export interface FriendRequests {
+  incoming: FriendRequest[];
+  outgoing: FriendRequest[];
+}
+
+/** a friend's profile (GET /v1/profile/:uuid) — friends-only, never a stranger's */
+export interface FriendProfile {
+  uuid: string;
+  username: string;
+  online: boolean;
+  /** unix seconds */
+  lastSeen: number;
+  cape: number | null;
+  accessories: number[];
+}
+
+/** one chat line, either direction (GET/POST /v1/messages/:uuid) */
+export interface ChatMessage {
+  id: number;
+  fromUuid: string;
+  toUuid: string;
+  body: string;
+  /** unix seconds */
+  sentAt: number;
+}
+
 export interface Version {
   id: string;
   type: string;
@@ -773,6 +832,39 @@ function previewCosmetics(): Promise<CosmeticsCatalog> {
     }));
   return previewCatalog;
 }
+/* the friends pane in the preview: one friend in game, one online, one
+   offline, one incoming request, and a conversation with an unread line.
+   Times are unix seconds, as the service sends them. */
+const previewNow = () => Math.floor(Date.now() / 1000);
+let previewFriends: Friend[] = [
+  { uuid: 'friend-nocturne', username: 'Nocturne', online: true, playing: '1.21.4', lastSeen: previewNow(), unread: 1 },
+  { uuid: 'friend-sable', username: 'Sable', online: true, lastSeen: previewNow(), unread: 0 },
+  { uuid: 'friend-ashen', username: 'Ashen', online: false, lastSeen: previewNow() - 5 * 3600, unread: 0 },
+];
+let previewFriendRequests: FriendRequests = {
+  incoming: [{ id: 1, uuid: 'friend-wrenlight', username: 'Wrenlight', createdAt: previewNow() - 3600 }],
+  outgoing: [],
+};
+let previewNextRequestId = 2;
+const previewMessages = new Map<string, ChatMessage[]>();
+let previewNextMessageId = 4;
+function previewConversation(uuid: string): ChatMessage[] {
+  let list = previewMessages.get(uuid);
+  if (!list) {
+    const t = previewNow();
+    list =
+      uuid === 'friend-nocturne'
+        ? [
+            { id: 1, fromUuid: uuid, toUuid: '', body: 'hey, you around?', sentAt: t - 40 * 60 },
+            { id: 2, fromUuid: '', toUuid: uuid, body: 'yeah just got on', sentAt: t - 38 * 60 },
+            { id: 3, fromUuid: uuid, toUuid: '', body: 'hop on 1.21.4, we\'re building the base', sentAt: t - 2 * 60 },
+          ]
+        : [];
+    previewMessages.set(uuid, list);
+  }
+  return list;
+}
+
 async function previewFile(path: string): Promise<string> {
   const r = await fetch(`/__cosmetics/${path}`);
   if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
@@ -900,6 +992,74 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     if (i >= 0) list.splice(i, 1);
     return undefined as T;
   }
+  if (cmd === 'social_heartbeat') {
+    return {
+      requests: previewFriendRequests.incoming.length,
+      unread: previewFriends.reduce((n, f) => n + f.unread, 0),
+      online: previewFriends.filter((f) => f.online).length,
+    } as T;
+  }
+  if (cmd === 'list_friends') return structuredClone(previewFriends) as T;
+  if (cmd === 'remove_friend') {
+    previewFriends = previewFriends.filter((f) => f.uuid !== args?.uuid);
+    return structuredClone(previewFriends) as T;
+  }
+  if (cmd === 'list_friend_requests') return structuredClone(previewFriendRequests) as T;
+  if (cmd === 'send_friend_request') {
+    const username = String(args?.username ?? '').trim();
+    if (!username) throw new Error('Enter a username first.');
+    previewFriendRequests = {
+      ...previewFriendRequests,
+      outgoing: [
+        ...previewFriendRequests.outgoing,
+        { id: previewNextRequestId++, uuid: `preview-${username.toLowerCase()}`, username, createdAt: previewNow() },
+      ],
+    };
+    return structuredClone(previewFriendRequests) as T;
+  }
+  if (cmd === 'accept_friend_request') {
+    const req = previewFriendRequests.incoming.find((r) => r.id === args?.id);
+    if (req) {
+      previewFriends = [
+        ...previewFriends,
+        { uuid: req.uuid, username: req.username, online: false, lastSeen: previewNow() - 600, unread: 0 },
+      ];
+    }
+    previewFriendRequests = {
+      incoming: previewFriendRequests.incoming.filter((r) => r.id !== args?.id),
+      outgoing: previewFriendRequests.outgoing.filter((r) => r.id !== args?.id),
+    };
+    return structuredClone(previewFriendRequests) as T;
+  }
+  if (cmd === 'decline_friend_request') {
+    previewFriendRequests = {
+      incoming: previewFriendRequests.incoming.filter((r) => r.id !== args?.id),
+      outgoing: previewFriendRequests.outgoing.filter((r) => r.id !== args?.id),
+    };
+    return structuredClone(previewFriendRequests) as T;
+  }
+  if (cmd === 'get_friend_profile') {
+    const uuid = String(args?.uuid);
+    const friend = previewFriends.find((f) => f.uuid === uuid);
+    if (!friend) throw new Error('not friends');
+    return { uuid, username: friend.username, online: friend.online, lastSeen: friend.lastSeen, cape: 5, accessories: [16] } as T;
+  }
+  if (cmd === 'get_messages') {
+    const uuid = String(args?.uuid);
+    const afterId = Number(args?.afterId ?? 0);
+    const batch = previewConversation(uuid).filter((m) => m.id > afterId);
+    if (batch.length) previewFriends = previewFriends.map((f) => (f.uuid === uuid ? { ...f, unread: 0 } : f));
+    return structuredClone(batch) as T;
+  }
+  if (cmd === 'send_message') {
+    const uuid = String(args?.uuid);
+    const body = String(args?.body ?? '').trim();
+    if (!body) throw new Error('Type a message first.');
+    const msg: ChatMessage = { id: previewNextMessageId++, fromUuid: '', toUuid: uuid, body, sentAt: previewNow() };
+    previewConversation(uuid).push(msg);
+    return structuredClone(msg) as T;
+  }
+  if (cmd === 'get_public_skin') return null as T;
   if (cmd === 'create_profile') {
     // the preview has no store to write — echo a plausible DTO so the flow
     // can be walked end to end in the browser
@@ -1050,6 +1210,24 @@ export const api = {
   setAccountCape: (id: string | null) => invoke<void>('set_account_cape', { id }),
   /** spend coins on a catalog item; resolves to the refreshed store */
   buyCosmetic: (id: number) => invoke<Store>('buy_cosmetic', { id }),
+
+  // ── friends / chat ──
+  /** keep this account online for friends and read the badge counts;
+   *  `playing` is the running game's version, or null */
+  socialHeartbeat: (playing: string | null) => invoke<SocialSummary>('social_heartbeat', { playing }),
+  listFriends: () => invoke<Friend[]>('list_friends'),
+  removeFriend: (uuid: string) => invoke<Friend[]>('remove_friend', { uuid }),
+  listFriendRequests: () => invoke<FriendRequests>('list_friend_requests'),
+  /** send a request by username; auto-accepts if they already asked first */
+  sendFriendRequest: (username: string) => invoke<FriendRequests>('send_friend_request', { username }),
+  acceptFriendRequest: (id: number) => invoke<FriendRequests>('accept_friend_request', { id }),
+  declineFriendRequest: (id: number) => invoke<FriendRequests>('decline_friend_request', { id }),
+  getFriendProfile: (uuid: string) => invoke<FriendProfile>('get_friend_profile', { uuid }),
+  /** poll for messages newer than `afterId` (0 = the whole history, capped at 200) */
+  getMessages: (uuid: string, afterId = 0) => invoke<ChatMessage[]>('get_messages', { uuid, afterId }),
+  sendMessage: (uuid: string, body: string) => invoke<ChatMessage>('send_message', { uuid, body }),
+  /** a friend's skin as a data URL, fetched from Mojang's public session server */
+  getPublicSkin: (uuid: string) => invoke<string | null>('get_public_skin', { uuid }),
 };
 
 // ── small formatters ───────────────────────────────────────────────────────

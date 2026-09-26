@@ -324,6 +324,91 @@
       "glint": false,
       "upsideDown": false,
       "ears": false
+    },
+    {
+      "id": 51,
+      "name": "Absolute Solver",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 52,
+      "name": "Animated Sculk",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 200
+    },
+    {
+      "id": 53,
+      "name": "Astelic Blue",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 150
+    },
+    {
+      "id": 54,
+      "name": "Badlion Demon",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 200
+    },
+    {
+      "id": 55,
+      "name": "Badlion Xmas",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 140
+    },
+    {
+      "id": 56,
+      "name": "Green Chains",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 57,
+      "name": "Pink Glitched",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 80
+    },
+    {
+      "id": 58,
+      "name": "RedRose Lunar",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 200
+    },
+    {
+      "id": 59,
+      "name": "SpinningRainbowSheep",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 60,
+      "name": "Zero Two",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 80
+    },
+    {
+      "id": 61,
+      "name": "Static 2",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false,
+      "frameMs": 50
     }
   ],
   "accessories": [

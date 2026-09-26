@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SceneBackground from './background/SceneBackground';
 import CustomWallpaper from './background/CustomWallpaper';
 import Nav from './components/Nav';
-import { PxBox, TT } from './components/px/Px';
 import UpdateButton from './components/UpdateButton';
 import type { Pose } from './components/PlayerRender';
 import { api, DUSK_PACK, isTauri, listen, type Account, type GameState, type Profile, type Progress, type Settings } from './lib/api';
@@ -16,6 +15,7 @@ import Store from './views/Store';
 import ProfileView from './views/Profile';
 import SettingsView from './views/Settings';
 import SignInGate from './components/SignIn';
+import SocialPane from './components/SocialPane';
 
 /** The window is undecorated (tauri.conf.json), so the shell owns its chrome. */
 
@@ -172,6 +172,10 @@ export default function App() {
     void syncGame();
   }, [syncGame]);
 
+  // what friends see beside our name while the game is up
+  const playing =
+    game?.state === 'running' ? (profiles.find((p) => p.id === game.profileId)?.gameVersion ?? null) : null;
+
   return (
     <div className="app">
       {settings?.customBackground ? (
@@ -235,19 +239,14 @@ export default function App() {
 
       <div className="status-bar">
         <UpdateButton status={updater.status} onInstall={() => void updater.install()} onRestart={() => void updater.restart()} />
-        <PxBox family="panel" height="sm" className="status-pill">
-          <span className={`status-pill__dot ${account?.authenticated ? '' : 'status-pill__dot--off'}`} />
-          <TT size={13} tone="dim">
-            {game?.state === 'running'
-              ? 'GAME RUNNING'
-              : account?.authenticated
-                ? 'ONLINE'
-                : isTauri
-                  ? 'OFFLINE — NOT SIGNED IN'
-                  : 'BROWSER PREVIEW'}
-          </TT>
-        </PxBox>
-
+        <SocialPane
+          // a different account starts from a clean pane — no stale friends or chat
+          key={account?.uuid ?? 'signed-out'}
+          account={account}
+          gameRunning={game?.state === 'running'}
+          playing={playing}
+          isTauri={isTauri}
+        />
       </div>
     </div>
   );

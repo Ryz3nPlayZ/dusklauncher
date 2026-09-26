@@ -119,7 +119,7 @@ async fn token(state: &AppState) -> Result<StoredToken, String> {
 }
 
 /// The service's `{"error": "..."}` body as the error string, else the status.
-async fn parse<T: DeserializeOwned>(resp: reqwest::Response) -> Result<T, String> {
+pub(crate) async fn parse<T: DeserializeOwned>(resp: reqwest::Response) -> Result<T, String> {
     let status = resp.status();
     let body = resp.bytes().await.map_err(|e| e.to_string())?;
     if status.is_success() {
@@ -133,7 +133,7 @@ async fn parse<T: DeserializeOwned>(resp: reqwest::Response) -> Result<T, String
 }
 
 /// An authenticated call; a stale token is re-issued once and the call retried.
-async fn call<T: DeserializeOwned>(
+pub(crate) async fn call<T: DeserializeOwned>(
     state: &AppState,
     method: reqwest::Method,
     path: &str,

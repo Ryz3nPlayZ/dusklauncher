@@ -4,6 +4,7 @@ mod auth_store;
 mod commands;
 mod cosmetics;
 mod dusk;
+mod friends;
 mod modpacks;
 mod mods;
 mod settings;
@@ -98,6 +99,18 @@ pub fn run() {
             dusk::get_referral,
             dusk::claim_referral,
             dusk::buy_cosmetic,
+            // friends / chat
+            friends::social_heartbeat,
+            friends::list_friends,
+            friends::remove_friend,
+            friends::list_friend_requests,
+            friends::send_friend_request,
+            friends::accept_friend_request,
+            friends::decline_friend_request,
+            friends::get_friend_profile,
+            friends::get_messages,
+            friends::send_message,
+            friends::get_public_skin,
             // skins
             skins::list_skins,
             skins::import_skin,
