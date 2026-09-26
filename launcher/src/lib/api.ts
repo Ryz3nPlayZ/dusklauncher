@@ -1050,10 +1050,6 @@ export const api = {
   setAccountCape: (id: string | null) => invoke<void>('set_account_cape', { id }),
   /** spend coins on a catalog item; resolves to the refreshed store */
   buyCosmetic: (id: number) => invoke<Store>('buy_cosmetic', { id }),
-  /** save dialog → the PNG out of the jar (for uploading to minecraftcapes.net);
-   *  resolves to the written path, or null if cancelled */
-  exportCosmeticTexture: (kind: 'cape' | 'ears' | 'accessory', id: number) =>
-    invoke<string | null>('export_cosmetic_texture', { kind, id }),
 };
 
 // ── small formatters ───────────────────────────────────────────────────────

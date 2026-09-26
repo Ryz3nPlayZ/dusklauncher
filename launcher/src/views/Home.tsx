@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import PlayerRender, { type Pose } from '../components/PlayerRender';
 import ListGlyph from '../components/px/ListGlyph';
 import PixelArrow from '../components/px/PixelArrow';
-import { NavLabel, PxBox, PxButton, TT } from '../components/px/Px';
+import { PxBox, PxButton, TT } from '../components/px/Px';
 import { ago, loaderLabel, type Account, type GameState, type Profile, type Progress } from '../lib/api';
 
 export default function Home({
@@ -148,10 +148,6 @@ export default function Home({
 
         {popout && (
           <div className="win px--window home__popout" role="listbox" aria-label="Instances">
-            <div className="win__bar">
-              <NavLabel label="INSTANCES" />
-              <div className="win__fill" />
-            </div>
             <div className="home__popout-list scroll">
               {profiles.map((p) => {
                 const current = p.id === selected?.id;
@@ -160,7 +156,7 @@ export default function Home({
                   <PxButton
                     key={p.id}
                     family={current ? 'accent' : 'grey'}
-                    height="listing"
+                    height="fill"
                     className="home__popout-row"
                     role="option"
                     aria-selected={current}

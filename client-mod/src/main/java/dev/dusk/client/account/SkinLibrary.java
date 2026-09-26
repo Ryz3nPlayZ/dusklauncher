@@ -120,6 +120,36 @@ public final class SkinLibrary {
         return (b[i] & 0xFF) << 24 | (b[i + 1] & 0xFF) << 16 | (b[i + 2] & 0xFF) << 8 | (b[i + 3] & 0xFF);
     }
 
+    /** The strips a classic arm paints and a slim arm leaves blank (x, y, w, h at 64 scale). */
+    private static final int[][] SLIM_GAPS = {{50, 16, 2, 4}, {54, 20, 2, 12}, {42, 48, 2, 4}, {46, 52, 2, 12}};
+
+    /**
+     * Whether a skin has slim arms, read off the PNG the way the launcher's
+     * wardrobe does (lib/skin.ts): a square skin whose slim-arm gaps are
+     * transparent anywhere, or all black, or all white. Legacy 64x32 skins are classic.
+     */
+    public static boolean slim(byte[] png) {
+        try {
+            BufferedImage img = ImageIO.read(new ByteArrayInputStream(png));
+            if (img == null || img.getWidth() != img.getHeight() || img.getWidth() < 64) return false;
+            int k = img.getWidth() / 64;
+            boolean transparent = false, black = true, white = true;
+            for (int[] g : SLIM_GAPS) {
+                for (int y = g[1] * k; y < (g[1] + g[3]) * k; y++) {
+                    for (int x = g[0] * k; x < (g[0] + g[2]) * k; x++) {
+                        int argb = img.getRGB(x, y);
+                        if (argb >>> 24 != 0xFF) transparent = true;
+                        if (argb != 0xFF000000) black = false;
+                        if (argb != 0xFFFFFFFF) white = false;
+                    }
+                }
+            }
+            return transparent || black || white;
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
     /**
      * A legacy 64x32 skin as the 64x64 layout (the left limbs mirrored from
      * the right ones, as the game does when it downloads one); other PNGs as they are.

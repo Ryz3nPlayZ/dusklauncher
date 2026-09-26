@@ -109,6 +109,93 @@ public final class Theme {
         c.fill(x + 2, y + 2, x + w - 2, y + h - 2, FIELD_BG);
     }
 
+    // ---- the launcher's families (launcher/src/design/px.css) --------------------
+
+    /** A PxBox family: band top/bottom, corner, surface bottom and how long the surface holds flat. */
+    public enum Family {
+        PANEL(BAND, BAND, 0, SURF_TOP, 100),
+        GREY(BAND, BAND, CORNER, SURF_BOT, 13),
+        ACCENT(GOLD_UP, GOLD_LO, GOLD_CORNER, CTA_BOT, 0),
+        GREEN(0xFF00FF40, 0xFF06DD0E, 0xFFCDFFE1, 0xFF123D1C, 45),
+        INSTALL(BAND, BAND, CORNER, 0xFF16241A, 45),
+        SOFT(BAND, BAND, CORNER, CTA_BOT, 45);
+
+        final int up, lo, corner, bot, hold;
+
+        Family(int up, int lo, int corner, int bot, int hold) {
+            this.up = up;
+            this.lo = lo;
+            this.corner = corner;
+            this.bot = bot;
+            this.hold = hold;
+        }
+    }
+
+    /** Label pairs the launcher's TT tones use. */
+    public static final int DIM = 0xFFCFCFCF, GREEN_UP = 0xFF00FF40, GREEN_LO = 0xFF06DD0E, GOLD_LO_TEXT = GOLD_LO;
+
+    /** The launcher's hover (brightness 1.18) and disabled (grayscale .7, brightness .72) filters. */
+    public static int filter(int argb, boolean hot, boolean disabled) {
+        if (!hot && !disabled) return argb;
+        int a = argb >>> 24, r = argb >> 16 & 0xFF, g = argb >> 8 & 0xFF, b = argb & 0xFF;
+        float k = hot ? 1.18f : 0.72f;
+        if (disabled) {
+            float grey = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+            r = Math.round(r + (grey - r) * 0.7f);
+            g = Math.round(g + (grey - g) * 0.7f);
+            b = Math.round(b + (grey - b) * 0.7f);
+        }
+        r = Math.min(255, Math.round(r * k));
+        g = Math.min(255, Math.round(g * k));
+        b = Math.min(255, Math.round(b * k));
+        return a << 24 | r << 16 | g << 8 | b;
+    }
+
+    /** A launcher PxBox: black outline, the family's band (split at mid-height), surface, L-corners. */
+    public static void box(Canvas c, int x, int y, int w, int h, Family f, boolean hot, boolean disabled) {
+        c.fill(x, y, x + w, y + h, BLACK);
+        band(c, x + 1, y + 1, w - 2, h - 2, f, hot, disabled);
+    }
+
+    /** A navbar cell: the grey band and corners on a flat surface, no black of its own (the bar supplies it). */
+    public static void cell(Canvas c, int x, int y, int w, int h, boolean hot) {
+        int band = filter(BAND, hot, false);
+        c.fill(x, y, x + w, y + h, band);
+        c.fill(x + 1, y + 1, x + w - 1, y + h - 1, filter(SURF_TOP, hot, false));
+        corners(c, x - 1, y - 1, w + 2, h + 2, filter(CORNER, hot, false));
+    }
+
+    /** The window-close cell: red band and corners on a red surface. */
+    public static void closeCell(Canvas c, int x, int y, int w, int h, boolean hot) {
+        int mid = y + h / 2;
+        c.fill(x, y, x + w, mid, RED_UP);
+        c.fill(x, mid, x + w, y + h, 0xFFDD0626);
+        c.fill(x + 1, y + 1, x + w - 1, y + h - 1, hot ? RED_UP : 0xFFDD0626);
+        corners(c, x - 1, y - 1, w + 2, h + 2, RED_CORNER);
+    }
+
+    public static final int RED_CORNER = 0xFFFF8B8E, GLYPH = 0xFFB8B8B8;
+
+    /** The bar's filler: a plain panel with bands top and bottom only. */
+    public static void barFill(Canvas c, int x, int y, int w, int h) {
+        c.fill(x, y, x + w, y + h, SURF_TOP);
+        c.fill(x, y, x + w, y + 1, BAND);
+        c.fill(x, y + h - 1, x + w, y + h, BAND);
+    }
+
+    private static void band(Canvas c, int x, int y, int w, int h, Family f, boolean hot, boolean disabled) {
+        int up = filter(f.up, hot, disabled), lo = filter(f.lo, hot, disabled);
+        int mid = y + h / 2;
+        c.fill(x, y, x + w, mid, up);
+        c.fill(x, mid, x + w, y + h, lo);
+        int top = filter(SURF_TOP, hot, disabled), bot = filter(f.bot, hot, disabled);
+        int sx = x + 1, sy = y + 1, sw = w - 2, sh = h - 2;
+        int hold = sy + sh * f.hold / 100;
+        if (hold > sy) c.fill(sx, sy, sx + sw, hold, top);
+        if (hold < sy + sh) c.fillGradient(sx, hold, sx + sw, sy + sh, top, bot);
+        if (f.corner != 0) corners(c, x - 1, y - 1, w + 2, h + 2, filter(f.corner, hot, disabled));
+    }
+
     public static void vDivider(Canvas c, int x, int y0, int y1) {
         c.fill(x, y0, x + 1, y1, BLACK);
     }

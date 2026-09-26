@@ -3,7 +3,7 @@ package dev.dusk.client.gui;
 /**
  * The launcher's animated background (launcher/src/background), redrawn
  * in-game: the 400x280 pixel scene cover-fit and bottom-anchored, sea and
- * flowers animated, bees drifting across, gold dust and the vignette. The
+ * flowers animated, bees drifting across, embers and the vignette. The
  * textures are the launcher's at 1.18x saturation.
  */
 public final class TitleScene {
@@ -31,7 +31,7 @@ public final class TitleScene {
         float s = Math.max(w / (float) SW, h / (float) SH);
         float ox = (w - SW * s) / 2f, oy = h - SH * s;
 
-        c.fill(0, 0, w, h, 0xFF101820);
+        c.fill(0, 0, w, h, 0xFF18103A);
         c.push();
         c.translate(ox, oy);
         c.scale(s, s);
@@ -61,7 +61,7 @@ public final class TitleScene {
         vignette(c, w, h);
     }
 
-    /** Floating gold motes (the Dawn mock's particles, #ffec85). */
+    /** Floating embers, warm against the dusk sky. */
     private static void dust(Canvas c, int w, int h, double t) {
         for (int i = 0; i < DUST; i++) {
             double r1 = hash(i * 3 + 1), r2 = hash(i * 3 + 2), r3 = hash(i * 3 + 3);
@@ -74,7 +74,7 @@ public final class TitleScene {
             if (a <= 4) continue;
             int size = r3 > 0.8 ? 2 : 1;
             int px = (int) x, py = (int) y;
-            c.fill(px, py, px + size, py + size, (a << 24) | 0xFFEC85);
+            c.fill(px, py, px + size, py + size, (a << 24) | 0xFFC99A);
         }
     }
 

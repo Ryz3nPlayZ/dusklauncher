@@ -177,11 +177,11 @@ export default function App() {
       {settings?.customBackground ? (
         <CustomWallpaper
           name={settings.customBackground}
-          scene={settings.theme === 'nether' ? 'mcpvp' : 'dawn'}
+          scene={settings.theme === 'nether' ? 'mcpvp' : 'dusk'}
           paused={settings.reduceMotion}
         />
       ) : (
-        <SceneBackground scene={settings?.theme === 'nether' ? 'mcpvp' : 'dawn'} />
+        <SceneBackground scene={settings?.theme === 'nether' ? 'mcpvp' : 'dusk'} />
       )}
 
       <Nav route={route} onRoute={setRoute} account={account} skin={skin} />

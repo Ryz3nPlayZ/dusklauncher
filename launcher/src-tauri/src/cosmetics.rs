@@ -20,7 +20,6 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::collections::BTreeSet;
 use tauri::{AppHandle, Manager, State};
-use tauri_plugin_dialog::DialogExt;
 
 /// The jars this build ships, one per game line: intermediary mappings are
 /// per-version (a 1.21.x build fails to even load on 26.x) and the
@@ -376,48 +375,6 @@ pub async fn get_inventory(state: State<'_, AppState>) -> Result<Inventory, Stri
         Ok(me) => Ok(Inventory { owned: me.owned }),
         Err(_) => Ok(load_inventory(&state.data_dir)),
     }
-}
-
-/// Save a cape's PNG (native save dialog) so the player can upload the very
-/// same file at minecraftcapes.net — that is the only way a player running
-/// the MinecraftCapes or Cosmetica mod sees a Dusk cape (docs/COSMETICS.md
-/// §3.1). Resolves to the written path, or `None` when cancelled.
-#[tauri::command]
-pub async fn export_cosmetic_texture(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    kind: String,
-    id: u32,
-) -> Result<Option<String>, String> {
-    let (path, stem) = match kind.as_str() {
-        "cape" => (format!("capes/{id}/cape.png"), "cape"),
-        "ears" => (format!("capes/{id}/ears.png"), "ears"),
-        "accessory" => (format!("accessories/{id}/texture.png"), "texture"),
-        _ => return Err("unknown texture kind (want cape|ears|accessory)".into()),
-    };
-    let jar = any_bundled_client_mod_jar(&app, &state.data_dir)
-        .ok_or("Bundled client mod is not packaged in this build yet.")?;
-    let bytes = read_jar_entry(&jar, &format!("{COSMETICS_PREFIX}{path}"))?;
-    let name = list_cosmetics(app.clone(), state.clone())?
-        .capes
-        .iter()
-        .find(|c| c.id == id)
-        .map(|c| c.name.clone())
-        .unwrap_or_else(|| format!("{stem}-{id}"));
-    let safe: String = name
-        .chars()
-        .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' { c } else { '_' })
-        .collect();
-    let picked = app
-        .dialog()
-        .file()
-        .add_filter("PNG image", &["png"])
-        .set_file_name(format!("{}.png", safe.trim()))
-        .blocking_save_file();
-    let Some(file) = picked else { return Ok(None) };
-    let out = file.into_path().map_err(|e| e.to_string())?;
-    std::fs::write(&out, bytes).map_err(|e| e.to_string())?;
-    Ok(Some(out.display().to_string()))
 }
 
 #[cfg(test)]

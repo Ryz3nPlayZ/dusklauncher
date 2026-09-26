@@ -189,9 +189,11 @@
 }
 .home__popout-row {
   flex: none;
+  /* a compact row: the name and one meta line, nothing between them */
+  height: calc(76 * var(--u));
   justify-content: space-between;
-  gap: calc(24 * var(--u));
-  padding: 0 calc(24 * var(--u));
+  gap: calc(18 * var(--u));
+  padding: 0 calc(18 * var(--u));
   text-align: left;
 }
 .home__popout-name {
@@ -203,6 +205,7 @@
 }
 .home__popout-name .meta {
   font-size: calc(17 * var(--t));
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1335,7 +1338,7 @@
    the wardrobe layout with an item card between the stage
    and the CTA: name + status on one line, the traits as one dim line under
    it. The column is narrow, so no chips — a "·" list reads at 13 and never
-   wraps. A second, quieter row under the CTA carries the PNG export. */
+   wraps. */
 .store__item {
   flex: none;
   display: flex;
@@ -1356,9 +1359,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.store__export {
-  height: var(--h-sm);
 }
 /* tiles carry one more line than the wardrobe's: FREE / OWNED / WORN */
 .store-tile {

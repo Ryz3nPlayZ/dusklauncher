@@ -180,17 +180,20 @@ public class DuskTitleScreen extends DuskScreen {
         Action tipFor = null;
         for (Action a : actions) {
             boolean hover = a.contains(mouseX, mouseY);
+            if (a.label.isEmpty() && a != account) {
+                // the launcher's nav cell (px--cell): black edge, grey band, flat face, #b8b8b8 glyph
+                c.fill(a.x, a.y, a.x + a.w, a.y + a.h, 0xFF000000);
+                Theme.cell(c, a.x + 1, a.y + 1, a.w - 2, a.h - 2, hover);
+                int iw = a.icon.width() * iconScale, ih = a.icon.height() * iconScale;
+                a.icon.draw(c, a.x + (a.w - iw) / 2, a.y + (a.h - ih) / 2, Theme.filter(Theme.GLYPH, hover, false), iconScale);
+                if (hover) tipFor = a;
+                continue;
+            }
             Theme.button(c, a.x, a.y, a.w, a.h, hover, a.kind);
             int up = hover ? Theme.ACTIVE_UP : Theme.LABEL_UP;
             int lo = hover ? Theme.ACTIVE_LO : Theme.LABEL_LO;
             if (a == account) {
                 drawAccount(c, a, up);
-                if (hover) tipFor = a;
-                continue;
-            }
-            if (a.label.isEmpty()) { // square shortcut
-                int iw = a.icon.width() * iconScale, ih = a.icon.height() * iconScale;
-                a.icon.draw(c, a.x + (a.w - iw) / 2, a.y + (a.h - ih) / 2, up, iconScale);
                 if (hover) tipFor = a;
                 continue;
             }

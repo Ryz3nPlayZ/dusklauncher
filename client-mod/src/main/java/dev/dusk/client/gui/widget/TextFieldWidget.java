@@ -18,7 +18,7 @@ public class TextFieldWidget extends Widget {
     private final boolean live;
     private final int maxLength;
     private String placeholder = "";
-    private boolean themed;
+    private boolean themed, bare;
     private String buffer;
 
     public TextFieldWidget(Supplier<String> source, Consumer<String> sink, boolean live, int maxLength) {
@@ -32,6 +32,13 @@ public class TextFieldWidget extends Widget {
     /** Draw with the Dusk panel's look instead of vanilla's edit box. */
     public TextFieldWidget themed() {
         this.themed = true;
+        return this;
+    }
+
+    /** Just the text, no box: the host draws the frame (the navbar's search cell). */
+    public TextFieldWidget bare() {
+        this.themed = true;
+        this.bare = true;
         return this;
     }
 
@@ -49,20 +56,29 @@ public class TextFieldWidget extends Widget {
 
     @Override
     public void render(Canvas c, int mouseX, int mouseY) {
-        if (themed) Theme.field(c, x, y, w, h, focused);
-        else Vanilla.editBox(c, x, y, w, h, focused);
-        int ty = y + (h - c.lineHeight()) / 2 + 1;
-        c.scissor(x + 2, y + 1, x + w - 2, y + h - 1);
+        if (bare) {
+            // nothing: the host's cell is the frame
+        } else if (themed) {
+            Theme.field(c, x, y, w, h, focused);
+        } else {
+            Vanilla.editBox(c, x, y, w, h, focused);
+        }
+        int ty = y + (h - c.lineHeight()) / 2 + 1, tx = bare ? x + 1 : x + 5;
+        c.scissor(x + (bare ? 0 : 2), y + (bare ? 0 : 1), x + w - (bare ? 0 : 2), y + h - (bare ? 0 : 1));
         if (buffer.isEmpty() && !focused) {
-            c.text(placeholder, x + 5, ty, themed ? Theme.TEXT_FAINT : 0xFF707070, !themed);
+            c.text(placeholder, tx, ty, themed ? Theme.TEXT_FAINT : 0xFF707070, !themed);
+        } else if (buffer.isEmpty() && bare) {
+            // focused on open: keep the hint, with the caret before it
+            if ((System.currentTimeMillis() / 500) % 2 == 0) c.fill(tx, ty - 1, tx + 1, ty + 8, Theme.TEXT);
+            c.text(placeholder, tx + 3, ty, Theme.TEXT_FAINT, false);
         } else {
             String caret = focused && (System.currentTimeMillis() / 500) % 2 == 0 ? "_" : "";
             String shown = buffer + caret;
             // keep the caret end visible when the text overflows
-            int avail = w - 10;
+            int avail = w - (bare ? 2 : 10);
             int start = 0;
             while (start < shown.length() && c.textWidth(shown.substring(start)) > avail) start++;
-            c.text(shown.substring(start), x + 5, ty, themed ? Theme.TEXT : 0xFFE0E0E0, !themed);
+            c.text(shown.substring(start), tx, ty, themed ? Theme.TEXT : 0xFFE0E0E0, !themed);
         }
         c.unscissor();
     }

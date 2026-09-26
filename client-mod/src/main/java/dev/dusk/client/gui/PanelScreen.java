@@ -14,20 +14,17 @@ import java.util.List;
  * right, and one scrollable area the page lays out.
  */
 public abstract class PanelScreen extends MenuScreen {
-    protected static final int TAB_H = 23, BAR_W = 4, SCROLL_STEP = 24;
+    protected static final int TAB_H = NavBar.H, BAR_W = 4, SCROLL_STEP = 24;
 
     /** A tab-bar tool: an icon square, or a text button when {@code icon} is null. */
     protected record Tool(String id, @Nullable Icons icon, String text, String tip) {}
-
-    private record Placed(Tool tool, int x, int w) {}
 
     protected int px, py, pw, ph, pad;
     /** The scrollable area: {@link #listX}..{@link #listX}+{@link #listW}, {@link #listY}..{@link #listBottom}. */
     protected int listX, listY, listW, listBottom;
     protected int scroll;
     private boolean draggingBar;
-    private final List<Placed> placed = new ArrayList<>();
-    private int[] tabX = new int[0], tabW = new int[0];
+    private final NavBar bar = new NavBar();
 
     protected PanelScreen(Component title, @Nullable Screen parent) {
         super(title, parent);
@@ -67,29 +64,14 @@ public abstract class PanelScreen extends MenuScreen {
         px = (this.width - pw) / 2;
         py = (this.height - ph) / 2;
         pad = Math.max(6, Math.round(pw * 0.025f));
+        List<NavBar.Tool> tools = new ArrayList<>();
+        for (Tool t : tools()) tools.add(new NavBar.Tool(t.id, t.icon, t.text, t.tip));
+        bar.layout(px, py, pw, tabs(), tools, search(), 170, this.font::width);
+    }
 
-        placed.clear();
-        int rx = px + pw;
-        for (Tool t : tools()) {
-            int w = t.icon != null ? TAB_H : this.font.width(t.text) + 16;
-            rx -= w - 1;
-            placed.add(new Placed(t, rx, w));
-        }
-        String[] tabs = tabs();
-        tabX = new int[tabs.length];
-        tabW = new int[tabs.length];
-        int x = px;
-        for (int i = 0; i < tabs.length; i++) {
-            int w = this.font.width(tabs[i]) + 22;
-            tabX[i] = x;
-            tabW[i] = w;
-            x += w - 1;
-        }
-        TextFieldWidget s = search();
-        if (s != null) {
-            int sw = Math.max(0, Math.min(170, rx - x));
-            s.setBounds(rx - sw + 5, py + 4, Math.max(0, sw - 8), TAB_H - 8);
-        }
+    /** Lays the whole page out; pages with more than the panel override it. */
+    protected void relayout() {
+        layoutPanel();
     }
 
     protected int maxScroll() {
@@ -108,44 +90,25 @@ public abstract class PanelScreen extends MenuScreen {
 
     // ---- drawing ------------------------------------------------------------
 
-    protected void drawPanel(Canvas c, int mouseX, int mouseY) {
+    /**
+     * The world dim and the window body go under the page's vanilla widgets
+     * (the wardrobe's model), so they draw with the background.
+     */
+    @Override
+    protected void drawBackgroundOverlay(Canvas c) {
+        super.drawBackgroundOverlay(c);
+        relayout();
         if (inWorld()) c.fill(0, 0, this.width, this.height, 0x4D000000);
-        int by = bodyY();
-        c.fill(px + 1, by + 1, px + pw - 1, py + ph - 1, 0xE61E1E1E);
-        c.outline(px, by, pw, py + ph - by, 0xFF000000);
+        NavBar.window(c, px, py, pw, ph);
+        drawUnderWidgets(c);
+    }
 
-        Theme.plate(c, px, py, pw, TAB_H, Theme.SURFACE, Theme.SURFACE, false);
-        int ty = py + (TAB_H - 7) / 2;
-        String[] tabs = tabs();
-        for (int i = 0; i < tabs.length; i++) {
-            int x = tabX[i], w = tabW[i];
-            boolean active = i == activeTab(), hover = Vanilla.inside(mouseX, mouseY, x, py, w, TAB_H);
-            if (active || hover) c.fill(x + 1, py + 2, x + w - 1, py + TAB_H - 2, active ? 0xFF2A2A2A : 0xFF242424);
-            if (i > 0) Theme.vDivider(c, x, py + 1, py + TAB_H - 1);
-            boolean bright = active || hover;
-            Theme.label(c, tabs[i], x + (w - c.textWidth(tabs[i])) / 2, ty,
-                    bright ? Theme.ACTIVE_UP : Theme.LABEL_UP, bright ? Theme.ACTIVE_LO : Theme.LABEL_LO, 1f);
-            if (active) c.fill(x + 3, py + TAB_H - 4, x + w - 3, py + TAB_H - 3, Theme.ACCENT);
-        }
-        TextFieldWidget s = search();
-        if (s != null && s.w >= 30) {
-            s.render(c, mouseX, mouseY);
-            if (s.text().isEmpty() && !s.focused()) Icons.SEARCH.draw(c, s.x + s.w - 11, s.y + (s.h - 7) / 2, Theme.TEXT_FAINT);
-        }
-        for (Placed p : placed) {
-            Theme.vDivider(c, p.x, py + 1, py + TAB_H - 1);
-            boolean hover = Vanilla.inside(mouseX, mouseY, p.x, py, p.w, TAB_H);
-            if (hover) c.fill(p.x + 1, py + 2, p.x + p.w - 1, py + TAB_H - 2, 0xFF242424);
-            boolean close = p.tool.id.equals("close");
-            int col = close && hover ? Theme.RED_UP : hover ? Theme.ACTIVE_UP : Theme.LABEL_UP;
-            if (p.tool.icon != null) {
-                p.tool.icon.draw(c, p.x + (p.w - p.tool.icon.width()) / 2, py + (TAB_H - p.tool.icon.height()) / 2, col);
-            } else {
-                Theme.label(c, p.tool.text, p.x + (p.w - c.textWidth(p.tool.text)) / 2, ty,
-                        col, hover ? Theme.ACTIVE_LO : Theme.LABEL_LO, 1f);
-            }
-            if (hover && !p.tool.tip.isEmpty()) Vanilla.tooltip(c, p.tool.tip, mouseX, mouseY, this.width, this.height);
-        }
+    /** Anything else that must sit under the page's vanilla widgets. */
+    protected void drawUnderWidgets(Canvas c) {}
+
+    /** The tab bar; the body is already down (see {@link #drawBackgroundOverlay}). */
+    protected void drawPanel(Canvas c, int mouseX, int mouseY) {
+        bar.draw(c, activeTab(), mouseX, mouseY, this.width, this.height);
     }
 
     protected void drawScrollbar(Canvas c) {
@@ -163,21 +126,16 @@ public abstract class PanelScreen extends MenuScreen {
         TextFieldWidget s = search();
         if (s != null && s.w >= 22 && s.contains(mx, my)) return s.click(mx, my, button);
         if (s != null) s.setFocused(false);
-        if (Vanilla.inside(mx, my, px, py, pw, TAB_H)) {
+        if (bar.contains(mx, my)) {
             if (button != 0) return true;
-            for (int i = 0; i < tabX.length; i++) {
-                if (mx >= tabX[i] && mx < tabX[i] + tabW[i]) {
-                    scroll = 0;
-                    selectTab(i);
-                    return true;
-                }
+            int t = bar.tabAt(mx, my);
+            if (t >= 0) {
+                scroll = 0;
+                selectTab(t);
+                return true;
             }
-            for (Placed p : placed) {
-                if (mx >= p.x && mx < p.x + p.w) {
-                    onTool(p.tool.id);
-                    return true;
-                }
-            }
+            NavBar.Tool tool = bar.toolAt(mx, my);
+            if (tool != null) onTool(tool.id());
             return true;
         }
         if (maxScroll() > 0 && Vanilla.inside(mx, my, barX() - 2, listY, BAR_W + 4, listBottom - listY)) {
@@ -231,6 +189,8 @@ public abstract class PanelScreen extends MenuScreen {
     protected boolean menuKey(int key, int scancode, int modifiers) {
         TextFieldWidget s = search();
         if (s == null || !s.focused()) return false;
+        // the menu key still closes the page unless it would type into the box
+        if (isSettingsKey(key, scancode) && (!NavBar.printable(key) || s.text().isEmpty())) return false;
         if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
             s.setFocused(false);
             return true;
@@ -259,15 +219,21 @@ public abstract class PanelScreen extends MenuScreen {
         return out;
     }
 
-    /** A flat button with a centred label; returns whether the mouse is on it. */
+    /** A launcher button: {@code on} is the installed/applied state (green label). Returns whether the mouse is on it. */
     protected static boolean flatButton(Canvas c, String label, int x, int y, int w, int h, int mouseX, int mouseY,
                                         boolean on, boolean enabled) {
+        return boxButton(c, label, x, y, w, h, mouseX, mouseY, Theme.Family.INSTALL, on, enabled);
+    }
+
+    /** A {@link Theme#box} with a centred two-tone label, filtered like the box. */
+    protected static boolean boxButton(Canvas c, String label, int x, int y, int w, int h, int mouseX, int mouseY,
+                                       Theme.Family f, boolean on, boolean enabled) {
         boolean hover = enabled && Vanilla.inside(mouseX, mouseY, x, y, w, h);
-        Theme.plate(c, x, y, w, h, Theme.SURFACE, on ? Theme.MOSS_BOT : Theme.SURFACE_BOT, hover);
-        int lx = x + (w - c.textWidth(label)) / 2, ly = y + (h - 7) / 2;
-        if (!enabled) c.text(label, lx, ly, Theme.TEXT_FAINT, false);
-        else if (on) Theme.label(c, label, lx, ly, Theme.MOSS_UP, Theme.MOSS_LO, 1f);
-        else Theme.label(c, label, lx, ly, hover ? Theme.ACTIVE_UP : Theme.LABEL_UP, hover ? Theme.ACTIVE_LO : Theme.LABEL_LO, 1f);
+        Theme.box(c, x, y, w, h, f, hover, !enabled && !on);
+        int up = on ? Theme.GREEN_UP : Theme.LABEL_UP, lo = on ? Theme.GREEN_LO : Theme.LABEL_LO;
+        boolean dis = !enabled && !on;
+        Theme.label(c, label, x + (w - c.textWidth(label)) / 2, y + (h - 7) / 2,
+                Theme.filter(up, hover, dis), Theme.filter(lo, hover, dis), 1f);
         return hover;
     }
 }

@@ -135,6 +135,19 @@ export default function PlayerRender({
   const [ready, setReady] = useState(0);
   // bumps once a skin has loaded, so accessories can read the arm width
   const [skinLoaded, setSkinLoaded] = useState(0);
+  /* while paused (the game is up, or the window is hidden) nothing redraws on
+     its own, so a skin that loads, a resize (which clears the canvas) or a
+     restored GL context would leave the stage empty. Each of those paints
+     one still frame instead — no loop, no frames taken from the game. */
+  const stillRef = useRef(0);
+  const still = () => {
+    const viewer = viewerRef.current;
+    if (!viewer || viewer.disposed || !viewer.renderPaused || stillRef.current) return;
+    stillRef.current = window.requestAnimationFrame(() => {
+      stillRef.current = 0;
+      if (!viewer.disposed && viewer.renderPaused && !viewer.renderer.getContext().isContextLost()) viewer.render();
+    });
+  };
 
   // create / destroy
   useEffect(() => {
@@ -165,13 +178,16 @@ export default function PlayerRender({
       ro = new ResizeObserver(() => {
         if (!parent || !viewer || viewer.disposed) return;
         viewer.setSize(parent.clientWidth, parent.clientHeight);
+        still();
       });
       if (parent) ro.observe(parent);
+      canvas.addEventListener('webglcontextrestored', still);
 
       // never render while the window is hidden or the game has the GPU
       // (DESIGN.md: the launcher never takes frames the game could use)
       onVisibility = () => {
         if (viewer && !viewer.disposed) viewer.renderPaused = pausedRef.current || document.hidden;
+        still();
       };
       document.addEventListener('visibilitychange', onVisibility);
 
@@ -181,6 +197,9 @@ export default function PlayerRender({
     return () => {
       cancelled = true;
       ro?.disconnect();
+      canvasRef.current?.removeEventListener('webglcontextrestored', still);
+      if (stillRef.current) window.cancelAnimationFrame(stillRef.current);
+      stillRef.current = 0;
       if (onVisibility) document.removeEventListener('visibilitychange', onVisibility);
       viewer?.dispose();
       viewerRef.current = null;
@@ -194,9 +213,15 @@ export default function PlayerRender({
       model: model === 'auto' ? 'auto-detect' : model === 'slim' ? 'slim' : 'default',
     });
     if (done instanceof Promise) {
-      done.then(() => setSkinLoaded((n) => n + 1)).catch((e) => console.error('skin load failed', e));
+      done
+        .then(() => {
+          setSkinLoaded((n) => n + 1);
+          still();
+        })
+        .catch((e) => console.error('skin load failed', e));
     } else {
       setSkinLoaded((n) => n + 1);
+      still();
     }
   }, [skin, model, ready]);
 
@@ -229,6 +254,7 @@ export default function PlayerRender({
         mesh.name = `accessory-${a.entry.id}`;
         parent.add(mesh);
         added.push({ parent, mesh, textures });
+        still();
         if (textures.length > 1) {
           let i = 0;
           timers.push(
@@ -294,6 +320,7 @@ export default function PlayerRender({
     if (!viewer || viewer.disposed) return;
     if (!cape) {
       viewer.loadCape(null);
+      still();
       return;
     }
     let cancelled = false;
@@ -303,6 +330,7 @@ export default function PlayerRender({
         if (cancelled || viewer.disposed) return;
         let i = 0;
         viewer.loadCape(frames[0], { backEquipment });
+        still();
         if (frames.length > 1) {
           timer = window.setInterval(() => {
             if (viewer.disposed) return;
@@ -336,6 +364,7 @@ export default function PlayerRender({
     if (!viewer || viewer.disposed) return;
     if (!ears) {
       viewer.loadEars(null);
+      still();
       return;
     }
     const done = viewer.loadEars(ears, { textureType: 'standalone' });
@@ -347,18 +376,21 @@ export default function PlayerRender({
     const lib = libRef.current;
     if (!viewer || viewer.disposed || !lib) return;
     viewer.animation = animationFor(lib, pose);
+    still();
   }, [pose, ready]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer || viewer.disposed) return;
     viewer.zoom = zoom;
+    still();
   }, [zoom, ready]);
 
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer || viewer.disposed) return;
     viewer.renderPaused = paused || document.hidden;
+    still();
   }, [paused, ready]);
 
   useEffect(() => {

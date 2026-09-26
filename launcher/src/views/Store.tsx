@@ -5,7 +5,6 @@ import PlayerRender, { POSES, type AccessoryView, type Pose } from '../component
 import { NavCell, NavLabel, PxBox, PxButton, TT } from '../components/px/Px';
 import {
   api,
-  isTauri,
   type Account,
   type AccessoryEntry,
   type AccessoryModelJson,
@@ -194,17 +193,6 @@ export default function Store({
     [picked, loadout, wornAcc],
   );
 
-  const savePng = useCallback(async () => {
-    if (!picked || picked.kind !== 'cape') return;
-    setNote(null);
-    try {
-      const path = await api.exportCosmeticTexture('cape', picked.id);
-      if (path) setNote(`Saved ${path}. Upload it at minecraftcapes.net so players on the MinecraftCapes or Cosmetica mod see it too.`);
-    } catch (e) {
-      setNote(String(e));
-    }
-  }, [picked]);
-
   const showCapes = filter !== 'ACCESSORIES';
   const showAcc = filter !== 'CAPES';
   const total = capes.length + accessories.length;
@@ -331,21 +319,6 @@ export default function Store({
                   </PxButton>
                 )}
               </div>
-              {pickedCape && pickedOwned && isTauri && (
-                <div className="viewer__actions store__export">
-                  <PxButton
-                    family="grey"
-                    height="fill"
-                    disabled={busy}
-                    title="Save the cape as a MinecraftCapes-format PNG. Upload it at minecraftcapes.net and players on the MinecraftCapes mod (and Cosmetica) see it on you too."
-                    onClick={() => void savePng()}
-                  >
-                    <TT size={13} tone="sub">
-                      EXPORT PNG
-                    </TT>
-                  </PxButton>
-                </div>
-              )}
             </PxBox>
 
             <div className="win win--inner wardrobe__gallery">

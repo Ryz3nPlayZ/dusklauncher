@@ -24,7 +24,6 @@ import java.util.Set;
  * and a settings gear. A card opens that module's settings page.
  */
 public class DuskSettingsScreen extends MenuScreen {
-    private static final int TAB_H = 23;
     private static final int CARD_GAP = 6, CARD_MIN_W = 110, MAX_COLS = 4, BAR_W = 4, SCROLL_STEP = 24;
 
     /** Modules added since the previous release, listed under the NEW tab. Update this set every release. */
@@ -52,8 +51,6 @@ public class DuskSettingsScreen extends MenuScreen {
         }
     }
 
-    private enum Tool { SEARCH, PREFS, HUD_EDITOR, CLOSE }
-
     private static Tab tab = Tab.ALL;
 
     private final TextFieldWidget search;
@@ -62,12 +59,13 @@ public class DuskSettingsScreen extends MenuScreen {
     private int scroll;
     private boolean draggingBar;
     private int px, py, pw, ph, pad, cols, cardW, cardH;
-    private final int[] tabX = new int[Tab.values().length], tabW = new int[Tab.values().length];
-    private final int[] toolX = new int[Tool.values().length], toolW = new int[Tool.values().length];
+    private final NavBar bar = new NavBar();
+    private static final String[] TAB_LABELS = Arrays.stream(Tab.values()).map(t -> t.label).toArray(String[]::new);
 
     public DuskSettingsScreen(@Nullable Screen parent) {
         super(Component.literal("Modules"), parent);
-        this.search = new TextFieldWidget(() -> "", this::setQuery, true, 40).themed().placeholder("Search...");
+        this.search = new TextFieldWidget(() -> "", this::setQuery, true, 40).bare().placeholder("Search...");
+        search.setFocused(true); // opening the menu is usually to find a module
         refresh();
     }
 
@@ -107,7 +105,7 @@ public class DuskSettingsScreen extends MenuScreen {
         layout();
     }
 
-    private int bodyY() { return py + TAB_H - 1; }
+    private int bodyY() { return py + NavBar.H; }
     private int contentX() { return px + pad; }
     private int contentW() { return pw - 2 * pad; }
     private int contentY() { return bodyY() + pad; }
@@ -124,38 +122,12 @@ public class DuskSettingsScreen extends MenuScreen {
         cols = Math.max(1, Math.min(MAX_COLS, (gridW() + CARD_GAP) / (CARD_MIN_W + CARD_GAP)));
         cardW = (gridW() - CARD_GAP * (cols - 1)) / cols;
         cardH = Math.max(80, Math.min(115, Math.round(cardW * 0.72f)));
-        layoutTabBar();
+        List<NavBar.Tool> tools = new ArrayList<>();
+        tools.add(new NavBar.Tool("close", Icons.CLOSE, "", "Close"));
+        if (inWorld()) tools.add(new NavBar.Tool("hud", Icons.HUD, "", "Edit HUD layout"));
+        tools.add(new NavBar.Tool("prefs", Icons.GEAR, "", "Preferences"));
+        bar.layout(px, py, pw, TAB_LABELS, tools, search, 150, this.font::width);
         clampScroll();
-    }
-
-    /** Tabs from the left at their label width; square tools from the right; search takes what is left. */
-    private void layoutTabBar() {
-        Tool[] right = inWorld() ? new Tool[] {Tool.CLOSE, Tool.HUD_EDITOR, Tool.PREFS} : new Tool[] {Tool.CLOSE, Tool.PREFS};
-        Arrays.fill(toolW, 0);
-        int rx = px + pw;
-        for (Tool t : right) {
-            rx -= TAB_H - 1;
-            toolX[t.ordinal()] = rx;
-            toolW[t.ordinal()] = TAB_H;
-        }
-        for (int tabPad : new int[] {10, 6, 3}) {
-            int x = px;
-            for (Tab t : Tab.values()) {
-                int w = this.font.width(t.label) + 2 * tabPad + 2;
-                tabX[t.ordinal()] = x;
-                tabW[t.ordinal()] = w;
-                x += w - 1;
-            }
-            int left = rx - x;
-            if (left >= 70 || tabPad == 3) {
-                int sw = Math.max(0, Math.min(150, left));
-                toolX[Tool.SEARCH.ordinal()] = rx - sw + 1;
-                toolW[Tool.SEARCH.ordinal()] = sw;
-                break;
-            }
-        }
-        int sx = toolX[Tool.SEARCH.ordinal()], sw = toolW[Tool.SEARCH.ordinal()];
-        search.setBounds(sx + 4, py + 4, Math.max(0, sw - 8), TAB_H - 8);
     }
 
     private int rows() { return (shown.size() + cols - 1) / cols; }
@@ -205,12 +177,8 @@ public class DuskSettingsScreen extends MenuScreen {
         layout();
         if (inWorld()) c.fill(0, 0, this.width, this.height, 0x4D000000);
 
-        // body: #1e1e1e at 90% inside a black stroke
-        int by = bodyY();
-        c.fill(px + 1, by + 1, px + pw - 1, py + ph - 1, 0xE61E1E1E);
-        c.outline(px, by, pw, py + ph - by, 0xFF000000);
-
-        drawTabBar(c, mouseX, mouseY);
+        NavBar.window(c, px, py, pw, ph);
+        bar.draw(c, tab.ordinal(), mouseX, mouseY, this.width, this.height);
 
         int top = contentY(), bottom = contentBottom();
         boolean inGrid = inGrid(mouseX, mouseY);
@@ -230,44 +198,6 @@ public class DuskSettingsScreen extends MenuScreen {
             int barY = top + (h - barH) * scroll / maxScroll();
             c.fill(barX(), top, barX() + BAR_W, bottom, 0xFF141414);
             c.fill(barX(), barY, barX() + BAR_W, barY + barH, draggingBar ? Theme.LABEL_UP : Theme.LABEL_LO);
-        }
-    }
-
-    private void drawTabBar(Canvas c, int mouseX, int mouseY) {
-        Theme.plate(c, px, py, pw, TAB_H, Theme.SURFACE, Theme.SURFACE, false);
-        int ty = py + (TAB_H - 7) / 2;
-        for (Tab t : Tab.values()) {
-            int x = tabX[t.ordinal()], w = tabW[t.ordinal()];
-            boolean active = t == tab;
-            boolean hover = Vanilla.inside(mouseX, mouseY, x, py, w, TAB_H);
-            if (active || hover) c.fill(x + 1, py + 2, x + w - 1, py + TAB_H - 2, active ? 0xFF2A2A2A : 0xFF242424);
-            if (t.ordinal() > 0) Theme.vDivider(c, x, py + 1, py + TAB_H - 1);
-            boolean bright = active || hover;
-            Theme.label(c, t.label, x + (w - c.textWidth(t.label)) / 2, ty,
-                    bright ? Theme.ACTIVE_UP : Theme.LABEL_UP, bright ? Theme.ACTIVE_LO : Theme.LABEL_LO, 1f);
-            if (active) c.fill(x + 3, py + TAB_H - 4, x + w - 3, py + TAB_H - 3, Theme.ACCENT);
-        }
-        for (Tool t : Tool.values()) {
-            int x = toolX[t.ordinal()], w = toolW[t.ordinal()];
-            if (w <= 0) continue;
-            Theme.vDivider(c, x, py + 1, py + TAB_H - 1);
-            if (t == Tool.SEARCH) {
-                if (w < 30) continue;
-                search.render(c, mouseX, mouseY);
-                if (search.text().isEmpty() && !search.focused()) {
-                    Icons.SEARCH.draw(c, search.x + search.w - 11, search.y + (search.h - 7) / 2, Theme.TEXT_FAINT);
-                }
-                continue;
-            }
-            boolean hover = Vanilla.inside(mouseX, mouseY, x, py, w, TAB_H);
-            if (hover) c.fill(x + 1, py + 2, x + w - 1, py + TAB_H - 2, 0xFF242424);
-            Icons icon = t == Tool.CLOSE ? Icons.CLOSE : t == Tool.PREFS ? Icons.GEAR : Icons.HUD;
-            int col = t == Tool.CLOSE && hover ? Theme.RED_UP : hover ? Theme.ACTIVE_UP : Theme.LABEL_UP;
-            icon.draw(c, x + (w - icon.width()) / 2, py + (TAB_H - icon.height()) / 2, col);
-            if (hover) {
-                String tip = t == Tool.CLOSE ? "Close" : t == Tool.PREFS ? "Preferences" : "Edit HUD layout";
-                Vanilla.tooltip(c, tip, mouseX, mouseY, this.width, this.height);
-            }
         }
     }
 
@@ -354,8 +284,8 @@ public class DuskSettingsScreen extends MenuScreen {
         layout();
         if (search.w >= 22 && search.contains(mx, my)) return search.click(mx, my, button);
         search.setFocused(false);
-        if (Vanilla.inside(mx, my, px, py, pw, TAB_H)) {
-            if (button == 0) clickTabBar(mx);
+        if (bar.contains(mx, my)) {
+            if (button == 0) clickTabBar(mx, my);
             return true;
         }
         if (maxScroll() > 0 && Vanilla.inside(mx, my, barX() - 2, contentY(), BAR_W + 4, contentBottom() - contentY())) {
@@ -380,23 +310,19 @@ public class DuskSettingsScreen extends MenuScreen {
         return Vanilla.inside(mx, my, px, py, pw, ph);
     }
 
-    private void clickTabBar(double mx) {
-        for (Tab t : Tab.values()) {
-            if (mx >= tabX[t.ordinal()] && mx < tabX[t.ordinal()] + tabW[t.ordinal()]) {
-                showTab(t);
-                return;
-            }
-        }
-        for (Tool t : Tool.values()) {
-            int x = toolX[t.ordinal()], w = toolW[t.ordinal()];
-            if (w <= 0 || mx < x || mx >= x + w) continue;
-            switch (t) {
-                case PREFS -> open(ConfigScreen.preferences(this));
-                case HUD_EDITOR -> { if (inWorld()) open(new HudEditorScreen(this)); }
-                case CLOSE -> exitMenu();
-                case SEARCH -> {}
-            }
+    private void clickTabBar(double mx, double my) {
+        int t = bar.tabAt(mx, my);
+        if (t >= 0) {
+            showTab(Tab.values()[t]);
             return;
+        }
+        NavBar.Tool tool = bar.toolAt(mx, my);
+        if (tool == null) return;
+        switch (tool.id()) {
+            case "prefs" -> open(ConfigScreen.preferences(this));
+            case "hud" -> { if (inWorld()) open(new HudEditorScreen(this)); }
+            case "close" -> exitMenu();
+            default -> {}
         }
     }
 
@@ -435,6 +361,8 @@ public class DuskSettingsScreen extends MenuScreen {
             return true;
         }
         if (search.focused()) {
+            // the menu key still closes the menu unless it would type into the search
+            if (isSettingsKey(key, scancode) && (!NavBar.printable(key) || search.text().isEmpty())) return false;
             if (key == GLFW.GLFW_KEY_ESCAPE && !search.text().isEmpty()) {
                 search.setText("");
                 search.setFocused(false);

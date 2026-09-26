@@ -1,6 +1,8 @@
 package dev.dusk.client.gui;
 
+import dev.dusk.client.DuskClient;
 import dev.dusk.client.config.DuskConfig;
+import dev.dusk.client.gui.widget.KeybindWidget;
 import dev.dusk.client.gui.widget.LabelWidget;
 import dev.dusk.client.gui.widget.ScrollPane;
 import dev.dusk.client.gui.widget.TextFieldWidget;
@@ -64,8 +66,8 @@ public class ConfigScreen extends MenuScreen {
             DuskConfig.get().backgroundPath = v.trim();
             DuskConfig.save();
         }, false, 512).placeholder("C:/path/to/background.png"), 20);
-        p.add(new LabelWidget(""), 10);
-        p.add(new LabelWidget("Right Shift opens the Dusk menu (rebind in Controls)."), 14);
+        p.add(new LabelWidget(""), 6);
+        p.add(new KeybindWidget("Open the Dusk menu", DuskClient::settingsKey), SettingsBuilder.ROW_H);
         return s;
     }
 

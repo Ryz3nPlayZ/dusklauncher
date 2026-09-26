@@ -10,7 +10,7 @@ usage rights.
 
 | Directory | Theme | Used as |
 |---|---|---|
-| `dawn/`   | gold sunset | launcher `overworld` theme |
+| `dusk/`   | dusk (regraded from dawn.gg's gold sunset) | launcher `overworld` theme |
 | `mcpvp/`  | red         | launcher `nether` theme |
 
 Both scenes share the same 400×280 native canvas and are composed bottom→top:
@@ -20,7 +20,7 @@ Both scenes share the same 400×280 native canvas and are composed bottom→top:
 | 0 | `rear.png` | static, RGBA | sky panorama: sun glow, clouds, distant mesas |
 | 1 | `sea-anim.webp` | **baked 16-frame loop, 1328 ms** (~83 ms/frame) | animated water, alpha |
 | 2 | `foreground.png` | static, RGBA | terrain silhouette, transparent sky |
-| 3 | `flower-anim.webp` | **baked 16-frame loop, 2000 ms** (125 ms/frame) | sway animation, alpha — `dawn/` only |
+| 3 | `flower-anim.webp` | **baked 16-frame loop, 2000 ms** (125 ms/frame) | sway animation, alpha — `dusk/` only |
 
 Composition recipe (what dawn.gg does and what `SceneBackground.tsx` does):
 stack all layers with `object-fit: cover; object-position: center bottom`,
@@ -35,8 +35,8 @@ tuned value; site default is 1.0).
 
 | Sprite | Scene | Site sizes |
 |---|---|---|
-| `bee1.webp` | dawn (×2) | 168, 120 |
-| `bee2.webp` | dawn | 144, mirrored |
+| `bee1.webp` | dusk (×2) | 168, 120 |
+| `bee2.webp` | dusk | 144, mirrored |
 | `ghast-big.webp` | mcpvp (×2) | 288, 240, all mirrored |
 | `ghast-small.webp` | mcpvp (×2) | 180, 144, all mirrored |
 

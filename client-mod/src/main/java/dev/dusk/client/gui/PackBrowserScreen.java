@@ -74,7 +74,7 @@ public class PackBrowserScreen extends PanelScreen {
         this.search = new TextFieldWidget(() -> "", q -> {
             query = q.trim();
             queryAt = System.currentTimeMillis();
-        }, true, 60).themed().placeholder("Search Modrinth...");
+        }, true, 60).bare().placeholder("Search Modrinth...");
         fetch(true);
     }
 

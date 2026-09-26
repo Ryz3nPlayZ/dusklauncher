@@ -98,7 +98,6 @@ pub fn run() {
             dusk::get_referral,
             dusk::claim_referral,
             dusk::buy_cosmetic,
-            cosmetics::export_cosmetic_texture,
             // skins
             skins::list_skins,
             skins::import_skin,

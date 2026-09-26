@@ -1,9 +1,9 @@
 import './scene.css';
 
-import dawnRear from '../assets/background/dawn/rear.png';
-import dawnSea from '../assets/background/dawn/sea-anim.webp';
-import dawnForeground from '../assets/background/dawn/foreground.png';
-import dawnFlower from '../assets/background/dawn/flower-anim.webp';
+import duskRear from '../assets/background/dusk/rear.png';
+import duskSea from '../assets/background/dusk/sea-anim.webp';
+import duskForeground from '../assets/background/dusk/foreground.png';
+import duskFlower from '../assets/background/dusk/flower-anim.webp';
 import mcpvpRear from '../assets/background/mcpvp/rear.png';
 import mcpvpSea from '../assets/background/mcpvp/sea-anim.webp';
 import mcpvpForeground from '../assets/background/mcpvp/foreground.png';
@@ -12,7 +12,7 @@ import bee2 from '../assets/background/mobs/bee2.webp';
 import ghastBig from '../assets/background/mobs/ghast-big.webp';
 import ghastSmall from '../assets/background/mobs/ghast-small.webp';
 
-export type SceneName = 'dawn' | 'mcpvp';
+export type SceneName = 'dusk' | 'mcpvp';
 
 interface Mob {
   src: string;
@@ -29,8 +29,8 @@ interface Mob {
 const MOB_SCALE = 0.45;
 
 const SCENES: Record<SceneName, { layers: string[]; mobs: Mob[] }> = {
-  dawn: {
-    layers: [dawnRear, dawnSea, dawnForeground, dawnFlower],
+  dusk: {
+    layers: [duskRear, duskSea, duskForeground, duskFlower],
     mobs: [
       { src: bee1, size: 168, top: '26%', drift: 38, bob: 6.33, amp: 18 },
       { src: bee2, size: 144, top: '48%', drift: 46, delay: -8, bob: 7.67, amp: 14, flip: true },
@@ -47,7 +47,7 @@ const SCENES: Record<SceneName, { layers: string[]; mobs: Mob[] }> = {
   },
 };
 
-export default function SceneBackground({ scene = 'dawn' }: { scene?: SceneName }) {
+export default function SceneBackground({ scene = 'dusk' }: { scene?: SceneName }) {
   const { layers, mobs } = SCENES[scene];
 
   return (
