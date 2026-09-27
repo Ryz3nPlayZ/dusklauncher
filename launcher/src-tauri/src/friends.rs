@@ -22,6 +22,9 @@ pub struct Friend {
     pub online: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub playing: Option<String>,
+    /// the multiplayer server they're on — joinable
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server: Option<String>,
     #[serde(default)]
     pub last_seen: i64,
     #[serde(default)]
@@ -58,6 +61,10 @@ pub struct FriendProfile {
     pub username: String,
     pub online: bool,
     pub last_seen: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub playing: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server: Option<String>,
     pub cape: Option<u32>,
     pub accessories: Vec<u32>,
 }
@@ -70,6 +77,46 @@ pub struct ChatMessage {
     pub to_uuid: String,
     pub body: String,
     pub sent_at: i64,
+    /// text | invite (meta: server, version) | image (meta: image) |
+    /// gift (meta: item, name, kind)
+    #[serde(default = "text_kind")]
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<serde_json::Value>,
+}
+
+fn text_kind() -> String {
+    "text".into()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Privacy {
+    pub appear_offline: bool,
+    pub share_activity: bool,
+    /// everyone | friends_of_friends | nobody
+    pub friend_requests: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockedPlayer {
+    pub uuid: String,
+    pub username: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Gifted {
+    pub coins: i64,
+    pub message: ChatMessage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Outfit {
+    pub id: i64,
+    pub name: String,
+    pub loadout: crate::cosmetics::Loadout,
+    pub created_at: i64,
 }
 
 // ── commands ─────────────────────────────────────────────────────────────
@@ -79,7 +126,15 @@ pub struct ChatMessage {
 /// returns the pending-request / unread / friends-online counts.
 #[tauri::command]
 pub async fn social_heartbeat(state: State<'_, AppState>, playing: Option<String>) -> Result<SocialSummary, String> {
-    call(&state, reqwest::Method::POST, "/v1/me/presence", Some(json!({ "playing": playing }))).await
+    // the server comes from the game log, not the UI (see `game_activity`)
+    let server = state.activity.lock().unwrap().as_ref().and_then(|a| a.server.clone());
+    call(
+        &state,
+        reqwest::Method::POST,
+        "/v1/me/presence",
+        Some(json!({ "playing": playing, "server": server })),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -134,6 +189,152 @@ pub async fn send_message(state: State<'_, AppState>, uuid: String, body: String
         return Err("Type a message first.".into());
     }
     call(&state, reqwest::Method::POST, &format!("/v1/messages/{uuid}"), Some(json!({ "body": body }))).await
+}
+
+/// Invite a friend to the server this account is on (or any address).
+#[tauri::command]
+pub async fn send_invite(
+    state: State<'_, AppState>,
+    uuid: String,
+    server: String,
+    version: Option<String>,
+) -> Result<ChatMessage, String> {
+    let server = server.trim();
+    if server.is_empty() {
+        return Err("Join a server first — there's nothing to invite them to.".into());
+    }
+    call(
+        &state,
+        reqwest::Method::POST,
+        &format!("/v1/messages/{uuid}"),
+        Some(json!({ "kind": "invite", "meta": { "server": server, "version": version } })),
+    )
+    .await
+}
+
+const IMAGE_MAX_BYTES: u64 = 8 * 1024 * 1024;
+
+#[derive(Deserialize)]
+struct Uploaded {
+    id: String,
+}
+
+/// Send one of this machine's screenshots to a friend: the file is uploaded
+/// to the service (only this account and the people it's sent to can fetch
+/// it back), then posted as an image message.
+#[tauri::command]
+pub async fn send_screenshot(state: State<'_, AppState>, uuid: String, path: String) -> Result<ChatMessage, String> {
+    let path = crate::screenshots::resolve(&state, &path)?;
+    let len = std::fs::metadata(&path).map_err(|e| e.to_string())?.len();
+    if len > IMAGE_MAX_BYTES {
+        return Err("That screenshot is over 8 MB — too big to send.".into());
+    }
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let mime = if bytes.starts_with(b"\x89PNG") { "image/png" } else { "image/jpeg" };
+    let resp = crate::dusk::send(&state, reqwest::Method::POST, "/v1/images", Some(crate::dusk::Body::Raw(bytes, mime))).await?;
+    let up: Uploaded = crate::dusk::parse(resp).await?;
+    call(
+        &state,
+        reqwest::Method::POST,
+        &format!("/v1/messages/{uuid}"),
+        Some(json!({ "kind": "image", "meta": { "image": up.id } })),
+    )
+    .await
+}
+
+/// A chat image as a data URL, cached under `<data>/cache/chat-images/` —
+/// images never change once uploaded.
+#[tauri::command]
+pub async fn get_chat_image(state: State<'_, AppState>, id: String) -> Result<String, String> {
+    if id.len() != 32 || !id.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err("bad image id".into());
+    }
+    let cache = state.data_dir.join("cache").join("chat-images").join(&id);
+    let bytes = match std::fs::read(&cache) {
+        Ok(b) => b,
+        Err(_) => {
+            let resp = crate::dusk::send(&state, reqwest::Method::GET, &format!("/v1/images/{id}"), None).await?;
+            if !resp.status().is_success() {
+                return Err(match resp.status().as_u16() {
+                    404 => "This image has expired.".into(),
+                    s => format!("Dusk service returned HTTP {s}"),
+                });
+            }
+            let b = resp.bytes().await.map_err(|e| e.to_string())?.to_vec();
+            if let Some(dir) = cache.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            let _ = std::fs::write(&cache, &b);
+            b
+        }
+    };
+    let mime = if bytes.starts_with(b"\x89PNG") { "image/png" } else { "image/jpeg" };
+    Ok(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(&bytes)))
+}
+
+// ── privacy & blocking ───────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn get_privacy(state: State<'_, AppState>) -> Result<Privacy, String> {
+    call(&state, reqwest::Method::GET, "/v1/me/privacy", None).await
+}
+
+#[tauri::command]
+pub async fn set_privacy(state: State<'_, AppState>, privacy: Privacy) -> Result<Privacy, String> {
+    let body = serde_json::to_value(&privacy).map_err(|e| e.to_string())?;
+    call(&state, reqwest::Method::PUT, "/v1/me/privacy", Some(body)).await
+}
+
+#[tauri::command]
+pub async fn list_blocked(state: State<'_, AppState>) -> Result<Vec<BlockedPlayer>, String> {
+    call(&state, reqwest::Method::GET, "/v1/blocks", None).await
+}
+
+/// Block by uuid (from the friends list) — ends any friendship and pending
+/// requests; they can't message or request this account again.
+#[tauri::command]
+pub async fn block_player(state: State<'_, AppState>, uuid: String) -> Result<Vec<BlockedPlayer>, String> {
+    call(&state, reqwest::Method::POST, "/v1/blocks", Some(json!({ "uuid": uuid }))).await
+}
+
+#[tauri::command]
+pub async fn unblock_player(state: State<'_, AppState>, uuid: String) -> Result<Vec<BlockedPlayer>, String> {
+    call(&state, reqwest::Method::DELETE, &format!("/v1/blocks/{uuid}"), None).await
+}
+
+// ── gifts & outfits ──────────────────────────────────────────────────────
+
+/// Buy cosmetic `id` for friend `uuid`; answers with the new balance and the
+/// gift message that now sits in the conversation.
+#[tauri::command]
+pub async fn gift_cosmetic(state: State<'_, AppState>, uuid: String, id: u32) -> Result<Gifted, String> {
+    call(&state, reqwest::Method::POST, "/v1/me/gift", Some(json!({ "to": uuid, "id": id }))).await
+}
+
+#[tauri::command]
+pub async fn list_outfits(state: State<'_, AppState>) -> Result<Vec<Outfit>, String> {
+    call(&state, reqwest::Method::GET, "/v1/me/outfits", None).await
+}
+
+/// Save the given loadout under `name` (replacing an outfit of that name).
+#[tauri::command]
+pub async fn save_outfit(
+    state: State<'_, AppState>,
+    name: String,
+    loadout: crate::cosmetics::Loadout,
+) -> Result<Vec<Outfit>, String> {
+    call(
+        &state,
+        reqwest::Method::POST,
+        "/v1/me/outfits",
+        Some(json!({ "name": name.trim(), "loadout": loadout })),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn delete_outfit(state: State<'_, AppState>, id: i64) -> Result<Vec<Outfit>, String> {
+    call(&state, reqwest::Method::DELETE, &format!("/v1/me/outfits/{id}"), None).await
 }
 
 // ── public skin (Mojang, no auth) ────────────────────────────────────────

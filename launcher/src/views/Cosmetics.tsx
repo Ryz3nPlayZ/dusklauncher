@@ -3,6 +3,7 @@ import AccessorySwatch from '../components/AccessorySwatch';
 import CapeSwatch from '../components/CapeSwatch';
 import PlayerRender, { POSES, type AccessoryView, type Pose } from '../components/PlayerRender';
 import SkinSnapshot from '../components/SkinSnapshot';
+import Outfits from '../components/Outfits';
 import { NavCell, NavLabel, PxBox, PxButton, TT } from '../components/px/Px';
 import {
   api,
@@ -25,7 +26,7 @@ const equippedAccessories = (l: Loadout | null): number[] =>
   Array.isArray(l?.accessories) ? l.accessories.filter((v): v is number => typeof v === 'number') : [];
 const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 
-type Tab = 'SKINS' | 'CAPES' | 'ACCESSORIES';
+type Tab = 'SKINS' | 'CAPES' | 'ACCESSORIES' | 'OUTFITS';
 
 export default function Cosmetics({
   account,
@@ -179,22 +180,27 @@ export default function Cosmetics({
     setPickedAcc((cur) => (cur.includes(id) ? cur.filter((v) => v !== id) : [...cur, id]));
   }, []);
 
+  /** the loadout with the picked cape + accessories in it */
+  const pickedLook = useMemo(() => {
+    const next: Loadout = { ...(loadout ?? {}) };
+    if (pickedCape === null) delete next.cape;
+    else next.cape = pickedCape;
+    if (pickedAcc.length === 0) delete next.accessories;
+    else next.accessories = pickedAcc;
+    return next;
+  }, [loadout, pickedCape, pickedAcc]);
+
   const applyLook = useCallback(async () => {
     setCapeNote(null);
     try {
-      const next: Loadout = { ...(loadout ?? {}) };
-      if (pickedCape === null) delete next.cape;
-      else next.cape = pickedCape;
-      if (pickedAcc.length === 0) delete next.accessories;
-      else next.accessories = pickedAcc;
-      const saved = await api.setLoadout(next);
+      const saved = await api.setLoadout(pickedLook);
       setLoadout(saved);
       setPickedCape(equippedCape(saved));
       setPickedAcc(equippedAccessories(saved));
     } catch (e) {
       setCapeNote(String(e));
     }
-  }, [loadout, pickedCape, pickedAcc]);
+  }, [pickedLook]);
 
   const cancelLook = useCallback(() => {
     setPickedCape(wornCape);
@@ -231,6 +237,7 @@ export default function Cosmetics({
           <NavCell label="SKINS" active={tab === 'SKINS'} onClick={() => setTab('SKINS')} />
           <NavCell label="CAPES" active={tab === 'CAPES'} onClick={() => setTab('CAPES')} />
           <NavCell label="ACCESSORIES" active={tab === 'ACCESSORIES'} onClick={() => setTab('ACCESSORIES')} />
+          <NavCell label="OUTFITS" active={tab === 'OUTFITS'} onClick={() => setTab('OUTFITS')} />
           <div className="win__fill" />
           <NavLabel label={current ? current.name.toUpperCase() : 'NO SKIN SELECTED'} />
         </div>
@@ -294,13 +301,27 @@ export default function Cosmetics({
                         ? `${mcCapes?.length ?? 0} MINECRAFT CAPE${mcCapes?.length === 1 ? '' : 'S'}`
                         : tab === 'CAPES'
                         ? `${capes.length} CAPE${capes.length === 1 ? '' : 'S'}`
+                        : tab === 'OUTFITS'
+                        ? 'SAVED LOOKS'
                         : `${accessories.length} ACCESSOR${accessories.length === 1 ? 'Y' : 'IES'}`
                     }
                   />
                 </div>
 
                 <div className="win__body">
-                  {tab === 'CAPES' && capeSource === 'MINECRAFT' ? (
+                  {tab === 'OUTFITS' ? (
+                    <Outfits
+                      capes={capes}
+                      accessories={accessories}
+                      look={pickedLook}
+                      onWear={(o) => {
+                        // only what's still owned goes on the viewer
+                        const cape = equippedCape(o.loadout);
+                        setPickedCape(cape !== null && capes.some((c) => c.id === cape) ? cape : null);
+                        setPickedAcc(equippedAccessories(o.loadout).filter((id) => accessories.some((a) => a.id === id)));
+                      }}
+                    />
+                  ) : tab === 'CAPES' && capeSource === 'MINECRAFT' ? (
                     <div className="skin-grid scroll">
                       {/* applied on click: Mojang has no "draft", and it needs no relog */}
                       <PxBox

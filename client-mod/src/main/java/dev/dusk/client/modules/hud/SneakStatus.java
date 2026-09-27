@@ -1,26 +1,31 @@
 package dev.dusk.client.modules.hud;
 
+import dev.dusk.client.DuskClient;
 import dev.dusk.client.hud.HudContext;
+import dev.dusk.client.hud.Keys;
 import dev.dusk.client.hud.TextHud;
+import dev.dusk.client.modules.toggle.ToggleSprint;
 
-/**
- * Flex-HUD's Toggle Sneak readout. Vanilla only exposes the logical sneak
- * state, so "Held" vs "Toggled" follows the toggle-crouch option rather than
- * the physical key (Flex-HUD reads the raw key through an access widener).
- */
+/** Flex-HUD's Toggle Sneak readout: "Sneaking (Held)" or "Sneaking (Toggled)". */
 public class SneakStatus extends TextHud {
     public SneakStatus() {
-        super("sneakstatus", "Sneak Indicator", "", "Whether you are sneaking, and whether it is held or toggled.");
+        super("sneakstatus", "Toggle Sneak", "Whether you are sneaking, and whether it is held or toggled.");
         setPosition(150, 126);
-        showLabel.set(false);
     }
 
     @Override
-    protected String value(HudContext ctx) {
+    protected String text(HudContext ctx) {
         var mc = ctx.mc();
         if (mc.player == null) return null;
-        if (!mc.options.keyShift.isDown()) return null;
-        return mc.options.toggleCrouch().get() ? "Sneaking (Toggled)" : "Sneaking (Held)";
+        ToggleSprint toggle = DuskClient.modules() == null ? null : DuskClient.modules().get(ToggleSprint.class);
+        boolean toggled = mc.options.toggleCrouch().get() || toggle != null && toggle.sneakToggleMode();
+        var key = mc.options.keyShift;
+        if (toggled) {
+            if (Keys.physicallyDown(key)) return "Sneaking (Held)";
+            if (key.isDown()) return "Sneaking (Toggled)";
+            return null;
+        }
+        return key.isDown() ? "Sneaking (Held)" : null;
     }
 
     @Override

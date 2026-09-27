@@ -3,8 +3,9 @@ import { NavCell, PxBox, PxButton, TT } from '../components/px/Px';
 import { Choice, Row } from '../components/px/Form';
 import { api, type AppInfo, type Referral, type Settings } from '../lib/api';
 import Wallpapers, { wallpaperLabel } from './Wallpapers';
+import SettingsSocial from './SettingsSocial';
 
-const TABS = ['GENERAL', 'JAVA', 'DISPLAY', 'FILES'] as const;
+const TABS = ['GENERAL', 'SOCIAL', 'JAVA', 'DISPLAY', 'FILES'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function SettingsView({
@@ -262,6 +263,8 @@ export default function SettingsView({
               </Row>
             </>
           )}
+
+          {tab === 'SOCIAL' && <SettingsSocial settings={settings} set={set} info={info} />}
 
           {tab === 'JAVA' && (
             <>

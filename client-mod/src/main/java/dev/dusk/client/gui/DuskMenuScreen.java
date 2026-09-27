@@ -9,7 +9,6 @@ import org.jetbrains.annotations.Nullable;
  * place, and under it Preferences (gear), Modules and Edit layout (arrows).
  */
 public class DuskMenuScreen extends MenuScreen {
-    private static final String WORDMARK = "DUSK";
     private static final long INTRO_MS = 500;
 
     private final long openedAt = System.currentTimeMillis();
@@ -33,10 +32,9 @@ public class DuskMenuScreen extends MenuScreen {
     protected void drawMenu(Canvas c, int mouseX, int mouseY, float delta) {
         float e = intro();
         int rowY = rowY();
-        int scale = Math.max(2, Math.min(5, (rowY - 30) / 9));
-        int tw = Theme.wordmarkWidth(c, WORDMARK, scale);
-        int ty = rowY - 20 - 9 * scale + Math.round((1 - e) * 16);
-        Theme.wordmark(c, WORDMARK, (this.width - tw) / 2, ty, scale, e);
+        int unit = Math.max(2, Math.min(6, (rowY - 24) / 11));
+        int ty = rowY - 16 - Theme.wordmarkHeight(unit) + Math.round((1 - e) * 16);
+        Theme.wordmark(c, (this.width - Theme.wordmarkWidth(unit)) / 2, ty, unit, e);
 
         int tint = Math.max(5, Math.round(255 * e)) << 24 | 0xFFFFFF;
         boolean prefsHover = Vanilla.inside(mouseX, mouseY, prefsX(), rowY, 20, 20);

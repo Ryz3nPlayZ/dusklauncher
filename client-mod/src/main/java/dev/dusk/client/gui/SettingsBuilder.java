@@ -4,6 +4,7 @@ import dev.dusk.client.gui.widget.ColorWidget;
 import dev.dusk.client.gui.widget.CrosshairWidget;
 import dev.dusk.client.gui.widget.DropdownWidget;
 import dev.dusk.client.gui.widget.GroupHeaderWidget;
+import dev.dusk.client.gui.widget.KeybindWidget;
 import dev.dusk.client.gui.widget.PopupHost;
 import dev.dusk.client.gui.widget.ScrollPane;
 import dev.dusk.client.gui.widget.SettingRow;
@@ -14,6 +15,7 @@ import dev.dusk.client.module.setting.BoolSetting;
 import dev.dusk.client.module.setting.ChoiceSetting;
 import dev.dusk.client.module.setting.ColorSetting;
 import dev.dusk.client.module.setting.IntSetting;
+import dev.dusk.client.module.setting.KeySetting;
 import dev.dusk.client.module.setting.PixelGridSetting;
 import dev.dusk.client.module.setting.Setting;
 import dev.dusk.client.modules.render.CrosshairPresets;
@@ -68,6 +70,7 @@ public final class SettingsBuilder {
         }
         if (s instanceof IntSetting i) return new SliderWidget(i, onChange).resets(s, onChange);
         if (s instanceof ChoiceSetting c) return new DropdownWidget(c, onChange, host).resets(s, onChange);
+        if (s instanceof KeySetting k) return new KeybindWidget(k.name(), k::mapping).resets(s, onChange);
         if (s instanceof ColorSetting c) return new ColorWidget(c, onChange, host).resets(s, onChange);
         if (s instanceof PixelGridSetting && module instanceof CustomCrosshair crosshair) {
             return new CrosshairWidget(crosshair, onChange, host).resets(s, () -> {

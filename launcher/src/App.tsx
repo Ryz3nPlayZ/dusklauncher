@@ -4,7 +4,18 @@ import CustomWallpaper from './background/CustomWallpaper';
 import Nav from './components/Nav';
 import UpdateButton from './components/UpdateButton';
 import type { Pose } from './components/PlayerRender';
-import { api, DUSK_PACK, isTauri, listen, type Account, type GameState, type Profile, type Progress, type Settings } from './lib/api';
+import {
+  api,
+  DUSK_PACK,
+  isTauri,
+  listen,
+  type Account,
+  type GameActivity,
+  type GameState,
+  type Profile,
+  type Progress,
+  type Settings,
+} from './lib/api';
 import { startGameLog } from './lib/gamelog';
 import { useUpdater } from './lib/updater';
 import type { Route } from './routes';
@@ -31,6 +42,8 @@ export default function App() {
   const [pose, setPose] = useState<Pose>('IDLE');
   const [progress, setProgress] = useState<Progress | null>(null);
   const [game, setGame] = useState<GameState | null>(null);
+  /* where the running game is (server / singleplayer) — INVITE sends it */
+  const [activity, setActivity] = useState<GameActivity | null>(null);
   const [error, setError] = useState<string | null>(null);
   const updater = useUpdater();
   // mirrors `game` for the event handlers, which are registered once
@@ -62,6 +75,7 @@ export default function App() {
     void refreshAccount();
     void syncGame();
     void api.getSettings().then(setSettings);
+    void api.gameActivity().then(setActivity).catch(() => {});
   }, [refreshProfiles, refreshAccount, syncGame]);
 
   // first run: seed the same instance NEW INSTANCE → DUSK PROFILE makes —
@@ -115,6 +129,7 @@ export default function App() {
         setGame(s);
         if (s.state !== 'starting') setProgress(null);
       }),
+      listen<GameActivity | null>('game-activity', setActivity),
     ];
     return () => {
       void Promise.all(unlisten).then((fns) => fns.forEach((f) => f?.()));
@@ -138,15 +153,16 @@ export default function App() {
     [settings, saveSettings],
   );
 
+  /* `server`: straight onto that multiplayer server (a friend's JOIN) */
   const launch = useCallback(
-    async (id: string) => {
+    async (id: string, server?: string) => {
       setError(null);
       setGame({ profileId: id, state: 'starting', code: null });
       setProgress({ profileId: id, stage: 'starting', done: 0, total: 0, doneBytes: 0, totalBytes: 0 });
       try {
         // resolves once the process has spawned — from here on the game is
         // running whatever order the events landed in
-        await api.launch(id);
+        await (server ? api.joinServer(id, server) : api.launch(id));
         setProgress(null);
         setGame({ profileId: id, state: 'running', code: null });
         void refreshProfiles();
@@ -159,6 +175,27 @@ export default function App() {
       }
     },
     [refreshProfiles, syncGame],
+  );
+
+  /* JOIN from the social pane: the selected instance when it runs the
+     friend's version (or no version is known), else another instance on
+     that version, else the selected one anyway — servers often accept a
+     range. Home shows the install / launch progress. */
+  const join = useCallback(
+    (server: string, version: string | null) => {
+      const g = gameRef.current;
+      if (g && (g.state === 'running' || g.state === 'starting')) return;
+      const target =
+        (version && selected?.gameVersion !== version && profiles.find((p) => p.gameVersion === version)) || selected;
+      if (!target) {
+        setError('Create an instance first, then JOIN.');
+        setRoute('home');
+        return;
+      }
+      setRoute('home');
+      void launch(target.id, server);
+    },
+    [profiles, selected, launch],
   );
 
   const stop = useCallback(async () => {
@@ -217,6 +254,7 @@ export default function App() {
             onLaunch={launch}
             onSelect={selectProfile}
             onStop={() => void stop()}
+            clock24h={settings?.clock24h ?? false}
           />
         )}
         {route === 'cosmetics' && (
@@ -243,8 +281,16 @@ export default function App() {
           // a different account starts from a clean pane — no stale friends or chat
           key={account?.uuid ?? 'signed-out'}
           account={account}
-          gameRunning={game?.state === 'running'}
+          gameRunning={game?.state === 'running' || game?.state === 'starting'}
           playing={playing}
+          activity={activity}
+          prefs={{
+            clock24h: settings?.clock24h ?? false,
+            warnOnLinks: settings?.warnOnLinks ?? true,
+            notifyFriendsOnline: settings?.notifyFriendsOnline ?? true,
+            notifyMessages: settings?.notifyMessages ?? true,
+          }}
+          onJoin={join}
           isTauri={isTauri}
         />
       </div>

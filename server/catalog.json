@@ -1,63 +1,447 @@
 {
   "capes": [
-    { "id": 5 , "name": "Animated Fire",                   "animated": true },
-    { "id": 6 , "name": "Astelic Badlion",                 "animated": true },
-    { "id": 7 , "name": "Astelic Purple Sky",              "animated": true },
-    { "id": 8 , "name": "Ender Dragon",                    "animated": false },
-    { "id": 9 , "name": "Energy Wings",                    "animated": false },
-    { "id": 10, "name": "Galaxy",                          "animated": false },
-    { "id": 11, "name": "HD Galaxy",                       "animated": false },
-    { "id": 12, "name": "Intel Edits Cloaks",              "animated": false },
-    { "id": 13, "name": "Pastel Aesthetic",                "animated": false },
-    { "id": 14, "name": "ThirtyVirus Code Red",            "animated": true },
-    { "id": 15, "name": "Glitchstorm",                     "animated": true },
-    { "id": 17, "name": "Animated 2015",                   "animated": true },
-    { "id": 18, "name": "Astelic Sunrise",                 "animated": true },
-    { "id": 19, "name": "Axolotl",                         "animated": false },
-    { "id": 20, "name": "Blue Migration V2",               "animated": false },
-    { "id": 21, "name": "Blue Rose Lunar",                 "animated": true },
-    { "id": 22, "name": "Blue",                            "animated": false },
-    { "id": 23, "name": "Christmas Tree",                  "animated": true },
-    { "id": 24, "name": "Cute Bears",                      "animated": true },
-    { "id": 25, "name": "Dark Damaged",                    "animated": false },
-    { "id": 26, "name": "Duck",                            "animated": false },
-    { "id": 27, "name": "GlitchVoid",                      "animated": true },
-    { "id": 28, "name": "Graffiti",                        "animated": false },
-    { "id": 29, "name": "Grey Migration",                  "animated": false },
-    { "id": 30, "name": "Halloween Vibes",                 "animated": false },
-    { "id": 31, "name": "Intel Wave",                      "animated": true },
-    { "id": 32, "name": "Jiingys Custom OF",               "animated": false },
-    { "id": 33, "name": "Kawaii Pastel Bear",              "animated": true },
-    { "id": 34, "name": "Kirby Pixelated",                 "animated": false },
-    { "id": 35, "name": "Lunar Sky Kanji",                 "animated": false },
-    { "id": 36, "name": "Migration Cape 16x",              "animated": false },
-    { "id": 37, "name": "Nasa",                            "animated": false },
-    { "id": 38, "name": "Neurosis",                        "animated": false },
-    { "id": 39, "name": "Notnico Sunset",                  "animated": false },
-    { "id": 40, "name": "Pink Pastel Sky",                 "animated": false },
-    { "id": 41, "name": "Purple Rain",                     "animated": true },
-    { "id": 42, "name": "Red Glitchstorm V2",              "animated": true },
-    { "id": 43, "name": "Red Omega",                       "animated": false },
-    { "id": 44, "name": "Soviet USSR",                     "animated": false },
-    { "id": 45, "name": "SpeedSilverBlueLunar",            "animated": false },
-    { "id": 46, "name": "Tiny Ice Dragon",                 "animated": false },
-    { "id": 47, "name": "Uwu",                             "animated": true },
-    { "id": 48, "name": "Hu Tao Ghost Anim",               "animated": true },
-    { "id": 49, "name": "Pi",                              "animated": false },
-    { "id": 50, "name": "Ruined Cyan",                     "animated": false },
-    { "id": 51, "name": "Absolute Solver",                 "animated": true },
-    { "id": 52, "name": "Animated Sculk",                  "animated": true },
-    { "id": 53, "name": "Astelic Blue",                    "animated": true },
-    { "id": 54, "name": "Badlion Demon",                   "animated": true },
-    { "id": 55, "name": "Badlion Xmas",                    "animated": true },
-    { "id": 56, "name": "Green Chains",                    "animated": true },
-    { "id": 57, "name": "Pink Glitched",                   "animated": true },
-    { "id": 58, "name": "RedRose Lunar",                   "animated": true },
-    { "id": 59, "name": "SpinningRainbowSheep",             "animated": true },
-    { "id": 60, "name": "Zero Two",                        "animated": true },
-    { "id": 61, "name": "Static 2",                        "animated": true }
+    {
+      "id": 5,
+      "name": "Animated Fire",
+      "animated": true
+    },
+    {
+      "id": 6,
+      "name": "Astelic Badlion",
+      "animated": true
+    },
+    {
+      "id": 7,
+      "name": "Astelic Purple Sky",
+      "animated": true
+    },
+    {
+      "id": 8,
+      "name": "Ender Dragon",
+      "animated": false
+    },
+    {
+      "id": 9,
+      "name": "Energy Wings",
+      "animated": false
+    },
+    {
+      "id": 10,
+      "name": "Galaxy",
+      "animated": false
+    },
+    {
+      "id": 11,
+      "name": "HD Galaxy",
+      "animated": false
+    },
+    {
+      "id": 12,
+      "name": "Intel Edits Cloaks",
+      "animated": false
+    },
+    {
+      "id": 13,
+      "name": "Pastel Aesthetic",
+      "animated": false
+    },
+    {
+      "id": 14,
+      "name": "ThirtyVirus Code Red",
+      "animated": true
+    },
+    {
+      "id": 15,
+      "name": "Glitchstorm",
+      "animated": true
+    },
+    {
+      "id": 17,
+      "name": "Animated 2015",
+      "animated": true
+    },
+    {
+      "id": 18,
+      "name": "Astelic Sunrise",
+      "animated": true
+    },
+    {
+      "id": 19,
+      "name": "Axolotl",
+      "animated": false
+    },
+    {
+      "id": 20,
+      "name": "Blue Migration V2",
+      "animated": false
+    },
+    {
+      "id": 21,
+      "name": "Blue Rose Lunar",
+      "animated": true
+    },
+    {
+      "id": 22,
+      "name": "Blue",
+      "animated": false
+    },
+    {
+      "id": 23,
+      "name": "Christmas Tree",
+      "animated": true
+    },
+    {
+      "id": 24,
+      "name": "Cute Bears",
+      "animated": true
+    },
+    {
+      "id": 25,
+      "name": "Dark Damaged",
+      "animated": false
+    },
+    {
+      "id": 26,
+      "name": "Duck",
+      "animated": false
+    },
+    {
+      "id": 27,
+      "name": "GlitchVoid",
+      "animated": true
+    },
+    {
+      "id": 28,
+      "name": "Graffiti",
+      "animated": false
+    },
+    {
+      "id": 29,
+      "name": "Grey Migration",
+      "animated": false
+    },
+    {
+      "id": 30,
+      "name": "Halloween Vibes",
+      "animated": false
+    },
+    {
+      "id": 31,
+      "name": "Intel Wave",
+      "animated": true
+    },
+    {
+      "id": 32,
+      "name": "Jiingys Custom OF",
+      "animated": false
+    },
+    {
+      "id": 33,
+      "name": "Kawaii Pastel Bear",
+      "animated": true
+    },
+    {
+      "id": 34,
+      "name": "Kirby Pixelated",
+      "animated": false
+    },
+    {
+      "id": 35,
+      "name": "Lunar Sky Kanji",
+      "animated": false
+    },
+    {
+      "id": 36,
+      "name": "Migration Cape 16x",
+      "animated": false
+    },
+    {
+      "id": 37,
+      "name": "Nasa",
+      "animated": false
+    },
+    {
+      "id": 38,
+      "name": "Neurosis",
+      "animated": false
+    },
+    {
+      "id": 39,
+      "name": "Notnico Sunset",
+      "animated": false
+    },
+    {
+      "id": 40,
+      "name": "Pink Pastel Sky",
+      "animated": false
+    },
+    {
+      "id": 41,
+      "name": "Purple Rain",
+      "animated": true
+    },
+    {
+      "id": 42,
+      "name": "Red Glitchstorm V2",
+      "animated": true
+    },
+    {
+      "id": 43,
+      "name": "Red Omega",
+      "animated": false
+    },
+    {
+      "id": 44,
+      "name": "Soviet USSR",
+      "animated": false
+    },
+    {
+      "id": 45,
+      "name": "SpeedSilverBlueLunar",
+      "animated": false
+    },
+    {
+      "id": 46,
+      "name": "Tiny Ice Dragon",
+      "animated": false
+    },
+    {
+      "id": 47,
+      "name": "Uwu",
+      "animated": true
+    },
+    {
+      "id": 48,
+      "name": "Hu Tao Ghost Anim",
+      "animated": true
+    },
+    {
+      "id": 49,
+      "name": "Pi",
+      "animated": false
+    },
+    {
+      "id": 50,
+      "name": "Ruined Cyan",
+      "animated": false
+    },
+    {
+      "id": 51,
+      "name": "Absolute Solver",
+      "animated": true
+    },
+    {
+      "id": 52,
+      "name": "Animated Sculk",
+      "animated": true
+    },
+    {
+      "id": 53,
+      "name": "Astelic Blue",
+      "animated": true
+    },
+    {
+      "id": 54,
+      "name": "Badlion Demon",
+      "animated": true
+    },
+    {
+      "id": 55,
+      "name": "Badlion Xmas",
+      "animated": true
+    },
+    {
+      "id": 56,
+      "name": "Green Chains",
+      "animated": true
+    },
+    {
+      "id": 57,
+      "name": "Pink Glitched",
+      "animated": true
+    },
+    {
+      "id": 58,
+      "name": "RedRose Lunar",
+      "animated": true
+    },
+    {
+      "id": 59,
+      "name": "SpinningRainbowSheep",
+      "animated": true
+    },
+    {
+      "id": 60,
+      "name": "Zero Two",
+      "animated": true
+    },
+    {
+      "id": 61,
+      "name": "Static 2",
+      "animated": true
+    },
+    {
+      "id": 83,
+      "name": "Halo Starter",
+      "animated": false,
+      "price": 689
+    },
+    {
+      "id": 84,
+      "name": "Spring Celeste Starter",
+      "animated": false,
+      "price": 514
+    },
+    {
+      "id": 85,
+      "name": "Spring Droplets Starter",
+      "animated": true,
+      "price": 675
+    },
+    {
+      "id": 86,
+      "name": "Spring Flower Petals Starter",
+      "animated": true,
+      "price": 845
+    },
+    {
+      "id": 87,
+      "name": "Sharpness Glitched Enchant",
+      "animated": true,
+      "price": 971
+    }
   ],
   "accessories": [
-    { "id": 16, "name": "Red Fire Arm", "animated": false }
+    {
+      "id": 16,
+      "name": "Red Fire Arm",
+      "animated": false
+    },
+    {
+      "id": 62,
+      "name": "A Wanderer's Hat",
+      "animated": false,
+      "price": 931
+    },
+    {
+      "id": 63,
+      "name": "Anthaeres_'s Red Halo V1",
+      "animated": false,
+      "price": 911
+    },
+    {
+      "id": 64,
+      "name": "Black Halo",
+      "animated": false,
+      "price": 594
+    },
+    {
+      "id": 65,
+      "name": "COOL FASHION AXOLOTL",
+      "animated": false,
+      "price": 570
+    },
+    {
+      "id": 66,
+      "name": "Cat With Blue Eyes",
+      "animated": false,
+      "price": 574
+    },
+    {
+      "id": 67,
+      "name": "Corrupt Katana V2 (By Ryaw)",
+      "animated": false,
+      "price": 549
+    },
+    {
+      "id": 68,
+      "name": "Duckert (shoulder)",
+      "animated": false,
+      "price": 768
+    },
+    {
+      "id": 69,
+      "name": "FAT RAT",
+      "animated": false,
+      "price": 506
+    },
+    {
+      "id": 70,
+      "name": "Halo",
+      "animated": false,
+      "price": 728
+    },
+    {
+      "id": 71,
+      "name": "Hikari's Halo",
+      "animated": false,
+      "price": 932
+    },
+    {
+      "id": 72,
+      "name": "Junior's Blue Hand Flames",
+      "animated": false,
+      "price": 740
+    },
+    {
+      "id": 73,
+      "name": "Junior's Hand Flames",
+      "animated": false,
+      "price": 864
+    },
+    {
+      "id": 74,
+      "name": "Junior's Purple Hand Flames",
+      "animated": false,
+      "price": 570
+    },
+    {
+      "id": 75,
+      "name": "Lil Warden Buddy",
+      "animated": false,
+      "price": 793
+    },
+    {
+      "id": 76,
+      "name": "Menacing",
+      "animated": false,
+      "price": 726
+    },
+    {
+      "id": 77,
+      "name": "Purple Allay",
+      "animated": false,
+      "price": 880
+    },
+    {
+      "id": 78,
+      "name": "Rice Hat V3.3",
+      "animated": false,
+      "price": 813
+    },
+    {
+      "id": 79,
+      "name": "Samurai Sword (By Ryaw)",
+      "animated": false,
+      "price": 935
+    },
+    {
+      "id": 80,
+      "name": "Zenin'z Katana",
+      "animated": false,
+      "price": 563
+    },
+    {
+      "id": 81,
+      "name": "Animated Purple Slim Armflame",
+      "animated": true,
+      "price": 577
+    },
+    {
+      "id": 82,
+      "name": "Black Cat",
+      "animated": false,
+      "price": 925
+    }
   ]
 }

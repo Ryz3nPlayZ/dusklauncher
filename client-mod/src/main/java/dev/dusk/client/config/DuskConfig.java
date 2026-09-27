@@ -29,6 +29,10 @@ public final class DuskConfig {
     public CosmeticsConfig cosmetics = new CosmeticsConfig();
     /** Module ids hearted in the Dusk menu, shown under its favourites tab. */
     public List<String> favorites = new ArrayList<>();
+    /** Media recording: "off", "clips" (a rolling buffer the clip key saves) or "full" (every session to a replay). */
+    public String recordingMode = "off";
+    /** How far back a clip reaches, in seconds. */
+    public int clipSeconds = 30;
 
     private static DuskConfig instance;
 

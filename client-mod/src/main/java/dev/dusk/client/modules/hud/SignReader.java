@@ -66,12 +66,24 @@ public class SignReader extends HudElement {
         float textureScale = d.hanging ? 4.5f : 4f;
         int w = width(ctx);
         int h = height(ctx);
-        int textureWidth = Math.round(64 * textureScale);
-        int textureHeight = Math.round(32 * textureScale);
-
-        float offsetX = 2 * textureScale;
-        if (!d.facingFront) offsetX += w + 2 * textureScale;
-        float offsetY = d.hanging ? 14 * textureScale : 2 * textureScale;
+        int textureWidth, textureHeight;
+        float offsetX, offsetY;
+        if (Compat.flatSignSheet()) {
+            textureWidth = textureHeight = Math.round(32 * textureScale);
+            if (d.hanging) {
+                offsetX = d.facingFront ? 2 * textureScale : w + 4 * textureScale;
+                offsetY = 16 * textureScale;
+            } else {
+                offsetX = 0;
+                offsetY = d.facingFront ? 2 * textureScale : h + 4 * textureScale;
+            }
+        } else {
+            textureWidth = Math.round(64 * textureScale);
+            textureHeight = Math.round(32 * textureScale);
+            offsetX = 2 * textureScale;
+            if (!d.facingFront) offsetX += w + 2 * textureScale;
+            offsetY = d.hanging ? 14 * textureScale : 2 * textureScale;
+        }
 
         // only the face of the sign sheet, blown up to HUD size
         c.blit(d.texture, 0, 0, offsetX, offsetY, w, h, textureWidth, textureHeight);

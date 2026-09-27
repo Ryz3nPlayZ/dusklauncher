@@ -4,6 +4,7 @@ import InstanceEditor from './InstanceEditor';
 import BrowseProjects from './Browse';
 import Project from './Project';
 import InstallModpack, { type InstallTarget } from './InstallModpack';
+import Screenshots from './Screenshots';
 /* Figma 96:2 — the card's picture ("dawnbright 2", the scene's middle band)
    and the 16×16 pixel gear on its square, both exact exports */
 import instanceBanner from '../assets/brand/instance-banner.webp';
@@ -31,6 +32,7 @@ export default function Instances({
   onLaunch,
   onSelect,
   onStop,
+  clock24h,
 }: {
   profiles: Profile[];
   selected: Profile | null;
@@ -39,8 +41,11 @@ export default function Instances({
   onLaunch: (id: string) => void;
   onSelect: (id: string) => void;
   onStop: () => void;
+  clock24h: boolean;
 }) {
   const [filter, setFilter] = useState<Filter>('ALL');
+  /* every instance's screenshots, one page (the instances layout) */
+  const [gallery, setGallery] = useState(false);
   const [creating, setCreating] = useState(false);
   const [browsing, setBrowsing] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -117,6 +122,8 @@ export default function Instances({
     </div>
   );
 
+  if (gallery) return <Screenshots clock24h={clock24h} onBack={() => setGallery(false)} />;
+
   if (editing) {
     return (
       <>
@@ -175,6 +182,9 @@ export default function Instances({
     <div className="page">
       <div className="page__head">
         <h1 className="page__title">Instances</h1>
+        <PxButton family="grey" height="fill" className="page__cta" onClick={() => setGallery(true)}>
+          <TT size={16}>MEDIA</TT>
+        </PxButton>
         {/* Figma 40:20 — the CTA construction at 142×42, a 16px label */}
         <PxButton family="accent" height="fill" className="page__cta" onClick={() => setCreating(true)}>
           <TT size={16} tone="accent">

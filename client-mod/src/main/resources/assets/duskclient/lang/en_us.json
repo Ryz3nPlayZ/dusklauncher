@@ -9,5 +9,6 @@
   "key.duskclient.time_forward": "Time Changer Forward",
   "key.duskclient.time_backward": "Time Changer Backward",
   "key.duskclient.behindyou_back": "Behind You: Back View",
-  "key.duskclient.behindyou_front": "Behind You: Front View"
+  "key.duskclient.behindyou_front": "Behind You: Front View",
+  "key.duskclient.save_clip": "Save Clip"
 }

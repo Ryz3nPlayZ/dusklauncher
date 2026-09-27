@@ -7,12 +7,19 @@
  * what keeps this account "online" for its friends (and says which game
  * version it's in), and its answer — pending requests, unread messages,
  * friends online — is what the pill shows. The full lists are only fetched
- * while the pane is open.
+ * while the pane is open — or, with OS notifications on, once a beat so a
+ * friend coming online or a new message can raise one while the launcher
+ * sits in the background.
+ *
+ * Friends on a server get a JOIN button (row, profile, invites); chat
+ * carries invites, screenshots and gifts as well as text, and links in
+ * text open through a warning unless that's switched off.
  */
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { PxBox, PxButton, TT } from './px/Px';
+import { NavCell, NavLabel, PxBox, PxButton, TT } from './px/Px';
 import PlayerHead from './PlayerHead';
+import { Row } from './px/Form';
 import {
   api,
   type Account,
@@ -21,8 +28,13 @@ import {
   type Friend,
   type FriendProfile,
   type FriendRequests,
+  type GameActivity,
+  type Screenshot,
   type SocialSummary,
+  type StoreItem,
 } from '../lib/api';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { stamp as timeStamp } from '../lib/time';
 
 /** well inside the service's two-minute online window */
 const HEARTBEAT_MS = 30_000;
@@ -45,20 +57,69 @@ function ago(ts: number): string {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-function stamp(ts: number): string {
-  const d = new Date(ts * 1000);
-  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const today = new Date();
-  const yesterday = new Date(today.getTime() - 86_400_000);
-  if (d.toDateString() === today.toDateString()) return `Today ${time}`;
-  if (d.toDateString() === yesterday.toDateString()) return `Yesterday ${time}`;
-  return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
+/** the settings the pane follows */
+export interface SocialPrefs {
+  clock24h: boolean;
+  warnOnLinks: boolean;
+  notifyFriendsOnline: boolean;
+  notifyMessages: boolean;
 }
 
-function statusLine(f: Friend): { text: string; online: boolean } {
+function statusLine(f: Pick<Friend, 'online' | 'playing' | 'server' | 'lastSeen'>): { text: string; online: boolean } {
+  if (f.online && f.playing && f.server) return { text: `PLAYING ${f.playing} · ${f.server}`, online: true };
   if (f.online && f.playing) return { text: `PLAYING ${f.playing}`, online: true };
   if (f.online) return { text: 'ONLINE', online: true };
   return { text: `LAST SEEN ${ago(f.lastSeen).toUpperCase()}`, online: false };
+}
+
+/* http(s) links in chat text; trailing punctuation stays text */
+const LINK_RE = /https?:\/\/[^\s<>"']+/g;
+function splitLinks(text: string): { text: string; url?: string }[] {
+  const out: { text: string; url?: string }[] = [];
+  let last = 0;
+  for (const m of text.matchAll(LINK_RE)) {
+    const url = m[0].replace(/[.,!?;:)\]]+$/, '');
+    const at = m.index ?? 0;
+    if (at > last) out.push({ text: text.slice(last, at) });
+    out.push({ text: url, url });
+    last = at + url.length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last) });
+  return out;
+}
+
+async function openLink(url: string) {
+  if (!/^https?:\/\//i.test(url)) return;
+  try {
+    const { openUrl } = await import('@tauri-apps/plugin-opener');
+    await openUrl(url);
+  } catch {
+    window.open(url, '_blank', 'noopener');
+  }
+}
+
+function LinkText({ text, onLink }: { text: string; onLink: (url: string) => void }) {
+  return (
+    <span className="social__text">
+      {splitLinks(text).map((part, i) =>
+        part.url ? (
+          <a
+            key={i}
+            className="social__link"
+            href={part.url}
+            onClick={(e) => {
+              e.preventDefault();
+              onLink(part.url!);
+            }}
+          >
+            {part.text}
+          </a>
+        ) : (
+          <span key={i}>{part.text}</span>
+        ),
+      )}
+    </span>
+  );
 }
 
 /* skins are shared across rows, the chat header and the profile, and the
@@ -111,12 +172,20 @@ export default function SocialPane({
   account,
   gameRunning,
   playing,
+  activity,
+  prefs,
+  onJoin,
   isTauri,
 }: {
   account: Account | null;
   gameRunning: boolean;
   /** the running game's version, reported to friends; null when not playing */
   playing: string | null;
+  /** what the running game is doing — its server is what INVITE sends */
+  activity: GameActivity | null;
+  prefs: SocialPrefs;
+  /** start the game straight onto a friend's server */
+  onJoin: (server: string, version: string | null) => void;
   isTauri: boolean;
 }) {
   // the browser preview has mocks for every call, so it walks as signed in
@@ -129,20 +198,71 @@ export default function SocialPane({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  /* a link waiting on the "open this?" warning */
+  const [link, setLink] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   // Escape reads these from a listener registered once per open
   const addingRef = useRef(adding);
   addingRef.current = adding;
+  const linkRef = useRef(link);
+  linkRef.current = link;
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
+  const openRef = useRef(open);
+  openRef.current = open;
 
+  const onLink = useCallback((url: string) => {
+    if (prefsRef.current.warnOnLinks) setLink(url);
+    else void openLink(url);
+  }, []);
+
+  /* OS notifications: diff each friends list against the last one — who
+     just came online, whose unread count went up. Only while the launcher
+     is in the background (in front, the pill's badge says it), and never
+     for the first list, which is just the baseline. */
+  const lastSeen = useRef<Map<string, { online: boolean; unread: number }> | null>(null);
+  const noticeFriends = useCallback(
+    (list: Friend[]) => {
+      const prev = lastSeen.current;
+      lastSeen.current = new Map(list.map((f) => [f.uuid, { online: f.online, unread: f.unread }]));
+      if (!prev || !isTauri || document.hasFocus()) return;
+      const p = prefsRef.current;
+      for (const f of list) {
+        const was = prev.get(f.uuid);
+        if (!was) continue;
+        if (p.notifyFriendsOnline && f.online && !was.online) {
+          const what = f.playing ? `Playing Minecraft ${f.playing}${f.server ? ` on ${f.server}` : ''}` : 'Now online';
+          void api.notify(`${f.username} is online`, what).catch(() => {});
+        }
+        if (p.notifyMessages && f.unread > was.unread) {
+          const n = f.unread - was.unread;
+          void api.notify(f.username, n === 1 ? 'Sent you a message' : `Sent you ${n} messages`).catch(() => {});
+        }
+      }
+    },
+    [isTauri],
+  );
+
+  const server = activity?.server ?? null;
   const heartbeat = useCallback(() => {
     void api
       .socialHeartbeat(playing)
-      .then(setSummary)
+      .then((s) => {
+        setSummary(s);
+        // the open pane polls the list itself; closed, notifications need it
+        const p = prefsRef.current;
+        if (!openRef.current && (p.notifyFriendsOnline || p.notifyMessages)) {
+          void api.listFriends().then(noticeFriends).catch(() => {});
+        }
+      })
       .catch(() => {
         // offline or the service is down — the next beat tries again, and
         // the pill just keeps its last counts
       });
-  }, [playing]);
+    // `server` isn't sent from here (the backend reads it) but a change of
+    // server should reach friends at once, like a change of version
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, server, noticeFriends]);
 
   // runs regardless of the pane: this is what keeps us online for friends.
   // `playing` is a dependency, so starting or stopping the game beats at once
@@ -159,6 +279,7 @@ export default function SocialPane({
       setFriends(f);
       setRequests(r);
       setLoadError(null);
+      noticeFriends(f);
       // the lists are fresher than the last beat — keep the pill in step
       setSummary({
         requests: r.incoming.length,
@@ -168,7 +289,7 @@ export default function SocialPane({
     } catch (e) {
       setLoadError(errText(e));
     }
-  }, []);
+  }, [noticeFriends]);
 
   useEffect(() => {
     if (!open || !signedIn) return;
@@ -191,7 +312,8 @@ export default function SocialPane({
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       // the dialog on top takes the first Escape, the pane the next
-      if (addingRef.current) setAdding(false);
+      if (linkRef.current) setLink(null);
+      else if (addingRef.current) setAdding(false);
       else setOpen(false);
     };
     document.addEventListener('pointerdown', onDown);
@@ -265,18 +387,32 @@ export default function SocialPane({
       </PxButton>
 
       {open && (
-        <div className="win px--window social__popout" role="dialog" aria-label="Friends and chat">
+        <div className="win win--solid social__win" role="dialog" aria-label="Friends and chat">
           {!signedIn ? (
-            <PxBox family="panel" className="social__empty">
-              <TT size={16} tone="sub">
-                SIGN IN TO SEE FRIENDS
-              </TT>
-              <span className="meta">Friends and chat use your Microsoft account.</span>
-            </PxBox>
+            <>
+              <div className="win__bar">
+                <NavLabel label="FRIENDS" />
+                <div className="win__fill" />
+              </div>
+              <div className="win__body">
+                <PxBox family="panel" className="empty">
+                  <TT size={20} tone="dim">
+                    NOT SIGNED IN
+                  </TT>
+                  <span className="meta">Friends and chat use your Microsoft account — sign in to see them.</span>
+                </PxBox>
+              </div>
+            </>
           ) : view.kind === 'chat' ? (
             <ChatView
               friend={byUuid(view.uuid)}
               uuid={view.uuid}
+              clock24h={prefs.clock24h}
+              activity={activity}
+              gameRunning={gameRunning}
+              isTauri={isTauri}
+              onJoin={onJoin}
+              onLink={onLink}
               onBack={() => toList()}
               onSeen={() => void refresh()}
               onProfile={() => setView({ kind: 'profile', uuid: view.uuid, from: 'chat' })}
@@ -285,56 +421,52 @@ export default function SocialPane({
             <ProfileView
               friend={byUuid(view.uuid)}
               uuid={view.uuid}
+              from={view.from}
               onBack={() =>
                 view.from === 'chat' ? setView({ kind: 'chat', uuid: view.uuid }) : toList()
               }
               onMessage={() => setView({ kind: 'chat', uuid: view.uuid })}
+              gameRunning={gameRunning}
+              onJoin={onJoin}
               onRemoved={(list, name) => {
                 setFriends(list);
                 setView({ kind: 'list' });
                 setNotice(`Removed ${name} from your friends.`);
               }}
+              onBlocked={(name) => {
+                setView({ kind: 'list' });
+                setNotice(`Blocked ${name}. Unblock them in Settings → Social.`);
+                void refresh();
+              }}
             />
           ) : (
             <>
-              <div className="social__tabs">
-                <PxButton
-                  family={view.kind === 'list' ? 'accent' : 'grey'}
-                  height="sm"
+              <div className="win__bar">
+                <NavCell
+                  label={friends && friends.length > 0 ? `FRIENDS ${friends.length}` : 'FRIENDS'}
+                  active={view.kind === 'list'}
                   onClick={() => setView({ kind: 'list' })}
-                  aria-pressed={view.kind === 'list'}
-                >
-                  <TT size={14} tone={view.kind === 'list' ? 'accent' : undefined}>
-                    {friends && friends.length > 0 ? `FRIENDS (${friends.length})` : 'FRIENDS'}
-                  </TT>
-                </PxButton>
-                <PxButton
-                  family={view.kind === 'requests' ? 'accent' : 'grey'}
-                  height="sm"
+                />
+                <NavCell
+                  label={requests.incoming.length > 0 ? `REQUESTS ${requests.incoming.length}` : 'REQUESTS'}
+                  active={view.kind === 'requests'}
                   onClick={() => setView({ kind: 'requests' })}
-                  aria-pressed={view.kind === 'requests'}
-                >
-                  <TT size={14} tone={view.kind === 'requests' ? 'accent' : undefined}>
-                    {requests.incoming.length > 0 ? `REQUESTS (${requests.incoming.length})` : 'REQUESTS'}
-                  </TT>
-                </PxButton>
-                <span className="social__fill" />
-                <PxButton family="grey" height="sm" onClick={() => setAdding(true)} title="Add a friend by username">
-                  <TT size={14}>+ ADD</TT>
-                </PxButton>
+                />
+                <div className="win__fill" />
+                <NavCell label="+ ADD" onClick={() => setAdding(true)} />
               </div>
 
-              <div className="social__list scroll">
+              <div className="win__body social__body scroll">
                 {notice && (
-                  <PxBox family="green" height="fill" className="social__notice" role="status">
+                  <PxBox family="green" height="md" className="social__notice" role="status">
                     <span className="meta">{notice}</span>
                   </PxBox>
                 )}
                 {loadError && (
-                  <PxBox family="red" height="fill" className="social__notice" role="alert">
+                  <PxBox family="red" height="md" className="social__notice" role="alert">
                     <span className="meta">{loadError}</span>
                     <PxButton family="grey" height="sm" onClick={() => void refresh()}>
-                      <TT size={13}>RETRY</TT>
+                      <TT size={14}>RETRY</TT>
                     </PxButton>
                   </PxBox>
                 )}
@@ -342,15 +474,17 @@ export default function SocialPane({
                   <RequestsList requests={requests} onChange={setRequests} onAccepted={() => void refresh()} />
                 ) : friends === null ? (
                   !loadError && (
-                    <PxBox family="panel" className="social__empty">
+                    <PxBox family="panel" className="empty">
                       <span className="meta">Loading friends…</span>
                     </PxBox>
                   )
                 ) : (
                   <FriendsList
                     friends={friends}
+                    gameRunning={gameRunning}
                     onOpen={(f) => setView({ kind: 'chat', uuid: f.uuid })}
                     onAdd={() => setAdding(true)}
+                    onJoin={onJoin}
                   />
                 )}
               </div>
@@ -376,7 +510,71 @@ export default function SocialPane({
           />,
           document.body,
         )}
+
+      {link &&
+        createPortal(
+          <div className="modal-scrim" onClick={() => setLink(null)}>
+            <PxBox family="panel" className="px--window modal" role="dialog" aria-label="Open link" onClick={(e) => e.stopPropagation()}>
+              <TT size={22}>OPEN THIS LINK?</TT>
+              <span className="meta social__link-url">{link}</span>
+              <span className="meta">
+                It opens in your browser. Links from people can lead anywhere — never sign in or enter a code a stranger
+                sent you.
+              </span>
+              <div className="modal__row modal__row--tall">
+                <PxButton family="grey" height="md" onClick={() => setLink(null)}>
+                  <TT size={20}>CANCEL</TT>
+                </PxButton>
+                <PxButton
+                  family="blue"
+                  height="md"
+                  autoFocus
+                  onClick={() => {
+                    void openLink(link);
+                    setLink(null);
+                  }}
+                >
+                  <TT size={20} tone="blue">
+                    OPEN
+                  </TT>
+                </PxButton>
+              </div>
+            </PxBox>
+          </div>,
+          document.body,
+        )}
     </div>
+  );
+}
+
+/** JOIN: start the game on the friend's server (their version when an
+    instance has it) — not while a game already runs, which can't be moved */
+function JoinButton({
+  server,
+  version,
+  gameRunning,
+  onJoin,
+}: {
+  server: string;
+  version: string | null;
+  gameRunning: boolean;
+  onJoin: (server: string, version: string | null) => void;
+}) {
+  return (
+    <PxButton
+      family="green"
+      height="md"
+      disabled={gameRunning}
+      title={gameRunning ? 'Close the running game first' : `Launch and join ${server}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onJoin(server, version);
+      }}
+    >
+      <TT size={16} tone="green">
+        JOIN
+      </TT>
+    </PxButton>
   );
 }
 
@@ -410,24 +608,21 @@ function AddFriendDialog({
     <div className="modal-scrim" onClick={onClose}>
       <PxBox
         family="panel"
-        className="px--window modal social__add"
+        className="px--window modal"
         role="dialog"
         aria-label="Add friend"
         onClick={(e) => e.stopPropagation()}
       >
-        <form className="social__add-form" onSubmit={submit}>
+        <form className="social__form" onSubmit={submit}>
           <TT size={22}>ADD FRIEND</TT>
-          <span className="meta">Their Minecraft username. They need to have signed in to Dusk Launcher once.</span>
+          <span className="meta">
+            Their Minecraft username. They need to have signed in to Dusk Launcher once.
+          </span>
           <div className="modal__row">
-            <span className="modal__label">
-              <TT size={16} tone="dim">
-                USERNAME
-              </TT>
-            </span>
             <PxBox family="panel" height="md">
               <input
                 className="input"
-                placeholder="THEIR USERNAME"
+                placeholder="USERNAME"
                 value={name}
                 maxLength={16}
                 autoFocus
@@ -441,17 +636,16 @@ function AddFriendDialog({
             </PxBox>
           </div>
           {error && (
-            <PxBox family="red" height="md" role="alert">
+            <PxBox family="red" height="md" className="social__notice" role="alert">
               <span className="meta">{error}</span>
             </PxBox>
           )}
-          <div className="modal__row">
-            <span className="modal__spacer" />
+          <div className="modal__row modal__row--tall">
             <PxButton family="grey" height="md" onClick={onClose}>
-              <TT size={16}>CANCEL</TT>
+              <TT size={20}>CANCEL</TT>
             </PxButton>
             <PxButton family="accent" height="md" type="submit" disabled={busy || !name.trim()}>
-              <TT size={16} tone="accent">
+              <TT size={20} tone="accent">
                 {busy ? 'SENDING…' : 'SEND REQUEST'}
               </TT>
             </PxButton>
@@ -462,25 +656,87 @@ function AddFriendDialog({
   );
 }
 
+/** the settings row (`.srow`) with a head in front — every person in the
+    pane is one of these, whether it opens a chat or carries buttons */
+function PersonRow({
+  uuid,
+  name,
+  online,
+  meta,
+  metaOnline,
+  dim,
+  onClick,
+  title,
+  children,
+}: {
+  uuid: string;
+  name: string;
+  online?: boolean;
+  meta: string;
+  metaOnline?: boolean;
+  dim?: boolean;
+  onClick?: () => void;
+  title?: string;
+  children?: ReactNode;
+}) {
+  const body = (
+    <>
+      <FriendHead uuid={uuid} online={online} size={40} />
+      <div className="srow__text">
+        <TT size={20} tone={dim ? 'dim' : 'plain'}>
+          {name}
+        </TT>
+        <span className={`meta ${metaOnline ? 'is-online' : ''}`}>{meta}</span>
+      </div>
+      {children && <div className="srow__control">{children}</div>}
+    </>
+  );
+  // a div, not a <button>: the row can carry buttons of its own (JOIN)
+  return onClick ? (
+    <div
+      className="srow social__row social__row--link"
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      title={title}
+    >
+      {body}
+    </div>
+  ) : (
+    <div className="srow social__row">{body}</div>
+  );
+}
+
 function FriendsList({
   friends,
+  gameRunning,
   onOpen,
   onAdd,
+  onJoin,
 }: {
   friends: Friend[];
+  gameRunning: boolean;
   onOpen: (f: Friend) => void;
   onAdd: () => void;
+  onJoin: (server: string, version: string | null) => void;
 }) {
   if (friends.length === 0) {
     return (
-      <PxBox family="panel" className="social__empty">
-        <TT size={16} tone="sub">
+      <PxBox family="panel" className="empty">
+        <TT size={20} tone="dim">
           NO FRIENDS YET
         </TT>
         <span className="meta">Add someone by their Minecraft username to chat and see when they're on.</span>
-        <PxButton family="accent" height="sm" onClick={onAdd}>
-          <TT size={14} tone="accent">
-            + ADD A FRIEND
+        <PxButton family="accent" height="md" className="social__empty-cta" onClick={onAdd}>
+          <TT size={16} tone="accent">
+            ADD A FRIEND
           </TT>
         </PxButton>
       </PxBox>
@@ -488,34 +744,32 @@ function FriendsList({
   }
   return (
     <>
-      {friends.map((f) => (
-        <FriendRow key={f.uuid} friend={f} onOpen={() => onOpen(f)} />
-      ))}
+      {friends.map((f) => {
+        const status = statusLine(f);
+        return (
+          <PersonRow
+            key={f.uuid}
+            uuid={f.uuid}
+            name={f.username}
+            online={f.online}
+            meta={status.text}
+            metaOnline={status.online}
+            dim={!f.online}
+            onClick={() => onOpen(f)}
+            title={`Chat with ${f.username}`}
+          >
+            {f.online && f.server && (
+              <JoinButton server={f.server} version={f.playing ?? null} gameRunning={gameRunning} onJoin={onJoin} />
+            )}
+            {f.unread > 0 && (
+              <span className="social__badge" title={`${f.unread} unread`}>
+                <TT size={13}>{f.unread > 99 ? '99+' : String(f.unread)}</TT>
+              </span>
+            )}
+          </PersonRow>
+        );
+      })}
     </>
-  );
-}
-
-function FriendRow({ friend, onOpen }: { friend: Friend; onOpen: () => void }) {
-  const status = statusLine(friend);
-  return (
-    <PxButton
-      family="grey"
-      height="fill"
-      className="social__row"
-      onClick={onOpen}
-      title={`Chat with ${friend.username}`}
-    >
-      <FriendHead uuid={friend.uuid} online={friend.online} size={32} />
-      <span className="home__popout-name">
-        <TT size={16}>{friend.username}</TT>
-        <span className={`meta ${status.online ? 'is-online' : ''}`}>{status.text}</span>
-      </span>
-      {friend.unread > 0 && (
-        <span className="social__badge" title={`${friend.unread} unread`}>
-          <TT size={11}>{friend.unread > 99 ? '99+' : String(friend.unread)}</TT>
-        </span>
-      )}
-    </PxButton>
   );
 }
 
@@ -547,8 +801,8 @@ function RequestsList({
 
   if (requests.incoming.length === 0 && requests.outgoing.length === 0) {
     return (
-      <PxBox family="panel" className="social__empty">
-        <TT size={16} tone="sub">
+      <PxBox family="panel" className="empty">
+        <TT size={20} tone="dim">
           NO PENDING REQUESTS
         </TT>
         <span className="meta">Requests you send and receive show up here.</span>
@@ -558,61 +812,53 @@ function RequestsList({
   return (
     <>
       {error && (
-        <PxBox family="red" height="fill" className="social__notice" role="alert">
+        <PxBox family="red" height="md" className="social__notice" role="alert">
           <span className="meta">{error}</span>
         </PxBox>
       )}
       {requests.incoming.length > 0 && (
-        <span className="social__section">
-          <TT size={13} tone="dim">
+        <div className="social__section">
+          <TT size={16} tone="dim">
             RECEIVED
           </TT>
-        </span>
+        </div>
       )}
       {requests.incoming.map((r) => (
-        <PxBox key={r.id} family="grey" height="fill" className="social__row social__row--static">
-          <FriendHead uuid={r.uuid} size={32} />
-          <span className="home__popout-name">
-            <TT size={16}>{r.username}</TT>
-            <span className="meta">wants to be friends · {ago(r.createdAt)}</span>
-          </span>
-          <span className="social__row-actions">
-            <PxButton
-              family="green"
-              height="sm"
-              disabled={busy !== null}
-              onClick={() => act(r.id, api.acceptFriendRequest, true)}
-            >
-              <TT size={13}>ACCEPT</TT>
-            </PxButton>
-            <PxButton family="grey" height="sm" disabled={busy !== null} onClick={() => act(r.id, api.declineFriendRequest)}>
-              <TT size={13}>DECLINE</TT>
-            </PxButton>
-          </span>
-        </PxBox>
+        <PersonRow key={r.id} uuid={r.uuid} name={r.username} meta={`Wants to be friends · ${ago(r.createdAt)}`}>
+          <PxButton
+            family="green"
+            height="md"
+            disabled={busy !== null}
+            onClick={() => act(r.id, api.acceptFriendRequest, true)}
+          >
+            <TT size={16} tone="green">
+              ACCEPT
+            </TT>
+          </PxButton>
+          <PxButton family="grey" height="md" disabled={busy !== null} onClick={() => act(r.id, api.declineFriendRequest)}>
+            <TT size={16}>DECLINE</TT>
+          </PxButton>
+        </PersonRow>
       ))}
       {requests.outgoing.length > 0 && (
-        <span className="social__section">
-          <TT size={13} tone="dim">
+        <div className="social__section">
+          <TT size={16} tone="dim">
             SENT
           </TT>
-        </span>
+        </div>
       )}
       {requests.outgoing.map((r) => (
-        <PxBox key={r.id} family="panel" height="fill" className="social__row social__row--static">
-          <FriendHead uuid={r.uuid} size={32} />
-          <span className="home__popout-name">
-            <TT size={16} tone="dim">
-              {r.username}
-            </TT>
-            <span className="meta">waiting for them · {ago(r.createdAt)}</span>
-          </span>
-          <span className="social__row-actions">
-            <PxButton family="grey" height="sm" disabled={busy !== null} onClick={() => act(r.id, api.declineFriendRequest)}>
-              <TT size={13}>CANCEL</TT>
-            </PxButton>
-          </span>
-        </PxBox>
+        <PersonRow
+          key={r.id}
+          uuid={r.uuid}
+          name={r.username}
+          dim
+          meta={`Waiting for them · sent ${ago(r.createdAt)}`}
+        >
+          <PxButton family="grey" height="md" disabled={busy !== null} onClick={() => act(r.id, api.declineFriendRequest)}>
+            <TT size={16}>CANCEL</TT>
+          </PxButton>
+        </PersonRow>
       ))}
     </>
   );
@@ -621,6 +867,12 @@ function RequestsList({
 function ChatView({
   friend,
   uuid,
+  clock24h,
+  activity,
+  gameRunning,
+  isTauri,
+  onJoin,
+  onLink,
   onBack,
   onSeen,
   onProfile,
@@ -628,6 +880,12 @@ function ChatView({
   /** undefined only until the list first loads, or after they unfriend us */
   friend: Friend | undefined;
   uuid: string;
+  clock24h: boolean;
+  activity: GameActivity | null;
+  gameRunning: boolean;
+  isTauri: boolean;
+  onJoin: (server: string, version: string | null) => void;
+  onLink: (url: string) => void;
   onBack: () => void;
   /** a fetch just marked their messages read — the badges are stale */
   onSeen: () => void;
@@ -636,6 +894,7 @@ function ChatView({
   const [messages, setMessages] = useState<ChatMessage[] | null>(null);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const afterId = useRef(0);
   // follow new lines only when already at the bottom — never yank someone
@@ -707,88 +966,277 @@ function ChatView({
       });
   };
 
+  const invite = () => {
+    if (!activity?.server) {
+      setError('Join a server in game first — then INVITE sends them its address.');
+      return;
+    }
+    setError(null);
+    pinned.current = true;
+    api
+      .sendInvite(uuid, activity.server, activity.gameVersion)
+      .then((msg) => merge([msg]))
+      .catch((err) => setError(errText(err)));
+  };
+
+  const sendShot = (shot: Screenshot) => {
+    setPicking(false);
+    setError(null);
+    pinned.current = true;
+    api
+      .sendScreenshot(uuid, shot.path)
+      .then((msg) => merge([msg]))
+      .catch((err) => setError(errText(err)));
+  };
+
   const name = friend?.username ?? 'Friend';
   const status = friend ? statusLine(friend) : null;
 
   return (
     <>
-      <div className="social__tabs">
-        <PxButton family="grey" height="sm" onClick={onBack} title="Back to friends">
-          <TT size={14}>← BACK</TT>
-        </PxButton>
-        <button className="social__chat-title" onClick={onProfile} title={`View ${name}'s profile`}>
-          <FriendHead uuid={uuid} online={friend?.online} size={24} />
-          <span className="home__popout-name">
-            <TT size={16}>{name}</TT>
-            {status && <span className={`meta ${status.online ? 'is-online' : ''}`}>{status.text}</span>}
-          </span>
-        </button>
+      <div className="win__bar">
+        <NavCell label="← FRIENDS" onClick={onBack} />
+        <div className="win__fill" />
+        <NavCell label="INVITE" onClick={invite} />
+        <NavCell label="SCREENSHOT" onClick={() => setPicking(true)} />
+        <NavCell label="PROFILE" onClick={onProfile} />
       </div>
 
-      <div
-        className="social__chat scroll"
-        ref={listRef}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-        }}
-        aria-live="polite"
-      >
-        {messages === null ? (
-          <span className="meta social__chat-empty">Loading…</span>
-        ) : messages.length === 0 ? (
-          <span className="meta social__chat-empty">Say hello — this is the start of your conversation with {name}.</span>
-        ) : (
-          messages.map((m, i) => {
-            const prev = messages[i - 1];
-            const showStamp = !prev || m.sentAt - prev.sentAt > STAMP_GAP_S;
-            const theirs = m.fromUuid === uuid;
-            return (
-              <div key={m.id} className="social__line">
-                {showStamp && <span className="meta social__stamp">{stamp(m.sentAt)}</span>}
-                <div
-                  className={`social__bubble ${theirs ? '' : 'social__bubble--mine'}`}
-                  title={new Date(m.sentAt * 1000).toLocaleString()}
-                >
-                  <span className="meta">{m.body}</span>
+      <div className="win__body social__chat-body">
+        <PersonRow
+          uuid={uuid}
+          name={name}
+          online={friend?.online}
+          meta={status?.text ?? ''}
+          metaOnline={status?.online}
+          onClick={onProfile}
+          title={`View ${name}'s profile`}
+        >
+          {friend?.online && friend.server && (
+            <JoinButton server={friend.server} version={friend.playing ?? null} gameRunning={gameRunning} onJoin={onJoin} />
+          )}
+        </PersonRow>
+
+        <div
+          className="social__chat scroll"
+          ref={listRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+          }}
+          aria-live="polite"
+        >
+          {messages === null ? (
+            <span className="meta social__chat-empty">Loading…</span>
+          ) : messages.length === 0 ? (
+            <span className="meta social__chat-empty">
+              Say hello — this is the start of your conversation with {name}.
+            </span>
+          ) : (
+            messages.map((m, i) => {
+              const prev = messages[i - 1];
+              const showStamp = !prev || m.sentAt - prev.sentAt > STAMP_GAP_S;
+              const mine = m.fromUuid !== uuid;
+              return (
+                <div key={m.id} className={`social__line ${mine ? 'social__line--mine' : ''}`}>
+                  {showStamp && <span className="meta social__stamp">{timeStamp(m.sentAt * 1000, clock24h)}</span>}
+                  <PxBox
+                    family={mine ? 'soft' : 'panel'}
+                    className={`social__bubble social__bubble--${m.kind ?? 'text'}`}
+                    title={timeStamp(m.sentAt * 1000, clock24h)}
+                  >
+                    <MessageBody
+                      m={m}
+                      mine={mine}
+                      name={name}
+                      gameRunning={gameRunning}
+                      onJoin={onJoin}
+                      onLink={onLink}
+                    />
+                  </PxBox>
                 </div>
-              </div>
-            );
-          })
+              );
+            })
+          )}
+        </div>
+
+        {error && (
+          <PxBox family="red" height="md" className="social__notice" role="alert">
+            <span className="meta">{error}</span>
+          </PxBox>
+        )}
+
+        <form className="social__composer" onSubmit={send}>
+          <PxBox family="panel" height="md" className="social__composer-field">
+            <input
+              className="input"
+              placeholder={`Message ${name}`}
+              value={draft}
+              maxLength={MESSAGE_MAX}
+              autoFocus
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter mid-composition (IME) picks a candidate, not send
+                if (e.key === 'Enter' && e.nativeEvent.isComposing) e.preventDefault();
+              }}
+            />
+            {draft.length > MESSAGE_MAX - 100 && (
+              <span className="meta social__count">{MESSAGE_MAX - draft.length}</span>
+            )}
+          </PxBox>
+          <PxButton family="accent" height="md" type="submit" disabled={!draft.trim()}>
+            <TT size={16} tone="accent">
+              SEND
+            </TT>
+          </PxButton>
+        </form>
+      </div>
+
+      {picking &&
+        createPortal(
+          <ShotPicker isTauri={isTauri} onPick={sendShot} onClose={() => setPicking(false)} />,
+          document.body,
+        )}
+    </>
+  );
+}
+
+/** what a bubble holds, by message kind */
+function MessageBody({
+  m,
+  mine,
+  name,
+  gameRunning,
+  onJoin,
+  onLink,
+}: {
+  m: ChatMessage;
+  mine: boolean;
+  name: string;
+  gameRunning: boolean;
+  onJoin: (server: string, version: string | null) => void;
+  onLink: (url: string) => void;
+}) {
+  const meta = m.meta ?? {};
+  if (m.kind === 'invite' && meta.server) {
+    return (
+      <div className="social__card">
+        <TT size={14} tone="dim">
+          {mine ? 'YOU SENT AN INVITE' : `${name.toUpperCase()} INVITED YOU`}
+        </TT>
+        <span className="social__text social__card-title">{meta.server}</span>
+        {meta.version && <span className="meta">Minecraft {meta.version}</span>}
+        {!mine && (
+          <div className="social__card-row">
+            <JoinButton server={meta.server} version={meta.version ?? null} gameRunning={gameRunning} onJoin={onJoin} />
+          </div>
         )}
       </div>
+    );
+  }
+  if (m.kind === 'gift') {
+    return (
+      <div className="social__card">
+        <TT size={14} tone="dim">
+          {mine ? 'YOU SENT A GIFT' : 'GIFT'}
+        </TT>
+        <span className="social__text social__card-title">{meta.name ?? 'A cosmetic'}</span>
+        <span className="meta">
+          {mine ? `It's in ${name}'s wardrobe now.` : `It's in your wardrobe — equip it under COSMETICS.`}
+        </span>
+      </div>
+    );
+  }
+  if (m.kind === 'image' && meta.image) return <ChatImage id={meta.image} />;
+  return <LinkText text={m.body} onLink={onLink} />;
+}
 
-      {error && (
-        <PxBox family="red" height="md" role="alert">
-          <span className="meta">{error}</span>
-        </PxBox>
-      )}
-
-      <form className="social__composer" onSubmit={send}>
-        <PxBox family="panel" height="md" className="social__composer-field">
-          <input
-            className="input"
-            placeholder={`MESSAGE ${name.toUpperCase()}`}
-            value={draft}
-            maxLength={MESSAGE_MAX}
-            autoFocus
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              // Enter mid-composition (IME) picks a candidate, not send
-              if (e.key === 'Enter' && e.nativeEvent.isComposing) e.preventDefault();
-            }}
-          />
-          {draft.length > MESSAGE_MAX - 100 && (
-            <span className="meta social__count">{MESSAGE_MAX - draft.length}</span>
-          )}
-        </PxBox>
-        <PxButton family="accent" height="md" type="submit" disabled={!draft.trim()}>
-          <TT size={16} tone="accent">
-            SEND
-          </TT>
-        </PxButton>
-      </form>
+/* chat images come through the backend (which caches them on disk); keep
+   the data URLs for the session so re-opening a chat doesn't refetch */
+const imageCache = new Map<string, Promise<string | null>>();
+function ChatImage({ id }: { id: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [zoom, setZoom] = useState(false);
+  useEffect(() => {
+    let live = true;
+    let hit = imageCache.get(id);
+    if (!hit) {
+      hit = api.getChatImage(id).catch(() => {
+        imageCache.delete(id);
+        return null;
+      });
+      imageCache.set(id, hit);
+    }
+    void hit.then((s) => {
+      if (!live) return;
+      if (s) setSrc(s);
+      else setFailed(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, [id]);
+  if (failed) return <span className="meta">Image unavailable</span>;
+  if (!src) return <span className="social__image social__image--loading" />;
+  return (
+    <>
+      <img className="social__image" src={src} alt="Screenshot" draggable={false} onClick={() => setZoom(true)} />
+      {zoom &&
+        createPortal(
+          <div className="modal-scrim social__zoom" onClick={() => setZoom(false)}>
+            <img src={src} alt="Screenshot" draggable={false} />
+          </div>,
+          document.body,
+        )}
     </>
+  );
+}
+
+/** the newest screenshots across instances, as thumbnails; one click sends */
+function ShotPicker({
+  isTauri,
+  onPick,
+  onClose,
+}: {
+  isTauri: boolean;
+  onPick: (s: Screenshot) => void;
+  onClose: () => void;
+}) {
+  const [shots, setShots] = useState<Screenshot[] | null>(null);
+  useEffect(() => {
+    void api
+      .listScreenshots()
+      .then((list) => setShots(list.slice(0, 24)))
+      .catch(() => setShots([]));
+  }, []);
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <PxBox
+        family="panel"
+        className="px--window modal social__shots"
+        role="dialog"
+        aria-label="Send a screenshot"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <TT size={22}>SEND A SCREENSHOT</TT>
+        <span className="meta">Your newest shots from every instance. Up to 8 MB each.</span>
+        <div className="social__shot-grid scroll">
+          {shots === null && <span className="meta">Loading…</span>}
+          {shots?.length === 0 && <span className="meta">No screenshots yet — press F2 in game.</span>}
+          {shots?.map((s) => (
+            <button key={s.path} className="social__shot" title={`${s.profileName} · ${s.name}`} onClick={() => onPick(s)}>
+              <img src={isTauri ? convertFileSrc(s.path) : s.path} alt="" loading="lazy" draggable={false} />
+            </button>
+          ))}
+        </div>
+        <div className="modal__row modal__row--tall">
+          <PxButton family="grey" height="md" onClick={onClose}>
+            <TT size={20}>CANCEL</TT>
+          </PxButton>
+        </div>
+      </PxBox>
+    </div>
   );
 }
 
@@ -805,21 +1253,32 @@ function loadCatalog() {
 function ProfileView({
   friend,
   uuid,
+  from,
   onBack,
   onMessage,
+  gameRunning,
+  onJoin,
   onRemoved,
+  onBlocked,
 }: {
   friend: Friend | undefined;
   uuid: string;
+  /** where BACK returns to */
+  from: 'list' | 'chat';
   onBack: () => void;
   onMessage: () => void;
+  gameRunning: boolean;
+  onJoin: (server: string, version: string | null) => void;
   onRemoved: (friends: Friend[], name: string) => void;
+  onBlocked: (name: string) => void;
 }) {
   const [profile, setProfile] = useState<FriendProfile | null>(null);
   const [catalog, setCatalog] = useState<CosmeticsCatalog | null>(null);
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState<'remove' | 'block' | null>(null);
+  const [gifting, setGifting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -834,74 +1293,238 @@ function ProfileView({
   }, [uuid]);
 
   const name = profile?.username ?? friend?.username ?? 'Friend';
-  const status = friend
-    ? statusLine(friend)
-    : profile
-      ? statusLine({ ...profile, unread: 0 })
-      : null;
+  const status = friend ? statusLine(friend) : profile ? statusLine(profile) : null;
+  const server = friend?.online ? friend.server : profile?.online ? profile.server : undefined;
+  const version = (friend?.online ? friend.playing : profile?.playing) ?? null;
 
   const capeName = profile?.cape != null ? catalog?.capes.find((c) => c.id === profile.cape)?.name : undefined;
   const accessoryNames = (profile?.accessories ?? [])
     .map((id) => catalog?.accessories.find((a) => a.id === id)?.name)
     .filter((n): n is string => !!n);
-  const wearing = [capeName, ...accessoryNames].filter(Boolean).join(', ');
 
-  const remove = () => {
+  // the confirm dialog takes the first Escape; the pane's own handler (on
+  // document, bubbling) would otherwise close everything at once
+  useEffect(() => {
+    if (!confirming && !gifting) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      if (busy) return;
+      setConfirming(null);
+      setGifting(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [confirming, gifting, busy]);
+
+  const act = () => {
+    const blocking = confirming === 'block';
     setBusy(true);
     setError(null);
-    api
-      .removeFriend(uuid)
-      .then((list) => onRemoved(list, name))
-      .catch((e) => {
+    (blocking ? api.blockPlayer(uuid).then(() => onBlocked(name)) : api.removeFriend(uuid).then((list) => onRemoved(list, name))).catch(
+      (e) => {
         setError(errText(e));
         setBusy(false);
-      });
+        setConfirming(null);
+      },
+    );
   };
 
   return (
     <>
-      <div className="social__tabs">
-        <PxButton family="grey" height="sm" onClick={onBack} title="Back">
-          <TT size={14}>← BACK</TT>
-        </PxButton>
+      <div className="win__bar">
+        <NavCell label={from === 'chat' ? '← CHAT' : '← FRIENDS'} onClick={onBack} />
+        <div className="win__fill" />
       </div>
-      <div className="social__profile">
-        <FriendHead uuid={uuid} online={status?.online} size={72} />
-        <TT size={22}>{name}</TT>
-        {status && <span className={`meta ${status.online ? 'is-online' : ''}`}>{status.text}</span>}
-        {wearing && <span className="meta social__wearing">Wearing {wearing}</span>}
+
+      <div className="win__body settings__body social__body scroll">
+        <div className="social__hero">
+          <FriendHead uuid={uuid} online={status?.online} size={88} />
+          <div className="srow__text">
+            <TT size={36} tone="plain">
+              {name}
+            </TT>
+            {status && <span className={`meta ${status.online ? 'is-online' : ''}`}>{status.text}</span>}
+          </div>
+          {server && <JoinButton server={server} version={version} gameRunning={gameRunning} onJoin={onJoin} />}
+          <PxButton family="accent" height="md" className="social__hero-cta" onClick={onMessage}>
+            <TT size={16} tone="accent">
+              MESSAGE
+            </TT>
+          </PxButton>
+        </div>
 
         {error && (
-          <PxBox family="red" height="md" role="alert">
+          <PxBox family="red" height="md" className="social__notice" role="alert">
             <span className="meta">{error}</span>
           </PxBox>
         )}
-
-        {confirming ? (
-          <div className="social__confirm">
-            <span className="meta">Remove {name}? You'll need a new friend request to chat again.</span>
-            <span className="social__row-actions">
-              <PxButton family="grey" height="sm" disabled={busy} onClick={() => setConfirming(false)}>
-                <TT size={13}>KEEP</TT>
-              </PxButton>
-              <PxButton family="red" height="sm" disabled={busy} onClick={remove}>
-                <TT size={13}>{busy ? 'REMOVING…' : 'REMOVE'}</TT>
-              </PxButton>
-            </span>
-          </div>
-        ) : (
-          <span className="social__row-actions social__profile-actions">
-            <PxButton family="accent" height="sm" onClick={onMessage}>
-              <TT size={14} tone="accent">
-                MESSAGE
-              </TT>
-            </PxButton>
-            <PxButton family="grey" height="sm" onClick={() => setConfirming(true)}>
-              <TT size={14}>REMOVE FRIEND</TT>
-            </PxButton>
-          </span>
+        {note && (
+          <PxBox family="green" height="md" className="social__notice" role="status">
+            <span className="meta">{note}</span>
+          </PxBox>
         )}
+
+        <Row label="CAPE" hint={profile ? (capeName ?? 'None equipped') : 'Loading…'}>
+          {null}
+        </Row>
+        <Row
+          label="ACCESSORIES"
+          hint={profile ? (accessoryNames.length > 0 ? accessoryNames.join(', ') : 'None equipped') : 'Loading…'}
+        >
+          {null}
+        </Row>
+        <Row label="SEND A GIFT" hint="Buy a store cosmetic with your coins and it lands in their wardrobe.">
+          <PxButton family="blue" height="md" onClick={() => setGifting(true)}>
+            <TT size={16} tone="blue">
+              GIFT
+            </TT>
+          </PxButton>
+        </Row>
+        <Row label="REMOVE FRIEND" hint="Takes them off your list. You'd need a new request to chat again.">
+          <PxButton family="red" height="md" onClick={() => setConfirming('remove')}>
+            <TT size={16} tone="red">
+              REMOVE
+            </TT>
+          </PxButton>
+        </Row>
+        <Row label="BLOCK" hint="Unfriends them and stops their requests and messages. Undo in Settings → Social.">
+          <PxButton family="red" height="md" onClick={() => setConfirming('block')}>
+            <TT size={16} tone="red">
+              BLOCK
+            </TT>
+          </PxButton>
+        </Row>
       </div>
+
+      {confirming &&
+        createPortal(
+          <div className="modal-scrim" onClick={() => !busy && setConfirming(null)}>
+            <PxBox family="red" className="px--window modal" onClick={(e) => e.stopPropagation()}>
+              <TT size={22} tone="red">
+                {`${confirming === 'block' ? 'BLOCK' : 'REMOVE'} ${name.toUpperCase()}?`}
+              </TT>
+              <span className="meta">
+                {confirming === 'block'
+                  ? "They're removed from your friends and can't send you requests or messages until you unblock them."
+                  : 'They drop off your friends list and your chat closes. Either of you can send a new request later.'}
+              </span>
+              <div className="modal__row modal__row--tall">
+                <PxButton family="grey" height="md" disabled={busy} onClick={() => setConfirming(null)}>
+                  <TT size={20}>CANCEL</TT>
+                </PxButton>
+                <PxButton family="red" height="md" disabled={busy} onClick={act}>
+                  <TT size={20} tone="red">
+                    {busy ? 'WORKING…' : confirming === 'block' ? 'BLOCK' : 'REMOVE'}
+                  </TT>
+                </PxButton>
+              </div>
+            </PxBox>
+          </div>,
+          document.body,
+        )}
+
+      {gifting &&
+        createPortal(
+          <GiftPicker
+            uuid={uuid}
+            name={name}
+            onClose={() => setGifting(false)}
+            onSent={(item, coins) => {
+              setGifting(false);
+              setNote(`Sent ${item} to ${name}. ${coins} coins left.`);
+            }}
+          />,
+          document.body,
+        )}
     </>
+  );
+}
+
+/** the store's cosmetics (capes first) with prices; the service refuses
+    anything they already own */
+function GiftPicker({
+  uuid,
+  name,
+  onClose,
+  onSent,
+}: {
+  uuid: string;
+  name: string;
+  onClose: () => void;
+  onSent: (item: string, coins: number) => void;
+}) {
+  const [items, setItems] = useState<StoreItem[] | null>(null);
+  const [coins, setCoins] = useState<number | null>(null);
+  const [busy, setBusy] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .getStore()
+      .then((s) => {
+        setItems([...s.items].sort((a, b) => (a.kind === b.kind ? a.price - b.price : a.kind === 'cape' ? -1 : 1)));
+        setCoins(s.coins);
+        if (s.error) setError(s.error);
+      })
+      .catch((e) => {
+        setItems([]);
+        setError(errText(e));
+      });
+  }, []);
+
+  const send = (item: StoreItem) => {
+    setBusy(item.id);
+    setError(null);
+    api
+      .giftCosmetic(uuid, item.id)
+      .then((r) => onSent(item.name, r.coins))
+      .catch((e) => {
+        setError(errText(e));
+        setBusy(null);
+      });
+  };
+
+  return (
+    <div className="modal-scrim" onClick={() => busy === null && onClose()}>
+      <PxBox
+        family="panel"
+        className="px--window modal social__gifts"
+        role="dialog"
+        aria-label={`Gift ${name}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <TT size={22}>{`GIFT ${name.toUpperCase()}`}</TT>
+        <span className="meta">{coins === null ? 'Loading the store…' : `You have ${coins} coins.`}</span>
+        <div className="social__gift-list scroll">
+          {items?.map((item) => (
+            <div key={item.id} className="social__gift">
+              <span className="social__text">{item.name}</span>
+              <span className="meta">{item.kind === 'cape' ? 'Cape' : 'Accessory'}</span>
+              <PxButton
+                family="blue"
+                height="md"
+                disabled={busy !== null || (coins !== null && coins < item.price)}
+                onClick={() => send(item)}
+              >
+                <TT size={16} tone="blue">
+                  {busy === item.id ? 'SENDING…' : `${item.price} COINS`}
+                </TT>
+              </PxButton>
+            </div>
+          ))}
+        </div>
+        {error && (
+          <PxBox family="red" height="md" className="social__notice" role="alert">
+            <span className="meta">{error}</span>
+          </PxBox>
+        )}
+        <div className="modal__row modal__row--tall">
+          <PxButton family="grey" height="md" disabled={busy !== null} onClick={onClose}>
+            <TT size={20}>CANCEL</TT>
+          </PxButton>
+        </div>
+      </PxBox>
+    </div>
   );
 }

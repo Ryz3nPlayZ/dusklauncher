@@ -4,6 +4,8 @@ import dev.dusk.client.compat.Compat;
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.BoolSetting;
 import dev.dusk.client.module.setting.IntSetting;
+import dev.dusk.client.module.setting.KeySetting;
+import org.lwjgl.glfw.GLFW;
 import net.minecraft.client.Minecraft;
 
 /**
@@ -14,9 +16,20 @@ import net.minecraft.client.Minecraft;
 public class ToggleSprint extends Module {
     private static ToggleSprint instance;
 
+    private final KeySetting enableKey = add(new KeySetting("togglesprint", "Enable/disable key", GLFW.GLFW_KEY_UNKNOWN));
     private final BoolSetting sprint = add(new BoolSetting("toggleSprint", "Toggle sprint", true));
     private final BoolSetting sneak = add(new BoolSetting("toggleSneak", "Toggle sneak", false));
     private final BoolSetting flyBoost = add(new BoolSetting("keepFlying", "Also while flying", true));
+
+    /** The enable/disable key; true when it flipped the module. */
+    public boolean tickKeys() {
+        boolean changed = false;
+        while (enableKey.mapping().consumeClick()) {
+            setEnabled(!enabled());
+            changed = true;
+        }
+        return changed;
+    }
 
     /**
      * PolySprint's two extras. They ride on client internals only 1.21.11 and
@@ -65,6 +78,11 @@ public class ToggleSprint extends Module {
 
     public boolean sprintToggled() {
         return enabled() && sprint.get();
+    }
+
+    /** Whether toggle-sneak is in charge of the sneak key (on or off right now). */
+    public boolean sneakToggleMode() {
+        return enabled() && sneak.get();
     }
 
     public boolean sneakToggled() {

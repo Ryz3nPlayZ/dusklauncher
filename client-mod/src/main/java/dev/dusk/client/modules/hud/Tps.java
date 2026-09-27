@@ -15,13 +15,12 @@ public class Tps extends TextHud {
     private final BoolSetting dynamicColor = add(new BoolSetting("dynamicColor", "Colour by rate", true));
 
     public Tps() {
-        super("tps", "TPS", "TPS", "How fast the server is ticking, measured from its time updates.");
+        super("tps", "TPS", "How fast the server is ticking, measured from its time updates.");
         setPosition(150, 115);
-        showLabel.set(false);
     }
 
     @Override
-    protected String value(HudContext ctx) {
+    protected String text(HudContext ctx) {
         return Fmt.fixed(TpsTracker.averageTps(), digits.get()) + " TPS";
     }
 
@@ -31,13 +30,13 @@ public class Tps extends TextHud {
     }
 
     @Override
-    protected int valueColor() {
-        if (!dynamicColor.get()) return super.valueColor();
+    protected int color(HudContext ctx) {
+        if (!dynamicColor.get()) return textColor();
         return lerp((float) (TpsTracker.averageTps() / 20.0), RED, GREEN);
     }
 
     /** Straight per-channel blend, like ARGB.srgbLerp on the Flex-HUD side. */
-    private static int lerp(float t, int from, int to) {
+    static int lerp(float t, int from, int to) {
         t = Math.clamp(t, 0f, 1f);
         int a = 0xFF;
         int r = Math.round(((from >> 16) & 0xFF) + t * (((to >> 16) & 0xFF) - ((from >> 16) & 0xFF)));

@@ -56,3 +56,7 @@ java/dev/dusk/client/render/particles/**
 # The PolyNametag port hooks the 1.21.11+ nametag feature renderer.
 java/dev/dusk/client/mixin/nametag/**
 java/dev/dusk/client/render/nametag/**
+# Recording and replays hook 1.21.11+ connection/protocol classes; this layer
+# carries a stub MediaBackend instead.
+java/dev/dusk/client/media/impl/**
+java/dev/dusk/client/mixin/media/**

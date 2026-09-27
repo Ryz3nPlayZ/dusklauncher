@@ -1,5 +1,7 @@
 package dev.dusk.client.gui;
 
+import net.minecraft.core.Holder;
+import net.minecraft.world.effect.MobEffect;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
@@ -45,6 +47,9 @@ public interface Canvas {
      * {@code argb} a tint (ignored on 1.21.1, which has no tinted blit).
      */
     void blit(String texture, int x, int y, float u, float v, int w, int h, int texW, int texH, int argb);
+
+    /** A status effect's HUD icon, {@code size} pixels square. */
+    void effectIcon(Holder<MobEffect> effect, int x, int y, int size);
 
     void push();
 

@@ -3,7 +3,7 @@ package dev.dusk.client.gui;
 /**
  * The launcher's look for the Dusk title screen (launcher/src/design/tokens.css):
  * a black outline, a #323232 band and #4a4a4a L-corners at the top-right and
- * bottom-left, the gold wordmark. The in-game menus use {@link Vanilla}
+ * bottom-left, the gold DUSK wordmark. The in-game menus use {@link Vanilla}
  * instead, so they sit with the rest of the game's screens.
  */
 public final class Theme {
@@ -218,45 +218,92 @@ public final class Theme {
         return cut + "...";
     }
 
-    /** Width of {@link #wordmark} text at {@code scale}. */
-    public static int wordmarkWidth(Canvas c, String text, int scale) {
-        int w = 0;
-        for (int i = 0; i < text.length(); i++) w += c.textWidth(String.valueOf(text.charAt(i))) + 1;
-        return (w - 1) * scale;
+    // ---- wordmark -------------------------------------------------------
+
+    /**
+     * DUSK in the game font's own glyphs (5x7, what Monocraft is drawn
+     * after), bolded the way the font does it: each glyph again one pixel right.
+     */
+    private static final String[][] LETTERS = {
+            {"1111.", "1...1", "1...1", "1...1", "1...1", "1...1", "1111."},
+            {"1...1", "1...1", "1...1", "1...1", "1...1", "1...1", ".111."},
+            {".1111", "1....", "1....", ".111.", "....1", "....1", "1111."},
+            {"1...1", "1..1.", "111..", "1..1.", "1...1", "1...1", "1...1"},
+    };
+    private static final int GLYPH_W = 5, GLYPH_H = 7, BOLD_W = GLYPH_W + 1, LETTER_GAP = 2;
+    private static final int LETTERS_W = LETTERS.length * (BOLD_W + LETTER_GAP) - LETTER_GAP;
+    /** Rows above this are the light gold, the rest the deep one: a hard split like the buttons'. */
+    private static final int SPLIT = 4;
+    private static final int OUTLINE = 0x12061E, DROP = 0x5A1A4A;
+    private static final boolean[][] LETTER_MASK = mask(LETTERS_W, GLYPH_H, (r, col) -> {
+        int l = col / (BOLD_W + LETTER_GAP), lc = col % (BOLD_W + LETTER_GAP);
+        if (lc >= BOLD_W) return false;
+        String row = LETTERS[l][r];
+        return lc < GLYPH_W && row.charAt(lc) == '1' || lc > 0 && row.charAt(lc - 1) == '1';
+    });
+    /** The letters and their drop one cell below, grown by a cell all round. */
+    private static final boolean[][] OUTLINE_MASK = mask(LETTERS_W + 2, GLYPH_H + 3, (r, col) -> {
+        for (int dr = -1; dr <= 1; dr++) {
+            for (int dc = -1; dc <= 1; dc++) {
+                int rr = r - 1 + dr, cc = col - 1 + dc;
+                if (cc < 0 || cc >= LETTERS_W) continue;
+                if (rr >= 0 && rr < GLYPH_H && LETTER_MASK[rr][cc] || rr >= 1 && rr <= GLYPH_H && LETTER_MASK[rr - 1][cc]) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    });
+
+    private interface Cell { boolean at(int r, int col); }
+
+    private static boolean[][] mask(int w, int h, Cell cell) {
+        boolean[][] m = new boolean[h][w];
+        for (int r = 0; r < h; r++) {
+            for (int col = 0; col < w; col++) m[r][col] = cell.at(r, col);
+        }
+        return m;
     }
 
-    public static void wordmark(Canvas c, String text, int x, int y, int scale) {
-        wordmark(c, text, x, y, scale, 1f);
+    /** Width of {@link #wordmark} at {@code unit} pixels per font pixel. */
+    public static int wordmarkWidth(int unit) {
+        return (LETTERS_W + 2) * unit;
+    }
+
+    /** Height of {@link #wordmark}: the outlined letters and their drop. */
+    public static int wordmarkHeight(int unit) {
+        return (GLYPH_H + 3) * unit;
+    }
+
+    public static void wordmark(Canvas c, int x, int y, int unit) {
+        wordmark(c, x, y, unit, 1f);
     }
 
     /**
-     * The big title: letter-spaced, the launcher's hard two-tone gold split and
-     * a #3b1000 drop, faded by {@code alpha}. Draw outside any transform (the
-     * bands are clipped in screen space).
+     * The title: bold DUSK, gold over deep gold split hard across the
+     * middle, a plum drop and a dark outline so it holds on any backdrop,
+     * faded by {@code alpha}.
      */
-    public static void wordmark(Canvas c, String text, int x, int y, int scale, float alpha) {
-        int a = Math.max(5, Math.round(255 * Math.max(0f, Math.min(1f, alpha)))) << 24;
-        int w = wordmarkWidth(c, text, scale);
-        drawSpaced(c, text, x, y + scale, scale, a | 0x3B1000);
-        int split = y + Math.round(0.43f * 7 * scale);
-        c.scissor(x - scale, y, x + w + scale, split);
-        drawSpaced(c, text, x, y, scale, a | (GOLD_UP & 0xFFFFFF));
-        c.unscissor();
-        c.scissor(x - scale, split, x + w + scale, y + 9 * scale);
-        drawSpaced(c, text, x, y, scale, a | (GOLD_LO & 0xFFFFFF));
-        c.unscissor();
+    public static void wordmark(Canvas c, int x, int y, int unit, float alpha) {
+        float a = Math.max(0f, Math.min(1f, alpha));
+        cells(c, OUTLINE_MASK, x, y, unit, a, r -> OUTLINE);
+        cells(c, LETTER_MASK, x + unit, y + 2 * unit, unit, a, r -> DROP);
+        cells(c, LETTER_MASK, x + unit, y + unit, unit, a, r -> r < SPLIT ? GOLD_UP : GOLD_LO);
     }
 
-    private static void drawSpaced(Canvas c, String text, int x, int y, int scale, int color) {
-        c.push();
-        c.translate(x, y);
-        c.scale(scale, scale);
-        int cx = 0;
-        for (int i = 0; i < text.length(); i++) {
-            String ch = String.valueOf(text.charAt(i));
-            c.text(ch, cx, 0, color, false);
-            cx += c.textWidth(ch) + 1;
+    private interface RowColor { int at(int r); }
+
+    /** Fills a cell mask in horizontal runs, each row one flat colour. */
+    private static void cells(Canvas c, boolean[][] m, int x, int y, int unit, float a, RowColor color) {
+        for (int r = 0; r < m.length; r++) {
+            int argb = Math.max(5, Math.round(255 * a)) << 24 | color.at(r) & 0xFFFFFF;
+            for (int col = 0; col < m[r].length; col++) {
+                if (!m[r][col]) continue;
+                int end = col;
+                while (end + 1 < m[r].length && m[r][end + 1]) end++;
+                c.fill(x + col * unit, y + r * unit, x + (end + 1) * unit, y + (r + 1) * unit, argb);
+                col = end;
+            }
         }
-        c.pop();
     }
 }

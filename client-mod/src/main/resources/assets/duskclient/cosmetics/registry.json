@@ -409,6 +409,41 @@
       "upsideDown": false,
       "ears": false,
       "frameMs": 50
+    },
+    {
+      "id": 83,
+      "name": "Halo Starter",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 84,
+      "name": "Spring Celeste Starter",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 85,
+      "name": "Spring Droplets Starter",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 86,
+      "name": "Spring Flower Petals Starter",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 87,
+      "name": "Sharpness Glitched Enchant",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
     }
   ],
   "accessories": [
@@ -426,6 +461,330 @@
       "ticksPerFrame": 5,
       "flags": 0,
       "source": "cosmetica:ufa1T"
+    },
+    {
+      "id": 62,
+      "name": "A Wanderer's Hat",
+      "attachment": "head",
+      "offset": [
+        0.0,
+        8.0,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 0,
+      "source": "cosmetica:7Qgsq"
+    },
+    {
+      "id": 63,
+      "name": "Anthaeres_'s Red Halo V1",
+      "attachment": "head",
+      "offset": [
+        0.0,
+        8.0,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 0,
+      "source": "cosmetica:751og"
+    },
+    {
+      "id": 64,
+      "name": "Black Halo",
+      "attachment": "head",
+      "offset": [
+        0.0,
+        8.0,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 0,
+      "source": "cosmetica:hQtyJ"
+    },
+    {
+      "id": 65,
+      "name": "COOL FASHION AXOLOTL",
+      "attachment": "body",
+      "offset": [
+        -6.0,
+        11.5,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 64,
+      "source": "cosmetica:yCLDf",
+      "usesUvRotations": true
+    },
+    {
+      "id": 66,
+      "name": "Cat With Blue Eyes",
+      "attachment": "body",
+      "offset": [
+        -6.0,
+        11.5,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 64,
+      "source": "cosmetica:UOLBS",
+      "usesUvRotations": true
+    },
+    {
+      "id": 67,
+      "name": "Corrupt Katana V2 (By Ryaw)",
+      "attachment": "body",
+      "offset": [
+        -6.0,
+        11.5,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 0,
+      "source": "cosmetica:VcRMA",
+      "usesUvRotations": true
+    },
+    {
+      "id": 68,
+      "name": "Duckert (shoulder)",
+      "attachment": "body",
+      "offset": [
+        -6.0,
+        11.5,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 64,
+      "source": "cosmetica:w6guN"
+    },
+    {
+      "id": 69,
+      "name": "FAT RAT",
+      "attachment": "left_arm",
+      "offset": [
+        0.0,
+        12.0,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 64,
+      "source": "cosmetica:OUYBk",
+      "usesUvRotations": true
+    },
+    {
+      "id": 70,
+      "name": "Halo",
+      "attachment": "body",
+      "offset": [
+        -6.0,
+        11.5,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 0,
+      "source": "cosmetica:cU54N",
+      "usesUvRotations": true
+    },
+    {
+      "id": 71,
+      "name": "Hikari's Halo",
+      "attachment": "head",
+      "offset": [
+        0.0,
+        8.0,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 0,
+      "source": "cosmetica:3Vvv1"
+    },
+    {
+      "id": 72,
+      "name": "Junior's Blue Hand Flames",
+      "attachment": "left_arm",
+      "offset": [
+        0.0,
+        12.0,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 0,
+      "source": "cosmetica:qL83s"
+    },
+    {
+      "id": 73,
+      "name": "Junior's Hand Flames",
+      "attachment": "left_arm",
+      "offset": [
+        0.0,
+        12.0,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 0,
+      "source": "cosmetica:SS4YC"
+    },
+    {
+      "id": 74,
+      "name": "Junior's Purple Hand Flames",
+      "attachment": "left_arm",
+      "offset": [
+        0.0,
+        12.0,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 0,
+      "source": "cosmetica:zSczM"
+    },
+    {
+      "id": 75,
+      "name": "Lil Warden Buddy",
+      "attachment": "body",
+      "offset": [
+        -6.0,
+        11.5,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 64,
+      "source": "cosmetica:cP49g",
+      "usesUvRotations": true
+    },
+    {
+      "id": 76,
+      "name": "Menacing",
+      "attachment": "body",
+      "offset": [
+        -6.0,
+        11.5,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 0,
+      "source": "cosmetica:meiR8"
+    },
+    {
+      "id": 77,
+      "name": "Purple Allay",
+      "attachment": "body",
+      "offset": [
+        -6.0,
+        11.5,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 0,
+      "source": "cosmetica:gH3DN"
+    },
+    {
+      "id": 78,
+      "name": "Rice Hat V3.3",
+      "attachment": "head",
+      "offset": [
+        0.0,
+        8.0,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 0,
+      "source": "cosmetica:NFN0j"
+    },
+    {
+      "id": 79,
+      "name": "Samurai Sword (By Ryaw)",
+      "attachment": "body",
+      "offset": [
+        0.0,
+        6.0,
+        2.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 0,
+      "source": "cosmetica:gEJY1",
+      "usesUvRotations": true
+    },
+    {
+      "id": 80,
+      "name": "Zenin'z Katana",
+      "attachment": "body",
+      "offset": [
+        -6.0,
+        11.5,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 0,
+      "source": "cosmetica:QMcz4",
+      "usesUvRotations": true
+    },
+    {
+      "id": 81,
+      "name": "Animated Purple Slim Armflame",
+      "attachment": "left_arm",
+      "offset": [
+        0.0,
+        -4.0,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 4,
+      "ticksPerFrame": 3,
+      "flags": 0,
+      "source": "cosmetica:QNifj"
+    },
+    {
+      "id": 82,
+      "name": "Black Cat",
+      "attachment": "body",
+      "offset": [
+        -6.0,
+        11.5,
+        0.0
+      ],
+      "mirrored": false,
+      "frames": 1,
+      "ticksPerFrame": 5,
+      "flags": 64,
+      "source": "cosmetica:7Z0lD",
+      "usesUvRotations": true
     }
   ]
 }

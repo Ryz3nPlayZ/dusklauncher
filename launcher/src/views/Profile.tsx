@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { DevicePanel, useLogin } from '../components/SignIn';
 import PlayerHead from '../components/PlayerHead';
 import { PxBox, PxButton, TT } from '../components/px/Px';
-import { api, isTauri, type Account, type AppInfo } from '../lib/api';
+import { api, isTauri, type Account, type AppInfo, type SavedAccount } from '../lib/api';
 
 export default function Profile({
   account,
@@ -15,12 +15,35 @@ export default function Profile({
 }) {
   const [signingOut, setSigningOut] = useState(false);
   const [info, setInfo] = useState<AppInfo | null>(null);
-  const { busy: signingIn, err, auth, start } = useLogin(onChange);
-  const busy = signingIn || signingOut;
+  const [accounts, setAccounts] = useState<SavedAccount[]>([]);
+  const [switching, setSwitching] = useState<string | null>(null);
+  const [switchErr, setSwitchErr] = useState<string | null>(null);
+  const refreshAccounts = () => void api.listAccounts().then(setAccounts).catch(() => setAccounts([]));
+  const { busy: signingIn, err, auth, start } = useLogin(async () => {
+    await onChange();
+    refreshAccounts();
+  });
+  const busy = signingIn || signingOut || switching !== null;
 
   useEffect(() => {
     void api.getAppInfo().then(setInfo);
+    refreshAccounts();
   }, []);
+
+  const switchTo = async (uuid: string) => {
+    setSwitching(uuid);
+    setSwitchErr(null);
+    try {
+      await api.switchAccount(uuid);
+      await onChange();
+      refreshAccounts();
+    } catch (e) {
+      setSwitchErr(String(e));
+    } finally {
+      setSwitching(null);
+    }
+  };
+  const others = accounts.filter((a) => !a.active);
 
   return (
     <div className="page">
@@ -51,6 +74,7 @@ export default function Profile({
                   setSigningOut(true);
                   await api.logout();
                   await onChange();
+                  refreshAccounts();
                   setSigningOut(false);
                 }}
               >
@@ -74,6 +98,54 @@ export default function Profile({
         </PxBox>
 
         {signingIn && <DevicePanel auth={auth} />}
+
+        {(account?.authenticated || others.length > 0) && (
+          <PxBox family="panel" className="stack">
+            <TT size={16} tone="dim">
+              ACCOUNTS
+            </TT>
+            <span className="meta">
+              Switch between Microsoft accounts without signing in again. Each keeps its own friends and Dusk wallet.
+            </span>
+            {others.map((a) => (
+              <div key={a.uuid} className="srow">
+                <div className="srow__text">
+                  <TT size={20}>{a.username}</TT>
+                  <span className="meta">{a.uuid}</span>
+                </div>
+                <div className="srow__control">
+                  <PxButton family="blue" height="md" disabled={busy} onClick={() => void switchTo(a.uuid)}>
+                    <TT size={16} tone="blue">
+                      {switching === a.uuid ? 'SWITCHING…' : 'SWITCH'}
+                    </TT>
+                  </PxButton>
+                  <PxButton
+                    family="grey"
+                    height="md"
+                    disabled={busy}
+                    title="Forget this account on this computer"
+                    onClick={() =>
+                      void api
+                        .removeAccount(a.uuid)
+                        .then(refreshAccounts)
+                        .catch((e) => setSwitchErr(String(e)))
+                    }
+                  >
+                    <TT size={16}>REMOVE</TT>
+                  </PxButton>
+                </div>
+              </div>
+            ))}
+            {switchErr && <span className="meta">{switchErr}</span>}
+            {account?.authenticated && (
+              <div>
+                <PxButton family="grey" height="md" disabled={busy} onClick={() => void start()}>
+                  <TT size={16}>+ ADD ACCOUNT</TT>
+                </PxButton>
+              </div>
+            )}
+          </PxBox>
+        )}
 
         {err && (
           <PxBox family="red" className="stack">

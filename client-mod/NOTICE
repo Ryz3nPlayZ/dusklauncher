@@ -24,6 +24,19 @@ two projects so that Dusk players are interoperable with them:
   launcher's preview (launcher/src/lib/accessoryMesh.ts) bakes the same
   rules. No source files were copied.
 
+The media package (dev.dusk.client.media and mixin/media) records and plays
+back sessions the way ReplayMod does:
+
+- ReplayMod — https://github.com/ReplayMod/ReplayMod
+  GPL-3.0 (johni0702 et al.). Replicated: the .mcpr file format (a zip of
+  metaData.json, recording.tmcpr as [int time][int length][packet] records
+  and thumb), the capture point (every clientbound packet as the connection
+  reads it, plus synthesized packets for the recording player's own
+  entity), and playback through a serverless connection fed on the client
+  thread, with backward seeks replaying from the start. Opening Dusk
+  files in ReplayMod itself is untested. No source files were copied;
+  the rolling clip buffer, the replay filter and all UI are Dusk's own.
+
 Bundled cosmetics (src/main/resources/assets/duskclient/cosmetics) are
 community capes and one Cosmetica accessory ("Red Fire Arm", cosmetica
 id ufa1T) imported with tools/import_cosmetics.py; they are content, not

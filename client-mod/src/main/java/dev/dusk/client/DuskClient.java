@@ -9,6 +9,7 @@ import dev.dusk.client.gui.MenuScreen;
 import dev.dusk.client.hud.HudHooks;
 import dev.dusk.client.hud.Raycast;
 import dev.dusk.client.hud.TpsTracker;
+import dev.dusk.client.media.MediaBackend;
 import dev.dusk.client.module.ModuleManager;
 import dev.dusk.client.modules.hud.ArmorStatus;
 import dev.dusk.client.modules.hud.Biome;
@@ -84,6 +85,7 @@ public class DuskClient implements ClientModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger("duskclient");
     private static ModuleManager modules;
     private static KeyMapping settingsKey;
+    private static KeyMapping clipKey;
 
     public static ModuleManager modules() {
         return modules;
@@ -94,10 +96,17 @@ public class DuskClient implements ClientModInitializer {
         return settingsKey;
     }
 
+    /** Saves the clip buffer (Media → Clips). */
+    public static KeyMapping clipKey() {
+        return clipKey;
+    }
+
     @Override
     public void onInitializeClient() {
         modules = new ModuleManager();
         // Keystroke-ish HUD
+        // first, so it heads the Dusk section of Controls; module keys register with their modules
+        settingsKey = Compat.registerKey("key.duskclient.settings", GLFW.GLFW_KEY_RIGHT_SHIFT);
         modules.register(new Keystrokes());
         modules.register(new CpsCounter());
         modules.register(new FpsDisplay());
@@ -164,18 +173,17 @@ public class DuskClient implements ClientModInitializer {
         DuskConfig.get(); // ensure duskclient.json exists for the launcher bridge
         CosmeticsManager.init();
         HudHooks.register();
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> TpsTracker.reset());
-
-        settingsKey = Compat.registerKey("key.duskclient.settings", GLFW.GLFW_KEY_RIGHT_SHIFT);
-        KeyMapping fullbrightKey = Compat.registerKey("key.duskclient.fullbright", GLFW.GLFW_KEY_G);
-        KeyMapping gammaUpKey = Compat.registerKey("key.duskclient.gamma_up", GLFW.GLFW_KEY_UNKNOWN);
-        KeyMapping gammaDownKey = Compat.registerKey("key.duskclient.gamma_down", GLFW.GLFW_KEY_UNKNOWN);
-        KeyMapping sprintKey = Compat.registerKey("key.duskclient.togglesprint", GLFW.GLFW_KEY_UNKNOWN);
-        // PolyTime's own defaults; they step the Time Changer slider by an hour.
-        KeyMapping timeForwardKey = Compat.registerKey("key.duskclient.time_forward", GLFW.GLFW_KEY_RIGHT_BRACKET);
-        KeyMapping timeBackwardKey = Compat.registerKey("key.duskclient.time_backward", GLFW.GLFW_KEY_LEFT_BRACKET);
-        KeyMapping behindBackKey = Compat.registerKey("key.duskclient.behindyou_back", GLFW.GLFW_KEY_UNKNOWN);
-        KeyMapping behindFrontKey = Compat.registerKey("key.duskclient.behindyou_front", GLFW.GLFW_KEY_UNKNOWN);
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            TpsTracker.reset();
+            dev.dusk.client.hud.PingTracker.reset();
+            // the launcher reads these lines to show friends where you are; a replay is not a server
+            if (MediaBackend.replaying()) return;
+            var server = client.getCurrentServer();
+            if (server != null && server.ip != null && !server.ip.isBlank()) LOGGER.info("[DuskPresence] server {}", server.ip);
+            else LOGGER.info("[DuskPresence] singleplayer");
+        });
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> LOGGER.info("[DuskPresence] menu"));
+        MediaBackend.init();
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             LoadoutWatcher.tick();
@@ -185,39 +193,12 @@ public class DuskClient implements ClientModInitializer {
                     Compat.setScreen(client, new DuskMenuScreen(current));
                 }
             }
-            boolean changed = false;
-            while (fullbrightKey.consumeClick()) {
-                Fullbright f = Fullbright.instance();
-                f.setEnabled(!f.enabled());
-                changed = true;
-            }
-            while (gammaUpKey.consumeClick()) {
-                Fullbright.instance().adjust(1);
-                changed = true;
-            }
-            while (gammaDownKey.consumeClick()) {
-                Fullbright.instance().adjust(-1);
-                changed = true;
-            }
-            while (sprintKey.consumeClick()) {
-                ToggleSprint t = modules.get(ToggleSprint.class);
-                t.setEnabled(!t.enabled());
-                changed = true;
-            }
-            while (timeForwardKey.consumeClick()) {
-                if (TimeChanger.instance() != null) {
-                    TimeChanger.instance().shift(1);
-                    changed = true;
-                }
-            }
-            while (timeBackwardKey.consumeClick()) {
-                if (TimeChanger.instance() != null) {
-                    TimeChanger.instance().shift(-1);
-                    changed = true;
-                }
-            }
+            boolean changed = Fullbright.instance().tickKeys();
+            changed |= modules.get(ToggleSprint.class).tickKeys();
+            if (TimeChanger.instance() != null) changed |= TimeChanger.instance().tickKeys();
             if (changed) modules.saveConfig();
-            behindYou.tickKeys(behindBackKey, behindFrontKey);
+            while (clipKey.consumeClick()) MediaBackend.saveClip();
+            behindYou.tickKeys();
             if (modules.get(Distance.class).enabled() || modules.get(SignReader.class).enabled()) {
                 Raycast.tick(client);
             }

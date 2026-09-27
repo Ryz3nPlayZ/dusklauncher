@@ -1,5 +1,7 @@
 package dev.dusk.client.gui;
 
+import net.minecraft.client.Minecraft;
+
 /**
  * Vanilla-looking controls for the Dusk menus (the Flex-HUD look): the
  * game's own widget sprites, blitted as standalone textures and stretched
@@ -12,6 +14,8 @@ public final class Vanilla {
 
     /** Flex-HUD's row highlight. */
     public static final int ROW_HOVER = 0x55C5C5C5;
+    /** What the highlight sits on outside a world, where the title art would show through it in patches. */
+    private static final int ROW_HOVER_BASE = 0xFF2A2A2A;
     public static final int TEXT = 0xFFFFFFFF, TEXT_OFF = 0xFFA0A0A0, TEXT_DIM = 0xFFAFAFAF;
     public static final int BUTTON_H = 20;
 
@@ -19,6 +23,12 @@ public final class Vanilla {
      * Draws a {@code tw}x{@code th} sprite into any size: the corners as they
      * are, the edges and middle tiled (never scaled, like vanilla).
      */
+    /** The row highlight, on a solid base when there is no world behind the menu. */
+    public static void rowHover(Canvas c, int x0, int y0, int x1, int y1) {
+        if (Minecraft.getInstance().level == null) c.fill(x0, y0, x1, y1, ROW_HOVER_BASE);
+        c.fill(x0, y0, x1, y1, ROW_HOVER);
+    }
+
     public static void nineSlice(Canvas c, String sprite, int x, int y, int w, int h, int tw, int th, int b, int argb) {
         if (w <= 0 || h <= 0) return;
         String tex = SPRITES + sprite + ".png";

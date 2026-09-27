@@ -28,7 +28,7 @@ public class ToggleWidget extends SettingRow {
     protected void renderRow(Canvas c, int mouseX, int mouseY) {
         if (!onRow(mouseX, mouseY)) return;
         int w = controlX() + SQUARE - x;
-        c.fill(x, top(), x + w, top() + SQUARE, Vanilla.ROW_HOVER);
+        Vanilla.rowHover(c, x, top(), x + w, top() + SQUARE);
         c.outline(x - 1, top() - 1, w + 2, SQUARE + 2, 0xFFFFFFFF);
     }
 

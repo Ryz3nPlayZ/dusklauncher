@@ -17,7 +17,7 @@ public abstract class PanelScreen extends MenuScreen {
     protected static final int TAB_H = NavBar.H, BAR_W = 4, SCROLL_STEP = 24;
 
     /** A tab-bar tool: an icon square, or a text button when {@code icon} is null. */
-    protected record Tool(String id, @Nullable Icons icon, String text, String tip) {}
+    public record Tool(String id, @Nullable Icons icon, String text, String tip) {}
 
     protected int px, py, pw, ph, pad;
     /** The scrollable area: {@link #listX}..{@link #listX}+{@link #listW}, {@link #listY}..{@link #listBottom}. */

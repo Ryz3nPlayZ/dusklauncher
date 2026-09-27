@@ -29,6 +29,20 @@ pub struct RunningGame {
     pub child: tokio::process::Child,
 }
 
+/// Where the running game is, as far as its log says: which instance, and
+/// the server address once it joins one. Drives the friends heartbeat and
+/// Discord Rich Presence.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameActivity {
+    pub profile_id: String,
+    pub profile_name: String,
+    pub game_version: String,
+    pub server: Option<String>,
+    /// unix seconds the game was started
+    pub started_at: u64,
+}
+
 pub struct AppState {
     pub data_dir: PathBuf,
     pub profiles: Mutex<ProfileStore>,
@@ -37,6 +51,7 @@ pub struct AppState {
     /// the running game, so it can be stopped from the UI and the UI can
     /// ask which profile owns it (`game_state`) instead of trusting events
     pub running_game: tokio::sync::Mutex<Option<RunningGame>>,
+    pub activity: Mutex<Option<GameActivity>>,
     /// held across install+spawn so double-clicking PLAY NOW can't launch twice
     pub launch_lock: tokio::sync::Mutex<()>,
     /// held across the interactive login flow so only one browser flow runs
@@ -76,6 +91,7 @@ impl AppState {
             settings: Mutex::new(settings),
             account: Mutex::new(Some(Account::default())),
             running_game: tokio::sync::Mutex::new(None),
+            activity: Mutex::new(None),
             launch_lock: tokio::sync::Mutex::new(()),
             login_lock: tokio::sync::Mutex::new(()),
             manifest: tokio::sync::RwLock::new(None),

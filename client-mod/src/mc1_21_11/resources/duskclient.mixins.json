@@ -5,6 +5,7 @@
   "client": [
     "TitleRouteMixin",
     "TpsMixin",
+    "PingMixin",
     "FullbrightMixin",
     "MotionBlurMixin",
     "MotionBlurLevelMixin",
@@ -59,7 +60,16 @@
     "behindyou.BehindYouCameraTypeMixin",
     "behindyou.BehindYouF5Mixin",
     "behindyou.BehindYouFovMixin",
-    "behindyou.BehindYouLevelMixin"
+    "behindyou.BehindYouLevelMixin",
+    "media.ConnectionMixin",
+    "media.MinecraftAccessor",
+    "media.MoveEntityAccessor",
+    "media.ReplayCameraModeMixin",
+    "media.ReplayListenerMixin",
+    "media.ReplayPauseMixin",
+    "media.ReplayViewerMixin",
+    "media.RotateHeadAccessor",
+    "media.SynchedEntityDataAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

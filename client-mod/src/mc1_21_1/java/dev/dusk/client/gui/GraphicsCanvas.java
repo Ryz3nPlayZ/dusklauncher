@@ -1,5 +1,8 @@
 package dev.dusk.client.gui;
 
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.core.Holder;
+import net.minecraft.client.Minecraft;
 import com.mojang.math.Axis;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -78,6 +81,11 @@ public record GraphicsCanvas(GuiGraphics g, Font font) implements Canvas {
     public void blit(String texture, int x, int y, float u, float v, int w, int h, int texW, int texH, int argb) {
         // 1.21.1 has no tinted blit; the tint is ignored.
         g.blit(ResourceLocation.parse(texture), x, y, u, v, w, h, texW, texH);
+    }
+
+    @Override
+    public void effectIcon(Holder<MobEffect> effect, int x, int y, int size) {
+        g.blit(x, y, 0, size, size, Minecraft.getInstance().getMobEffectTextures().get(effect));
     }
 
     @Override

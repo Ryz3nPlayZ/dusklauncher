@@ -16,10 +16,8 @@ public class FullInventory extends TextHud {
     private boolean full;
 
     public FullInventory() {
-        super("fullinventory", "Full Inventory", "", "Warns you when every inventory slot is taken.");
+        super("fullinventory", "Full Inventory", "Warns you when every inventory slot is taken.", 0xFFFF0000);
         setPosition(150, 148);
-        showLabel.set(false);
-        valueColor.set(0xFFFF0000);
     }
 
     @Override
@@ -42,12 +40,12 @@ public class FullInventory extends TextHud {
     }
 
     @Override
-    protected String value(HudContext ctx) {
-        return full ? "Inventory full!" : null;
+    protected String text(HudContext ctx) {
+        return full ? "Inventory full !" : null;
     }
 
     @Override
     protected String sample() {
-        return "Inventory full!";
+        return "Inventory full !";
     }
 }

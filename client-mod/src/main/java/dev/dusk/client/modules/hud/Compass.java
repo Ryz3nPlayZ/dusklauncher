@@ -2,9 +2,8 @@ package dev.dusk.client.modules.hud;
 
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.hud.HudContext;
-import dev.dusk.client.hud.HudElement;
+import dev.dusk.client.hud.TextHud;
 import dev.dusk.client.module.setting.BoolSetting;
-import dev.dusk.client.module.setting.ColorSetting;
 import dev.dusk.client.module.setting.IntSetting;
 import net.minecraft.client.player.LocalPlayer;
 
@@ -13,7 +12,7 @@ import net.minecraft.client.player.LocalPlayer;
  * optional degree ticks. The map-mod and locator-bar overlays it can draw
  * on top are not ported.
  */
-public class Compass extends HudElement {
+public class Compass extends TextHud {
     private static final int STRIP_WIDTH = 210;
     private static final int STRIP_HEIGHT = 30;
     private static final String MARKER = "▼";
@@ -25,12 +24,15 @@ public class Compass extends HudElement {
     private final IntSetting degreesDecimals = add(new IntSetting("degreesDecimals", "Degree decimals", 0, 0, 14));
     private final BoolSetting showIntermediate =
             add(new BoolSetting("showIntermediate", "Show degree ticks", true));
-    private final BoolSetting shadow = add(new BoolSetting("shadow", "Text shadow", true));
-    private final ColorSetting color = add(new ColorSetting("color", "Colour", 0xFFFFFFFF));
 
     public Compass() {
         super("compass", "Compass", "A compass strip showing which way you are facing.");
         setPosition(135, 4);
+    }
+
+    @Override
+    protected String text(HudContext ctx) {
+        return "";
     }
 
     @Override
@@ -70,7 +72,7 @@ public class Compass extends HudElement {
             c.push();
             c.translate((STRIP_WIDTH / 2.0f) - (c.textWidth(degrees) / 2.0f) * 0.75f, 1);
             c.scale(0.75f, 0.75f);
-            c.text(degrees, 0, 0, color.argb(), shadow.get());
+            c.text(degrees, 0, 0, textColor(), shadow.get());
             c.pop();
         }
 
@@ -78,7 +80,7 @@ public class Compass extends HudElement {
             c.push();
             c.translate((STRIP_WIDTH / 2.0f) - (c.textWidth(MARKER) / 2.0f), showDegrees.get() ? 8 : 0);
             c.scale(1.0f, 0.5f);
-            c.text(MARKER, 0, 0, color.argb(), shadow.get());
+            c.text(MARKER, 0, 0, textColor(), shadow.get());
             c.pop();
         }
     }
@@ -129,6 +131,7 @@ public class Compass extends HudElement {
         if (distanceFromCenter > STRIP_WIDTH / 4.0) {
             alpha = Math.max(0xFF - (int) ((distanceFromCenter - STRIP_WIDTH / 4.0) / (STRIP_WIDTH / 4.0) * 0xFF), 0);
         }
-        return (alpha << 24) | (color.argb() & 0xFFFFFF);
+        // older fonts draw alpha under 4 as opaque, so the fade stops there
+        return Math.max(alpha, 4) << 24 | textColor() & 0xFFFFFF;
     }
 }

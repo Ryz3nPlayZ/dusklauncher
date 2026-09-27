@@ -1,29 +1,29 @@
 package dev.dusk.client.modules.hud;
 
+import dev.dusk.client.hud.Fmt;
 import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.hud.TextHud;
 import dev.dusk.client.module.setting.BoolSetting;
 
 import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 
+/** Flex-HUD's Clock: real-world time, 24- or 12-hour by the system locale. */
 public class Clock extends TextHud {
-    private static final DateTimeFormatter H24 = DateTimeFormatter.ofPattern("HH:mm");
-    private static final DateTimeFormatter H24S = DateTimeFormatter.ofPattern("HH:mm:ss");
-    private static final DateTimeFormatter H12 = DateTimeFormatter.ofPattern("h:mm a");
-    private static final DateTimeFormatter H12S = DateTimeFormatter.ofPattern("h:mm:ss a");
-
-    private final BoolSetting twelveHour = add(new BoolSetting("twelveHour", "12-hour clock", false));
-    private final BoolSetting seconds = add(new BoolSetting("seconds", "Show seconds", false));
+    private final BoolSetting twentyFour = add(new BoolSetting("twentyFourHour", "24-hour format", Fmt.localeIs24Hour()));
+    private final BoolSetting seconds = add(new BoolSetting("showSeconds", "Show seconds", true));
 
     public Clock() {
-        super("clock", "Clock", "Time", "Real-world local time.");
+        super("clock", "Clock", "Real-world local time.");
         setPosition(150, 5);
     }
 
     @Override
-    protected String value(HudContext ctx) {
-        DateTimeFormatter f = twelveHour.get() ? (seconds.get() ? H12S : H12) : (seconds.get() ? H24S : H24);
-        return LocalTime.now().format(f);
+    protected String text(HudContext ctx) {
+        return LocalTime.now().format(Fmt.clock(twentyFour.get(), seconds.get()));
+    }
+
+    @Override
+    protected String sample() {
+        return text(null);
     }
 }

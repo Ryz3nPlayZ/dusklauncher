@@ -80,7 +80,10 @@ public abstract class Module {
         m.put("y", y);
         if (!settings.isEmpty()) {
             Map<String, Object> s = new LinkedHashMap<>();
-            for (Setting<?> setting : settings) s.put(setting.id(), setting.save());
+            for (Setting<?> setting : settings) {
+                Object saved = setting.save();
+                if (saved != null) s.put(setting.id(), saved);
+            }
             m.put("settings", s);
         }
         return m;

@@ -36,3 +36,6 @@ launcher/src-tauri/resources/*.jar
 
 # local AI-session exports, never for publish
 *claudesession*
+
+# tsc incremental cache
+*.tsbuildinfo

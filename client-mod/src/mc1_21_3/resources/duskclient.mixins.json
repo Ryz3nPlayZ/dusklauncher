@@ -5,6 +5,7 @@
   "client": [
     "TitleRouteMixin",
     "TpsMixin",
+    "PingMixin",
     "CrosshairMixin",
     "FullbrightMixin",
     "MotionBlurMixin",

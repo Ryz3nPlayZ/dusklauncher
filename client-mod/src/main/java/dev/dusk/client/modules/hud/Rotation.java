@@ -7,19 +7,22 @@ import net.minecraft.util.Mth;
 
 public class Rotation extends TextHud {
     public Rotation() {
-        super("rotation", "Yaw / Pitch", "Rot", "Camera yaw and pitch in degrees.");
+        super("rotation", "Yaw / Pitch", "Camera yaw and pitch in degrees.");
         setPosition(5, 71);
     }
 
+    private static String format(float yaw, float pitch) {
+        return "Yaw: " + Fmt.fixed(yaw, 1) + " Pitch: " + Fmt.fixed(pitch, 1);
+    }
+
     @Override
-    protected String value(HudContext ctx) {
+    protected String text(HudContext ctx) {
         var p = ctx.player();
-        if (p == null) return null;
-        return Fmt.fixed(Mth.wrapDegrees(p.getYRot()), 1) + " / " + Fmt.fixed(p.getXRot(), 1);
+        return p == null ? null : format(Mth.wrapDegrees(p.getYRot()), p.getXRot());
     }
 
     @Override
     protected String sample() {
-        return "0.0 / 0.0";
+        return format(0, 0);
     }
 }

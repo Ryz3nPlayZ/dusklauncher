@@ -50,6 +50,25 @@ pub struct Settings {
     /// wallpapers.rs). Empty = the built-in animated scene.
     #[serde(default)]
     pub custom_background: String,
+    /// Show what's being played on the Discord profile (Rich Presence).
+    #[serde(default = "yes")]
+    pub discord_rpc: bool,
+    /// Desktop notifications for friends coming online / new messages /
+    /// friend requests and gifts.
+    #[serde(default = "yes")]
+    pub notify_friends_online: bool,
+    #[serde(default = "yes")]
+    pub notify_messages: bool,
+    /// Chat and screenshot times as 24-hour clock instead of 12-hour.
+    #[serde(default)]
+    pub clock_24h: bool,
+    /// Ask before opening a link someone sent in chat.
+    #[serde(default = "yes")]
+    pub warn_on_links: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 fn default_resolution() -> u32 {
@@ -87,6 +106,11 @@ impl Default for Settings {
             auth_client_id: String::new(),
             auth_mode: default_auth_mode(),
             custom_background: String::new(),
+            discord_rpc: true,
+            notify_friends_online: true,
+            notify_messages: true,
+            clock_24h: false,
+            warn_on_links: true,
         }
     }
 }

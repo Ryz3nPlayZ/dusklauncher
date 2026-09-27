@@ -2,9 +2,27 @@
  * Hand-drawn pixel glyphs as crisp SVG rects — no icon font, no emoji
  * (DESIGN.md). Each glyph is drawn on a 12×12 grid.
  */
-export type Glyph = 'minimize' | 'maximize' | 'close' | 'search' | 'gear' | 'left' | 'box';
+export type Glyph = 'minimize' | 'maximize' | 'close' | 'search' | 'gear' | 'left' | 'right' | 'box' | 'star';
 
 const RECTS: Record<Glyph, [number, number, number, number][]> = {
+  right: [
+    [2, 2, 2, 2],
+    [4, 4, 2, 2],
+    [6, 6, 2, 2],
+    [4, 8, 2, 2],
+    [2, 10, 2, 2],
+  ],
+  star: [
+    [5, 0, 2, 2],
+    [4, 2, 4, 2],
+    [0, 4, 12, 2],
+    [2, 6, 8, 2],
+    [3, 8, 6, 1],
+    [2, 9, 3, 2],
+    [7, 9, 3, 2],
+    [1, 11, 2, 1],
+    [9, 11, 2, 1],
+  ],
   left: [
     [8, 2, 2, 2],
     [6, 4, 2, 2],

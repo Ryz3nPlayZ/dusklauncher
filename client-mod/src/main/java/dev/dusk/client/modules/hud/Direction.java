@@ -12,21 +12,24 @@ public class Direction extends TextHud {
     private final BoolSetting showAxis = add(new BoolSetting("showAxis", "Show axis", true));
 
     public Direction() {
-        super("direction", "Direction", "Facing", "Compass heading you are looking toward.");
+        super("direction", "Direction", "Compass heading you are looking toward.");
         setPosition(5, 60);
     }
 
+    private String format(int idx) {
+        return "Facing: " + (showAxis.get() ? POINTS[idx] + " (" + AXES[idx] + ")" : POINTS[idx]);
+    }
+
     @Override
-    protected String value(HudContext ctx) {
+    protected String text(HudContext ctx) {
         var p = ctx.player();
         if (p == null) return null;
         float yaw = Mth.wrapDegrees(p.getYRot());
-        int idx = Math.floorMod(Math.round(yaw / 45f), 8);
-        return showAxis.get() ? POINTS[idx] + " (" + AXES[idx] + ")" : POINTS[idx];
+        return format(Math.floorMod(Math.round(yaw / 45f), 8));
     }
 
     @Override
     protected String sample() {
-        return "N (-Z)";
+        return format(4);
     }
 }

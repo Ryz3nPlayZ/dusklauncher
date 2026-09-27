@@ -16,12 +16,21 @@ public abstract class HudElement extends Module {
     /** Background padding around the element box, in unscaled pixels. */
     public static final int PAD = 2;
 
-    protected final IntSetting scale = add(new IntSetting("scale", "Scale", 100, 50, 300, 5, "%"));
-    protected final BoolSetting background = add(new BoolSetting("background", "Background", false));
-    protected final ColorSetting backgroundColor = add(new ColorSetting("backgroundColor", "Background colour", 0x80000000));
+    protected final IntSetting scale;
+    protected final BoolSetting background;
+    protected final ColorSetting backgroundColor;
+    protected final BoolSetting hideInF3;
 
     protected HudElement(String id, String name, String description) {
+        this(id, name, description, false);
+    }
+
+    protected HudElement(String id, String name, String description, boolean backgroundByDefault) {
         super(id, name, Category.HUD, description);
+        scale = add(new IntSetting("scale", "Scale", 100, 50, 300, 5, "%"));
+        background = add(new BoolSetting("background", "Background", backgroundByDefault));
+        backgroundColor = add(new ColorSetting("backgroundColor", "Background colour", 0x7F313131));
+        hideInF3 = add(new BoolSetting("hideInF3", "Hide in F3", true));
     }
 
     public float scale() { return scale.get() / 100f; }
@@ -33,6 +42,8 @@ public abstract class HudElement extends Module {
     public boolean background() { return background.get(); }
 
     public int backgroundColor() { return backgroundColor.argb(); }
+
+    public boolean hideInF3() { return hideInF3.get(); }
 
     /** Unscaled box size; may depend on live data (text width). */
     public abstract int width(HudContext ctx);

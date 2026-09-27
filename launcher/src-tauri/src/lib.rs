@@ -3,10 +3,13 @@ mod auth_flow;
 mod auth_store;
 mod commands;
 mod cosmetics;
+mod discord;
 mod dusk;
 mod friends;
 mod modpacks;
 mod mods;
+mod recordings;
+mod screenshots;
 mod settings;
 mod skins;
 mod wallpapers;
@@ -27,6 +30,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState::init())
         .invoke_handler(tauri::generate_handler![
             // profiles
@@ -47,6 +51,7 @@ pub fn run() {
             commands::install_and_launch,
             commands::stop_game,
             commands::game_state,
+            commands::game_activity,
             // settings
             commands::get_settings,
             commands::set_settings,
@@ -60,8 +65,22 @@ pub fn run() {
             commands::begin_reconsent_login,
             commands::logout,
             commands::get_current_account,
+            commands::list_accounts,
+            commands::switch_account,
+            commands::remove_account,
             // app
             commands::get_app_info,
+            commands::notify,
+            // screenshots
+            screenshots::list_screenshots,
+            screenshots::set_screenshot_favorite,
+            screenshots::delete_screenshot,
+            screenshots::reveal_screenshot,
+            // clips and replays
+            recordings::list_recordings,
+            recordings::recording_thumb,
+            recordings::delete_recording,
+            recordings::reveal_recording,
             // modpacks
             modpacks::search_modpacks,
             modpacks::search_projects,
@@ -111,6 +130,18 @@ pub fn run() {
             friends::get_messages,
             friends::send_message,
             friends::get_public_skin,
+            friends::send_invite,
+            friends::send_screenshot,
+            friends::get_chat_image,
+            friends::get_privacy,
+            friends::set_privacy,
+            friends::list_blocked,
+            friends::block_player,
+            friends::unblock_player,
+            friends::gift_cosmetic,
+            friends::list_outfits,
+            friends::save_outfit,
+            friends::delete_outfit,
             // skins
             skins::list_skins,
             skins::import_skin,

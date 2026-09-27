@@ -1683,73 +1683,93 @@
 }
 
 /* ══ SOCIAL ═════════════════════════════════════════════════════════════
-   Friends, requests and chat, opened from the status pill. Same popout
-   mechanics as the instance picker (.home__popout) — a bordered window
-   anchored to the trigger's top edge — just anchored to the pill instead
-   of the console, and wide enough for a row + an inline remove button. */
+   Friends, requests and chat, opened from the status pill. Built from the
+   same parts as every page: a .win (nav-cell bar over a solid body), people
+   as settings rows (.srow) with a head in front, errors and notices as the
+   family plates, empties as .empty, confirmations as .modal. The window
+   stands on the pill and runs up to just under the navbar. */
 .social {
-  /* the status-pill's own margin-left:auto only pushed it against
-     .status-bar's flex row when the pill itself was the flex child —
-     now that it's wrapped for the popout, this wrapper takes over that job */
+  /* the pill's own margin-left:auto only worked when the pill was the flex
+     child — wrapped for the popout, this wrapper takes over that job */
   margin-left: auto;
   position: relative;
   height: 100%;
 }
-.social__popout {
+.social__win {
   position: absolute;
   right: 0;
   bottom: calc(100% + var(--gap-sm));
-  /* wider and taller than the instance picker: it hosts a conversation,
-     and at 640u the tab strip alone overflowed */
-  width: calc(880 * var(--u));
-  max-width: calc(100vw - 32px);
-  max-height: calc(1000 * var(--u));
-  display: flex;
-  flex-direction: column;
+  flex: none;
+  width: calc(1100 * var(--u));
+  max-width: calc(100vw - 2 * var(--gap));
+  height: min(calc(1320 * var(--u)), calc(100vh - var(--nav-h) - var(--h-sm) - 3 * var(--gap-sm)));
   z-index: var(--z-modal);
 }
-.social__tabs {
-  flex: none;
-  display: flex;
-  align-items: stretch;
-  gap: var(--px-nav);
-  padding: 0 0 var(--px-nav);
-}
-.social__fill {
-  flex: 1 1 0;
-}
-.social__list {
-  flex: 1 1 auto;
-  min-height: 0;
+/* the list bodies read like settings: rows edge to edge, dividers between */
+.social__body {
+  gap: 0;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--px-nav);
-  background: var(--black);
+}
+.social__body > .social__notice {
+  margin-bottom: var(--gap-sm);
 }
 .social__row {
-  flex: none;
-  height: calc(76 * var(--u));
-  justify-content: flex-start;
-  gap: calc(14 * var(--u));
-  padding: 0 calc(16 * var(--u));
+  width: 100%;
+  min-height: calc(110 * var(--u));
+  padding: calc(14 * var(--u)) calc(10 * var(--u));
   text-align: left;
+  font: inherit;
+  color: inherit;
 }
-/* a request row is a PxBox holding its own buttons — not clickable itself */
-.social__row--static {
-  display: flex;
+.social__row .srow__text {
+  gap: calc(4 * var(--u));
+}
+.social__row .srow__text .meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.social__row .srow__control {
   align-items: center;
-  cursor: default;
 }
-.social__row-actions {
+/* a row that opens something: a bare button wearing the row, lit on hover
+   the way a plate brightens */
+.social__row--link {
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.social__row--link:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.social__row--link:focus-visible {
+  outline: 2px solid var(--accent-co);
+  outline-offset: -2px;
+}
+/* RECEIVED / SENT — a group label over its rows */
+.social__section {
   flex: none;
-  display: flex;
-  gap: var(--px-nav);
+  padding: calc(20 * var(--u)) calc(10 * var(--u)) calc(6 * var(--u));
 }
-.social__row-actions > .px {
-  flex: 1;
-  padding: 0 calc(14 * var(--u));
+.social__section:first-child {
+  padding-top: 0;
 }
+.social__notice {
+  flex: none;
+  justify-content: space-between;
+  gap: var(--gap-sm);
+  padding: 0 calc(10 * var(--u)) 0 calc(22 * var(--u));
+}
+.social__notice .meta {
+  color: var(--text-2);
+}
+.social__empty-cta {
+  margin-top: var(--gap-sm);
+  padding: 0 calc(30 * var(--u));
+}
+
 /* a head plus its presence square, bottom-right like the pill's own dot */
 .social__head {
   flex: none;
@@ -1762,150 +1782,313 @@
   bottom: -3px;
   width: calc(18 * var(--u));
   height: calc(18 * var(--u));
-  background: var(--g-up);
-  border: 2px solid var(--black);
+  background: linear-gradient(var(--g-up) 50%, var(--g-lo) 50%);
+  box-shadow: 0 0 0 2px var(--black);
 }
 /* online is green everywhere — the pill's dot, not the red "live" of a
    running instance */
-.social .is-online,
-.home__popout-name .is-online {
+.social .is-online {
   color: var(--g-lo);
 }
-.social__section {
-  flex: none;
-  padding: calc(8 * var(--u)) calc(4 * var(--u)) 0;
-}
-.social__notice {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: calc(12 * var(--u));
-  padding: calc(10 * var(--u)) calc(16 * var(--u));
-}
-.social__empty {
-  flex: none;
-  flex-direction: column;
-  gap: calc(10 * var(--u));
-  padding: calc(30 * var(--u)) calc(24 * var(--u));
-}
+/* the count square: the instance picker's accent mark, with a number in it */
 .social__badge {
   flex: none;
-  min-width: calc(20 * var(--u));
-  height: calc(20 * var(--u));
-  padding: 0 calc(6 * var(--u));
+  min-width: calc(34 * var(--u));
+  height: calc(34 * var(--u));
+  padding: 0 calc(8 * var(--u));
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent-up);
+  background: linear-gradient(var(--accent-up) 50%, var(--accent-lo) 50%);
+  box-shadow: 0 0 0 2px var(--black);
+}
+.status-pill .social__badge {
+  margin-left: auto;
+  min-width: calc(28 * var(--u));
+  height: calc(28 * var(--u));
+}
+.social__badge .tt {
+  --tt-top: var(--black);
+  --tt-bot: var(--black);
+  --tt-stroke: 0;
 }
 
-/* the chat sub-view replaces the tabs+list with a back bar, a scrolling
-   line of bubbles, and a one-row composer — same window shell */
-.social__chat-title {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  padding: 0 calc(14 * var(--u));
-  border: 0;
-  background: transparent;
-  gap: calc(12 * var(--u));
-  cursor: pointer;
-  overflow: hidden;
-  text-align: left;
-}
-.social__chat-title:hover .tt {
-  filter: brightness(1.2);
+/* ── chat: who, then the conversation, then the composer ─────────────── */
+.social__chat-body {
+  gap: 0;
+  padding-top: 0;
 }
 .social__chat {
   flex: 1 1 auto;
-  /* a conversation keeps a steady window rather than growing line by line */
-  height: calc(620 * var(--u));
   min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: calc(10 * var(--u));
-  padding: calc(16 * var(--u));
-  background: var(--black);
+  gap: calc(12 * var(--u));
+  padding: var(--gap-sm) calc(10 * var(--u));
 }
 .social__chat-empty {
   align-self: center;
-  margin-top: calc(30 * var(--u));
+  margin: auto 0;
+  text-align: center;
 }
 .social__line {
+  flex: none;
   display: flex;
   flex-direction: column;
-  gap: calc(10 * var(--u));
+  align-items: flex-start;
+  gap: calc(12 * var(--u));
+}
+.social__line--mine {
+  align-items: flex-end;
 }
 .social__stamp {
   align-self: center;
-  font-size: calc(15 * var(--t));
+  font-size: calc(16 * var(--t));
+  padding-top: calc(8 * var(--u));
 }
 .social__bubble {
-  align-self: flex-start;
+  max-width: 78%;
+  justify-content: flex-start;
+  padding: calc(14 * var(--u)) calc(22 * var(--u));
+}
+.social__text {
+  font-family: var(--font-body);
+  font-size: calc(21 * var(--t));
+  line-height: 1.4;
+  color: var(--text-1);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-width: 80%;
-  padding: calc(10 * var(--u)) calc(14 * var(--u));
-  background: var(--panel);
-  border: var(--px-black) solid var(--black);
-}
-.social__bubble--mine {
-  align-self: flex-end;
-  background: var(--accent-surf-bot);
 }
 .social__composer {
   flex: none;
   display: flex;
-  gap: var(--px-nav);
-  padding-top: var(--px-nav);
+  gap: calc(12 * var(--u));
+  padding-top: var(--gap-sm);
+  border-top: 2px solid var(--panel-bd);
+}
+.social__composer > .px:last-child {
+  flex: none;
+  padding: 0 calc(34 * var(--u));
 }
 .social__composer-field {
   flex: 1;
   min-width: 0;
-  display: flex;
-  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
 }
 .social__count {
   flex: none;
-  padding-right: calc(12 * var(--u));
+  padding-right: calc(16 * var(--u));
+}
+.social__chat-body > .social__notice {
+  margin-bottom: var(--gap-sm);
 }
 
-/* the profile sub-view: a centred card, not a list */
-.social__profile {
+/* ── profile: the person up top, then their details as settings rows ──── */
+.social__hero {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: calc(10 * var(--u)) calc(10 * var(--u)) var(--gap);
+  border-bottom: 2px solid var(--panel-bd);
+}
+.social__hero .srow__text {
   flex: 1;
-  min-height: calc(560 * var(--u));
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: calc(6 * var(--u));
+}
+.social__hero-cta {
+  flex: none;
+  padding: 0 calc(30 * var(--u));
+}
+
+/* the add-friend dialog: a form laid out like the .modal it sits in */
+.social__form {
+  display: flex;
+  flex-direction: column;
+  gap: calc(18 * var(--u));
+}
+
+/* ══ SCREENSHOTS ════════════════════════════════════════════════════════
+   The wallpaper tiles with a clickable picture; VIEW opens the viewer —
+   a wide window with the shot letterboxed on black. */
+.shot__open {
+  cursor: zoom-in;
+}
+.shot__viewer {
+  width: min(calc(1500 * var(--u)), 92vw);
+  gap: calc(14 * var(--u));
+}
+.shot__stage {
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: calc(14 * var(--u));
-  padding: calc(40 * var(--u));
-  background: var(--black);
-  text-align: center;
+  height: min(calc(760 * var(--u)), 62vh);
+  background: #000;
+  border: var(--px-black) solid var(--black);
 }
-.social__wearing {
+.shot__stage img {
   max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
-.social__profile-actions {
-  margin-top: calc(10 * var(--u));
+.shot__caption {
+  display: flex;
+  align-items: baseline;
+  gap: calc(16 * var(--u));
+  min-width: 0;
 }
-.social__confirm {
+.shot__caption .meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.modal__row > .shot__step {
+  flex: 0 0 var(--h-md);
+}
+/* the send picker opens over the viewer */
+.shot__picker-scrim {
+  z-index: calc(var(--z-modal) + 1);
+}
+.shot__friends {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: calc(10 * var(--u));
-  margin-top: calc(10 * var(--u));
+  max-height: calc(420 * var(--u));
+  overflow-y: auto;
+}
+.shot__friends > .px {
+  flex: none;
 }
 
-/* the add-friend dialog reuses .modal, just narrower */
-.social__add {
-  width: calc(520 * var(--u));
+/* ── chat: links, invite / gift cards, images, the pickers ───────────── */
+.social__link {
+  color: var(--b-co);
+  text-decoration: underline;
+  cursor: pointer;
 }
-.social__add-form {
+.social__link-url {
+  overflow-wrap: anywhere;
+  color: var(--b-co);
+}
+.social__card {
   display: flex;
   flex-direction: column;
-  gap: inherit;
+  gap: calc(6 * var(--u));
+  min-width: calc(300 * var(--u));
+}
+.social__card-title {
+  font-weight: 700;
+}
+.social__card-row {
+  display: flex;
+  height: var(--h-md);
+  margin-top: calc(8 * var(--u));
+}
+.social__card-row > .px {
+  flex: 1;
+}
+.social__bubble--image {
+  padding: calc(8 * var(--u));
+}
+.social__image {
+  display: block;
+  max-width: 100%;
+  max-height: calc(320 * var(--u));
+  cursor: zoom-in;
+}
+.social__image--loading {
+  width: calc(360 * var(--u));
+  height: calc(200 * var(--u));
+  background: var(--panel-bd);
+  cursor: default;
+}
+.social__zoom img {
+  max-width: 92vw;
+  max-height: 88vh;
+  object-fit: contain;
+  border: var(--px-black) solid var(--black);
+}
+.social__shots,
+.social__gifts {
+  width: calc(900 * var(--u));
+  gap: calc(14 * var(--u));
+}
+.social__shot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(200 * var(--u)), 1fr));
+  gap: calc(10 * var(--u));
+  max-height: calc(520 * var(--u));
+  overflow-y: auto;
+}
+.social__shot {
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  border: var(--px-black) solid var(--black);
+  background: var(--panel-bd);
+  cursor: pointer;
+}
+.social__shot:hover,
+.social__shot:focus-visible {
+  outline: 2px solid var(--accent-co);
+}
+.social__shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.social__gift-list {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(520 * var(--u));
+  overflow-y: auto;
+}
+.social__gift {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: calc(16 * var(--u));
+  height: calc(76 * var(--u));
+  padding: 0 calc(6 * var(--u));
+  border-bottom: 2px solid var(--panel-bd);
+}
+.social__gift > .social__text {
+  flex: 1;
+  min-width: 0;
+}
+.social__gift > .px {
+  flex: 0 0 calc(200 * var(--u));
+  height: var(--h-md);
+}
+.shot__open {
+  font: inherit;
+  width: 100%;
+}
+
+/* ── wardrobe → OUTFITS: a save form over settings-style rows ─────────── */
+.outfits {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+  overflow-y: auto;
+}
+.outfits__save {
+  flex: none;
+  display: flex;
+  gap: calc(12 * var(--u));
+  height: var(--h-md);
+}
+.outfits__field {
+  flex: 1;
+  min-width: 0;
+}
+.outfits > .meta {
+  flex: none;
 }

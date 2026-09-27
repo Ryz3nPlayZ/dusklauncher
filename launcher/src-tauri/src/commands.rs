@@ -127,6 +127,8 @@ pub struct AppInfoDto {
     pub launcher_version: String,
     pub os: String,
     pub data_dir: String,
+    /// this build has a Discord application id, so Rich Presence can work
+    pub discord_available: bool,
 }
 
 fn now_millis() -> u64 {
@@ -429,6 +431,7 @@ pub async fn install_and_launch(
     app: AppHandle,
     state: State<'_, AppState>,
     profile_id: String,
+    join_server: Option<String>,
 ) -> Result<(), String> {
     // Only one install+spawn at a time; the guard is held until the child spawns.
     let _launch_guard = state
@@ -447,6 +450,19 @@ pub async fn install_and_launch(
             .find(|p| p.id == profile_id)
             .cloned()
             .ok_or("profile not found")?
+    };
+    // "Join" from the friends list: this launch goes straight to that
+    // server (`--server`), without touching the saved instance
+    let profile = match join_server.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(addr) => {
+            if addr.len() > 64 || !addr.chars().all(|c| c.is_ascii_alphanumeric() || ".-_:[]".contains(c)) {
+                return Err("That server address doesn't look right.".into());
+            }
+            let mut p = profile;
+            p.server = Some(addr.to_string());
+            p
+        }
+        None => profile,
     };
     emit_state(&app, &profile_id, "starting", None);
 
@@ -624,6 +640,9 @@ pub async fn install_and_launch(
             };
             match recv {
                 Some(line) => {
+                    if let Some(server) = presence_from_log(&line.line) {
+                        set_activity_server(&app3, server);
+                    }
                     lines.push(line);
                     if lines.len() >= 128 || last_flush.elapsed() >= Duration::from_millis(120) {
                         let _ = app3.emit("game-log", GameLogBatch { lines: std::mem::take(&mut lines) });
@@ -654,6 +673,9 @@ pub async fn install_and_launch(
             };
             *guard = None;
             drop(guard);
+            *state.activity.lock().unwrap() = None;
+            let _ = app3.emit("game-activity", None::<crate::appstate::GameActivity>);
+            crate::discord::refresh(&app3);
             launch::run_post_exit(&env2);
             let code = status.ok().and_then(|s| s.code());
             emit_state(&app3, &pid2, "exited", code);
@@ -672,9 +694,61 @@ pub async fn install_and_launch(
         });
     }
 
+    *state.activity.lock().unwrap() = Some(crate::appstate::GameActivity {
+        profile_id: profile_id.clone(),
+        profile_name: profile.name.clone(),
+        game_version: profile.game_version.clone(),
+        server: None,
+        started_at: now_millis() / 1000,
+    });
+    let _ = app.emit("game-activity", state.activity.lock().unwrap().clone());
+    crate::discord::refresh(&app);
     emit_state(&app, &profile_id, "running", None);
     let _ = state.patch_profile(&profile_id, |p| p.last_played = Some(now_millis()));
     Ok(())
+}
+
+/// What a game log line says about where the player is: `Some(Some(addr))`
+/// joined a server, `Some(None)` is singleplayer or back at the menus. The
+/// bundled client mod logs `[DuskPresence] …`; without it (vanilla, other
+/// loaders) the vanilla "Connecting to host, port" line still catches joins.
+fn presence_from_log(line: &str) -> Option<Option<String>> {
+    if let Some(i) = line.find("[DuskPresence] ") {
+        let rest = line[i + "[DuskPresence] ".len()..].trim();
+        return Some(rest.strip_prefix("server ").map(|a| a.trim().to_ascii_lowercase()).filter(|a| !a.is_empty()));
+    }
+    let i = line.find("Connecting to ")?;
+    let (host, port) = line[i + "Connecting to ".len()..].trim().split_once(", ")?;
+    let port: u16 = port.trim().parse().ok()?;
+    let host = host.trim().to_ascii_lowercase();
+    if host.is_empty() {
+        return None;
+    }
+    Some(Some(if port == 25565 { host } else { format!("{host}:{port}") }))
+}
+
+fn set_activity_server(app: &AppHandle, server: Option<String>) {
+    let state = app.state::<AppState>();
+    let changed = {
+        let mut activity = state.activity.lock().unwrap();
+        match activity.as_mut() {
+            Some(a) if a.server != server => {
+                a.server = server;
+                true
+            }
+            _ => false,
+        }
+    };
+    if changed {
+        let _ = app.emit("game-activity", state.activity.lock().unwrap().clone());
+        crate::discord::refresh(app);
+    }
+}
+
+/// What the running game is doing right now (`None` when nothing runs).
+#[tauri::command]
+pub fn game_activity(state: State<'_, AppState>) -> Option<crate::appstate::GameActivity> {
+    state.activity.lock().unwrap().clone()
 }
 
 fn emit_state(app: &AppHandle, profile_id: &str, state: &str, code: Option<i32>) {
@@ -918,7 +992,7 @@ fn seed_instance_config(root: &std::path::Path) {
 }
 
 #[tauri::command]
-pub fn set_settings(state: State<AppState>, mut settings: Settings) -> Result<Settings, String> {
+pub fn set_settings(app: AppHandle, state: State<AppState>, mut settings: Settings) -> Result<Settings, String> {
     {
         let mut s = state.settings.lock().unwrap();
         // the UI doesn't know this field; don't let a round-trip rewind it
@@ -926,6 +1000,7 @@ pub fn set_settings(state: State<AppState>, mut settings: Settings) -> Result<Se
         *s = settings.clone();
     }
     state.save_settings(&settings);
+    crate::discord::refresh(&app);
     Ok(settings)
 }
 
@@ -1055,10 +1130,68 @@ fn account_dto(session: &Session) -> AccountDto {
     }
 }
 
+/// Sign out of the active account and forget it; other saved accounts stay
+/// in the switcher.
 #[tauri::command]
 pub fn logout(state: State<AppState>) {
+    if let Some(session) = auth_store::load_session(&state.data_dir) {
+        auth_store::remove_stashed(&state.data_dir, &session.uuid);
+    }
     auth_store::clear_session(&state.data_dir);
+    crate::dusk::clear_token(&state.data_dir);
     *state.account.lock().unwrap() = Some(Account::default());
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedAccountDto {
+    pub uuid: String,
+    pub username: String,
+    pub active: bool,
+}
+
+/// Every Microsoft account signed in on this machine, for the switcher.
+#[tauri::command]
+pub fn list_accounts(state: State<AppState>) -> Vec<SavedAccountDto> {
+    let active = auth_store::load_session(&state.data_dir).map(|s| s.uuid.replace('-', ""));
+    auth_store::list_stashed(&state.data_dir)
+        .into_iter()
+        .map(|s| SavedAccountDto {
+            active: active.as_deref() == Some(s.uuid.replace('-', "").as_str()),
+            uuid: s.uuid,
+            username: s.username,
+        })
+        .collect()
+}
+
+/// Make a saved account the active one — no browser needed; its refresh
+/// token is renewed on the next launch if it has gone stale.
+#[tauri::command]
+pub async fn switch_account(state: State<'_, AppState>, uuid: String) -> Result<AccountDto, String> {
+    if state.running_game.lock().await.is_some() {
+        return Err("Close the game before switching accounts.".into());
+    }
+    let session = auth_store::load_stashed(&state.data_dir, &uuid)
+        .ok_or("That account isn't saved on this computer any more — sign in again.")?;
+    auth_store::save_session(&state.data_dir, &session);
+    crate::dusk::clear_token(&state.data_dir);
+    *state.account.lock().unwrap() = Some(Account {
+        username: session.username.clone(),
+        uuid: session.uuid.clone(),
+        authenticated: true,
+    });
+    Ok(account_dto(&session))
+}
+
+/// Forget a saved account that isn't the active one.
+#[tauri::command]
+pub fn remove_account(state: State<AppState>, uuid: String) -> Result<(), String> {
+    let active = auth_store::load_session(&state.data_dir).map(|s| s.uuid.replace('-', ""));
+    if active.as_deref() == Some(uuid.replace('-', "").as_str()) {
+        return Err("That's the account in use — sign out instead.".into());
+    }
+    auth_store::remove_stashed(&state.data_dir, &uuid);
+    Ok(())
 }
 
 /// Resolve the session to play with:
@@ -1099,6 +1232,19 @@ pub(crate) async fn ensure_play_session(state: &AppState) -> Result<Session, Str
     Err("Not signed in — use Sign in with Microsoft first.".into())
 }
 
+/// A desktop notification (friend online, new message, gift). The UI
+/// decides when — only while the launcher window isn't focused.
+#[tauri::command]
+pub fn notify(app: AppHandle, title: String, body: String) -> Result<(), String> {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .map_err(|e| e.to_string())
+}
+
 // ── app info ───────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -1107,6 +1253,7 @@ pub fn get_app_info(state: State<AppState>) -> AppInfoDto {
         launcher_version: env!("CARGO_PKG_VERSION").into(),
         os: format!("{} ({})", capitalize(std::env::consts::OS), std::env::consts::ARCH),
         data_dir: state.data_dir.display().to_string(),
+        discord_available: crate::discord::available(),
     }
 }
 
@@ -1115,5 +1262,30 @@ fn capitalize(s: &str) -> String {
     match c.next() {
         Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
         None => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod presence_tests {
+    use super::presence_from_log;
+
+    #[test]
+    fn reads_dusk_and_vanilla_presence_lines() {
+        assert_eq!(
+            presence_from_log("[12:00:01] [Render thread/INFO] (duskclient) [DuskPresence] server Play.Example.net"),
+            Some(Some("play.example.net".into()))
+        );
+        assert_eq!(presence_from_log("[Render thread/INFO] (duskclient) [DuskPresence] singleplayer"), Some(None));
+        assert_eq!(presence_from_log("[Render thread/INFO] (duskclient) [DuskPresence] menu"), Some(None));
+        assert_eq!(
+            presence_from_log("[Server Connector #1/INFO] (Minecraft) Connecting to mc.example.net, 25565"),
+            Some(Some("mc.example.net".into()))
+        );
+        assert_eq!(
+            presence_from_log("[Server Connector #1/INFO] Connecting to 10.0.0.2, 25570"),
+            Some(Some("10.0.0.2:25570".into()))
+        );
+        assert_eq!(presence_from_log("[Render thread/INFO] Connecting to the database"), None);
+        assert_eq!(presence_from_log("Loading 12 mods"), None);
     }
 }

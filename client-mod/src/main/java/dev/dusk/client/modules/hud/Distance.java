@@ -13,13 +13,12 @@ public class Distance extends TextHud {
     private final IntSetting digits = add(new IntSetting("digits", "Decimals", 0, 0, 4));
 
     public Distance() {
-        super("distance", "Distance", "", "Distance to the block under your crosshair, out to your render distance.");
+        super("distance", "Distance", "Distance to the block under your crosshair, out to your render distance.");
         setPosition(150, 137);
-        showLabel.set(false);
     }
 
     @Override
-    protected String value(HudContext ctx) {
+    protected String text(HudContext ctx) {
         var mc = ctx.mc();
         var camera = mc.getCameraEntity();
         if (camera == null || mc.player == null) return null;

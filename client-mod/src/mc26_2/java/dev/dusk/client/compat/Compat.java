@@ -1,5 +1,8 @@
 package dev.dusk.client.compat;
 
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.core.Holder;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
@@ -112,5 +115,15 @@ public final class Compat {
 
     private static net.minecraft.world.entity.player.PlayerSkin skin(Minecraft mc) {
         return SkinCompat.current(mc);
+    }
+
+    /** Speed, which 1.21.5 renamed from MOVEMENT_SPEED. */
+    public static Holder<MobEffect> speedEffect() {
+        return MobEffects.SPEED;
+    }
+
+    /** Whether sign textures use the 32x32 block sheet (front above back) 26.2 moved them to. */
+    public static boolean flatSignSheet() {
+        return true;
     }
 }

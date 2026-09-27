@@ -73,6 +73,15 @@ const MESSAGE_PAGE: i64 = 200;
 const MESSAGE_MAX_LEN: usize = 1000;
 const MESSAGE_RATE_WINDOW: i64 = 10;
 const MESSAGE_RATE_MAX: i64 = 20;
+/// What `presence` accepts as the server address ("mc.example.net:25565").
+const SERVER_MAX_LEN: usize = 64;
+/// Saved outfits per account.
+const MAX_OUTFITS: i64 = 20;
+const OUTFIT_NAME_MAX: usize = 32;
+/// Chat images (screenshots): size, daily uploads, and how long they're kept.
+const IMAGE_MAX_BYTES: usize = 8 * 1024 * 1024;
+const IMAGE_DAILY_MAX: i64 = 30;
+const IMAGE_TTL: i64 = 90 * 24 * 3600;
 
 // ── catalog ────────────────────────────────────────────────────────────────
 
@@ -176,11 +185,29 @@ fn open_db(path: &str) -> Connection {
          CREATE INDEX IF NOT EXISTS messages_pair ON messages (from_uuid, to_uuid, sent_at);
          CREATE TABLE IF NOT EXISTS message_reads (
            reader TEXT NOT NULL REFERENCES accounts(uuid), other TEXT NOT NULL REFERENCES accounts(uuid),
-           last_read_id INTEGER NOT NULL, PRIMARY KEY (reader, other));",
+           last_read_id INTEGER NOT NULL, PRIMARY KEY (reader, other));
+         CREATE TABLE IF NOT EXISTS blocks (
+           blocker TEXT NOT NULL REFERENCES accounts(uuid), blocked TEXT NOT NULL REFERENCES accounts(uuid),
+           created_at INTEGER NOT NULL, PRIMARY KEY (blocker, blocked));
+         CREATE TABLE IF NOT EXISTS outfits (
+           id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT NOT NULL REFERENCES accounts(uuid),
+           name TEXT NOT NULL, json TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE (uuid, name));
+         CREATE TABLE IF NOT EXISTS images (
+           id TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES accounts(uuid), mime TEXT NOT NULL,
+           bytes BLOB NOT NULL, created_at INTEGER NOT NULL);
+         CREATE INDEX IF NOT EXISTS images_by_owner ON images (owner, created_at);",
     )
     .expect("schema");
     add_column(&db, "accounts", "launches", "INTEGER NOT NULL DEFAULT 0");
     add_column(&db, "accounts", "playing", "TEXT");
+    add_column(&db, "accounts", "server", "TEXT");
+    // privacy: NULL = visible, else when "appear offline" went on (what
+    // friends see as last seen from then on)
+    add_column(&db, "accounts", "hidden_since", "INTEGER");
+    add_column(&db, "accounts", "share_activity", "INTEGER NOT NULL DEFAULT 1");
+    add_column(&db, "accounts", "friend_requests", "TEXT NOT NULL DEFAULT 'everyone'");
+    add_column(&db, "messages", "kind", "TEXT NOT NULL DEFAULT 'text'");
+    add_column(&db, "messages", "meta", "TEXT");
     db
 }
 
@@ -732,33 +759,58 @@ struct FriendEntry {
     /// The game version they're in — only while online.
     #[serde(skip_serializing_if = "Option::is_none")]
     playing: Option<String>,
+    /// The multiplayer server they're on — only while online and playing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    server: Option<String>,
     #[serde(rename = "lastSeen")]
     last_seen: i64,
     /// Messages from them this account hasn't fetched yet.
     unread: i64,
 }
 
+/// What a friend is allowed to see of an account's presence, after its
+/// privacy settings: "appear offline" freezes last seen at the moment it
+/// went on; not sharing activity hides the game and the server.
+struct Presence {
+    online: bool,
+    last_seen: i64,
+    playing: Option<String>,
+    server: Option<String>,
+}
+
+fn visible_presence(
+    last_seen: i64,
+    hidden_since: Option<i64>,
+    share_activity: bool,
+    playing: Option<String>,
+    server: Option<String>,
+) -> Presence {
+    let last_seen = hidden_since.map_or(last_seen, |h| h.min(last_seen));
+    let online = hidden_since.is_none() && now() - last_seen <= ONLINE_WINDOW;
+    let playing = playing.filter(|_| online && share_activity);
+    let server = server.filter(|_| playing.is_some());
+    Presence { online, last_seen, playing, server }
+}
+
 fn read_friends(db: &Connection, uuid: &str) -> Result<Vec<FriendEntry>, ApiError> {
     let mut st = db.prepare(
-        "SELECT acc.uuid, acc.username, acc.last_seen, acc.playing,
+        "SELECT acc.uuid, acc.username, acc.last_seen, acc.playing, acc.server, acc.hidden_since, acc.share_activity,
                 (SELECT COUNT(*) FROM messages m WHERE m.from_uuid = acc.uuid AND m.to_uuid = ?1
                    AND m.id > COALESCE((SELECT last_read_id FROM message_reads WHERE reader = ?1 AND other = acc.uuid), 0))
          FROM friendships f JOIN accounts acc ON acc.uuid = CASE WHEN f.a = ?1 THEN f.b ELSE f.a END
          WHERE f.a = ?1 OR f.b = ?1",
     )?;
-    let t = now();
     let mut out = st
         .query_map(params![uuid], |r| {
-            let last_seen: i64 = r.get(2)?;
-            let online = t - last_seen <= ONLINE_WINDOW;
-            let playing: Option<String> = r.get(3)?;
+            let p = visible_presence(r.get(2)?, r.get(5)?, r.get::<_, i64>(6)? != 0, r.get(3)?, r.get(4)?);
             Ok(FriendEntry {
                 uuid: r.get(0)?,
                 username: r.get(1)?,
-                online,
-                playing: playing.filter(|_| online),
-                last_seen,
-                unread: r.get(4)?,
+                online: p.online,
+                playing: p.playing,
+                server: p.server,
+                last_seen: p.last_seen,
+                unread: r.get(7)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -767,6 +819,12 @@ fn read_friends(db: &Connection, uuid: &str) -> Result<Vec<FriendEntry>, ApiErro
         b.online.cmp(&a.online).then_with(|| a.username.to_lowercase().cmp(&b.username.to_lowercase()))
     });
     Ok(out)
+}
+
+fn friend_uuids(db: &Connection, uuid: &str) -> Result<BTreeSet<String>, rusqlite::Error> {
+    let mut st = db.prepare("SELECT CASE WHEN a = ?1 THEN b ELSE a END FROM friendships WHERE a = ?1 OR b = ?1")?;
+    let out = st.query_map(params![uuid], |r| r.get(0))?.collect();
+    out
 }
 
 async fn list_friends(State(app): State<Shared>, headers: HeaderMap) -> ApiResult<Vec<FriendEntry>> {
@@ -780,6 +838,9 @@ struct PresenceBody {
     /// The game version being played, or absent when the game isn't running.
     #[serde(default)]
     playing: Option<String>,
+    /// The multiplayer server the game is connected to, if any.
+    #[serde(default)]
+    server: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -813,8 +874,9 @@ async fn presence(
                 .to_string()
         })
         .filter(|s| !s.is_empty());
+    let server = body.server.as_deref().and_then(clean_server).filter(|_| playing.is_some());
     let db = app.db.lock().unwrap();
-    db.execute("UPDATE accounts SET playing = ?1 WHERE uuid = ?2", params![playing, uuid])?;
+    db.execute("UPDATE accounts SET playing = ?1, server = ?2 WHERE uuid = ?3", params![playing, server, uuid])?;
     let friends = read_friends(&db, &uuid)?;
     let requests: i64 =
         db.query_row("SELECT COUNT(*) FROM friend_requests WHERE to_uuid = ?1", params![uuid], |r| r.get(0))?;
@@ -823,6 +885,16 @@ async fn presence(
         unread: friends.iter().map(|f| f.unread).sum(),
         online: friends.iter().filter(|f| f.online).count() as i64,
     }))
+}
+
+/// A server address as typed into the multiplayer screen: host name or IP,
+/// optional port. Anything else (spaces, schemes, paths) is refused.
+fn clean_server(raw: &str) -> Option<String> {
+    let s = raw.trim().to_lowercase();
+    let ok = !s.is_empty()
+        && s.len() <= SERVER_MAX_LEN
+        && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ':' | '[' | ']'));
+    ok.then_some(s)
 }
 
 async fn remove_friend(State(app): State<Shared>, headers: HeaderMap, Path(raw): Path<String>) -> ApiResult<Vec<FriendEntry>> {
@@ -946,6 +1018,9 @@ async fn send_friend_request(
     if are_friends(&tx, &uuid, &target)? {
         return Err(ApiError(StatusCode::CONFLICT, "You're already friends.".into()));
     }
+    if is_blocked(&tx, &uuid, &target)? {
+        return Err(ApiError(StatusCode::FORBIDDEN, "You blocked this player — unblock them first.".into()));
+    }
     // they already asked first — accept instead of leaving two requests in flight
     let reverse: Option<i64> = tx
         .query_row("SELECT id FROM friend_requests WHERE from_uuid = ?1 AND to_uuid = ?2", params![target, uuid], |r| r.get(0))
@@ -953,6 +1028,9 @@ async fn send_friend_request(
     if let Some(id) = reverse {
         accept_request_tx(&tx, id, &uuid)?;
     } else {
+        if !accepts_request_from(&tx, &target, &uuid)? {
+            return Err(ApiError(StatusCode::FORBIDDEN, "This player isn't accepting friend requests.".into()));
+        }
         let pending: i64 =
             tx.query_row("SELECT COUNT(*) FROM friend_requests WHERE from_uuid = ?1", params![uuid], |r| r.get(0))?;
         if pending >= MAX_PENDING_REQUESTS {
@@ -1011,8 +1089,30 @@ struct FriendProfile {
     online: bool,
     #[serde(rename = "lastSeen")]
     last_seen: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    playing: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    server: Option<String>,
     cape: Option<u32>,
     accessories: Vec<u32>,
+}
+
+/// Whether `to`'s privacy settings (and block list) let `from` send a friend
+/// request. A block is answered like "not accepting", so it can't be probed.
+fn accepts_request_from(db: &Connection, to: &str, from: &str) -> Result<bool, ApiError> {
+    if is_blocked(db, to, from)? {
+        return Ok(false);
+    }
+    let policy: String =
+        db.query_row("SELECT friend_requests FROM accounts WHERE uuid = ?1", params![to], |r| r.get(0))?;
+    Ok(match policy.as_str() {
+        "nobody" => false,
+        "friends_of_friends" => {
+            let theirs = friend_uuids(db, to)?;
+            friend_uuids(db, from)?.iter().any(|f| theirs.contains(f))
+        }
+        _ => true,
+    })
 }
 
 fn not_friends() -> ApiError {
@@ -1031,8 +1131,15 @@ async fn friend_profile(
     if target != uuid && !are_friends(&db, &uuid, &target)? {
         return Err(not_friends());
     }
-    let (username, last_seen): (String, i64) = db
-        .query_row("SELECT username, last_seen FROM accounts WHERE uuid = ?1", params![target], |r| Ok((r.get(0)?, r.get(1)?)))
+    let (username, p): (String, Presence) = db
+        .query_row(
+            "SELECT username, last_seen, hidden_since, share_activity, playing, server FROM accounts WHERE uuid = ?1",
+            params![target],
+            |r| {
+                let p = visible_presence(r.get(1)?, r.get(2)?, r.get::<_, i64>(3)? != 0, r.get(4)?, r.get(5)?);
+                Ok((r.get(0)?, p))
+            },
+        )
         .optional()?
         .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "no such Dusk player".into()))?;
     let lo = read_loadout(&db, &target)?;
@@ -1042,7 +1149,16 @@ async fn friend_profile(
         .and_then(Value::as_array)
         .map(|a| a.iter().filter_map(Value::as_u64).filter_map(|n| u32::try_from(n).ok()).collect())
         .unwrap_or_default();
-    Ok(Json(FriendProfile { uuid: target, username, online: now() - last_seen <= ONLINE_WINDOW, last_seen, cape, accessories }))
+    Ok(Json(FriendProfile {
+        uuid: target,
+        username,
+        online: p.online,
+        last_seen: p.last_seen,
+        playing: p.playing,
+        server: p.server,
+        cape,
+        accessories,
+    }))
 }
 
 // ── chat ───────────────────────────────────────────────────────────────────
@@ -1057,6 +1173,35 @@ struct MessageEntry {
     body: String,
     #[serde(rename = "sentAt")]
     sent_at: i64,
+    /// text | invite (meta: server, version) | image (meta: image id) |
+    /// gift (meta: item, name, kind)
+    kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    meta: Option<Value>,
+}
+
+fn insert_message(
+    db: &Connection,
+    from: &str,
+    to: &str,
+    body: &str,
+    kind: &str,
+    meta: Option<&Value>,
+) -> Result<MessageEntry, rusqlite::Error> {
+    let t = now();
+    db.execute(
+        "INSERT INTO messages (from_uuid, to_uuid, body, sent_at, kind, meta) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![from, to, body, t, kind, meta.map(Value::to_string)],
+    )?;
+    Ok(MessageEntry {
+        id: db.last_insert_rowid(),
+        from_uuid: from.to_string(),
+        to_uuid: to.to_string(),
+        body: body.to_string(),
+        sent_at: t,
+        kind: kind.to_string(),
+        meta: meta.cloned(),
+    })
 }
 
 #[derive(Deserialize)]
@@ -1090,16 +1235,25 @@ fn read_messages(db: &Connection, me: &str, other: &str, after_id: i64) -> Resul
     let pair = "((from_uuid = ?1 AND to_uuid = ?2) OR (from_uuid = ?2 AND to_uuid = ?1)) AND id > ?3";
     let sql = if after_id == 0 {
         format!(
-            "SELECT * FROM (SELECT id, from_uuid, to_uuid, body, sent_at FROM messages WHERE {pair}
+            "SELECT * FROM (SELECT id, from_uuid, to_uuid, body, sent_at, kind, meta FROM messages WHERE {pair}
              ORDER BY id DESC LIMIT ?4) ORDER BY id ASC"
         )
     } else {
-        format!("SELECT id, from_uuid, to_uuid, body, sent_at FROM messages WHERE {pair} ORDER BY id ASC LIMIT ?4")
+        format!("SELECT id, from_uuid, to_uuid, body, sent_at, kind, meta FROM messages WHERE {pair} ORDER BY id ASC LIMIT ?4")
     };
     let mut st = db.prepare(&sql)?;
     let out = st
         .query_map(params![me, other, after_id, MESSAGE_PAGE], |r| {
-            Ok(MessageEntry { id: r.get(0)?, from_uuid: r.get(1)?, to_uuid: r.get(2)?, body: r.get(3)?, sent_at: r.get(4)? })
+            let meta: Option<String> = r.get(6)?;
+            Ok(MessageEntry {
+                id: r.get(0)?,
+                from_uuid: r.get(1)?,
+                to_uuid: r.get(2)?,
+                body: r.get(3)?,
+                sent_at: r.get(4)?,
+                kind: r.get(5)?,
+                meta: meta.and_then(|m| serde_json::from_str(&m).ok()),
+            })
         })?
         .collect::<Result<Vec<_>, _>>()?;
     if let Some(last) = out.last() {
@@ -1114,7 +1268,52 @@ fn read_messages(db: &Connection, me: &str, other: &str, after_id: i64) -> Resul
 
 #[derive(Deserialize)]
 struct SendMessage {
+    #[serde(default)]
     body: String,
+    /// text (default) | invite | image
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
+    meta: Option<Value>,
+}
+
+/// Check a message the client composed; invites and images get a default
+/// body so older launchers still show something readable.
+fn compose_message(db: &Connection, from: &str, payload: &SendMessage) -> Result<(String, String, Option<Value>), ApiError> {
+    let text = payload.body.trim().to_string();
+    if text.chars().count() > MESSAGE_MAX_LEN {
+        return Err(bad(format!("Messages are limited to {MESSAGE_MAX_LEN} characters.")));
+    }
+    let field = |k: &str| payload.meta.as_ref().and_then(|m| m.get(k)).and_then(Value::as_str);
+    match payload.kind.as_deref().unwrap_or("text") {
+        "text" => {
+            if text.is_empty() {
+                return Err(bad("Type a message first."));
+            }
+            Ok((text, "text".into(), None))
+        }
+        "invite" => {
+            let server = field("server").and_then(clean_server).ok_or_else(|| bad("invite needs a server address"))?;
+            let version = field("version")
+                .map(|v| v.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_')).take(PLAYING_MAX_LEN).collect::<String>())
+                .filter(|v| !v.is_empty());
+            let body = if text.is_empty() { format!("Join me on {server}") } else { text };
+            Ok((body, "invite".into(), Some(json!({ "server": server, "version": version }))))
+        }
+        "image" => {
+            let id = field("image").ok_or_else(|| bad("image message needs an image id"))?;
+            let mine: bool = db
+                .query_row("SELECT 1 FROM images WHERE id = ?1 AND owner = ?2", params![id, from], |_| Ok(true))
+                .optional()?
+                .unwrap_or(false);
+            if !mine {
+                return Err(ApiError(StatusCode::NOT_FOUND, "That image has expired — send it again.".into()));
+            }
+            let body = if text.is_empty() { "Sent a screenshot".to_string() } else { text };
+            Ok((body, "image".into(), Some(json!({ "image": id }))))
+        }
+        _ => Err(bad("unknown message kind")),
+    }
 }
 
 async fn send_message(
@@ -1125,18 +1324,12 @@ async fn send_message(
 ) -> ApiResult<MessageEntry> {
     let uuid = authed(&app, &headers)?;
     let target = dashed_uuid(&raw).ok_or_else(|| bad("bad uuid"))?;
-    let text = payload.body.trim();
-    if text.is_empty() {
-        return Err(bad("Type a message first."));
-    }
-    if text.chars().count() > MESSAGE_MAX_LEN {
-        return Err(bad(format!("Messages are limited to {MESSAGE_MAX_LEN} characters.")));
-    }
     let mut db = app.db.lock().unwrap();
     let tx = db.transaction()?;
     if !are_friends(&tx, &uuid, &target)? {
         return Err(not_friends());
     }
+    let (body, kind, meta) = compose_message(&tx, &uuid, &payload)?;
     let recent: i64 = tx.query_row(
         "SELECT COUNT(*) FROM messages WHERE from_uuid = ?1 AND sent_at > ?2",
         params![uuid, now() - MESSAGE_RATE_WINDOW],
@@ -1145,14 +1338,343 @@ async fn send_message(
     if recent >= MESSAGE_RATE_MAX {
         return Err(ApiError(StatusCode::TOO_MANY_REQUESTS, "You're sending messages too fast — wait a few seconds.".into()));
     }
-    let t = now();
-    tx.execute(
-        "INSERT INTO messages (from_uuid, to_uuid, body, sent_at) VALUES (?1, ?2, ?3, ?4)",
-        params![uuid, target, text, t],
-    )?;
-    let id = tx.last_insert_rowid();
+    let msg = insert_message(&tx, &uuid, &target, &body, &kind, meta.as_ref())?;
     tx.commit()?;
-    Ok(Json(MessageEntry { id, from_uuid: uuid, to_uuid: target, body: text.to_string(), sent_at: t }))
+    Ok(Json(msg))
+}
+
+// ── privacy ────────────────────────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Privacy {
+    /// friends see this account as offline, last seen when this went on
+    appear_offline: bool,
+    /// friends see the game version and server being played
+    share_activity: bool,
+    /// who may send a friend request: everyone | friends_of_friends | nobody
+    friend_requests: String,
+}
+
+fn read_privacy(db: &Connection, uuid: &str) -> Result<Privacy, rusqlite::Error> {
+    db.query_row(
+        "SELECT hidden_since, share_activity, friend_requests FROM accounts WHERE uuid = ?1",
+        params![uuid],
+        |r| {
+            Ok(Privacy {
+                appear_offline: r.get::<_, Option<i64>>(0)?.is_some(),
+                share_activity: r.get::<_, i64>(1)? != 0,
+                friend_requests: r.get(2)?,
+            })
+        },
+    )
+}
+
+async fn get_privacy(State(app): State<Shared>, headers: HeaderMap) -> ApiResult<Privacy> {
+    let uuid = authed(&app, &headers)?;
+    let db = app.db.lock().unwrap();
+    Ok(Json(read_privacy(&db, &uuid)?))
+}
+
+async fn put_privacy(State(app): State<Shared>, headers: HeaderMap, Json(body): Json<Privacy>) -> ApiResult<Privacy> {
+    let uuid = authed(&app, &headers)?;
+    if !matches!(body.friend_requests.as_str(), "everyone" | "friends_of_friends" | "nobody") {
+        return Err(bad("friendRequests must be everyone, friends_of_friends or nobody"));
+    }
+    let db = app.db.lock().unwrap();
+    // keep the original moment when it was already on, so toggling other
+    // settings doesn't move "last seen"
+    db.execute(
+        "UPDATE accounts SET hidden_since = CASE WHEN ?1 THEN COALESCE(hidden_since, ?2) ELSE NULL END,
+                             share_activity = ?3, friend_requests = ?4 WHERE uuid = ?5",
+        params![body.appear_offline, now(), body.share_activity, body.friend_requests, uuid],
+    )?;
+    Ok(Json(read_privacy(&db, &uuid)?))
+}
+
+// ── blocks ─────────────────────────────────────────────────────────────────
+
+fn is_blocked(db: &Connection, blocker: &str, blocked: &str) -> Result<bool, rusqlite::Error> {
+    Ok(db
+        .query_row("SELECT 1 FROM blocks WHERE blocker = ?1 AND blocked = ?2", params![blocker, blocked], |_| Ok(true))
+        .optional()?
+        .unwrap_or(false))
+}
+
+#[derive(Serialize)]
+struct BlockedEntry {
+    uuid: String,
+    username: String,
+}
+
+fn read_blocks(db: &Connection, uuid: &str) -> Result<Vec<BlockedEntry>, ApiError> {
+    let mut st = db.prepare(
+        "SELECT b.blocked, a.username FROM blocks b JOIN accounts a ON a.uuid = b.blocked
+         WHERE b.blocker = ?1 ORDER BY a.username COLLATE NOCASE",
+    )?;
+    let out = st
+        .query_map(params![uuid], |r| Ok(BlockedEntry { uuid: r.get(0)?, username: r.get(1)? }))?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(out)
+}
+
+async fn list_blocks(State(app): State<Shared>, headers: HeaderMap) -> ApiResult<Vec<BlockedEntry>> {
+    let uuid = authed(&app, &headers)?;
+    let db = app.db.lock().unwrap();
+    Ok(Json(read_blocks(&db, &uuid)?))
+}
+
+/// Block a player: ends the friendship and any request in either direction;
+/// they can't send a new one and see this account as not accepting requests.
+fn block_tx(db: &Connection, uuid: &str, target: &str) -> Result<(), ApiError> {
+    if target == uuid {
+        return Err(bad("You can't block yourself."));
+    }
+    let (a, b) = friend_pair(uuid, target);
+    db.execute("DELETE FROM friendships WHERE a = ?1 AND b = ?2", params![a, b])?;
+    db.execute(
+        "DELETE FROM friend_requests WHERE (from_uuid = ?1 AND to_uuid = ?2) OR (from_uuid = ?2 AND to_uuid = ?1)",
+        params![uuid, target],
+    )?;
+    db.execute(
+        "INSERT OR IGNORE INTO blocks (blocker, blocked, created_at) VALUES (?1, ?2, ?3)",
+        params![uuid, target, now()],
+    )?;
+    Ok(())
+}
+
+async fn block_player(
+    State(app): State<Shared>,
+    headers: HeaderMap,
+    Json(body): Json<FriendRequestBody>,
+) -> ApiResult<Vec<BlockedEntry>> {
+    let uuid = authed(&app, &headers)?;
+    let mut db = app.db.lock().unwrap();
+    let tx = db.transaction()?;
+    let target = resolve_account(&tx, &body)?;
+    block_tx(&tx, &uuid, &target)?;
+    let out = read_blocks(&tx, &uuid)?;
+    tx.commit()?;
+    Ok(Json(out))
+}
+
+async fn unblock_player(State(app): State<Shared>, headers: HeaderMap, Path(raw): Path<String>) -> ApiResult<Vec<BlockedEntry>> {
+    let uuid = authed(&app, &headers)?;
+    let target = dashed_uuid(&raw).ok_or_else(|| bad("bad uuid"))?;
+    let db = app.db.lock().unwrap();
+    db.execute("DELETE FROM blocks WHERE blocker = ?1 AND blocked = ?2", params![uuid, target])?;
+    Ok(Json(read_blocks(&db, &uuid)?))
+}
+
+// ── gifts ──────────────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct Gift {
+    to: String,
+    id: u32,
+}
+
+/// Buy a cosmetic for a friend: the sender pays, the friend owns it, and the
+/// conversation gets a gift message so they find out.
+fn gift_tx(db: &Connection, item: &PricedItem, from: &str, to: &str) -> Result<(i64, MessageEntry), ApiError> {
+    if to == from {
+        return Err(bad("Buy it for yourself in the store instead."));
+    }
+    if !are_friends(db, from, to)? {
+        return Err(not_friends());
+    }
+    let already: bool = db
+        .query_row("SELECT 1 FROM owned WHERE uuid = ?1 AND item = ?2", params![to, item.id], |_| Ok(true))
+        .optional()?
+        .unwrap_or(false);
+    if already {
+        return Err(ApiError(StatusCode::CONFLICT, format!("They already own {}.", item.name)));
+    }
+    let coins: i64 = db.query_row("SELECT coins FROM accounts WHERE uuid = ?1", params![from], |r| r.get(0))?;
+    if coins < item.price {
+        return Err(ApiError(
+            StatusCode::PAYMENT_REQUIRED,
+            format!("{} costs {} coins; you have {coins}", item.name, item.price),
+        ));
+    }
+    let t = now();
+    db.execute("UPDATE accounts SET coins = coins - ?1 WHERE uuid = ?2", params![item.price, from])?;
+    db.execute("INSERT INTO owned (uuid, item, acquired_at) VALUES (?1, ?2, ?3)", params![to, item.id, t])?;
+    db.execute(
+        "INSERT INTO ledger (uuid, delta, reason, at) VALUES (?1, ?2, ?3, ?4)",
+        params![from, -item.price, format!("gift:{}:{to}", item.id), t],
+    )?;
+    let meta = json!({ "item": item.id, "name": item.name, "kind": item.kind });
+    let body = format!("Sent you {} as a gift", item.name);
+    let msg = insert_message(db, from, to, &body, "gift", Some(&meta))?;
+    Ok((coins - item.price, msg))
+}
+
+#[derive(Serialize)]
+struct Gifted {
+    coins: i64,
+    message: MessageEntry,
+}
+
+async fn gift(State(app): State<Shared>, headers: HeaderMap, Json(body): Json<Gift>) -> ApiResult<Gifted> {
+    let uuid = authed(&app, &headers)?;
+    let to = dashed_uuid(&body.to).ok_or_else(|| bad("bad uuid"))?;
+    let item = app.catalog.get(&body.id).ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "no such cosmetic".into()))?;
+    let mut db = app.db.lock().unwrap();
+    let tx = db.transaction()?;
+    let (coins, message) = gift_tx(&tx, item, &uuid, &to)?;
+    tx.commit()?;
+    tracing::info!("{uuid} gifted {} to {to}", item.id);
+    Ok(Json(Gifted { coins, message }))
+}
+
+// ── outfits ────────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Outfit {
+    id: i64,
+    name: String,
+    loadout: Value,
+    created_at: i64,
+}
+
+#[derive(Deserialize)]
+struct NewOutfit {
+    name: String,
+    loadout: Map<String, Value>,
+}
+
+fn read_outfits(db: &Connection, uuid: &str) -> Result<Vec<Outfit>, ApiError> {
+    let mut st = db.prepare("SELECT id, name, json, created_at FROM outfits WHERE uuid = ?1 ORDER BY created_at, id")?;
+    let out = st
+        .query_map(params![uuid], |r| {
+            let json: String = r.get(2)?;
+            Ok(Outfit {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                loadout: serde_json::from_str(&json).unwrap_or(Value::Object(Map::new())),
+                created_at: r.get(3)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(out)
+}
+
+async fn list_outfits(State(app): State<Shared>, headers: HeaderMap) -> ApiResult<Vec<Outfit>> {
+    let uuid = authed(&app, &headers)?;
+    let db = app.db.lock().unwrap();
+    Ok(Json(read_outfits(&db, &uuid)?))
+}
+
+/// Save a loadout under a name; saving under a name already used replaces it.
+async fn save_outfit(State(app): State<Shared>, headers: HeaderMap, Json(body): Json<NewOutfit>) -> ApiResult<Vec<Outfit>> {
+    let uuid = authed(&app, &headers)?;
+    let name = body.name.trim();
+    if name.is_empty() || name.chars().count() > OUTFIT_NAME_MAX {
+        return Err(bad(format!("Outfit names are 1–{OUTFIT_NAME_MAX} characters.")));
+    }
+    if body.loadout.len() > 32 {
+        return Err(bad("too many slots"));
+    }
+    // ownership is checked again when an outfit is worn (PUT /v1/me/loadout)
+    loadout_ids(&body.loadout)?;
+    let db = app.db.lock().unwrap();
+    let exists: bool = db
+        .query_row("SELECT 1 FROM outfits WHERE uuid = ?1 AND name = ?2", params![uuid, name], |_| Ok(true))
+        .optional()?
+        .unwrap_or(false);
+    if !exists {
+        let count: i64 = db.query_row("SELECT COUNT(*) FROM outfits WHERE uuid = ?1", params![uuid], |r| r.get(0))?;
+        if count >= MAX_OUTFITS {
+            return Err(bad(format!("You can save up to {MAX_OUTFITS} outfits — delete one first.")));
+        }
+    }
+    db.execute(
+        "INSERT INTO outfits (uuid, name, json, created_at) VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(uuid, name) DO UPDATE SET json = excluded.json",
+        params![uuid, name, Value::Object(body.loadout).to_string(), now()],
+    )?;
+    Ok(Json(read_outfits(&db, &uuid)?))
+}
+
+async fn delete_outfit(State(app): State<Shared>, headers: HeaderMap, Path(id): Path<i64>) -> ApiResult<Vec<Outfit>> {
+    let uuid = authed(&app, &headers)?;
+    let db = app.db.lock().unwrap();
+    db.execute("DELETE FROM outfits WHERE id = ?1 AND uuid = ?2", params![id, uuid])?;
+    Ok(Json(read_outfits(&db, &uuid)?))
+}
+
+// ── images ─────────────────────────────────────────────────────────────────
+
+fn image_mime(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("image/png")
+    } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+        Some("image/jpeg")
+    } else {
+        None
+    }
+}
+
+#[derive(Serialize)]
+struct Uploaded {
+    id: String,
+}
+
+/// Store a screenshot for a chat message. The raw PNG/JPEG is the body; the
+/// id comes back to be sent as an `image` message.
+async fn upload_image(State(app): State<Shared>, headers: HeaderMap, body: axum::body::Bytes) -> ApiResult<Uploaded> {
+    let uuid = authed(&app, &headers)?;
+    if body.len() > IMAGE_MAX_BYTES {
+        return Err(bad("Screenshots are limited to 8 MB."));
+    }
+    let mime = image_mime(&body).ok_or_else(|| bad("Only PNG and JPEG images can be sent."))?;
+    let db = app.db.lock().unwrap();
+    let t = now();
+    let today: i64 = db.query_row(
+        "SELECT COUNT(*) FROM images WHERE owner = ?1 AND created_at > ?2",
+        params![uuid, t - 24 * 3600],
+        |r| r.get(0),
+    )?;
+    if today >= IMAGE_DAILY_MAX {
+        return Err(ApiError(StatusCode::TOO_MANY_REQUESTS, "You've sent a lot of screenshots today — try again tomorrow.".into()));
+    }
+    let mut raw = [0u8; 16];
+    rand::thread_rng().fill_bytes(&mut raw);
+    let id = hex::encode(raw);
+    db.execute(
+        "INSERT INTO images (id, owner, mime, bytes, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![id, uuid, mime, body.as_ref(), t],
+    )?;
+    db.execute("DELETE FROM images WHERE created_at < ?1", params![t - IMAGE_TTL])?;
+    Ok(Json(Uploaded { id }))
+}
+
+/// An image, for its uploader and whoever it was sent to in chat.
+async fn get_image(State(app): State<Shared>, headers: HeaderMap, Path(id): Path<String>) -> Result<Response, ApiError> {
+    let uuid = authed(&app, &headers)?;
+    let db = app.db.lock().unwrap();
+    let row: Option<(String, String, Vec<u8>)> = db
+        .query_row("SELECT owner, mime, bytes FROM images WHERE id = ?1", params![id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .optional()?;
+    let gone = || ApiError(StatusCode::NOT_FOUND, "That image has expired.".into());
+    let (owner, mime, bytes) = row.ok_or_else(gone)?;
+    if owner != uuid {
+        let shared: bool = db
+            .query_row(
+                "SELECT 1 FROM messages WHERE kind = 'image' AND from_uuid = ?1 AND to_uuid = ?2
+                   AND json_extract(meta, '$.image') = ?3 LIMIT 1",
+                params![owner, uuid, id],
+                |_| Ok(true),
+            )
+            .optional()?
+            .unwrap_or(false);
+        if !shared {
+            return Err(gone());
+        }
+    }
+    Ok(([(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, "private, max-age=86400".into())], bytes).into_response())
 }
 
 // ── public ─────────────────────────────────────────────────────────────────
@@ -1250,6 +1772,18 @@ async fn main() {
         .route("/v1/friends/requests/{id}/decline", post(decline_friend_request))
         .route("/v1/profile/{uuid}", get(friend_profile))
         .route("/v1/messages/{uuid}", get(get_messages).post(send_message))
+        .route("/v1/me/privacy", get(get_privacy).put(put_privacy))
+        .route("/v1/me/gift", post(gift))
+        .route("/v1/me/outfits", get(list_outfits).post(save_outfit))
+        .route("/v1/me/outfits/{id}", delete(delete_outfit))
+        .route("/v1/blocks", get(list_blocks).post(block_player))
+        .route("/v1/blocks/{uuid}", delete(unblock_player))
+        .route(
+            "/v1/images",
+            // the one route that takes more than a small JSON body
+            post(upload_image).layer(axum::extract::DefaultBodyLimit::max(IMAGE_MAX_BYTES + 1024)),
+        )
+        .route("/v1/images/{id}", get(get_image))
         .layer(axum::extract::DefaultBodyLimit::max(16 * 1024))
         .with_state(app);
 
@@ -1437,7 +1971,6 @@ mod tests {
     #[test]
     fn friends_list_puts_online_first() {
         let db = open_db(":memory:");
-        const C: &str = "cccccccc-0000-0000-0000-000000000003";
         issue_token(&db, A, "Me").unwrap();
         issue_token(&db, B, "Zed").unwrap();
         issue_token(&db, C, "Amy").unwrap();
@@ -1467,5 +2000,127 @@ mod tests {
         add_column(&db, "accounts", "launches", "INTEGER NOT NULL DEFAULT 0");
         add_column(&db, "accounts", "launches", "INTEGER NOT NULL DEFAULT 0");
         db.query_row("SELECT launches FROM accounts", [], |_| Ok(())).optional().unwrap();
+    }
+
+    const C: &str = "cccccccc-0000-0000-0000-000000000003";
+
+    fn three() -> Connection {
+        let db = open_db(":memory:");
+        issue_token(&db, A, "Alice").unwrap();
+        issue_token(&db, B, "Bob").unwrap();
+        issue_token(&db, C, "Carol").unwrap();
+        db
+    }
+
+    #[test]
+    fn appear_offline_hides_presence_and_freezes_last_seen() {
+        let db = three();
+        befriend(&db, A, B);
+        db.execute("UPDATE accounts SET playing = '1.21.4', server = 'mc.example.net' WHERE uuid = ?1", params![B]).unwrap();
+        let seen = &read_friends(&db, A).unwrap()[0];
+        assert!(seen.online);
+        assert_eq!(seen.server.as_deref(), Some("mc.example.net"));
+
+        db.execute("UPDATE accounts SET share_activity = 0 WHERE uuid = ?1", params![B]).unwrap();
+        let seen = &read_friends(&db, A).unwrap()[0];
+        assert!(seen.online && seen.playing.is_none() && seen.server.is_none());
+
+        db.execute("UPDATE accounts SET hidden_since = 100, share_activity = 1 WHERE uuid = ?1", params![B]).unwrap();
+        let seen = &read_friends(&db, A).unwrap()[0];
+        assert!(!seen.online && seen.playing.is_none());
+        assert_eq!(seen.last_seen, 100);
+    }
+
+    #[test]
+    fn friend_request_policy() {
+        let db = three();
+        assert!(accepts_request_from(&db, B, A).unwrap());
+        db.execute("UPDATE accounts SET friend_requests = 'nobody' WHERE uuid = ?1", params![B]).unwrap();
+        assert!(!accepts_request_from(&db, B, A).unwrap());
+        db.execute("UPDATE accounts SET friend_requests = 'friends_of_friends' WHERE uuid = ?1", params![B]).unwrap();
+        assert!(!accepts_request_from(&db, B, A).unwrap());
+        befriend(&db, A, C);
+        befriend(&db, B, C);
+        assert!(accepts_request_from(&db, B, A).unwrap());
+    }
+
+    #[test]
+    fn blocking_ends_friendship_and_requests() {
+        let db = three();
+        befriend(&db, A, B);
+        db.execute("INSERT INTO friend_requests (from_uuid, to_uuid, created_at) VALUES (?1, ?2, 0)", params![B, A]).unwrap();
+        block_tx(&db, A, B).unwrap();
+        assert!(!are_friends(&db, A, B).unwrap());
+        assert!(read_requests(&db, A).unwrap().incoming.is_empty());
+        // the blocked side just sees someone not accepting requests
+        assert!(!accepts_request_from(&db, A, B).unwrap());
+        assert_eq!(read_blocks(&db, A).unwrap()[0].username, "Bob");
+        assert!(block_tx(&db, A, A).is_err());
+    }
+
+    #[test]
+    fn gift_moves_coins_and_ownership() {
+        let db = three();
+        let cat = load_catalog();
+        let item = &cat[&8];
+        assert!(gift_tx(&db, item, A, B).is_err(), "strangers can't gift");
+        befriend(&db, A, B);
+        assert!(gift_tx(&db, item, A, B).is_err(), "no coins");
+        grant(&db, A, 1000, "test").unwrap();
+        let (coins, msg) = gift_tx(&db, item, A, B).unwrap();
+        assert_eq!(coins, 1000 - item.price);
+        assert_eq!(msg.kind, "gift");
+        assert_eq!(owned_ids(&db, B).unwrap(), vec![8]);
+        assert!(owned_ids(&db, A).unwrap().is_empty());
+        assert!(gift_tx(&db, item, A, B).is_err(), "already owned");
+        let got = read_messages(&db, B, A, 0).unwrap();
+        assert_eq!(got[0].meta.as_ref().unwrap()["item"], 8);
+    }
+
+    #[test]
+    fn invite_and_image_messages_validate() {
+        let db = three();
+        let invite = SendMessage {
+            body: String::new(),
+            kind: Some("invite".into()),
+            meta: Some(json!({ "server": "Play.Example.net:25565", "version": "1.21.4" })),
+        };
+        let (body, kind, meta) = compose_message(&db, A, &invite).unwrap();
+        assert_eq!(kind, "invite");
+        assert_eq!(body, "Join me on play.example.net:25565");
+        assert_eq!(meta.unwrap()["version"], "1.21.4");
+        let bad_invite = SendMessage { body: String::new(), kind: Some("invite".into()), meta: Some(json!({ "server": "http://x y" })) };
+        assert!(compose_message(&db, A, &bad_invite).is_err());
+
+        let image = SendMessage { body: String::new(), kind: Some("image".into()), meta: Some(json!({ "image": "abc" })) };
+        assert!(compose_message(&db, A, &image).is_err(), "not uploaded");
+        db.execute("INSERT INTO images (id, owner, mime, bytes, created_at) VALUES ('abc', ?1, 'image/png', x'00', 0)", params![A]).unwrap();
+        assert!(compose_message(&db, B, &image).is_err(), "someone else's image");
+        let (_, kind, meta) = compose_message(&db, A, &image).unwrap();
+        insert_message(&db, A, B, "Sent a screenshot", &kind, meta.as_ref()).unwrap();
+        let shared: bool = db
+            .query_row(
+                "SELECT 1 FROM messages WHERE kind = 'image' AND from_uuid = ?1 AND to_uuid = ?2 AND json_extract(meta, '$.image') = ?3",
+                params![A, B, "abc"],
+                |_| Ok(true),
+            )
+            .unwrap();
+        assert!(shared);
+    }
+
+    #[test]
+    fn server_addresses_are_cleaned() {
+        assert_eq!(clean_server(" MC.Hypixel.net ").as_deref(), Some("mc.hypixel.net"));
+        assert_eq!(clean_server("[::1]:25565").as_deref(), Some("[::1]:25565"));
+        assert!(clean_server("a b").is_none());
+        assert!(clean_server("x/../y").is_none());
+        assert!(clean_server("").is_none());
+    }
+
+    #[test]
+    fn image_sniffing() {
+        assert_eq!(image_mime(b"\x89PNG\r\n\x1a\nrest"), Some("image/png"));
+        assert_eq!(image_mime(&[0xff, 0xd8, 0xff, 0xe0]), Some("image/jpeg"));
+        assert_eq!(image_mime(b"GIF89a"), None);
     }
 }

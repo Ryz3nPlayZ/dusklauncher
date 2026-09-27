@@ -188,6 +188,8 @@ export interface Friend {
   online: boolean;
   /** the game version they're in; only while online */
   playing?: string;
+  /** the multiplayer server they're on — joinable; only while playing */
+  server?: string;
   /** unix seconds */
   lastSeen: number;
   /** messages from them not yet fetched */
@@ -225,6 +227,8 @@ export interface FriendProfile {
   online: boolean;
   /** unix seconds */
   lastSeen: number;
+  playing?: string;
+  server?: string;
   cape: number | null;
   accessories: number[];
 }
@@ -237,6 +241,62 @@ export interface ChatMessage {
   body: string;
   /** unix seconds */
   sentAt: number;
+  kind: 'text' | 'invite' | 'image' | 'gift';
+  /** invite: {server, version?} · image: {image} · gift: {item, name, kind} */
+  meta?: { server?: string; version?: string | null; image?: string; item?: number; name?: string; kind?: string };
+}
+
+/** who can see what (GET/PUT /v1/me/privacy) */
+export interface Privacy {
+  /** friends see this account offline, last seen when it went on */
+  appearOffline: boolean;
+  /** friends see the version and server being played */
+  shareActivity: boolean;
+  friendRequests: 'everyone' | 'friends_of_friends' | 'nobody';
+}
+
+export interface BlockedPlayer {
+  uuid: string;
+  username: string;
+}
+
+/** a saved, named loadout (GET/POST /v1/me/outfits) */
+export interface Outfit {
+  id: number;
+  name: string;
+  loadout: Loadout;
+  /** unix seconds */
+  createdAt: number;
+}
+
+/** a Microsoft account signed in on this machine, for the switcher */
+export interface SavedAccount {
+  uuid: string;
+  username: string;
+  active: boolean;
+}
+
+/** what the running game is doing (event `game-activity`) */
+export interface GameActivity {
+  profileId: string;
+  profileName: string;
+  gameVersion: string;
+  /** the multiplayer server, from the game log; null in singleplayer / menus */
+  server: string | null;
+  /** unix seconds */
+  startedAt: number;
+}
+
+export interface Screenshot {
+  /** absolute path, fed to `convertFileSrc` */
+  path: string;
+  name: string;
+  profileId: string;
+  profileName: string;
+  /** unix millis */
+  takenAt: number;
+  size: number;
+  favorite: boolean;
 }
 
 export interface Version {
@@ -388,6 +448,22 @@ export interface World {
   size: number;
 }
 
+/** a clip or replay the Dusk client recorded (an `.mcpr`) */
+export interface Recording {
+  path: string;
+  name: string;
+  kind: 'clip' | 'replay';
+  profileId: string;
+  profileName: string;
+  /** unix millis */
+  recordedAt: number;
+  size: number;
+  durationMs: number;
+  /** server address, '' for singleplayer */
+  server: string;
+  mcVersion: string;
+}
+
 /** subfolders `show_in_folder` will open (mirrors the Rust allow-list) */
 export type ProfileFolder =
   | ''
@@ -402,6 +478,8 @@ export interface AppInfo {
   launcherVersion: string;
   os: string;
   dataDir: string;
+  /** this build can show Discord Rich Presence */
+  discordAvailable: boolean;
 }
 
 export interface Wallpaper {
@@ -431,6 +509,11 @@ export interface Settings {
   authClientId: string;
   authMode: string;
   customBackground: string;
+  discordRpc: boolean;
+  notifyFriendsOnline: boolean;
+  notifyMessages: boolean;
+  clock24h: boolean;
+  warnOnLinks: boolean;
 }
 
 export interface Progress {
@@ -709,6 +792,7 @@ const fixtures: Record<string, unknown> = {
     launcherVersion: '0.1.0',
     os: 'Browser (preview)',
     dataDir: '— not running under Tauri —',
+    discordAvailable: false,
   } satisfies AppInfo,
   get_settings: {
     theme: 'overworld',
@@ -729,6 +813,11 @@ const fixtures: Record<string, unknown> = {
     authClientId: '',
     authMode: 'official',
     customBackground: '',
+    discordRpc: true,
+    notifyFriendsOnline: true,
+    notifyMessages: true,
+    clock24h: false,
+    warnOnLinks: true,
   } satisfies Settings,
 };
 
@@ -753,6 +842,14 @@ const sideEffects = new Set([
   'import_wallpaper',
   'remove_wallpaper',
   'set_account_cape',
+  'switch_account',
+  'remove_account',
+  'delete_screenshot',
+  'reveal_screenshot',
+  'delete_recording',
+  'reveal_recording',
+  'send_screenshot',
+  'notify',
 ]);
 
 /* the preview's mod folders — one list per profile+kind, so enable/remove
@@ -837,7 +934,7 @@ function previewCosmetics(): Promise<CosmeticsCatalog> {
    Times are unix seconds, as the service sends them. */
 const previewNow = () => Math.floor(Date.now() / 1000);
 let previewFriends: Friend[] = [
-  { uuid: 'friend-nocturne', username: 'Nocturne', online: true, playing: '1.21.4', lastSeen: previewNow(), unread: 1 },
+  { uuid: 'friend-nocturne', username: 'Nocturne', online: true, playing: '1.21.4', server: 'play.dusk-smp.net', lastSeen: previewNow(), unread: 1 },
   { uuid: 'friend-sable', username: 'Sable', online: true, lastSeen: previewNow(), unread: 0 },
   { uuid: 'friend-ashen', username: 'Ashen', online: false, lastSeen: previewNow() - 5 * 3600, unread: 0 },
 ];
@@ -847,7 +944,13 @@ let previewFriendRequests: FriendRequests = {
 };
 let previewNextRequestId = 2;
 const previewMessages = new Map<string, ChatMessage[]>();
-let previewNextMessageId = 4;
+let previewNextMessageId = 6;
+let previewPrivacy: Privacy = { appearOffline: false, shareActivity: true, friendRequests: 'everyone' };
+let previewBlocked: BlockedPlayer[] = [];
+let previewOutfits: Outfit[] = [
+  { id: 1, name: 'Night out', loadout: { cape: 5, accessories: [16] }, createdAt: previewNow() - 86400 },
+];
+let previewNextOutfitId = 2;
 function previewConversation(uuid: string): ChatMessage[] {
   let list = previewMessages.get(uuid);
   if (!list) {
@@ -855,9 +958,11 @@ function previewConversation(uuid: string): ChatMessage[] {
     list =
       uuid === 'friend-nocturne'
         ? [
-            { id: 1, fromUuid: uuid, toUuid: '', body: 'hey, you around?', sentAt: t - 40 * 60 },
-            { id: 2, fromUuid: '', toUuid: uuid, body: 'yeah just got on', sentAt: t - 38 * 60 },
-            { id: 3, fromUuid: uuid, toUuid: '', body: 'hop on 1.21.4, we\'re building the base', sentAt: t - 2 * 60 },
+            { id: 1, fromUuid: uuid, toUuid: '', body: 'hey, you around?', sentAt: t - 40 * 60, kind: 'text' },
+            { id: 2, fromUuid: '', toUuid: uuid, body: 'yeah just got on', sentAt: t - 38 * 60, kind: 'text' },
+            { id: 3, fromUuid: uuid, toUuid: '', body: 'hop on 1.21.4, we\'re building the base — map at https://dusk-smp.net/map', sentAt: t - 3 * 60, kind: 'text' },
+            { id: 4, fromUuid: uuid, toUuid: '', body: 'Join me on play.dusk-smp.net', sentAt: t - 2 * 60, kind: 'invite', meta: { server: 'play.dusk-smp.net', version: '1.21.4' } },
+            { id: 5, fromUuid: uuid, toUuid: '', body: 'Sent you Aurora Cape as a gift', sentAt: t - 60, kind: 'gift', meta: { item: 5, name: 'Aurora Cape', kind: 'cape' } },
           ]
         : [];
     previewMessages.set(uuid, list);
@@ -1055,10 +1160,90 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     const uuid = String(args?.uuid);
     const body = String(args?.body ?? '').trim();
     if (!body) throw new Error('Type a message first.');
-    const msg: ChatMessage = { id: previewNextMessageId++, fromUuid: '', toUuid: uuid, body, sentAt: previewNow() };
+    const msg: ChatMessage = { id: previewNextMessageId++, fromUuid: '', toUuid: uuid, body, sentAt: previewNow(), kind: 'text' };
     previewConversation(uuid).push(msg);
     return structuredClone(msg) as T;
   }
+  if (cmd === 'send_invite') {
+    const uuid = String(args?.uuid);
+    const server = String(args?.server ?? '').trim();
+    if (!server) throw new Error('Join a server first — there\'s nothing to invite them to.');
+    const msg: ChatMessage = {
+      id: previewNextMessageId++, fromUuid: '', toUuid: uuid, body: `Join me on ${server}`, sentAt: previewNow(),
+      kind: 'invite', meta: { server, version: (args?.version as string) ?? null },
+    };
+    previewConversation(uuid).push(msg);
+    return structuredClone(msg) as T;
+  }
+  if (cmd === 'get_chat_image') return shot(640, 360, '#2a2346', 'screenshot') as T;
+  if (cmd === 'game_activity') return null as T;
+  if (cmd === 'get_privacy') return structuredClone(previewPrivacy) as T;
+  if (cmd === 'set_privacy') {
+    previewPrivacy = structuredClone(args?.privacy as Privacy);
+    return structuredClone(previewPrivacy) as T;
+  }
+  if (cmd === 'list_blocked') return structuredClone(previewBlocked) as T;
+  if (cmd === 'block_player') {
+    const f = previewFriends.find((x) => x.uuid === args?.uuid);
+    if (f) previewBlocked = [...previewBlocked, { uuid: f.uuid, username: f.username }];
+    previewFriends = previewFriends.filter((x) => x.uuid !== args?.uuid);
+    return structuredClone(previewBlocked) as T;
+  }
+  if (cmd === 'unblock_player') {
+    previewBlocked = previewBlocked.filter((b) => b.uuid !== args?.uuid);
+    return structuredClone(previewBlocked) as T;
+  }
+  if (cmd === 'gift_cosmetic') {
+    const store = await previewStore();
+    const item = store.items.find((i) => i.id === args?.id);
+    if (!item) throw new Error('no such cosmetic');
+    if (previewCoins < item.price) throw new Error(`Not enough coins — ${item.name} costs ${item.price}.`);
+    previewCoins -= item.price;
+    const uuid = String(args?.uuid);
+    const message: ChatMessage = {
+      id: previewNextMessageId++, fromUuid: '', toUuid: uuid, body: `Sent you ${item.name} as a gift`, sentAt: previewNow(),
+      kind: 'gift', meta: { item: item.id, name: item.name, kind: item.kind },
+    };
+    previewConversation(uuid).push(message);
+    return { coins: previewCoins, message } as T;
+  }
+  if (cmd === 'list_outfits') return structuredClone(previewOutfits) as T;
+  if (cmd === 'save_outfit') {
+    const name = String(args?.name ?? '').trim();
+    if (!name) throw new Error('Outfit names are 1–32 characters.');
+    const loadout = structuredClone(args?.loadout as Loadout);
+    const existing = previewOutfits.find((o) => o.name === name);
+    if (existing) existing.loadout = loadout;
+    else previewOutfits = [...previewOutfits, { id: previewNextOutfitId++, name, loadout, createdAt: previewNow() }];
+    return structuredClone(previewOutfits) as T;
+  }
+  if (cmd === 'delete_outfit') {
+    previewOutfits = previewOutfits.filter((o) => o.id !== args?.id);
+    return structuredClone(previewOutfits) as T;
+  }
+  if (cmd === 'list_accounts') {
+    return [
+      { uuid: 'acc-preview', username: 'Preview', active: true },
+      { uuid: 'acc-alt', username: 'PreviewAlt', active: false },
+    ] as T;
+  }
+  if (cmd === 'list_screenshots') {
+    const t = Date.now();
+    return [
+      { path: shot(1280, 720, '#3a2f5a', 'base at dusk'), name: '2026-09-25_21.14.03.png', profileId: 'p-performium', profileName: 'Performium', takenAt: t - 3 * HOUR, size: 2_400_000, favorite: true },
+      { path: shot(1280, 720, '#1f4a3a', 'jungle'), name: '2026-09-24_18.02.44.png', profileId: 'p-performium', profileName: 'Performium', takenAt: t - 27 * HOUR, size: 3_100_000, favorite: false },
+      { path: shot(1280, 720, '#4a2f1f', 'nether hub'), name: '2026-09-20_12.40.10.png', profileId: 'p-performium', profileName: 'Performium', takenAt: t - 6 * 24 * HOUR, size: 2_800_000, favorite: false },
+    ] satisfies Screenshot[] as T;
+  }
+  if (cmd === 'set_screenshot_favorite') return undefined as T;
+  if (cmd === 'list_recordings') {
+    const t = Date.now();
+    return [
+      { path: '/preview/clips/clip_2026-09-25_21-20-11.mcpr', name: 'clip_2026-09-25_21-20-11.mcpr', kind: 'clip', profileId: 'p-performium', profileName: 'Performium', recordedAt: t - 2 * HOUR, size: 1_900_000, durationMs: 30_000, server: 'play.example.net', mcVersion: '1.21.11' },
+      { path: '/preview/replays/replay_2026-09-24_17-40-02.mcpr', name: 'replay_2026-09-24_17-40-02.mcpr', kind: 'replay', profileId: 'p-performium', profileName: 'Performium', recordedAt: t - 28 * HOUR, size: 41_000_000, durationMs: 1_512_000, server: '', mcVersion: '1.21.11' },
+    ] satisfies Recording[] as T;
+  }
+  if (cmd === 'recording_thumb') return shot(480, 270, '#2a2346', 'recording') as T;
   if (cmd === 'get_public_skin') return null as T;
   if (cmd === 'create_profile') {
     // the preview has no store to write — echo a plausible DTO so the flow
@@ -1099,6 +1284,10 @@ export const api = {
     invoke<Profile>('update_profile', { id, patch }),
   deleteProfile: (id: string) => invoke<void>('delete_profile', { id }),
   launch: (profileId: string) => invoke<void>('install_and_launch', { profileId }),
+  /** launch straight onto a server (a friend's, an invite) without saving it on the instance */
+  joinServer: (profileId: string, server: string) =>
+    invoke<void>('install_and_launch', { profileId, joinServer: server }),
+  gameActivity: () => invoke<GameActivity | null>('game_activity'),
   stopGame: () => invoke<void>('stop_game'),
   /** the game the backend is running right now, or null — the UI's source
    *  of truth for PLAY / STOP whenever the event stream may have been missed */
@@ -1176,6 +1365,22 @@ export const api = {
   login: () => invoke<Account>('begin_login'),
   loginWithCode: () => invoke<Account>('begin_code_login'),
   logout: () => invoke<void>('logout'),
+  listAccounts: () => invoke<SavedAccount[]>('list_accounts'),
+  switchAccount: (uuid: string) => invoke<Account>('switch_account', { uuid }),
+  removeAccount: (uuid: string) => invoke<void>('remove_account', { uuid }),
+  notify: (title: string, body: string) => invoke<void>('notify', { title, body }),
+  listScreenshots: () => invoke<Screenshot[]>('list_screenshots'),
+  setScreenshotFavorite: (path: string, favorite: boolean) =>
+    invoke<void>('set_screenshot_favorite', { path, favorite }),
+  /** moves it to the OS trash */
+  deleteScreenshot: (path: string) => invoke<void>('delete_screenshot', { path }),
+  revealScreenshot: (path: string) => invoke<void>('reveal_screenshot', { path }),
+  listRecordings: () => invoke<Recording[]>('list_recordings'),
+  /** the recording's thumbnail as a data URL, null when it has none */
+  recordingThumb: (path: string) => invoke<string | null>('recording_thumb', { path }),
+  /** moves it to the OS trash */
+  deleteRecording: (path: string) => invoke<void>('delete_recording', { path }),
+  revealRecording: (path: string) => invoke<void>('reveal_recording', { path }),
   getAppInfo: () => invoke<AppInfo>('get_app_info'),
 
   listSkins: () => invoke<Skin[]>('list_skins'),
@@ -1228,6 +1433,20 @@ export const api = {
   sendMessage: (uuid: string, body: string) => invoke<ChatMessage>('send_message', { uuid, body }),
   /** a friend's skin as a data URL, fetched from Mojang's public session server */
   getPublicSkin: (uuid: string) => invoke<string | null>('get_public_skin', { uuid }),
+  sendInvite: (uuid: string, server: string, version: string | null) =>
+    invoke<ChatMessage>('send_invite', { uuid, server, version }),
+  sendScreenshot: (uuid: string, path: string) => invoke<ChatMessage>('send_screenshot', { uuid, path }),
+  /** a chat image as a data URL */
+  getChatImage: (id: string) => invoke<string>('get_chat_image', { id }),
+  getPrivacy: () => invoke<Privacy>('get_privacy'),
+  setPrivacy: (privacy: Privacy) => invoke<Privacy>('set_privacy', { privacy }),
+  listBlocked: () => invoke<BlockedPlayer[]>('list_blocked'),
+  blockPlayer: (uuid: string) => invoke<BlockedPlayer[]>('block_player', { uuid }),
+  unblockPlayer: (uuid: string) => invoke<BlockedPlayer[]>('unblock_player', { uuid }),
+  giftCosmetic: (uuid: string, id: number) => invoke<{ coins: number; message: ChatMessage }>('gift_cosmetic', { uuid, id }),
+  listOutfits: () => invoke<Outfit[]>('list_outfits'),
+  saveOutfit: (name: string, loadout: Loadout) => invoke<Outfit[]>('save_outfit', { name, loadout }),
+  deleteOutfit: (id: number) => invoke<Outfit[]>('delete_outfit', { id }),
 };
 
 // ── small formatters ───────────────────────────────────────────────────────

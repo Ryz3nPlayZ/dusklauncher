@@ -139,14 +139,35 @@ pub(crate) async fn call<T: DeserializeOwned>(
     path: &str,
     body: Option<Value>,
 ) -> Result<T, String> {
+    parse(send(state, method, path, body.map(Body::Json)).await?).await
+}
+
+pub(crate) enum Body {
+    Json(Value),
+    /// raw bytes with their content type (image uploads)
+    Raw(Vec<u8>, &'static str),
+}
+
+/// The authenticated request behind [`call`], for callers that need the
+/// raw response (image bytes) or a non-JSON body.
+pub(crate) async fn send(
+    state: &AppState,
+    method: reqwest::Method,
+    path: &str,
+    body: Option<Body>,
+) -> Result<reqwest::Response, String> {
     let mut tok = token(state).await?;
     for attempt in 0..2 {
         let mut req = state
             .client
             .request(method.clone(), format!("{}{path}", api_base()))
             .bearer_auth(&tok.token);
-        if let Some(b) = &body {
-            req = req.json(b);
+        match &body {
+            Some(Body::Json(b)) => req = req.json(b),
+            Some(Body::Raw(bytes, mime)) => {
+                req = req.header(reqwest::header::CONTENT_TYPE, *mime).body(bytes.clone())
+            }
+            None => {}
         }
         let resp = req.send().await.map_err(|e| format!("Dusk service unreachable: {e}"))?;
         if resp.status() == reqwest::StatusCode::UNAUTHORIZED && attempt == 0 {
@@ -154,7 +175,7 @@ pub(crate) async fn call<T: DeserializeOwned>(
             tok = sign_in(state).await?;
             continue;
         }
-        return parse(resp).await;
+        return Ok(resp);
     }
     unreachable!()
 }

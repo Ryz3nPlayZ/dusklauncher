@@ -4,6 +4,7 @@ import com.mojang.realmsclient.RealmsMainScreen;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.compat.SkinCompat;
 import dev.dusk.client.config.DuskConfig;
+import dev.dusk.client.media.MediaScreen;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -29,7 +30,6 @@ import java.util.List;
  * is bigger than the mock-up's 11.5px text is to its button.
  */
 public class DuskTitleScreen extends DuskScreen {
-    private static final String WORDMARK = "DUSK";
 
     private record Action(int x, int y, int w, int h, String label, @Nullable Icons icon, String tip, Theme.Kind kind, Runnable run) {
         boolean contains(double mx, double my) {
@@ -75,6 +75,8 @@ public class DuskTitleScreen extends DuskScreen {
         }
         icon(ix, top, ib, Icons.PACK, "Resource Packs", () -> open(new PackBrowserScreen(this, PackBrowserScreen.RESOURCE_PACKS)));
         ix -= ib + ig;
+        icon(ix, top, ib, Icons.MEDIA, "Media", () -> open(new MediaScreen(this, MediaScreen.SCREENSHOTS)));
+        ix -= ib + ig;
         icon(ix, top, ib, Icons.GRID, "Dusk Menu", () -> open(new DuskSettingsScreen(this)));
         if (DuskConfig.get().showAccountTile && this.minecraft != null) {
             // 5 | 28 face | 10 | name | 14
@@ -94,13 +96,13 @@ public class DuskTitleScreen extends DuskScreen {
 
         // centre: the wordmark, 24 (plus its line box), then 310x44 bars 9 apart
         int bw = Math.min(this.width - 16, px(310, v)), bh = Math.max(20, px(44, v)), gap = Math.max(3, px(9, v));
-        titleScale = Math.max(2, Math.round(44 * v / 8));
+        titleScale = Math.max(3, Math.round(44 * v / 8) * 5 / 6);
         int logoGap = px(30, v);
-        int centreH = 7 * titleScale + logoGap + 3 * bh + 2 * gap;
+        int centreH = Theme.wordmarkHeight(titleScale) + logoGap + 3 * bh + 2 * gap;
         int free = quitY - topH - centreH;
         int y0 = topH + Math.max(0, free / 2) - px(10, v);
         titleY = Math.max(4, y0);
-        int y = titleY + 7 * titleScale + logoGap;
+        int y = titleY + Theme.wordmarkHeight(titleScale) + logoGap;
         iconGap = Math.max(4, px(12, v));
         add(cx - bw / 2, y, bw, bh, "SINGLEPLAYER", Icons.PERSON, Theme.Kind.NORMAL,
                 () -> open(new SelectWorldScreen(this)));
@@ -174,8 +176,7 @@ public class DuskTitleScreen extends DuskScreen {
     @Override
     protected void drawOverlay(Canvas c, int mouseX, int mouseY, float delta) {
         int cx = this.width / 2;
-        int tw = Theme.wordmarkWidth(c, WORDMARK, titleScale);
-        Theme.wordmark(c, WORDMARK, cx - tw / 2, titleY, titleScale);
+        Theme.wordmark(c, cx - Theme.wordmarkWidth(titleScale) / 2, titleY, titleScale);
 
         Action tipFor = null;
         for (Action a : actions) {

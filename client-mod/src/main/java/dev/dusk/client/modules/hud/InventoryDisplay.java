@@ -6,6 +6,7 @@ import dev.dusk.client.hud.HudElement;
 import dev.dusk.client.module.setting.IntSetting;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 /** Flex-HUD's inventory display: the three main rows on the vanilla panel. */
 public class InventoryDisplay extends HudElement {
@@ -47,7 +48,7 @@ public class InventoryDisplay extends HudElement {
             for (int col = 0; col < NUM_COLS; col++) {
                 int slot = 9 + NUM_COLS * row + col;
                 if (inventory.getContainerSize() <= slot) continue;
-                ItemStack stack = inventory.getItem(slot);
+                ItemStack stack = ctx.editing() ? new ItemStack(Items.DIAMOND_BLOCK, 64) : inventory.getItem(slot);
                 int x = PADDING + col * ITEM_SIZE;
                 int y = PADDING + row * ITEM_SIZE;
                 c.item(stack, x, y);

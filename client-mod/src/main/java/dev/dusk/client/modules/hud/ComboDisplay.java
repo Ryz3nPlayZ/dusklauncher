@@ -20,7 +20,7 @@ public class ComboDisplay extends TextHud {
     private boolean wasHurt;
 
     public ComboDisplay() {
-        super("combo", "Combo Counter", "Combo", "Consecutive hits landed without getting hit back.");
+        super("combo", "Combo Counter", "Consecutive hits landed without getting hit back.");
         setPosition(150, 115);
     }
 
@@ -38,7 +38,7 @@ public class ComboDisplay extends TextHud {
     }
 
     @Override
-    protected String value(HudContext ctx) {
+    protected String text(HudContext ctx) {
         var mc = ctx.mc();
         if (mc.player == null) return null;
         int serial = ClickTracker.attackSerial();
@@ -49,11 +49,11 @@ public class ComboDisplay extends TextHud {
                 lastHitMs = System.currentTimeMillis();
             }
         }
-        return Integer.toString(combo);
+        return "Combo: " + combo;
     }
 
     @Override
     protected String sample() {
-        return "0";
+        return "Combo: 0";
     }
 }

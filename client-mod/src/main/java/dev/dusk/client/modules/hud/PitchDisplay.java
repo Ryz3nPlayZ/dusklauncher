@@ -2,15 +2,14 @@ package dev.dusk.client.modules.hud;
 
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.hud.HudContext;
-import dev.dusk.client.hud.HudElement;
+import dev.dusk.client.hud.TextHud;
 import dev.dusk.client.module.setting.BoolSetting;
-import dev.dusk.client.module.setting.ColorSetting;
 import dev.dusk.client.module.setting.IntSetting;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.item.Items;
 
 /** Flex-HUD's pitch gauge: a vertical strip of angle ticks around your pitch. */
-public class PitchDisplay extends HudElement {
+public class PitchDisplay extends TextHud {
     private static final int STRIP_HEIGHT = 150;
     private static final String MARKER = "▶";
     private static final String TICK = "|";
@@ -20,8 +19,6 @@ public class PitchDisplay extends HudElement {
     private final BoolSetting showMarker = add(new BoolSetting("showMarker", "Show marker", true));
     private final BoolSetting showDegrees = add(new BoolSetting("showDegrees", "Show degrees", false));
     private final IntSetting degreesDecimals = add(new IntSetting("degreesDecimals", "Degree decimals", 0, 0, 14));
-    private final BoolSetting shadow = add(new BoolSetting("shadow", "Text shadow", true));
-    private final ColorSetting color = add(new ColorSetting("color", "Colour", 0xFFFFFFFF));
 
     public PitchDisplay() {
         super("pitchdisplay", "Pitch Display", "A vertical pitch gauge, like an aircraft's ladder.");
@@ -30,8 +27,13 @@ public class PitchDisplay extends HudElement {
 
     private String pitchText(HudContext ctx) {
         LocalPlayer player = ctx.player();
-        float pitch = player == null ? 0.0f : -player.getXRot();
+        float pitch = player == null || ctx.editing() ? 0.0f : -player.getXRot();
         return String.format("%." + degreesDecimals.get() + "f", pitch);
+    }
+
+    @Override
+    protected String text(HudContext ctx) {
+        return "";
     }
 
     @Override
@@ -57,7 +59,7 @@ public class PitchDisplay extends HudElement {
     @Override
     public void render(Canvas c, HudContext ctx) {
         LocalPlayer player = ctx.player();
-        float pitch = player == null ? 0.0f : (player.getXRot() % 360 + 360) % 360;
+        float pitch = player == null || ctx.editing() ? 0.0f : (player.getXRot() % 360 + 360) % 360;
 
         c.scissor(0, 0, width(ctx), STRIP_HEIGHT);
 
@@ -67,7 +69,7 @@ public class PitchDisplay extends HudElement {
             c.push();
             c.translate(hudX, (STRIP_HEIGHT - c.lineHeight()) / 2.0f);
             c.scale(0.75f, 0.75f);
-            c.text(text, 0, 0, color.argb(), shadow.get());
+            c.text(text, 0, 0, textColor(), shadow.get());
             c.pop();
             hudX += c.textWidth(text) * 0.75f + 2;
         }
@@ -76,7 +78,7 @@ public class PitchDisplay extends HudElement {
             c.push();
             c.translate(hudX, (STRIP_HEIGHT - c.lineHeight()) / 2.0f);
             c.scale(0.5f, 1.0f);
-            c.text(MARKER, 0, 0, color.argb(), shadow.get());
+            c.text(MARKER, 0, 0, textColor(), shadow.get());
             c.pop();
             hudX += c.textWidth(MARKER) / 2.0f + 5;
         }
@@ -140,6 +142,7 @@ public class PitchDisplay extends HudElement {
         if (distanceFromCenter > STRIP_HEIGHT / 4.0) {
             alpha = Math.max(0xFF - (int) ((distanceFromCenter - STRIP_HEIGHT / 4.0) / (STRIP_HEIGHT / 4.0) * 0xFF), 0);
         }
-        return (alpha << 24) | (color.argb() & 0xFFFFFF);
+        // older fonts draw alpha under 4 as opaque, so the fade stops there
+        return Math.max(alpha, 4) << 24 | textColor() & 0xFFFFFF;
     }
 }

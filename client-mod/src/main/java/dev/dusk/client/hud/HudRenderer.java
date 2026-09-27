@@ -2,6 +2,7 @@ package dev.dusk.client.hud;
 
 import dev.dusk.client.DuskClient;
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.media.MediaBackend;
 import dev.dusk.client.module.ModuleManager;
 
 /** Draws every enabled {@link HudElement} at its anchor with its scale. */
@@ -11,11 +12,14 @@ public final class HudRenderer {
     public static void render(Canvas c, HudContext ctx) {
         ModuleManager modules = DuskClient.modules();
         if (modules == null) return;
+        boolean f3 = !ctx.editing() && ctx.mc().getDebugOverlay().showDebugScreen();
         for (HudElement e : modules.hudElements()) {
             if (!e.enabled()) continue;
+            if (f3 && e.hideInF3()) continue;
             if (!ctx.editing() && !e.visible(ctx)) continue;
             draw(c, e, ctx);
         }
+        if (!ctx.editing()) MediaBackend.drawHud(c, ctx);
     }
 
     public static void draw(Canvas c, HudElement e, HudContext ctx) {
