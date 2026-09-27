@@ -1094,7 +1094,7 @@ dependencies = [
 
 [[package]]
 name = "fasterlauncher"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "base64 0.22.1",
  "dirs",
@@ -1121,7 +1121,7 @@ dependencies = [
 
 [[package]]
 name = "fasterlauncher-core"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "base64 0.22.1",
  "dirs",
