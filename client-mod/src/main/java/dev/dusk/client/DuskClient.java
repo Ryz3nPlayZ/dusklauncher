@@ -183,6 +183,7 @@ public class DuskClient implements ClientModInitializer {
             else LOGGER.info("[DuskPresence] singleplayer");
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> LOGGER.info("[DuskPresence] menu"));
+        clipKey = Compat.registerKey("key.duskclient.save_clip", GLFW.GLFW_KEY_F8);
         MediaBackend.init();
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
