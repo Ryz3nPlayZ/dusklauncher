@@ -14,6 +14,11 @@
  *     sv = mirrored ? (Qx, Qy, −Qz) : (−Qx, Qy, −Qz)     Q = m + (−8, −4, −8) + 16·offset
  *
  * so the wardrobe shows the accessory exactly where the game draws it.
+ *
+ * That holds relative to the Minecraft joint. skinview3d's head, arm and leg
+ * groups sit on those joints, but its body group is at the torso's centre,
+ * 6 px below Minecraft's body pivot (the neck), so body accessories are
+ * lifted by those 6 px.
  */
 import type * as THREE from 'three';
 import type { AccessoryEntry, AccessoryModelJson } from './api';
@@ -32,6 +37,11 @@ function attachmentShift(att: AccessoryEntry['attachment'], slim: boolean): [num
     default:
       return [0, -8];
   }
+}
+
+/** Minecraft's joint in the skinview3d part's local space (pixels, y up). */
+function jointInPart(att: AccessoryEntry['attachment']): number {
+  return att === 'head' || att.endsWith('_arm') || att.endsWith('_leg') ? 0 : 6;
 }
 
 /** Which skinview3d part an accessory hangs off (mirroring swaps sides). */
@@ -109,6 +119,7 @@ export function bakeAccessory(
 ): THREE.BufferGeometry {
   const [dx, dy] = attachmentShift(entry.attachment, slim);
   const off: Vec3 = [entry.offset[0] + dx - 8, entry.offset[1] + dy - 4, entry.offset[2] - 8];
+  const lift = jointInPart(entry.attachment);
   const pos: number[] = [];
   const uvs: number[] = [];
   const idx: number[] = [];
@@ -139,7 +150,7 @@ export function bakeAccessory(
           rz,
         );
         const Q: Vec3 = [c[0] + off[0], c[1] + off[1], c[2] + off[2]];
-        pos.push(entry.mirrored ? Q[0] : -Q[0], Q[1], -Q[2]);
+        pos.push(entry.mirrored ? Q[0] : -Q[0], Q[1] + lift, -Q[2]);
         // three.js samples v from the bottom; Minecraft from the top
         uvs.push(faceU(uv, i + quadrant) / 16, 1 - faceV(uv, i + quadrant) / 16);
       }

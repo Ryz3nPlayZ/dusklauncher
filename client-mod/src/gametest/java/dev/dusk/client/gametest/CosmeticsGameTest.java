@@ -26,6 +26,14 @@ public final class CosmeticsGameTest implements FabricClientGameTest {
     private static final Logger LOG = LoggerFactory.getLogger("duskclient/gametest");
     private static final int CAPE = 5;
     private static final int ACCESSORY = 16;
+    /** DUSK_GAMETEST_ACCESSORIES=62,68 wears those instead, to eyeball other models. */
+    private static final int[] ACCESSORIES = accessories();
+
+    private static int[] accessories() {
+        String env = System.getenv("DUSK_GAMETEST_ACCESSORIES");
+        if (env == null || env.isBlank()) return new int[] {ACCESSORY};
+        return java.util.Arrays.stream(env.split(",")).map(String::trim).mapToInt(Integer::parseInt).toArray();
+    }
 
     @Override
     public void runTest(ClientGameTestContext ctx) {
@@ -35,7 +43,7 @@ public final class CosmeticsGameTest implements FabricClientGameTest {
             var cfg = DuskConfig.get().cosmetics;
             cfg.loadout.put("cape", new JsonPrimitive(CAPE));
             JsonArray acc = new JsonArray();
-            acc.add(ACCESSORY);
+            for (int id : ACCESSORIES) acc.add(id);
             cfg.loadout.put("accessories", acc);
             DuskConfig.save();
             CosmeticsManager.reloadLocal();
@@ -50,16 +58,18 @@ public final class CosmeticsGameTest implements FabricClientGameTest {
             // wait for the worker thread to resolve the local player's loadout
             int ticks = ctx.waitFor(client -> {
                 PlayerCosmetics c = CosmeticsManager.get(client.player.getUUID(), client.player.getName().getString());
-                return c.hasCape() && c.accessories().size() == 1;
+                return c.hasCape() && c.accessories().size() == ACCESSORIES.length;
             }, 200);
             LOG.info("Local loadout resolved after {} tick(s)", ticks);
 
             PlayerCosmetics c = ctx.computeOnClient(client ->
                     CosmeticsManager.get(client.player.getUUID(), client.player.getName().getString()));
             if (!c.hasCape()) throw new AssertionError("cape " + CAPE + " not resolved");
-            if (c.accessories().size() != 1) throw new AssertionError("expected 1 accessory, got " + c.accessories());
-            var a = c.accessories().get(0);
-            if (a.entry().id() != ACCESSORY || !a.isReady()) throw new AssertionError("accessory not ready: " + a.entry());
+            if (c.accessories().size() != ACCESSORIES.length)
+                throw new AssertionError("expected " + ACCESSORIES.length + " accessories, got " + c.accessories());
+            for (var a : c.accessories()) {
+                if (!a.isReady()) throw new AssertionError("accessory not ready: " + a.entry());
+            }
 
             ctx.runOnClient(client -> {
                 client.options.setCameraType(CameraType.THIRD_PERSON_FRONT);
@@ -72,8 +82,43 @@ public final class CosmeticsGameTest implements FabricClientGameTest {
             ctx.waitTicks(10);
             Path back = ctx.takeScreenshot("cosmetics-back");
             LOG.info("Screenshots: {} {}", front, back);
+            if (System.getenv("DUSK_GAMETEST_ACCESSORIES") != null) closeUps(ctx);
         }
         // the harness requires tests to hand back a client sitting on the title screen
         ctx.waitForScreen(TitleScreen.class);
+    }
+
+    /** Each accessory alone, zoomed in, from four sides. */
+    private static void closeUps(ClientGameTestContext ctx) {
+        ctx.runOnClient(client -> {
+            client.options.hideGui = true;
+            client.options.fov().set(30);
+            client.options.setCameraType(CameraType.THIRD_PERSON_FRONT);
+        });
+        for (int id : ACCESSORIES) {
+            ctx.runOnClient(client -> {
+                var cfg = DuskConfig.get().cosmetics;
+                cfg.loadout.remove("cape");
+                JsonArray acc = new JsonArray();
+                acc.add(id);
+                cfg.loadout.put("accessories", acc);
+                CosmeticsManager.reloadLocal();
+            });
+            ctx.waitFor(client -> {
+                PlayerCosmetics c = CosmeticsManager.get(client.player.getUUID(), client.player.getName().getString());
+                return c.accessories().size() == 1 && c.accessories().get(0).entry().id() == id
+                        && c.accessories().get(0).isReady();
+            }, 200);
+            for (int yaw : new int[] {0, 60, 150, 240}) {
+                ctx.runOnClient(client -> {
+                    client.player.setYRot(yaw);
+                    client.player.setYHeadRot(yaw);
+                    client.player.setYBodyRot(yaw);
+                    client.player.setXRot(25);
+                });
+                ctx.waitTicks(4);
+                ctx.takeScreenshot("acc-" + id + "-" + yaw);
+            }
+        }
     }
 }
