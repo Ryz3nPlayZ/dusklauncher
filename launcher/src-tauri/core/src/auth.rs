@@ -403,7 +403,7 @@ async fn xbl_device_token(
         return Err(Error::Auth(map_xbl_error(status, &body, AuthMode::OfficialTitle)));
     }
     let device: XblResponse = device_resp.json().await?;
-    Ok(device.Token)
+    Ok(device.token)
 }
 
 /// The SISU (single sign-on) exchange for title clients: one call returns the
@@ -450,7 +450,7 @@ async fn authenticate_title_sisu(
     }
     let sisu: SisuResponse = sisu_resp.json().await?;
     let uhs = xbl_uhs(&sisu.authorization_token)?;
-    Ok((uhs, sisu.authorization_token.Token))
+    Ok((uhs, sisu.authorization_token.token))
 }
 
 #[derive(Debug, Deserialize)]
@@ -495,12 +495,12 @@ impl Session {
 struct MsaTokenResponse {
     access_token: String,
     refresh_token: Option<String>,
-    expires_in: u64,
 }
 
 #[derive(Debug, Deserialize)]
 struct XblResponse {
-    Token: String,
+    #[serde(rename = "Token")]
+    token: String,
     #[serde(rename = "DisplayClaims")]
     display_claims: serde_json::Value,
 }
@@ -916,7 +916,7 @@ pub async fn authenticate(
                 .header("X-Xbl-Contract-Version", "1")
                 .json(&serde_json::json!({
                     "SandboxId": "RETAIL",
-                    "UserTokens": [xbl.Token],
+                    "UserTokens": [xbl.token],
                     "RelyingParty": "rp://api.minecraftservices.com/",
                     "TokenType": "JWT"
                 }))
@@ -928,7 +928,7 @@ pub async fn authenticate(
                 return Err(Error::Auth(map_xsts_error(status, &body)));
             }
             let xsts: XblResponse = xsts_resp.json().await?;
-            (uhs, xsts.Token)
+            (uhs, xsts.token)
         }
     };
 

@@ -1,6 +1,7 @@
 mod appstate;
 mod auth_flow;
 mod auth_store;
+mod client_settings;
 mod commands;
 mod cosmetics;
 mod discord;
@@ -38,6 +39,7 @@ pub fn run() {
             commands::create_profile,
             commands::update_profile,
             commands::delete_profile,
+            commands::duplicate_profile,
             commands::list_worlds,
             commands::show_in_folder,
             commands::open_data_dir,
@@ -93,11 +95,14 @@ pub fn run() {
             mods::list_profile_mods,
             mods::list_profile_content,
             mods::lookup_profile_content,
+            mods::check_content_updates,
+            mods::update_profile_content,
             mods::remove_profile_mod,
             mods::remove_profile_content,
             mods::set_mod_enabled,
             mods::set_content_enabled,
-            mods::import_local_mod,
+            mods::import_local_content,
+            mods::import_content_paths,
             mods::search_mods,
             mods::search_content,
             mods::install_mod_to_profile,

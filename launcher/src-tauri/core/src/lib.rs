@@ -6,6 +6,7 @@ pub mod launch;
 pub mod meta;
 pub mod modrinth;
 pub mod natives;
+pub mod neoforge;
 pub mod profile;
 
 use thiserror::Error;

@@ -108,7 +108,7 @@ pub async fn list_recordings(state: State<'_, AppState>) -> Result<Vec<Recording
                 }
             }
         }
-        out.sort_by(|a, b| b.recorded_at.cmp(&a.recorded_at));
+        out.sort_by_key(|r| std::cmp::Reverse(r.recorded_at));
         out
     })
     .await

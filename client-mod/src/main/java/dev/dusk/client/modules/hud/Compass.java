@@ -21,7 +21,7 @@ public class Compass extends TextHud {
 
     private final BoolSetting showMarker = add(new BoolSetting("showMarker", "Show marker", true));
     private final BoolSetting showDegrees = add(new BoolSetting("showDegrees", "Show degrees", false));
-    private final IntSetting degreesDecimals = add(new IntSetting("degreesDecimals", "Degree decimals", 0, 0, 14));
+    private final IntSetting degreesDecimals = add(new IntSetting("degreesDecimals", "Degree decimals", 0, 0, 3));
     private final BoolSetting showIntermediate =
             add(new BoolSetting("showIntermediate", "Show degree ticks", true));
 

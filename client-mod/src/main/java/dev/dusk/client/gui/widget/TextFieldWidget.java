@@ -1,6 +1,7 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.gui.Px;
 import dev.dusk.client.gui.Theme;
 import dev.dusk.client.gui.Vanilla;
 import org.lwjgl.glfw.GLFW;
@@ -29,7 +30,7 @@ public class TextFieldWidget extends Widget {
         this.buffer = source.get();
     }
 
-    /** Draw with the Dusk panel's look instead of vanilla's edit box. */
+    /** Draw with the Dusk panel's field (Theme) instead of the Px settings field. */
     public TextFieldWidget themed() {
         this.themed = true;
         return this;
@@ -61,7 +62,7 @@ public class TextFieldWidget extends Widget {
         } else if (themed) {
             Theme.field(c, x, y, w, h, focused);
         } else {
-            Vanilla.editBox(c, x, y, w, h, focused);
+            Px.field(c, x, y, w, h, focused);
         }
         int ty = y + (h - c.lineHeight()) / 2 + 1, tx = bare ? x + 1 : x + 5;
         c.scissor(x + (bare ? 0 : 2), y + (bare ? 0 : 1), x + w - (bare ? 0 : 2), y + h - (bare ? 0 : 1));

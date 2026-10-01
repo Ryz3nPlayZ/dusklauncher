@@ -23,7 +23,7 @@ public class Coordinates extends TextHud {
     private static final String[] AXIS_Z = {"+", "+", "", "-", "-", "-", "", "+"};
 
     private final BoolSetting showY = add(new BoolSetting("showY", "Show Y", true));
-    private final IntSetting digits = add(new IntSetting("digits", "Decimals", 0, 0, 14));
+    private final IntSetting digits = add(new IntSetting("digits", "Decimals", 0, 0, 3));
     private final BoolSetting showDirection = add(new BoolSetting("showDirection", "Show direction", true));
     private final BoolSetting abbreviate = add(new BoolSetting("directionAbbreviation", "Abbreviate direction", true));
     private final ChoiceSetting mode = add(new ChoiceSetting("displayMode", "Layout", "Vertical", "Vertical", "Horizontal"));

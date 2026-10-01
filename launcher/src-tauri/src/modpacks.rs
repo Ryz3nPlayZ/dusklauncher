@@ -502,7 +502,13 @@ async fn install_mrpack_bytes(
         .ok_or("modpack does not declare a minecraft version")?;
     let (loader, loader_version) = match index.loader() {
         Some(("fabric", v)) => (Loader::Fabric, Some(v.clone())),
-        _ => (Loader::Vanilla, None), // neoforge/forge not supported yet (roadmap)
+        Some(("neoforge", v)) => (Loader::NeoForge, Some(v.clone())),
+        // a Forge/Quilt pack's mods would sit in mods/ and never load
+        Some((other, _)) => {
+            let name = if other == "forge" { "Forge" } else { "Quilt" };
+            return Err(format!("This modpack needs {name}, which Dusk can't run yet (Fabric and NeoForge only)."));
+        }
+        None => (Loader::Vanilla, None),
     };
 
     // unique name from what the user typed, else the pack title
@@ -650,10 +656,13 @@ pub async fn export_instance(
 
     let mut dependencies = std::collections::HashMap::new();
     dependencies.insert("minecraft".to_string(), profile.game_version.clone());
-    if profile.loader == Loader::Fabric {
-        if let Some(v) = &profile.loader_version {
-            dependencies.insert("fabric-loader".to_string(), v.clone());
-        }
+    let loader_key = match profile.loader {
+        Loader::Fabric => Some("fabric-loader"),
+        Loader::NeoForge => Some("neoforge"),
+        Loader::Vanilla => None,
+    };
+    if let (Some(key), Some(v)) = (loader_key, &profile.loader_version) {
+        dependencies.insert(key.to_string(), v.clone());
     }
     let index = mr::MrpackIndex {
         format_version: 1,

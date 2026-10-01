@@ -6,9 +6,11 @@
   "environment": "client",
   "entrypoints": {
     "fabric-client-gametest": [
+      "dev.dusk.client.gametest.MixinAuditGameTest",
       "dev.dusk.client.gametest.CosmeticsGameTest",
       "dev.dusk.client.gametest.CrossModCapesGameTest",
-      "dev.dusk.client.gametest.HudGameTest"
+      "dev.dusk.client.gametest.HudGameTest",
+      "dev.dusk.client.gametest.ServerApiGameTest"
     ]
   },
   "depends": {

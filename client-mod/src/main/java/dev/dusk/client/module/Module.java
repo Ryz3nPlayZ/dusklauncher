@@ -21,6 +21,8 @@ public abstract class Module {
     private final Category category;
     private final List<Setting<?>> settings = new ArrayList<>();
     private boolean enabled;
+    /** Switched off by the connected server (see ServerApi); the player's own choice is kept. */
+    private boolean blocked;
 
     /** HUD anchor, in scaled pixels, for Category.HUD modules. */
     private int x, y;
@@ -38,14 +40,24 @@ public abstract class Module {
 
     public String id() { return id; }
     public String name() { return name; }
-    public String description() { return description; }
+    public String description() { return blocked ? "Disabled by this server." : description; }
     public Category category() { return category; }
-    public boolean enabled() { return enabled; }
+    public boolean enabled() { return enabled && !blocked; }
+    public boolean blocked() { return blocked; }
 
     public void setEnabled(boolean enabled) {
         if (this.enabled == enabled) return;
         this.enabled = enabled;
+        if (blocked) return; // takes effect once the server lifts the block
         if (enabled) onEnable(); else onDisable();
+    }
+
+    /** Server-side override: the module stays off while blocked, whatever the player picks. */
+    public void setBlocked(boolean blocked) {
+        if (this.blocked == blocked) return;
+        this.blocked = blocked;
+        if (!enabled) return;
+        if (blocked) onDisable(); else onEnable();
     }
 
     public int x() { return x; }
@@ -75,7 +87,7 @@ public abstract class Module {
 
     public Map<String, Object> saveState() {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("enabled", enabled);
+        m.put("enabled", enabled); // the player's choice, not the server's block
         m.put("x", x);
         m.put("y", y);
         if (!settings.isEmpty()) {

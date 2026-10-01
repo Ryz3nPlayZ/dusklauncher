@@ -14,7 +14,7 @@ public class Distance extends TextHud {
 
     public Distance() {
         super("distance", "Distance", "Distance to the block under your crosshair, out to your render distance.");
-        setPosition(150, 137);
+        setPosition(150, 148);
     }
 
     @Override

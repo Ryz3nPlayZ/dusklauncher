@@ -4,6 +4,7 @@ import net.minecraft.world.effect.MobEffect;
 import net.minecraft.core.Holder;
 import net.minecraft.client.Minecraft;
 import com.mojang.math.Axis;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -79,8 +80,16 @@ public record GraphicsCanvas(GuiGraphics g, Font font) implements Canvas {
 
     @Override
     public void blit(String texture, int x, int y, float u, float v, int w, int h, int texW, int texH, int argb) {
-        // 1.21.1 has no tinted blit; the tint is ignored.
+        // 1.21.1 has no tinted blit; the shader colour stands in for the tint
+        if (argb == 0xFFFFFFFF) {
+            g.blit(ResourceLocation.parse(texture), x, y, u, v, w, h, texW, texH);
+            return;
+        }
+        RenderSystem.enableBlend();
+        RenderSystem.setShaderColor((argb >> 16 & 0xFF) / 255F, (argb >> 8 & 0xFF) / 255F, (argb & 0xFF) / 255F, (argb >>> 24) / 255F);
         g.blit(ResourceLocation.parse(texture), x, y, u, v, w, h, texW, texH);
+        RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
+        RenderSystem.disableBlend();
     }
 
     @Override

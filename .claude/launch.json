@@ -4,8 +4,25 @@
     {
       "name": "dusklauncher-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "launcher"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "launcher"
+      ],
       "port": 5173
+    },
+    {
+      "name": "site",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4600",
+        "--directory",
+        "site"
+      ],
+      "port": 4600
     }
   ]
 }

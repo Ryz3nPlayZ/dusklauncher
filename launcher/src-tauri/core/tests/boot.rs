@@ -12,11 +12,12 @@
 //! cargo test -p fasterlauncher-core --test boot -- --ignored --nocapture
 //! ```
 //!
-//! Env: `DUSK_TEST_VERSION` (default `1.21`), `DUSK_BOOT_ROOT`
-//! (default `<tmp>/dusk-boottest`). Downloads are checksum-cached, so
+//! Env: `DUSK_TEST_VERSION` (default `1.21`), `DUSK_TEST_LOADER`
+//! (`vanilla` or `neoforge`), `DUSK_BOOT_ROOT` (default
+//! `<tmp>/dusk-boottest`). Downloads are checksum-cached, so
 //! re-runs only fetch what is missing.
 
-use fasterlauncher_core::{auth, download, java, launch, meta, natives, profile};
+use fasterlauncher_core::{auth, download, java, launch, meta, natives, neoforge, profile};
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -63,6 +64,7 @@ async fn pump<R: tokio::io::AsyncRead + Unpin>(
 #[ignore]
 async fn boot_to_menu() {
     let version_id = std::env::var("DUSK_TEST_VERSION").unwrap_or_else(|_| "1.21".into());
+    let loader = profile::Loader::parse(&std::env::var("DUSK_TEST_LOADER").unwrap_or_default());
     let data_dir = root();
     println!("boot root: {}", data_dir.display());
 
@@ -75,7 +77,7 @@ async fn boot_to_menu() {
         id: "boottest".into(),
         name: "boottest".into(),
         game_version: version_id.clone(),
-        loader: profile::Loader::Vanilla,
+        loader,
         loader_version: None,
         jvm_args: profile::default_jvm_args(),
         memory_mb: None,
@@ -95,18 +97,38 @@ async fn boot_to_menu() {
         .unwrap();
     println!("version {} java {:?}", version.id, version.java_version);
 
+    // ── java (before the loader: NeoForge's installer runs on it) ──
+    java::provision(&client, &version.effective_java().component, &dirs.runtimes, |_| {})
+        .await
+        .unwrap();
+    let java_bin = java::java_executable(&java::runtime_dir(&dirs.runtimes, &version.effective_java().component));
+    println!("java: {}", java_bin.display());
+    assert!(java_bin.exists(), "provisioned java binary missing");
+
+    // ── loader ──
+    let version = match loader {
+        profile::Loader::NeoForge => {
+            neoforge::install_neoforge(&client, &java_bin, &version_id, None, &data_dir, &dirs.versions, &version)
+                .await
+                .unwrap()
+        }
+        profile::Loader::Vanilla => version,
+        profile::Loader::Fabric => panic!("the fabric boot is covered by the client-mod gametests"),
+    };
+    println!("effective version {}", version.id);
+
     // ── libraries ──
     let libs: Vec<download::Download> = version
         .libraries
         .iter()
         .filter(|l| meta::library_allowed(l))
         .filter_map(|l| {
-            let artifact = l.downloads.as_ref()?.artifact.as_ref()?;
+            let artifact = l.resolve_artifact().filter(|a| !a.url.is_empty())?;
             Some(download::Download {
-                url: artifact.url.clone(),
+                url: artifact.url,
                 dest: dirs.libraries.join(&artifact.path),
-                sha1: Some(artifact.sha1.clone()),
-                size: Some(artifact.size),
+                sha1: artifact.sha1,
+                size: artifact.size,
             })
         })
         .collect();
@@ -160,14 +182,6 @@ async fn boot_to_menu() {
         .await
         .unwrap();
     println!("natives jars extracted: {n}");
-
-    // ── java ──
-    java::provision(&client, &version.effective_java().component, &dirs.runtimes, |_| {})
-        .await
-        .unwrap();
-    let java_bin = java::java_executable(&java::runtime_dir(&dirs.runtimes, &version.effective_java().component));
-    println!("java: {}", java_bin.display());
-    assert!(java_bin.exists(), "provisioned java binary missing");
 
     // ── spec + spawn ──
     let session = auth::Session {

@@ -5,7 +5,7 @@ import dev.dusk.client.compat.Compat;
 import dev.dusk.client.gui.ConfigScreen;
 import dev.dusk.client.gui.HudEditorScreen;
 import dev.dusk.client.modules.hud.HeldItem;
-import dev.dusk.client.modules.hud.ShieldStatus;
+import dev.dusk.client.modules.render.ShieldStatuses;
 import dev.dusk.client.modules.render.CustomCrosshair;
 import dev.dusk.client.modules.render.Fullbright;
 import dev.dusk.client.modules.render.MotionBlur;
@@ -36,7 +36,7 @@ public final class HudGameTest implements FabricClientGameTest {
         ctx.runOnClient(client -> {
             Fullbright.instance().setEnabled(true);
             MotionBlur.instance().setEnabled(true);
-            DuskClient.modules().get(ShieldStatus.class).setEnabled(true);
+            DuskClient.modules().get(ShieldStatuses.class).setEnabled(true);
             DuskClient.modules().get(HeldItem.class).setEnabled(true);
             client.options.setCameraType(CameraType.FIRST_PERSON);
         });

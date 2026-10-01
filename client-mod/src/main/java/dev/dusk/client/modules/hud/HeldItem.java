@@ -23,7 +23,7 @@ public class HeldItem extends TextHud {
 
     public HeldItem() {
         super("helditem", "Held Item", "The item in your main hand and how much of it you have.");
-        setPosition(150, 130);
+        setPosition(150, 170);
     }
 
     @Override
@@ -70,7 +70,7 @@ public class HeldItem extends TextHud {
         if (v == null || stack.isEmpty()) return;
         boolean right = x() + screenWidth(ctx) / 2.0 > ctx.width() / 2.0;
         if (right) {
-            c.text(v, 0, 4, textColor(), shadow.get());
+            c.text(v, 0, 4, labelColor, shadow.get());
             c.item(stack, v.isEmpty() ? 0 : ctx.textWidth(v) + GAP, 0);
         } else {
             c.item(stack, 0, 0);

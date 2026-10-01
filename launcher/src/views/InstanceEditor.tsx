@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import PixelGlyph from '../components/px/PixelGlyph';
 import { Choice, Row } from '../components/px/Form';
 import { NavCell, PxBox, PxButton, TT } from '../components/px/Px';
@@ -12,6 +13,7 @@ import {
   isTauri,
   loaderLabel,
   type ContentKind,
+  type ContentUpdate,
   type GameState,
   type InstalledProject,
   type Profile,
@@ -261,6 +263,22 @@ const displayName = (f: string) => f.replace(/\.(jar|zip)$/i, '');
 const isHeapFlag = (a: string) => a.startsWith('-Xmx') || a.startsWith('-Xms');
 const jvmText = (p: Profile) => p.jvmArgs.filter((a) => !isHeapFlag(a)).join(' ');
 
+/* one-click JVM tuning; the launcher drops flags a given Java can't parse
+   (core launch.rs), so these are safe on every version */
+const TUNING = {
+  /* Mojang's own G1 set (core profile.rs G1_TUNING), the default */
+  balanced:
+    '-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M',
+  /* generational ZGC: near-pauseless collections for a steadier frame time,
+     for a little throughput and memory */
+  latency: '-XX:+UnlockExperimentalVMOptions -XX:+UseZGC -XX:+ZGenerational',
+} as const;
+type Tuning = keyof typeof TUNING | 'custom';
+const tuningOf = (jvm: string): Tuning => {
+  const t = jvm.trim().split(/\s+/).join(' ');
+  return (Object.keys(TUNING) as (keyof typeof TUNING)[]).find((k) => TUNING[k] === t) ?? 'custom';
+};
+
 /* ── SETTINGS: the profile's own fields, saved as one patch ─────────────── */
 function SettingsTab({
   profile,
@@ -346,6 +364,20 @@ function SettingsTab({
     }
   };
 
+  const duplicate = async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const copy = await api.duplicateProfile(profile.id);
+      setNote(`Copied as “${copy.name}” — it's in INSTANCES.`);
+      await onSaved();
+    } catch (e) {
+      setNote(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const exportPack = async () => {
     setBusy(true);
     setNote(null);
@@ -388,7 +420,9 @@ function SettingsTab({
         hint={
           loader === 'fabric'
             ? `Fabric ${profile.loader === 'fabric' && profile.loaderVersion ? profile.loaderVersion : '— pinned automatically'}`
-            : 'Plain vanilla, no modloader. Mods in the folder are ignored.'
+            : loader === 'neoforge'
+              ? `NeoForge ${profile.loader === 'neoforge' && profile.loaderVersion ? profile.loaderVersion : '— newest build for the version'}. DuskClient is Fabric-only.`
+              : 'Plain vanilla, no modloader. Mods in the folder are ignored.'
         }
       >
         <Choice
@@ -396,6 +430,7 @@ function SettingsTab({
           options={[
             { value: 'vanilla', label: 'VANILLA' },
             { value: 'fabric', label: 'FABRIC' },
+            { value: 'neoforge', label: 'NEOFORGE' },
           ]}
           onPick={setLoader}
         />
@@ -452,6 +487,26 @@ function SettingsTab({
           />
         </PxBox>
       </Row>
+      <Row
+        label="TUNING"
+        hint={
+          tuningOf(jvm) === 'latency'
+            ? 'Generational ZGC: steadier frame times, a little more memory. Needs Java 21+ to be generational.'
+            : tuningOf(jvm) === 'balanced'
+              ? "Mojang's G1 settings, the default."
+              : 'Your own JVM arguments below.'
+        }
+      >
+        <Choice
+          value={tuningOf(jvm)}
+          options={[
+            { value: 'balanced', label: 'BALANCED' },
+            { value: 'latency', label: 'LOW LATENCY' },
+            { value: 'custom', label: 'CUSTOM' },
+          ]}
+          onPick={(t) => t !== 'custom' && setJvm(TUNING[t])}
+        />
+      </Row>
       <Row label="JVM ARGUMENTS" hint="Space-separated extras; the heap comes from MEMORY.">
         <PxBox family="panel" height="md" className="px--wide">
           <input
@@ -491,6 +546,15 @@ function SettingsTab({
               EXPORT
             </TT>
           </PxButton>
+          <PxButton
+            family="grey"
+            height="md"
+            disabled={busy}
+            title="A new instance with these settings, mods, config and worlds"
+            onClick={() => void duplicate()}
+          >
+            <TT size={16}>DUPLICATE</TT>
+          </PxButton>
           <PxButton family="red" height="md" onClick={onDelete}>
             <TT size={16} tone="red">
               DELETE INSTANCE
@@ -525,12 +589,33 @@ function ContentTab({
 }) {
   const [rows, setRows] = useState<{ file: ProfileMod; kind: ContentKind; label: string }[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
+  /* newer Modrinth versions, keyed `kind/filename`; null while checking */
+  const [updates, setUpdates] = useState<Map<string, ContentUpdate> | null>(null);
+  /* the rows an UPDATE is running on — their buttons wait */
+  const [updating, setUpdating] = useState<Set<string>>(() => new Set());
+  /* files are being dragged over the window */
+  const [dropping, setDropping] = useState(false);
 
   const kind = content?.kind ?? null;
   const noun = content?.noun ?? 'files';
+  const targets = content ? [content] : KIND_INFO;
+
+  /* hashes the folder against Modrinth; offline just means no UPDATE buttons */
+  const checkUpdates = async () => {
+    setUpdates(null);
+    const found = await Promise.all(
+      targets.map((t) =>
+        api
+          .checkContentUpdates(profile.id, t.kind)
+          .then((list) => list.map((u) => [`${t.kind}/${u.filename}`, u] as const))
+          .catch(() => []),
+      ),
+    );
+    setUpdates(new Map(found.flat()));
+  };
 
   const reload = () => {
-    const targets = content ? [content] : KIND_INFO;
     return Promise.all(
       targets.map(async (t) => {
         const files = await api.listContent(profile.id, t.kind);
@@ -546,8 +631,75 @@ function ContentTab({
   useEffect(() => {
     setRows(null);
     void reload();
+    void checkUpdates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile.id, kindTab]);
+
+  /* drop .jar / .zip files anywhere on the window: the backend sorts each
+     into mods, resource packs or shaders by what's inside */
+  useEffect(() => {
+    if (!isTauri) return;
+    let off: (() => void) | undefined;
+    let gone = false;
+    void getCurrentWebview()
+      .onDragDropEvent(({ payload: p }) => {
+        if (p.type === 'enter' || p.type === 'over') setDropping(true);
+        else if (p.type === 'leave') setDropping(false);
+        else {
+          setDropping(false);
+          void act(async () => {
+            const r = await api.importContentPaths(profile.id, p.paths);
+            const added = r.added.length === 1 ? `Added ${r.added[0].filename}` : `Added ${r.added.length} files`;
+            const skipped = r.skipped.length
+              ? `skipped ${r.skipped.join(', ')} — only .jar mods and .zip packs go here`
+              : '';
+            setNote([r.added.length ? added : '', skipped].filter(Boolean).join(' · ') || null);
+          });
+        }
+      })
+      .then((u) => (gone ? u() : (off = u)));
+    return () => {
+      gone = true;
+      off?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.id, kindTab]);
+
+  /* one at a time: two downloads racing into one folder buys nothing, and a
+     failure stops the batch where it is */
+  const update = async (list: [string, ContentKind, ContentUpdate][]) => {
+    setNote(null);
+    setUpdating((cur) => new Set([...cur, ...list.map(([key]) => key)]));
+    let done = 0;
+    try {
+      for (const [key, k, u] of list) {
+        await api.updateContent(profile.id, k, u.filename, u.versionId);
+        done++;
+        setUpdates((cur) => {
+          const next = new Map(cur);
+          next.delete(key);
+          return next;
+        });
+      }
+    } catch (e) {
+      setNote(`${done ? `Updated ${done}, then: ` : ''}${String(e)}`);
+    } finally {
+      setUpdating(new Set());
+      await reload();
+    }
+  };
+
+  const pending = rows
+    ? rows.flatMap(({ file, kind: k }) => {
+        const key = `${k}/${file.filename}`;
+        const u = updates?.get(key);
+        return u ? [[key, k, u] as [string, ContentKind, ContentUpdate]] : [];
+      })
+    : [];
+  const needle = filter.trim().toLowerCase();
+  const shown = needle
+    ? rows?.filter(({ file }) => `${file.name ?? ''} ${file.filename}`.toLowerCase().includes(needle))
+    : rows;
 
   const act = async (fn: () => Promise<unknown>) => {
     setNote(null);
@@ -569,18 +721,52 @@ function ContentTab({
           <NavCell key={k} label={k} active={kindTab === k} onClick={() => onKindTab(k)} />
         ))}
         <div className="win__fill" />
-        {kindTab === 'MODS' && isTauri && (
-          <NavCell label="ADD FILE" onClick={() => void act(() => api.importLocalMod(profile.id))} />
+        {content && isTauri && (
+          <NavCell label="ADD FILES" onClick={() => void act(() => api.importLocalContent(profile.id, content.kind))} />
         )}
         {content && <NavCell label="GET FROM MODRINTH" onClick={() => onBrowse(content)} />}
       </div>
 
       {vanilla && (
         <span className="meta">
-          This instance runs vanilla — switch the loader to Fabric in SETTINGS for mods to load.
+          This instance runs vanilla — switch the loader to Fabric or NeoForge in SETTINGS for mods to load.
         </span>
       )}
       {note && <span className="meta">{note}</span>}
+
+      {rows && rows.length > 0 && (
+        <div className="browse__toolbar">
+          <PxBox family="panel" height="sm" className="search editor__search">
+            <PixelGlyph glyph="search" size={20} color="var(--text-3)" />
+            <input
+              className="input editor__search-input"
+              placeholder={`Filter ${noun}…`}
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+          </PxBox>
+          {pending.length > 0 && (
+            <PxButton
+              family="accent"
+              height="sm"
+              disabled={updating.size > 0}
+              onClick={() => void update(pending)}
+            >
+              <TT size={16} tone="accent">
+                {pending.length === 1 ? 'UPDATE 1' : `UPDATE ALL ${pending.length}`}
+              </TT>
+            </PxButton>
+          )}
+          <span className="meta browse__count">
+            {`${needle ? `${shown?.length ?? 0} OF ` : ''}${rows.length} ${noun.toUpperCase()}`}
+            {updates === null
+              ? ' · CHECKING FOR UPDATES…'
+              : pending.length
+                ? ` · ${pending.length} ${pending.length === 1 ? 'UPDATE' : 'UPDATES'}`
+                : ' · UP TO DATE'}
+          </span>
+        </div>
+      )}
 
       <div className="editor__list scroll">
         {rows && rows.length === 0 && (
@@ -590,59 +776,93 @@ function ContentTab({
             </TT>
             <span className="meta">
               {kind === 'mod'
-                ? 'Add a .jar from disk or install one from Modrinth.'
-                : `Install one from Modrinth, or drop files into the ${noun} folder.`}
+                ? 'Add .jar files from disk or install one from Modrinth.'
+                : kind
+                  ? 'Add .zip files from disk or install one from Modrinth.'
+                  : 'Pick a kind above to add files from disk or install from Modrinth.'}
             </span>
           </PxBox>
         )}
-        {rows?.map(({ file: m, kind: fileKind, label }) => (
-          <div key={`${fileKind}/${m.filename}`} className={['editor__row', m.enabled ? '' : 'is-off'].join(' ')}>
-            {/* the on/off box leads the row — the one control every row has */}
-            <button
-              className="check"
-              title={m.enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
-              onClick={() => void act(() => api.setContentEnabled(profile.id, fileKind, m.filename, !m.enabled))}
-            >
-              <span className={['px px--grey check__box', m.enabled ? 'is-on' : ''].join(' ')}>
-                <span className="check__tick" />
-              </span>
-            </button>
-            {/* 172:640 — the icon square: the jar's own icon, else a glyph */}
-            <span className="editor__row-icon">
-              {m.icon ? (
-                <img src={m.icon} alt="" draggable={false} />
-              ) : (
-                <PixelGlyph glyph="box" size={40} color="var(--text-3)" />
-              )}
-            </span>
-            <span className="editor__file">
-              <TT size={16} tone={m.enabled ? 'plain' : 'dim'}>
-                {m.name || displayName(m.filename)}
-              </TT>
-              <span className="meta editor__filename">
-                {m.filename} · {fmtBytes(m.size)}
-              </span>
-            </span>
-            {/* type / state column — the Figma note asks for type + source +
-                version; the backend only knows the type today */}
-            <span className="editor__kind">
-              <TT size={14} tone="sub">
-                {label}
-              </TT>
-              <span className="meta">{m.enabled ? 'enabled' : 'disabled'}</span>
-            </span>
-            <PxButton
-              family="red"
-              height="sm"
-              className="editor__remove"
-              onClick={() => void act(() => api.removeContent(profile.id, fileKind, m.filename))}
-            >
-              <TT size={16} tone="red">
-                REMOVE
-              </TT>
-            </PxButton>
+        {needle && shown?.length === 0 && (
+          <span className="meta">{`Nothing here matches “${filter.trim()}”.`}</span>
+        )}
+        {dropping && (
+          <div className="editor__drop">
+            <TT size={20} tone="accent">
+              {`DROP TO ADD TO ${profile.name.toUpperCase()}`}
+            </TT>
+            <span className="meta">.jar mods · .zip resource packs and shader packs</span>
           </div>
-        ))}
+        )}
+        {shown?.map(({ file: m, kind: fileKind, label }) => {
+          const key = `${fileKind}/${m.filename}`;
+          const upd = updates?.get(key);
+          return (
+            <div key={key} className={['editor__row', m.enabled ? '' : 'is-off'].join(' ')}>
+              {/* the on/off box leads the row — the one control every row has */}
+              <button
+                className="check"
+                title={m.enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
+                onClick={() => void act(() => api.setContentEnabled(profile.id, fileKind, m.filename, !m.enabled))}
+              >
+                <span className={['px px--grey check__box', m.enabled ? 'is-on' : ''].join(' ')}>
+                  <span className="check__tick" />
+                </span>
+              </button>
+              {/* 172:640 — the icon square: the jar's own icon, else a glyph */}
+              <span className="editor__row-icon">
+                {m.icon ? (
+                  <img src={m.icon} alt="" draggable={false} />
+                ) : (
+                  <PixelGlyph glyph="box" size={40} color="var(--text-3)" />
+                )}
+              </span>
+              <span className="editor__file">
+                <TT size={16} tone={m.enabled ? 'plain' : 'dim'}>
+                  {m.name || displayName(m.filename)}
+                </TT>
+                <span className="meta editor__filename">
+                  {m.filename} · {fmtBytes(m.size)}
+                  {upd && ` · ${upd.currentVersion} → ${upd.versionNumber}`}
+                </span>
+              </span>
+              {/* type / state column — the Figma note asks for type + source +
+                  version; the backend only knows the type today */}
+              <span className="editor__kind">
+                <TT size={14} tone="sub">
+                  {label}
+                </TT>
+                <span className="meta">{m.enabled ? 'enabled' : 'disabled'}</span>
+              </span>
+              {/* fixed width, so the type column lines up with or without UPDATE */}
+              <span className="editor__actions">
+                {upd && (
+                  <PxButton
+                    family="accent"
+                    height="sm"
+                    title={`${upd.currentVersion} → ${upd.versionNumber}`}
+                    disabled={updating.size > 0}
+                    onClick={() => void update([[key, fileKind, upd]])}
+                  >
+                    <TT size={16} tone="accent">
+                      {updating.has(key) ? 'UPDATING…' : 'UPDATE'}
+                    </TT>
+                  </PxButton>
+                )}
+                <PxButton
+                  family="red"
+                  height="sm"
+                  disabled={updating.has(key)}
+                  onClick={() => void act(() => api.removeContent(profile.id, fileKind, m.filename))}
+                >
+                  <TT size={16} tone="red">
+                    REMOVE
+                  </TT>
+                </PxButton>
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

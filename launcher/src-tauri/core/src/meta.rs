@@ -93,8 +93,8 @@ pub struct AssetIndex {
     pub id: String,
     pub url: String,
     pub sha1: String,
-    #[serde(default)]
-    pub totalSize: u64,
+    #[serde(default, rename = "totalSize")]
+    pub total_size: u64,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -269,11 +269,11 @@ pub fn library_allowed(lib: &Library) -> bool {
     for rule in rules {
         let applies = match &rule.os {
             Some(o) => {
-                let name_ok = o.name.as_deref().map_or(true, |n| n == os);
+                let name_ok = o.name.as_deref().is_none_or(|n| n == os);
                 let arch_ok = o
                     .arch
                     .as_deref()
-                    .map_or(true, |a| a == std::env::consts::ARCH);
+                    .is_none_or(|a| a == std::env::consts::ARCH);
                 name_ok && arch_ok
             }
             None => true,

@@ -1,6 +1,7 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.gui.Px;
 import dev.dusk.client.gui.Vanilla;
 import dev.dusk.client.module.setting.ColorSetting;
 import org.lwjgl.glfw.GLFW;
@@ -36,7 +37,7 @@ public class ColorWidget extends SettingRow {
     protected void renderControl(Canvas c, int mouseX, int mouseY) {
         if (!focused) buffer = setting.hex(); // follow the picker and the reset button
         int fx = controlX(), fy = top();
-        Vanilla.editBox(c, fx, fy, FIELD_W, SQUARE, focused);
+        Px.field(c, fx, fy, FIELD_W, SQUARE, focused);
         String shown = "#" + buffer + (focused && (System.currentTimeMillis() / 500) % 2 == 0 ? "_" : "");
         c.text(shown, fx + 5, fy + 6, focused ? 0xFFE0E0E0 : Vanilla.TEXT_DIM, true);
         swatch(c, swatchX(), fy, SQUARE, setting.argb(), inSwatch(mouseX, mouseY));

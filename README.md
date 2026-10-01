@@ -21,7 +21,7 @@ The builds aren't Apple-notarized yet, so the cask strips the quarantine flag it
 ## Layout
 
 - `launcher/` — Tauri 2 desktop app. Rust core (`src-tauri/core`: meta, download, auth, fabric, modrinth, natives, java, profile, launch) + React/TS pixel-art UI (animated parallax scenes, live 3D player render, Modrinth modpacks, local skins).
-- `client-mod/` — Fabric mod ("DuskClient", nine builds covering every release from 1.21 through 26.2, force-injected into every Fabric instance the launcher starts): module framework, 26 HUD elements (keystrokes, CPS, FPS, ping, armor, effects, shield, combo, coords, clock, …), Toggle Sprint, Custom Crosshair, Fullbright, and an in-game HUD editor (Right Shift) with a single centred module window. See `docs/IN-GAME-GUI.md`.
+- `client-mod/` — Fabric mod ("DuskClient", nine builds covering every release from 1.21 through 26.2, force-injected into every Fabric instance the launcher starts): module framework, 34 HUD elements (keystrokes, CPS, FPS, ping, TPS, armor, effects, shield, combo, reach, coords, clock, …), render modules (custom crosshair, hitboxes, nametags, particles, motion blur, fullbright, colour grading, low fire/shield, time and weather changers, …), Toggle Sprint, cosmetics, clips and replays, and an in-game HUD editor (Right Shift) with a single centred module window. See `docs/IN-GAME-GUI.md`.
 
 ## Development
 
@@ -34,8 +34,11 @@ npm run tauri dev
 # Core tests
 cd launcher/src-tauri/core && cargo test
 
-# Frontend unit tests + typecheck
-cd launcher && npm test && npx tsc --noEmit
+# Frontend typecheck
+cd launcher && npx tsc --noEmit
+
+# Cosmetics server tests
+cd server && cargo test
 
 # Browser-only UI dev (mock backend, no Rust needed)
 cd launcher && npm run dev
@@ -48,15 +51,18 @@ cd launcher && npm run tauri build
 
 # Client mod (all nine Minecraft targets; Gradle 9.7 + JDK 21 for 1.21.x, JDK 25 for 26.x — CI uses the same)
 cd client-mod && for mc in 1.21.1 1.21.3 1.21.4 1.21.5 1.21.8 1.21.10 1.21.11 26.1 26.2; do gradle build -Pmc=$mc || break; done
+
+# In-game tests (boots the client: mixin audit, HUD, cosmetics, server API; not on 1.21.1/1.21.3)
+cd client-mod && gradle runClientGameTest -Pmc=1.21.11
 ```
 
 ## Roadmap
 
 1. **M1 — Core launch**: Microsoft auth (OAuth → XBL → XSTS → minecraftservices), install/launch vanilla + Fabric 1.21.11 and 26.2 on macOS/Windows, sha1-verified downloads, natives extraction, log streaming, Mojang-provisioned Java runtimes. *(launch pipeline + UI done; MS auth works via the Official sign-in mode — see `docs/ARCHITECTURE.md`)*
 2. **M2 — PvP suite**: client-mod MVP modules + drag-and-drop HUD layout editor, profile management, Modrinth modpack browsing + one-click install. *(launcher side done)*
-3. **M3 — Performance**: curated Sodium/Lithium stack, ZGC/AlwaysPreTouch defaults (from Mojang's 26.2 `default-user-jvm`), per-profile tuning presets.
-4. **M4 — Trust & growth**: settings sync, Discord RPC, open server-integration API, cosmetics.
-5. **Later**: 1.8.9 support, NeoForge profiles.
+3. **M3 — Performance**: curated Sodium/Lithium stack, G1 defaults tuned like Mojang's launcher, per-profile tuning presets (BALANCED / LOW LATENCY generational ZGC). *(JVM defaults and presets done)*
+4. **M4 — Trust & growth**: settings sync, Discord RPC, open server-integration API, cosmetics. *(done; server protocol in [docs/SERVER-API.md](docs/SERVER-API.md))*
+5. **Later**: 1.8.9 support. *(NeoForge profiles done: 1.20.2 and later, through the official installer; DuskClient stays Fabric-only)*
 
 ## Anti-cheat stance
 

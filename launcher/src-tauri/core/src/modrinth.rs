@@ -117,7 +117,7 @@ pub async fn search(client: &reqwest::Client, params: &SearchParams) -> Result<S
         ])
         .send()
         .await?;
-    Ok(decode(check(resp, "search").await?, "search").await?)
+    decode(check(resp, "search").await?, "search").await
 }
 
 // ── versions ───────────────────────────────────────────────────────────────
@@ -138,6 +138,8 @@ pub struct VersionFile {
 pub struct VersionDependency {
     #[serde(default)]
     pub version_id: Option<String>,
+    #[serde(default)]
+    pub project_id: Option<String>,
     #[serde(default)]
     pub dependency_type: String,
 }
@@ -175,7 +177,7 @@ pub async fn project_versions(client: &reqwest::Client, project_id: &str) -> Res
         .header(reqwest::header::USER_AGENT, USER_AGENT)
         .send()
         .await?;
-    Ok(decode(check(resp, "project versions").await?, "project versions").await?)
+    decode(check(resp, "project versions").await?, "project versions").await
 }
 
 pub async fn version(client: &reqwest::Client, version_id: &str) -> Result<Version> {
@@ -184,7 +186,7 @@ pub async fn version(client: &reqwest::Client, version_id: &str) -> Result<Versi
         .header(reqwest::header::USER_AGENT, USER_AGENT)
         .send()
         .await?;
-    Ok(decode(check(resp, "version").await?, "version").await?)
+    decode(check(resp, "version").await?, "version").await
 }
 
 /// Which Modrinth version each file hash belongs to — `POST /version_files`.
@@ -203,7 +205,36 @@ pub async fn version_files(
         .json(&serde_json::json!({ "hashes": hashes, "algorithm": "sha1" }))
         .send()
         .await?;
-    Ok(decode(check(resp, "version lookup").await?, "version lookup").await?)
+    decode(check(resp, "version lookup").await?, "version lookup").await
+}
+
+/// The newest version of each hash's project that still fits this game
+/// version and one of `loaders` — `POST /version_files/update`. A hash
+/// already on its newest fitting version maps to that same version; unknown
+/// hashes are absent. Always pass loaders: without them Modrinth happily
+/// answers a Fabric jar with the NeoForge build.
+pub async fn version_files_update(
+    client: &reqwest::Client,
+    hashes: &[String],
+    loaders: &[&str],
+    game_version: &str,
+) -> Result<std::collections::HashMap<String, Version>> {
+    if hashes.is_empty() {
+        return Ok(Default::default());
+    }
+    let body = serde_json::json!({
+        "hashes": hashes,
+        "algorithm": "sha1",
+        "loaders": loaders,
+        "game_versions": [game_version],
+    });
+    let resp = client
+        .post(format!("{MODRINTH_API}/version_files/update"))
+        .header(reqwest::header::USER_AGENT, USER_AGENT)
+        .json(&body)
+        .send()
+        .await?;
+    decode(check(resp, "update lookup").await?, "update lookup").await
 }
 
 // ── tags (the filter vocabularies) ─────────────────────────────────────────
@@ -249,7 +280,7 @@ async fn tag<T: serde::de::DeserializeOwned>(client: &reqwest::Client, name: &st
         .send()
         .await?;
     let what = format!("tag/{name}");
-    Ok(decode(check(resp, &what).await?, &what).await?)
+    decode(check(resp, &what).await?, &what).await
 }
 
 pub async fn category_tags(client: &reqwest::Client) -> Result<Vec<CategoryTag>> {
@@ -328,7 +359,7 @@ pub async fn project(client: &reqwest::Client, project_id: &str) -> Result<Proje
         .header(reqwest::header::USER_AGENT, USER_AGENT)
         .send()
         .await?;
-    Ok(decode(check(resp, "project").await?, "project").await?)
+    decode(check(resp, "project").await?, "project").await
 }
 
 /// Newest version of a project playable on this game version + loader.
@@ -560,5 +591,23 @@ mod tests {
         assert!(msg.contains("text/html"), "{msg}");
         assert!(msg.contains("Blocked"), "{msg}");
         assert!(msg.contains("parse error"), "{msg}");
+    }
+
+    #[test]
+    #[ignore = "live network call"]
+    fn update_lookup_stays_on_the_loader_live() {
+        tokio::runtime::Runtime::new().expect("tokio runtime").block_on(async {
+            let client = reqwest::Client::new();
+            // an old Fabric Sodium for 1.21.1 (mc1.21-0.5.11)
+            let old = "d67e66ea4bb2409997b636dae4203d33764cdcc8".to_string();
+            let found = super::version_files_update(&client, &[old.clone()], &["fabric"], "1.21.1")
+                .await
+                .expect("update lookup");
+            let v = found.get(&old).expect("Modrinth knows the hash");
+            assert_eq!(v.project_id, "AANobbMI");
+            assert!(v.loaders.iter().any(|l| l == "fabric"), "{:?}", v.loaders);
+            assert!(v.game_versions.iter().any(|g| g == "1.21.1"), "{:?}", v.game_versions);
+            assert_ne!(v.version_number, "mc1.21-0.5.11");
+        });
     }
 }

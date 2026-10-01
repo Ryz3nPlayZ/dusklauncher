@@ -91,7 +91,7 @@ public final class CosmeticsGameTest implements FabricClientGameTest {
     /** Each accessory alone, zoomed in, from four sides. */
     private static void closeUps(ClientGameTestContext ctx) {
         ctx.runOnClient(client -> {
-            client.options.hideGui = true;
+            HarnessCompat.hideHud(client);
             client.options.fov().set(30);
             client.options.setCameraType(CameraType.THIRD_PERSON_FRONT);
         });

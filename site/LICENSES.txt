@@ -1,0 +1,7 @@
+Third-party assets bundled with this site
+
+fonts/Monocraft-Bold.otf   Monocraft by IdreesInc, SIL Open Font License 1.1
+fonts/inter-*.woff2        Inter by Rasmus Andersson, SIL Open Font License 1.1
+icons/ (except below)      pixelarticons by Gerrit Halfmann, MIT License
+icons/homebrew.svg,
+icons/modrinth.svg         Simple Icons, CC0 1.0

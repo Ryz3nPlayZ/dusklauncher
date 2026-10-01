@@ -36,13 +36,14 @@ java/dev/dusk/client/mixin/DamageEventMixin.java
 java/dev/dusk/client/mixin/DamageOverlayMixin.java
 java/dev/dusk/client/mixin/OverlayTextureMixin.java
 java/dev/dusk/client/render/DamageVariants.java
-java/dev/dusk/client/mixin/SprintMixin.java
 java/dev/dusk/client/mixin/HitboxMixin.java
 java/dev/dusk/client/mixin/HitboxRenderMixin.java
 java/dev/dusk/client/mixin/StuckArrowMixin.java
 java/dev/dusk/client/mixin/StuckStingerMixin.java
 java/dev/dusk/client/mixin/HitboxToggleMixin.java
 java/dev/dusk/client/render/HitboxHooks.java
+# The Shield Statuses port tints the 1.21.11+ shield/item-model renderers.
+java/dev/dusk/client/mixin/shield/**
 
 # ColorSaturation's grade is a 1.21.11-style post chain (std140 uniform blocks
 # in the effect json), so it stays off the older targets too.

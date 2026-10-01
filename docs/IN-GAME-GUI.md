@@ -29,17 +29,37 @@ from the layers beneath it. Written against what's already in the tree; every
 ### Modules
 
 - **HUD** (`modules/hud/`): Keystrokes, CPS, FPS, Ping, Armor Status, Held Item,
-  Potion Effects, Shield Status, Combo Counter, Reach, Sprint Status,
-  Coordinates, Nether Coordinates, Direction, Rotation, Speed, Biome, Light
+  Potion Effects, Combo Counter, Reach, Sprint Status,
+  Coordinates, Nether Coordinates, Speed, Biome, Light
   Level, Clock, Game Time, Day Counter, Weather, Playtime, Entity Count,
   Memory, Server Address. Each is a `HudElement` with its own settings; the
   starter set (FPS, CPS, Ping, XYZ, Keystrokes, Armor, Effects, Sprint Status)
   is on by default.
-- **Movement**: Toggle Sprint (+ toggle sneak). Holds the vanilla key down
-  client-side; nothing about movement packets changes.
+- **Ported modules.** Modules that recreate a known mod follow that mod's
+  behaviour and defaults, and say so in their class comment. Permissive
+  sources (MIT, Zlib, Unlicense) are ported with attribution in
+  `client-mod/NOTICE`. GPL/LGPL mods are behaviour-only (no code), and
+  tr7zw mods (3D skin layers, wavey capes) are our own implementations.
+  - **Toggle Sprint**: toggle-toggle-sprint (Zlib). Keys flip vanilla's own
+    Sprint/Sneak toggle options. Toggle Sneak is unbound because Right Shift
+    opens the Dusk menu.
+  - **Freelook**: FreeLook (MIT). Hold Left Alt or toggle with Right Alt;
+    shoulder clamp and eased return.
+  - **Hunger Info**: AppleSkin (Unlicense). Saturation/exhaustion overlays,
+    hunger/health previews for held food, tooltip food values and the
+    `appleskin:` sync payloads (exhaustion/saturation only come from
+    AppleSkin servers or singleplayer). Not registered when AppleSkin is
+    installed.
+  - **Shield Statuses**: Walksy's Shield Statuses + WalksyLib (MIT). Tints
+    every player's shield green/red by raised/disabled state.
+  - **Compact Chat**, **Chat Timestamps** (MIT), and the **Combo Counter**
+    from Eymistaken's HUD (MIT).
+  - **Confirm Disconnect** (LGPL, behaviour only): asks before leaving.
+  - **Fullbright**: Gamma Utils' gamma controls (LGPL, behaviour only). G
+    toggles 1500 %, arrow keys step 10 % within −750…1500 %, an action-bar
+    "Gamma: N%" message and an optional smooth transition.
 - **Render**: Custom Crosshair (cross/square/dot/circle, gap/size/thickness,
-  outline, rainbow, colour-by-target, bow/attack-cooldown gap), Fullbright
-  (gamma 100–1500 %, keybinds G / unbound up-down), Motion Blur
+  outline, rainbow, colour-by-target, bow/attack-cooldown gap), Motion Blur
   (natural-motionblur style frame accumulation, strength 1–100 %; runs at
   the tail of `GameRenderer.renderLevel` so the HUD/GUI is never blurred —
   `render/MotionBlurRenderer.java` + `post_effect/motion_blur.json`).
@@ -60,7 +80,11 @@ targets that have a gametest harness (`mc_<key>_gametest` is `false` for
 1.21.1 and 1.21.3, whose Fabric API lacks the client gametest module): it
 enters a world, asserts crosshair/fullbright state, that the motion-blur post
 pass actually ran, and screenshots the live HUD plus the editor's list and
-settings views into `build/run/clientGameTest/screenshots/`. Rendering has
+settings views into `build/run/clientGameTest/screenshots/`. The same run
+includes `MixinAuditGameTest`, which force-loads every mixin target so a stale
+injection descriptor fails the test instead of crashing a player when the
+target class first loads. It also includes `ServerApiGameTest`, which runs the
+`dusk:hello`/`dusk:rules` handshake against the integrated server. Rendering has
 been checked in-game on 1.21.11 and 26.x; the older targets are verified by
 compiling and by javap-ing their mixin targets against the mapped jars.
 
@@ -101,8 +125,5 @@ the launcher shell share one look.
 Not GUI, but the same mixin discipline as the cosmetics package:
 
 - **Zoom** — we ship Zoomify; don't build our own.
-- **Freelook** — mixin the camera update (`Camera`/`GameRenderer` orientation
-  path) to use a detached yaw/pitch while a keybind is held, capture mouse
-  delta in `MouseHandler` before vanilla consumes it, restore on release.
-  Needs care in third-person + smoothing; freelook is AGPL-licensed, so this
-  is reference-only (read their repo, write our own).
+- **Freelook** — done: a port of FreeLook (MIT) in `modules/render/Freelook.java`
+  and `mixin/freelook`.

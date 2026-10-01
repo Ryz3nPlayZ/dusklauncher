@@ -1,11 +1,11 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
-import dev.dusk.client.gui.Vanilla;
+import dev.dusk.client.gui.Px;
 import dev.dusk.client.module.setting.IntSetting;
 import org.lwjgl.glfw.GLFW;
 
-/** A vanilla slider with the value written on it. Arrow keys step it while hovered. */
+/** The launcher's range as a Px slider with the value written on it. Arrow keys step it while hovered. */
 public class SliderWidget extends SettingRow {
     private final IntSetting setting;
     private final Runnable onChange;
@@ -19,8 +19,8 @@ public class SliderWidget extends SettingRow {
 
     @Override
     protected void renderControl(Canvas c, int mouseX, int mouseY) {
-        Vanilla.slider(c, controlX(), top(), controlWidth(), SQUARE, setting.fraction(), setting.display(),
-                dragging || inControl(mouseX, mouseY), true);
+        Px.slider(c, controlX(), top(), controlWidth(), SQUARE, setting.fraction(), setting.display(),
+                dragging || inControl(mouseX, mouseY));
     }
 
     @Override
@@ -36,6 +36,7 @@ public class SliderWidget extends SettingRow {
     public void drag(double mx, double my) {
         if (!dragging) return;
         int before = setting.get();
+        // Px.slider's handle is 8 wide on a standard row; its centre follows the mouse
         setting.setFraction((mx - controlX() - 4) / (controlWidth() - 8));
         if (setting.get() != before) onChange.run();
     }

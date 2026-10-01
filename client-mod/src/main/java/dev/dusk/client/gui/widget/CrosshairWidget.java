@@ -1,10 +1,10 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
-import dev.dusk.client.gui.Vanilla;
+import dev.dusk.client.gui.Px;
 import dev.dusk.client.modules.render.CustomCrosshair;
 
-/** Flex-HUD's crosshair entry: an "Edit" button with the live 15x15 preview beside it. */
+/** The crosshair entry: an "Edit" PxButton with the live 15x15 preview beside it. */
 public class CrosshairWidget extends SettingRow {
     private final CustomCrosshair crosshair;
     private final Runnable onChange;
@@ -21,14 +21,14 @@ public class CrosshairWidget extends SettingRow {
     protected void renderControl(Canvas c, int mouseX, int mouseY) {
         boolean hover = inControl(mouseX, mouseY);
         int bw = controlWidth() - SQUARE - GAP, px = controlX() + bw + GAP, py = top();
-        Vanilla.button(c, "Edit", controlX(), py, bw, SQUARE, hover, true);
+        Px.button(c, controlX(), py, bw, SQUARE, hover, true);
+        Px.label(c, "Edit", controlX(), py, bw, SQUARE, hover, false, 0xFF);
         preview(c, crosshair, px, py, SQUARE, hover);
     }
 
-    /** A dark square with the crosshair at one pixel per cell. */
+    /** A panel square with the crosshair at one pixel per cell. */
     public static void preview(Canvas c, CustomCrosshair crosshair, int x, int y, int size, boolean hover) {
-        c.fill(x, y, x + size, y + size, hover ? 0xFFD0D0D0 : 0xFF404040);
-        c.fill(x + 1, y + 1, x + size - 1, y + size - 1, 0xFF1E1F22);
+        Px.panel(c, x, y, size, size);
         int ox = x + (size - CustomCrosshair.SIZE) / 2, oy = y + (size - CustomCrosshair.SIZE) / 2;
         crosshair.forEachPixel((px, py, argb) -> c.fill(ox + px, oy + py, ox + px + 1, oy + py + 1, argb));
     }

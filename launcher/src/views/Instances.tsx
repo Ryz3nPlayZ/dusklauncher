@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavCell, PxBox, PxButton, TT } from '../components/px/Px';
+import { Choice } from '../components/px/Form';
 import InstanceEditor from './InstanceEditor';
 import BrowseProjects from './Browse';
 import Project from './Project';
@@ -21,7 +22,7 @@ import {
   type Version,
 } from '../lib/api';
 
-const FILTERS = ['ALL', 'VANILLA', 'FABRIC'] as const;
+const FILTERS = ['ALL', 'VANILLA', 'FABRIC', 'NEOFORGE'] as const;
 type Filter = (typeof FILTERS)[number];
 
 export default function Instances({
@@ -307,13 +308,13 @@ export default function Instances({
    Figma 98:88 — a 307×223 chooser: CREATE JAVA PROFILE in the accent, then
    DUSK PROFILE (purple) and BROWSE MODPACKS (moss), 265×46 grey-ring
    buttons with tinted surfaces. Two more grey rows: CUSTOM PROFILE (a bare
-   vanilla / fabric instance) and IMPORT .MRPACK off disk (desktop only).
+   vanilla / fabric / neoforge instance) and IMPORT .MRPACK off disk (desktop only).
    DUSK PROFILE is the frame-6 install popup pointed at DUSK_PACK: pick the
    pack release + game version exactly as for any modpack, and the instance
    is the whole pack plus everything the launcher forces in at launch. The
-   custom form is name + Minecraft version; the fabric loader resolves
-   itself and shows up read-only, and the FABRIC LOADER toggle is the loader
-   switch: on → fabric, off → plain vanilla with no modloader. */
+   custom form is name + Minecraft version + LOADER; the fabric loader
+   resolves itself and shows up read-only, NeoForge picks the newest build
+   for the version at first launch. */
 function NewInstance({
   onClose,
   onBrowse,
@@ -327,7 +328,7 @@ function NewInstance({
   const [versions, setVersions] = useState<Version[]>([]);
   const [name, setName] = useState('');
   const [version, setVersion] = useState('');
-  const [optimized, setOptimized] = useState(true);
+  const [loader, setLoader] = useState<'fabric' | 'neoforge' | 'vanilla'>('fabric');
   const [fabricVer, setFabricVer] = useState<string | null>(null);
   /* the pack's icon for the DUSK PROFILE popup; the box glyph until it lands */
   const [duskIcon, setDuskIcon] = useState<string | null>(null);
@@ -388,7 +389,7 @@ function NewInstance({
               BROWSE MODPACKS
             </TT>
           </PxButton>
-          <PxButton family="grey" height="md" onClick={() => setStep('custom')} title="A bare vanilla or Fabric instance">
+          <PxButton family="grey" height="md" onClick={() => setStep('custom')} title="A bare vanilla, Fabric or NeoForge instance">
             <TT size={20}>CUSTOM PROFILE</TT>
           </PxButton>
           <PxButton
@@ -472,7 +473,26 @@ function NewInstance({
           </PxBox>
         </div>
 
-        {optimized && (
+        <div className="modal__row">
+          <span className="modal__label">
+            <TT size={16} tone="dim">
+              LOADER
+            </TT>
+          </span>
+          <div className="newinst__choice">
+            <Choice
+              value={loader}
+              options={[
+                { value: 'fabric', label: 'FABRIC' },
+                { value: 'neoforge', label: 'NEOFORGE' },
+                { value: 'vanilla', label: 'VANILLA' },
+              ]}
+              onPick={setLoader}
+            />
+          </div>
+        </div>
+
+        {loader === 'fabric' && (
           <div className="modal__row">
             <span className="modal__label">
               <TT size={16} tone="dim">
@@ -488,23 +508,13 @@ function NewInstance({
           </div>
         )}
 
-        <button
-          className="check"
-          onClick={() => setOptimized((v) => !v)}
-          title="Fabric loader; DuskClient rides along"
-        >
-          <span className={['px px--grey check__box', optimized ? 'is-on' : ''].join(' ')}>
-            <span className="check__tick" />
-          </span>
-          <span className="newinst__option-text">
-            <TT size={16}>FABRIC LOADER</TT>
-            <span className="meta">
-              {optimized
-                ? 'Pinned automatically for that version; DuskClient rides along.'
-                : 'Off — plain vanilla, no modloader.'}
-            </span>
-          </span>
-        </button>
+        <span className="meta">
+          {loader === 'fabric'
+            ? 'Pinned automatically for that version; DuskClient rides along.'
+            : loader === 'neoforge'
+              ? 'The newest NeoForge build for that version, installed at first launch. DuskClient is Fabric-only.'
+              : 'Plain vanilla, no modloader.'}
+        </span>
 
         {err && <span className="meta">{err}</span>}
 
@@ -525,7 +535,7 @@ function NewInstance({
               setErr(null);
               try {
                 onCreated(
-                  await api.createProfile(name.trim(), version.trim(), optimized ? 'fabric' : 'vanilla'),
+                  await api.createProfile(name.trim(), version.trim(), loader),
                 );
               } catch (e) {
                 setErr(String(e));

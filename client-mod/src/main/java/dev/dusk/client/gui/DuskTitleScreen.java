@@ -96,7 +96,7 @@ public class DuskTitleScreen extends DuskScreen {
 
         // centre: the wordmark, 24 (plus its line box), then 310x44 bars 9 apart
         int bw = Math.min(this.width - 16, px(310, v)), bh = Math.max(20, px(44, v)), gap = Math.max(3, px(9, v));
-        titleScale = Math.max(3, Math.round(44 * v / 8) * 5 / 6);
+        titleScale = Math.max(2, Math.round(44 * v / 8) * 2 / 3);
         int logoGap = px(30, v);
         int centreH = Theme.wordmarkHeight(titleScale) + logoGap + 3 * bh + 2 * gap;
         int free = quitY - topH - centreH;

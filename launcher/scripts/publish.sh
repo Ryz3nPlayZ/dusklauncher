@@ -8,6 +8,7 @@
 #
 #   scripts/publish.sh v0.2.1
 #   scripts/publish.sh v0.2.1 --check   # verify only, leave it a draft
+#   scripts/publish.sh v0.2.1 --skip-gametest   # publish although client gametests failed
 set -euo pipefail
 
 TAP_REPO="ryz3nplayz/homebrew-tap"
@@ -16,7 +17,14 @@ REPO="ryz3nplayz/dusklauncher"
 cd "$(dirname "$0")/.."
 tag="${1:-}"
 check_only=0
-[ "${2:-}" = "--check" ] && check_only=1
+skip_gametest=0
+for arg in "${@:2}"; do
+  case "$arg" in
+    --check) check_only=1 ;;
+    --skip-gametest) skip_gametest=1 ;;
+    *) echo "unknown option: $arg" >&2; exit 2 ;;
+  esac
+done
 if [[ ! "$tag" =~ ^v[0-9] ]]; then
   echo "usage: scripts/publish.sh vX.Y.Z [--check]" >&2
   exit 2
@@ -62,6 +70,28 @@ for p in ("darwin-aarch64", "darwin-x86_64", "windows-x86_64", "linux-x86_64"):
 print("latest.json ok:", doc["version"], ", ".join(sorted(doc["platforms"])))
 PY
 rm -f "$tmp"
+
+# the client gametests boot every Dusk client jar; a failure there means the
+# mod crashes in-game even though every installer built fine
+run_id="$(gh run list --repo "$REPO" --workflow release.yml --branch "$tag" --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)"
+if [ -z "$run_id" ]; then
+  echo "warning: no release workflow run found for $tag; client gametests unchecked" >&2
+else
+  failed="$(gh run view "$run_id" --repo "$REPO" --json jobs \
+    -q '.jobs[] | select(.name | startswith("client-gametest")) | select(.conclusion != "success") | "\(.name): \(if .conclusion == "" then .status else .conclusion end)"')"
+  if [ -n "$failed" ]; then
+    echo "client gametests did not pass (https://github.com/$REPO/actions/runs/$run_id):" >&2
+    printf '  %s\n' "$failed" >&2
+    if [ "$skip_gametest" = 1 ]; then
+      echo "continuing anyway (--skip-gametest)" >&2
+    else
+      echo "not publishing; fix the client or rerun with --skip-gametest" >&2
+      exit 1
+    fi
+  else
+    echo "client gametests ok (run $run_id)"
+  fi
+fi
 
 if [ "$check_only" = 1 ]; then
   echo "draft $tag checks out — not publishing (--check)"

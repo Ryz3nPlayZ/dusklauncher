@@ -1,6 +1,7 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.gui.Px;
 import dev.dusk.client.gui.Vanilla;
 import dev.dusk.client.module.setting.ColorSetting;
 import org.lwjgl.glfw.GLFW;
@@ -12,7 +13,6 @@ import org.lwjgl.glfw.GLFW;
 public class ColorPickerPopup implements Popup {
     private static final int PAD = 3, SV = 80, BAR = 8, FIELD_H = 16;
     private static final int W = PAD + SV + PAD + BAR + PAD + BAR + PAD, H = PAD + SV + PAD + FIELD_H + PAD;
-    private static final int BG = 0xFF1E1F22;
 
     private final int ax, ay, as;
     private final ColorSetting setting;
@@ -58,8 +58,7 @@ public class ColorPickerPopup implements Popup {
     @Override
     public void render(Canvas c, int mouseX, int mouseY, int screenW, int screenH) {
         place(screenW, screenH);
-        c.fill(x - 1, y - 1, x + W + 1, y + H + 1, 0xFF000000);
-        c.fill(x, y, x + W, y + H, BG);
+        Px.panel(c, x - 1, y - 1, W + 2, H + 2);
 
         // saturation across, value down: each column fades its full-value colour to black
         int sx = svX(), sy = svY();
@@ -84,7 +83,7 @@ public class ColorPickerPopup implements Popup {
         marker(c, alx, sy + Math.round((1 - alpha / 255f) * (SV - 1)));
 
         int fy = fieldY(), fw = W - 2 * PAD - FIELD_H - PAD;
-        Vanilla.editBox(c, sx, fy, fw, FIELD_H, editing);
+        Px.field(c, sx, fy, fw, FIELD_H, editing);
         String shown = "#" + (editing ? buffer : setting.hex()) + (editing && (System.currentTimeMillis() / 500) % 2 == 0 ? "_" : "");
         c.text(shown, sx + 4, fy + (FIELD_H - 8) / 2 + 1, editing ? 0xFFE0E0E0 : Vanilla.TEXT_DIM, true);
         ColorWidget.swatch(c, sx + fw + PAD, fy, FIELD_H, setting.argb(), false);

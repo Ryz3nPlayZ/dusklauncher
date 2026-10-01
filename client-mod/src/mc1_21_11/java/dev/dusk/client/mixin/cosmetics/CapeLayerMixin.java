@@ -6,9 +6,13 @@ import com.llamalad7.mixinextras.sugar.Local;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.dusk.client.cosmetics.ExtendedAvatarRenderState;
 import dev.dusk.client.cosmetics.PlayerCosmetics;
+import dev.dusk.client.render.cape.CapeMesh;
+import dev.dusk.client.render.cape.CapeShapeHolder;
 import net.minecraft.client.model.Model;
+import net.minecraft.client.model.player.PlayerModel;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.layers.CapeLayer;
+import net.minecraft.client.renderer.entity.layers.RenderLayer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.rendertype.RenderType;
@@ -20,7 +24,8 @@ import org.spongepowered.asm.mixin.injection.At;
 /**
  * Custom capes are drawn translucent (so PNG alpha works, as in Cosmetica and
  * MinecraftCapes) and, when the profile asks for it, with the armour
- * enchantment glint layered on top. Vanilla capes are left alone.
+ * enchantment glint layered on top. With Cape Physics on, every cape is
+ * drawn bent along its simulated shape instead of as vanilla's flat board.
  */
 @Mixin(CapeLayer.class)
 public abstract class CapeLayerMixin {
@@ -32,13 +37,28 @@ public abstract class CapeLayerMixin {
             int light, int overlay, int outlineColor, ModelFeatureRenderer.CrumblingOverlay crumbling,
             Operation<Void> original, @Local(argsOnly = true) AvatarRenderState avatarState) {
         PlayerCosmetics c = ((ExtendedAvatarRenderState) avatarState).duskclient$getCosmetics();
-        if (c == null || !c.hasCape()) {
-            original.call(collector, model, state, poseStack, renderType, light, overlay, outlineColor, crumbling);
+        boolean custom = c != null && c.hasCape();
+        if (custom) {
+            Identifier texture = avatarState.skin.cape().texturePath();
+            renderType = RenderTypes.entityTranslucent(texture);
+        }
+        boolean glint = custom && c.glint();
+        float[] shape = ((CapeShapeHolder) avatarState).duskclient$capeShape();
+        if (shape != null) {
+            PlayerModel parent = (PlayerModel) ((RenderLayer<?, ?>) (Object) this).getParentModel();
+            poseStack.pushPose();
+            parent.body.translateAndRotate(poseStack);
+            poseStack.translate(0.0F, 0.0F, 0.125F);
+            collector.submitCustomGeometry(poseStack, renderType, (pose, vc) -> CapeMesh.emit(shape, pose, vc, light, overlay));
+            if (glint) {
+                collector.order(1).submitCustomGeometry(poseStack, RenderTypes.armorEntityGlint(),
+                        (pose, vc) -> CapeMesh.emit(shape, pose, vc, light, overlay));
+            }
+            poseStack.popPose();
             return;
         }
-        Identifier texture = avatarState.skin.cape().texturePath();
-        original.call(collector, model, state, poseStack, RenderTypes.entityTranslucent(texture), light, overlay, outlineColor, crumbling);
-        if (c.glint()) {
+        original.call(collector, model, state, poseStack, renderType, light, overlay, outlineColor, crumbling);
+        if (glint) {
             collector.order(1).submitModel(model, state, poseStack, RenderTypes.armorEntityGlint(), light, overlay, outlineColor, crumbling);
         }
     }

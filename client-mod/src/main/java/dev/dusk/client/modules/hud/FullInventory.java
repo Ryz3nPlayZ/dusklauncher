@@ -17,7 +17,7 @@ public class FullInventory extends TextHud {
 
     public FullInventory() {
         super("fullinventory", "Full Inventory", "Warns you when every inventory slot is taken.", 0xFFFF0000);
-        setPosition(150, 148);
+        setPosition(150, 159);
     }
 
     @Override

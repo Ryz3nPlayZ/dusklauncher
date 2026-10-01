@@ -1,7 +1,7 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
-import dev.dusk.client.gui.Theme;
+import dev.dusk.client.gui.Px;
 import dev.dusk.client.gui.Vanilla;
 import org.lwjgl.glfw.GLFW;
 
@@ -15,6 +15,8 @@ import java.util.function.IntConsumer;
  */
 public class DropdownPopup implements Popup {
     private static final int ROW = 16, MAX_VISIBLE = 8;
+    /** The panel's frame (2px black + 3px band at the launcher's scale), rounded up to GUI pixels. */
+    private static final int INSET = 3;
 
     private final int ax, ay, aw, ah;
     private final List<String> options;
@@ -38,37 +40,35 @@ public class DropdownPopup implements Popup {
     private int visible() { return Math.min(MAX_VISIBLE, options.size()); }
 
     private void place(int screenH) {
-        h = visible() * ROW + 2;
+        h = visible() * ROW + 2 * INSET;
         x = ax;
         y = ay + ah - 1;
         if (y + h > screenH - 2 && ay - h + 1 >= 2) y = ay - h + 1;
     }
 
     private int rowAt(double mx, double my) {
-        if (!Vanilla.inside(mx, my, x, y + 1, aw, h - 2)) return -1;
-        int i = scroll + (int) ((my - y - 1) / ROW);
+        if (!Vanilla.inside(mx, my, x, y + INSET, aw, h - 2 * INSET)) return -1;
+        int i = scroll + (int) ((my - y - INSET) / ROW);
         return i < options.size() ? i : -1;
     }
 
     @Override
     public void render(Canvas c, int mouseX, int mouseY, int screenW, int screenH) {
         place(screenH);
-        c.fill(x, y, x + aw, y + h, 0xF0000000);
-        c.outline(x, y, aw, h, 0xFFA0A0A0);
+        Px.panel(c, x, y, aw, h);
         hovered = rowAt(mouseX, mouseY);
         boolean bar = options.size() > visible();
-        int textW = aw - 10 - (bar ? 4 : 0);
+        int rowW = aw - 2 * INSET - (bar ? Vanilla.SCROLLBAR_W : 0);
         for (int r = 0; r < visible(); r++) {
-            int i = scroll + r, ry = y + 1 + r * ROW;
-            if (i == hovered) c.fill(x + 1, ry, x + aw - 1, ry + ROW, 0x40FFFFFF);
-            else if (i == selected) c.fill(x + 1, ry, x + aw - 1, ry + ROW, 0x20FFFFFF);
-            int color = i == selected ? 0xFFFFFFA0 : Vanilla.TEXT;
-            c.text(Theme.ellipsize(c, options.get(i), textW), x + 5, ry + (ROW - 8) / 2 + 1, color, true);
+            int i = scroll + r, ry = y + INSET + r * ROW;
+            if (i == hovered) c.fill(x + INSET, ry, x + INSET + rowW, ry + ROW, 0xFF323232);
+            Px.value(c, options.get(i), x + INSET, ry, rowW, ROW, i == selected ? Px.Tone.ACCENT : Px.Tone.GREY,
+                    i == hovered, true);
         }
         if (bar) {
-            int trackH = h - 2, barH = Math.max(8, trackH * visible() / options.size());
-            int barY = y + 1 + (trackH - barH) * scroll / (options.size() - visible());
-            c.fill(x + aw - 4, barY, x + aw - 2, barY + barH, 0xFFA0A0A0);
+            int trackH = h - 2 * INSET, barH = Math.max(8, trackH * visible() / options.size());
+            int barY = y + INSET + (trackH - barH) * scroll / (options.size() - visible());
+            Px.scrollbar(c, x + aw - INSET - Vanilla.SCROLLBAR_W, Vanilla.SCROLLBAR_W, barY, barH);
         }
     }
 

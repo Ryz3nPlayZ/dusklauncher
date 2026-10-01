@@ -81,12 +81,12 @@ fn rules_allow(rules: &[Value], features: &HashMap<String, bool>) -> bool {
             .get("os")
             .and_then(|o| o.get("name"))
             .and_then(|n| n.as_str())
-            .map_or(true, |n| n == meta::os_name());
+            .is_none_or(|n| n == meta::os_name());
         if !os_ok {
             continue;
         }
         let feat_ok = match rule.get("features") {
-            Some(f) => f.as_object().map_or(true, |m| {
+            Some(f) => f.as_object().is_none_or(|m| {
                 m.iter().all(|(k, v)| features.get(k).copied().unwrap_or(false) == v.as_bool().unwrap_or(false))
             }),
             None => true,
@@ -132,6 +132,9 @@ fn strip_unsupported_flags(args: Vec<String>, java_major: u32) -> Vec<String> {
             let name = a.trim_start_matches("-XX:+").trim_start_matches("-XX:-");
             match name {
                 "UseZGC" => java_major >= 15,
+                // generational ZGC: opt-in on 21-23, the only mode (and the
+                // flag obsolete) from 24, unknown before 21
+                "ZGenerational" => (21..24).contains(&java_major),
                 "UseCompactObjectHeaders" => java_major >= 24,
                 _ => true,
             }
@@ -214,6 +217,9 @@ pub fn build_launch_spec(
     values.insert("game_directory".into(), dirs.root.display().to_string());
     values.insert("assets_root".into(), dirs.assets.display().to_string());
     values.insert("user_properties".into(), "{}".into());
+    // NeoForge builds its module path (`-p`) from these
+    values.insert("library_directory".into(), dirs.libraries.display().to_string());
+    values.insert("classpath_separator".into(), if cfg!(windows) { ";" } else { ":" }.into());
 
     let mut features = HashMap::new();
     features.insert("is_demo_user".to_string(), false);
@@ -583,6 +589,15 @@ mod tests {
         for arg in spec.jvm_args.iter().chain(spec.game_args.iter()) {
             assert!(!arg.contains("${"), "unexpanded placeholder: {arg}");
         }
+    }
+
+    #[test]
+    fn generational_zgc_is_gated_per_java() {
+        let args = || vec!["-XX:+UseZGC".to_string(), "-XX:+ZGenerational".to_string()];
+        assert_eq!(strip_unsupported_flags(args(), 8), Vec::<String>::new());
+        assert_eq!(strip_unsupported_flags(args(), 17), vec!["-XX:+UseZGC"]);
+        assert_eq!(strip_unsupported_flags(args(), 21), args());
+        assert_eq!(strip_unsupported_flags(args(), 25), vec!["-XX:+UseZGC"]);
     }
 
     #[test]

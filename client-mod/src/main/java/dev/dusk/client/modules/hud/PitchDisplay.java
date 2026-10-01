@@ -6,6 +6,7 @@ import dev.dusk.client.hud.TextHud;
 import dev.dusk.client.module.setting.BoolSetting;
 import dev.dusk.client.module.setting.IntSetting;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Items;
 
 /** Flex-HUD's pitch gauge: a vertical strip of angle ticks around your pitch. */
@@ -18,7 +19,7 @@ public class PitchDisplay extends TextHud {
             add(new BoolSetting("elytraOnly", "Only with an elytra", false));
     private final BoolSetting showMarker = add(new BoolSetting("showMarker", "Show marker", true));
     private final BoolSetting showDegrees = add(new BoolSetting("showDegrees", "Show degrees", false));
-    private final IntSetting degreesDecimals = add(new IntSetting("degreesDecimals", "Degree decimals", 0, 0, 14));
+    private final IntSetting degreesDecimals = add(new IntSetting("degreesDecimals", "Degree decimals", 0, 0, 3));
 
     public PitchDisplay() {
         super("pitchdisplay", "Pitch Display", "A vertical pitch gauge, like an aircraft's ladder.");
@@ -40,7 +41,7 @@ public class PitchDisplay extends TextHud {
     public boolean visible(HudContext ctx) {
         LocalPlayer player = ctx.player();
         if (player == null) return false;
-        return !elytraOnly.get() || player.getInventory().getItem(38).is(Items.ELYTRA);
+        return !elytraOnly.get() || player.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA);
     }
 
     @Override

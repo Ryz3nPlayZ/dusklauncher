@@ -1,9 +1,9 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
-import dev.dusk.client.gui.Vanilla;
+import dev.dusk.client.gui.Px;
 
-/** A vanilla button filling its bounds. */
+/** A launcher PxButton across its bounds, one control tall. */
 public class ButtonWidget extends Widget {
     private final String label;
     private final Runnable onClick;
@@ -15,7 +15,10 @@ public class ButtonWidget extends Widget {
 
     @Override
     public void render(Canvas c, int mouseX, int mouseY) {
-        Vanilla.button(c, label, x, y + (h - Vanilla.BUTTON_H) / 2, w, Vanilla.BUTTON_H, contains(mouseX, mouseY), true);
+        int by = y + (h - Px.H) / 2;
+        boolean hover = contains(mouseX, mouseY);
+        Px.button(c, x, by, w, Px.H, hover, true);
+        Px.label(c, label, x, by, w, Px.H, hover, false, 0xFF);
     }
 
     @Override

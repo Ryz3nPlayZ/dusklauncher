@@ -127,12 +127,12 @@ public class Particles extends Module {
 
     private static Particles instance;
 
-    public final BoolSetting cleanView = add(new BoolSetting("cleanView", "Clean view", false));
-    public final BoolSetting staticColor = add(new BoolSetting("staticColor", "Static particle colour", false));
-    public final BoolSetting noClip = add(new BoolSetting("noClip", "Particles no-clip", false));
-    public final BoolSetting alwaysCritical = add(new BoolSetting("alwaysCritical", "Always show critical", false));
-    public final BoolSetting alwaysSharp = add(new BoolSetting("alwaysSharp", "Always show sharpness", false));
-    public final BoolSetting checkInvulnerable = add(new BoolSetting("checkInvulnerable", "Check invulnerability", false));
+    public final BoolSetting cleanView = add(new BoolSetting("cleanView", "Hide your own potion swirls (first person)", false));
+    public final BoolSetting staticColor = add(new BoolSetting("staticColor", "Ignore lighting (always full bright)", false));
+    public final BoolSetting noClip = add(new BoolSetting("noClip", "Particles pass through blocks", false));
+    public final BoolSetting alwaysCritical = add(new BoolSetting("alwaysCritical", "Crit particles on every hit", false));
+    public final BoolSetting alwaysSharp = add(new BoolSetting("alwaysSharp", "Sharpness particles on every hit", false));
+    public final BoolSetting checkInvulnerable = add(new BoolSetting("checkInvulnerable", "Only on hits that land", false));
 
     private final Map<String, Entry> entries = new LinkedHashMap<>();
     private final Map<String, Entry> lookup = new HashMap<>();
@@ -196,7 +196,7 @@ public class Particles extends Module {
                 // The block entry replaces the per-particle page in the original.
                 hideDigging = grouped(new BoolSetting(key + ".hideDigging", "Hide block digging particles", false), name);
                 hideRunning = grouped(new BoolSetting(key + ".hideRunning", "Hide entity running / falling particles", false), name);
-                hideMode = grouped(new ChoiceSetting(key + ".hideMode", "Mode", "ALL", "Visible entities only", "ALL"), name);
+                hideMode = grouped(new ChoiceSetting(key + ".hideMode", "Hide for", "All entities", "All entities", "Visible entities only"), name);
                 customColor = null;
                 colorMode = null;
                 color = null;
@@ -206,7 +206,7 @@ public class Particles extends Module {
                 hideDigging = hideRunning = null;
                 hideMode = null;
                 customColor = grouped(new BoolSetting(key + ".customColor", "Custom colour", false), name);
-                colorMode = grouped(new ChoiceSetting(key + ".colorMode", "Mode", "Multiply", "Multiply", "Override"), name);
+                colorMode = grouped(new ChoiceSetting(key + ".colorMode", "Colour mode", "Multiply", "Multiply", "Override"), name);
                 color = grouped(new ColorSetting(key + ".color", "Colour", 0xFFFFFFFF), name);
                 size = grouped(new IntSetting(key + ".size", "Size", 100, 50, unfair ? 100 : 500, 10, "%"), name);
                 multiplier = unfair ? null : grouped(new IntSetting(key + ".multiplier", "Multiplier", 100, 0, 1000, 10, "%"), name);

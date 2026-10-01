@@ -6,6 +6,8 @@ import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.hud.TextHud;
 import dev.dusk.client.module.setting.BoolSetting;
 
+import net.minecraft.client.resources.language.I18n;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -53,6 +55,9 @@ public class Biome extends TextHud {
         for (String p : paths) COLORS.put(p, argb);
     }
 
+    /** The id path of the biome last shown, for its colour. */
+    private String path = "plains";
+
     private final BoolSetting biomeColor = add(new BoolSetting("biomeSpecificColor", "Biome colours", true));
 
     public Biome() {
@@ -65,18 +70,36 @@ public class Biome extends TextHud {
         var p = ctx.player();
         var level = ctx.level();
         if (p == null || level == null) return null;
-        return level.getBiome(p.getOnPos()).unwrapKey().map(Compat::keyPath).orElse(null);
+        return level.getBiome(p.blockPosition()).unwrapKey().map(Compat::keyPath).orElse(null);
     }
 
     @Override
     protected String text(HudContext ctx) {
         String b = biome(ctx);
-        return b == null ? null : PREFIX + b;
+        if (b == null) return null;
+        path = b;
+        return PREFIX + displayName(b);
     }
 
     @Override
     protected String sample() {
-        return PREFIX + "plains";
+        path = "plains";
+        return PREFIX + displayName(path);
+    }
+
+    /** "Dark Forest" from the game's language file, or title-cased from the id for modded biomes. */
+    private static String displayName(String path) {
+        String key = "biome.minecraft." + path;
+        // an untranslated key comes back as itself (26.2 dropped I18n.exists)
+        String translated = I18n.get(key);
+        if (!translated.equals(key)) return translated;
+        StringBuilder out = new StringBuilder();
+        for (String word : path.split("_")) {
+            if (word.isEmpty()) continue;
+            if (out.length() > 0) out.append(' ');
+            out.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+        }
+        return out.toString();
     }
 
     @Override
@@ -86,7 +109,7 @@ public class Biome extends TextHud {
         String name = v.substring(PREFIX.length());
         int prefixWidth = c.textWidth(PREFIX);
         c.text(PREFIX, 0, 0, textColor(), shadow.get());
-        int nameColor = biomeColor.get() ? COLORS.getOrDefault(name, 0xFFFFFFFF) : textColor();
+        int nameColor = biomeColor.get() ? COLORS.getOrDefault(path, 0xFFFFFFFF) : textColor();
         c.text(name, prefixWidth, 0, nameColor, shadow.get());
     }
 }

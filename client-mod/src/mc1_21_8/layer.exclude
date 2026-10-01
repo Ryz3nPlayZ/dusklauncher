@@ -1,3 +1,5 @@
 # 1.21.2–1.21.8 use PlayerRenderer/PlayerRenderState mixins instead of the Avatar* ones
 java/dev/dusk/client/mixin/cosmetics/AvatarRendererMixin.java
 java/dev/dusk/client/mixin/cosmetics/AvatarRenderStateMixin.java
+# MC-301281 (ToggleKeyMapping.shouldRestoreStateOnScreenClosed) is 1.21.9+.
+java/dev/dusk/client/mixin/toggle/ToggleRestoreMixin.java

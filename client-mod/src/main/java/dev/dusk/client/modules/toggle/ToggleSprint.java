@@ -1,118 +1,134 @@
 package dev.dusk.client.modules.toggle;
 
 import dev.dusk.client.compat.Compat;
+import dev.dusk.client.hud.Keys;
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.BoolSetting;
-import dev.dusk.client.module.setting.IntSetting;
+import dev.dusk.client.module.setting.ChoiceSetting;
 import dev.dusk.client.module.setting.KeySetting;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.OptionInstance;
+import net.minecraft.client.Options;
+import org.lwjgl.glfw.GLFW;
+
+import java.util.function.Function;
 
 /**
- * Keeps the sprint (and optionally sneak) key held for you. Purely a
- * client-side key press: the server sees the same input as a finger on the
- * key, so nothing about movement changes.
+ * Toggle Toggle Sprint (Zlib, celestialfault — see NOTICE): keys that flip
+ * vanilla's own Sprint and Sneak "Toggle" controls, and press the vanilla key
+ * for you. Sprinting itself stays the game's, so a server sees exactly what it
+ * would from a player who set Sprint to Toggle in Controls.
+ *
+ * <p>Toggle Sneak has no key by default here: the original's Right Shift opens
+ * the Dusk menu.
  */
 public class ToggleSprint extends Module {
+    private static final String UNCHANGED = "Don't modify", ON = "Toggle", OFF = "Hold";
+    private static final String NEVER = "Never", ALWAYS = "Always", WHEN_UNTOGGLED = "When enabling";
+
     private static ToggleSprint instance;
 
-    private final KeySetting enableKey = add(new KeySetting("togglesprint", "Enable/disable key", GLFW.GLFW_KEY_UNKNOWN));
-    private final BoolSetting sprint = add(new BoolSetting("toggleSprint", "Toggle sprint", true));
-    private final BoolSetting sneak = add(new BoolSetting("toggleSneak", "Toggle sneak", false));
-    private final BoolSetting flyBoost = add(new BoolSetting("keepFlying", "Also while flying", true));
+    private final Control sprint = new Control("sprint", "Sprint", GLFW.GLFW_KEY_RIGHT_CONTROL, true, ALWAYS,
+            Options::toggleSprint, o -> o.keySprint);
+    private final Control sneak = new Control("sneak", "Sneak", GLFW.GLFW_KEY_UNKNOWN, false, WHEN_UNTOGGLED,
+            Options::toggleCrouch, o -> o.keyShift);
+    private final BoolSetting keepSprintingOnDeath = add(new BoolSetting("keepSprintingOnDeath", "Keep sprinting after death", true));
 
-    /** The enable/disable key; true when it flipped the module. */
-    public boolean tickKeys() {
-        boolean changed = false;
-        while (enableKey.mapping().consumeClick()) {
-            setEnabled(!enabled());
-            changed = true;
-        }
-        return changed;
-    }
-
-    /**
-     * PolySprint's two extras. They ride on client internals only 1.21.11 and
-     * up have, so on older targets they are left off the module rather than
-     * shown as switches that do nothing.
-     */
-    private final BoolSetting noWTap = new BoolSetting("noWTap", "Disable W-tap sprint", false);
-    private final BoolSetting boostFlight = new BoolSetting("flyBoost", "Fly boost (singleplayer)", false);
-    private final IntSetting boostAmount = new IntSetting("flyBoostAmount", "Fly boost amount", 4, 1, 10, 1, "x");
-
-    private boolean sneakOn;
-    private boolean sneakKeyWasDown;
+    private boolean inWorld;
 
     public ToggleSprint() {
         super("togglesprint", "Toggle Sprint", Category.MOVEMENT,
-                "Holds sprint for you so you never have to double-tap. Optional toggle-sneak.");
-        if (Compat.MODERN_CLIENT_HOOKS) {
-            add(noWTap);
-            add(boostFlight);
-            add(boostAmount);
-        }
+                "Keys for vanilla's Toggle Sprint and Toggle Sneak, so sprinting stays the game's own.");
         instance = this;
         setEnabled(true);
     }
 
-    /**
-     * PolySprint's "Disable W-Tap Sprint": the double-tap timer is cleared
-     * every tick, so letting go of forward and pressing it again never starts
-     * a sprint of its own.
-     */
-    public static boolean disablesWTap() {
+    /** Whether respawning should leave the Sprint toggle latched. */
+    public static boolean keepsSprintOnDeath() {
         ToggleSprint m = instance;
-        return m != null && m.enabled() && m.noWTap.get();
+        return m != null && m.enabled() && m.keepSprintingOnDeath.get();
     }
 
     /**
-     * The flight-speed multiplier, or 0 when the boost is off. PolySprint
-     * keeps this to singleplayer, where the speed is nobody else's business.
+     * The two keys, every client tick. A press while the module is off is
+     * dropped rather than saved up for when it comes back on. Never changes
+     * the module config, so always false.
      */
-    public static float flyBoost() {
-        ToggleSprint m = instance;
-        if (m == null || !m.enabled() || !m.boostFlight.get()) return 0f;
-        if (!Minecraft.getInstance().hasSingleplayerServer()) return 0f;
-        return m.boostAmount.get();
-    }
-
-    public boolean sprintToggled() {
-        return enabled() && sprint.get();
-    }
-
-    /** Whether toggle-sneak is in charge of the sneak key (on or off right now). */
-    public boolean sneakToggleMode() {
-        return enabled() && sneak.get();
-    }
-
-    public boolean sneakToggled() {
-        return enabled() && sneak.get() && sneakOn;
-    }
-
-    @Override
-    public void tick() {
+    public boolean tickKeys() {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) {
-            sneakOn = false;
-            return;
-        }
-        if (sprintToggled()) {
-            boolean flying = mc.player.getAbilities().flying;
-            if (!flying || flyBoost.get()) mc.options.keySprint.setDown(true);
-        }
-        if (sneak.get()) {
-            boolean down = mc.options.keyShift.isDown();
-            if (Compat.currentScreen(mc) == null && down && !sneakKeyWasDown) sneakOn = !sneakOn;
-            sneakKeyWasDown = down;
-            if (sneakOn) mc.options.keyShift.setDown(true);
-        } else {
-            sneakOn = false;
+        if (enabled()) firstWorldTick(mc);
+        sprint.tick(mc, enabled());
+        sneak.tick(mc, enabled());
+        return false;
+    }
+
+    private void firstWorldTick(Minecraft mc) {
+        // key states are left alone while any screen is open
+        if (Compat.currentScreen(mc) != null) return;
+        if (mc.level == null && inWorld) {
+            inWorld = false;
+        } else if (mc.level != null && !inWorld) {
+            sprint.firstWorldTick(mc);
+            sneak.firstWorldTick(mc);
+            inWorld = true;
         }
     }
 
-    @Override
-    public void setEnabled(boolean enabled) {
-        super.setEnabled(enabled);
-        if (!enabled) sneakOn = false;
+    /** One toggling key: Toggle Sprint or Toggle Sneak, and its options. */
+    private final class Control {
+        private final KeySetting key;
+        private final BoolSetting onJoin;
+        private final ChoiceSetting defaultState;
+        private final ChoiceSetting activateKey;
+        private final Function<Options, OptionInstance<Boolean>> toggle;
+        private final Function<Options, KeyMapping> vanillaKey;
+
+        Control(String id, String name, int defaultKey, boolean onJoinDefault, String activationDefault,
+                Function<Options, OptionInstance<Boolean>> toggle, Function<Options, KeyMapping> vanillaKey) {
+            String verb = id.equals("sprint") ? "sprinting" : "sneaking";
+            this.key = add(new KeySetting("toggle_" + id, "Toggle " + name + " key", defaultKey), name);
+            this.onJoin = add(new BoolSetting(id + "OnJoin", "Start " + verb, onJoinDefault), name);
+            this.defaultState = add(new ChoiceSetting(id + "DefaultState", "Default " + id + " state",
+                    UNCHANGED, UNCHANGED, ON, OFF), name);
+            this.activateKey = add(new ChoiceSetting(id + "Activation", "Simulate " + name + " key press",
+                    activationDefault, NEVER, ALWAYS, WHEN_UNTOGGLED), name);
+            this.toggle = toggle;
+            this.vanillaKey = vanillaKey;
+        }
+
+        void firstWorldTick(Minecraft mc) {
+            OptionInstance<Boolean> toggle = this.toggle.apply(mc.options);
+            KeyMapping key = vanillaKey.apply(mc.options);
+            if (defaultState.is(ON)) {
+                toggle.set(true);
+            } else if (defaultState.is(OFF)) {
+                toggle.set(false);
+                // a latched key can linger after the toggle goes off, until it is pressed again
+                key.setDown(false);
+            }
+            if (onJoin.get() && toggle.get() && !key.isDown()) key.setDown(true);
+        }
+
+        void tick(Minecraft mc, boolean active) {
+            while (key.mapping().consumeClick()) {
+                if (active) onPress(mc);
+            }
+        }
+
+        private void onPress(Minecraft mc) {
+            OptionInstance<Boolean> toggle = this.toggle.apply(mc.options);
+            KeyMapping key = vanillaKey.apply(mc.options);
+            if (activateKey.is(ALWAYS) && toggle.get() && !key.isDown()) {
+                key.setDown(true);
+                return;
+            }
+            toggle.set(!toggle.get());
+            if (!toggle.get()) {
+                key.setDown(Keys.physicallyDown(key));
+            } else if (!activateKey.is(NEVER) && !key.isDown()) {
+                key.setDown(true);
+            }
+        }
     }
 }

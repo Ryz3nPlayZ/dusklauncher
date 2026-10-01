@@ -25,6 +25,7 @@ fasterlauncher/
 │   │   │       ├── java.rs        # Mojang java-runtime provisioning
 │   │   │       ├── auth.rs        # Microsoft OAuth → XBL → XSTS → MSA
 │   │   │       ├── fabric.rs      # Fabric meta profile JSON installation
+│   │   │       ├── neoforge.rs    # NeoForge: headless official installer + vanilla merge
 │   │   │       ├── modrinth.rs    # modpack search + .mrpack install
 │   │   │       ├── natives.rs     # LWJGL natives download + extraction
 │   │   │       ├── profile.rs     # user profiles (version, mods, JVM args)
@@ -80,7 +81,8 @@ Chain (see [minecraft.wiki/w/Microsoft_authentication](https://minecraft.wiki/w/
 - Rules: no JVM agents, no runtime injection, no jar rewriting. Mixins are client-side only (rendering/HUD/input), never touch outbound packets or movement math. Client jar sha1 always verified. This is what keeps Grim/Vulcan/Hypixel-style setups comfortable.
 
 ### Profiles
-- One profile = { MC version, loader (vanilla/fabric), loader version, mod list (bundled client-mod + user-added from Modrinth), JVM args (default from 26.2 `default-user-jvm`), resolution, server shortcuts }.
+- NeoForge has no profile endpoint: its installer runs processors that binary-patch the vanilla client into `libraries/net/neoforged/neoforge/<v>/neoforge-<v>-client.jar`. `core/src/neoforge.rs` runs the official installer headless (`java -jar …-installer.jar --install-client <data_dir>`, which only needs a `launcher_profiles.json` to exist) on the game's own Java, so its libraries land in the shared `libraries/`. The JSON it writes last (`versions/neoforge-<v>/neoforge-<v>.json`) doubles as the installed marker and merges with vanilla through the same `merge_with_vanilla`. Its JVM args need `${library_directory}` and `${classpath_separator}` for the `-p` module path, and `-DignoreList=…${version_name}.jar` is why the vanilla jar is saved under the merged id. Builds follow the game version minus `1.` (1.21.1 → `21.1.x`); from 26.x the full version leads (26.1 → `26.1.0.x`). The newest stable build wins, falling back to beta. DuskClient, `-Dfabric.addMods` and settings sync stay Fabric-only.
+- One profile = { MC version, loader (vanilla/fabric/neoforge), loader version, mod list (bundled client-mod + user-added from Modrinth), JVM args (default from 26.2 `default-user-jvm`), resolution, server shortcuts }.
 - Data layout: `<data>/profiles/<id>/{version.json, mods/, assets, libraries}` with a shared content-addressed library/asset store across profiles (like Lunar's single-install model, but standard).
 - Modrinth API (`api.modrinth.com/v2`) for user mods: search, per-version file resolution, mrpack later.
 
@@ -108,6 +110,16 @@ Chain (see [minecraft.wiki/w/Microsoft_authentication](https://minecraft.wiki/w/
 - Global settings (`settings.json`) cover theme/sound/motion/fps, default
   memory + JVM args, per-Java-major runtime overrides, env vars, and
   prelaunch/wrapper/post-exit hooks (all wired into the spawn).
+- **Client settings sync** (`src/client_settings.rs`, on by default): the
+  launcher keeps a master copy of the Dusk mod's HUD/module options and menu
+  prefs in `<data>/client-settings.json`. Before a Fabric launch it pulls a
+  newer copy from the service (`GET /v1/me/settings`, 4 s cap) and overlays it
+  key by key onto the instance's `config/duskclient-hud.json` and
+  `config/duskclient.json` (background path and cosmetics are not synced).
+  At exit only keys that differ from what it wrote fold back into the master,
+  so modules a version lacks keep their settings, and the master is pushed
+  (`PUT /v1/me/settings`, last writer wins). With nothing synced yet, the
+  first exit adopts the instance's settings wholesale.
 
 ## Client mod (Fabric)
 
@@ -116,7 +128,7 @@ Chain (see [minecraft.wiki/w/Microsoft_authentication](https://minecraft.wiki/w/
 - MVP modules: Keystrokes, CPS counter, FPS display, ToggleSprint/ToggleSneak, HitDelayFix (the community-validated fix Lunar removed), Zoom, Armor Status HUD, Combo display, Coordinates, Custom scoreboard.
 - Performance stack (phase 2): bundle Sodium + Lithium + immediatelyFast-style optimizations on the profile, curated and version-pinned.
 - Targets: 1.21.11 first (last obfuscated version — needs Yarn/mojmap as usual); 26.1+ is **unobfuscated**, so the mod port to 26.2 is materially cheaper. Use one codebase with per-version branches/multiloader layout as needed.
-- Server-facing API (phase 3, moat): an open equivalent of Apollo/BadlionClientModAPI — servers can advertise/disallow modules; plus Discord Rich Presence.
+- **Server API** (`dev.dusk.client.server`, spec in [SERVER-API.md](SERVER-API.md)): an open, dependency-free alternative to Apollo/BadlionClientModAPI. A server sends `dusk:rules` (raw UTF-8 JSON, `{"disable":[ids]}`) to block modules while the player is connected. `Module.setBlocked` keeps the player's own toggle underneath, and the block lifts on disconnect. A client answers a registered `dusk:hello` with its protocol/version/module list. `ServerApi` in `src/main` holds the logic, and the per-version `ServerChannel` (1.21.11 base, 1.21.10 `ResourceLocation`, 26.x renamed Fabric registries) holds the payload codecs.
 
 ## Milestones
 
@@ -124,7 +136,7 @@ Chain (see [minecraft.wiki/w/Microsoft_authentication](https://minecraft.wiki/w/
 2. **M2 — PvP suite**: client-mod MVP modules + HUD layout editor; profile management UI; Modrinth mod browsing.
 3. **M3 — Performance**: curated Sodium/Lithium stack, per-profile tuning presets, ZGC defaults.
 4. **M4 — Trust & growth**: open-source core polish, settings sync, Discord RPC, server-integration API, cosmetics (deferred — no ads, ever).
-5. **Later**: 1.8.9 support (evaluate: legacy Fabric vs custom approach), NeoForge profiles, Bedrock is out of scope.
+5. **Later**: 1.8.9 support (evaluate: legacy Fabric vs custom approach); Bedrock is out of scope. NeoForge profiles are done.
 
 ## Open items / needs from user
 

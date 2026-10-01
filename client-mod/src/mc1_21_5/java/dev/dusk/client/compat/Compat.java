@@ -55,6 +55,16 @@ public final class Compat {
         return KeyBindingHelper.registerKeyBinding(new KeyMapping(name, InputConstants.Type.KEYSYM, glfwKey, "key.categories.duskclient"));
     }
 
+    /** A line on the action bar, above the hotbar. */
+    public static void actionBar(net.minecraft.world.entity.player.Player player, net.minecraft.network.chat.Component text) {
+        player.displayClientMessage(text, true);
+    }
+
+    /** A key mapping's Controls category as shown on screen (a translation key before 1.21.9). */
+    public static String keyCategoryLabel(KeyMapping key) {
+        return net.minecraft.client.resources.language.I18n.get(key.getCategory());
+    }
+
     /** The framebuffer the world was just drawn into (motion blur). */
     public static RenderTarget mainTarget(Minecraft mc) {
         return mc.getMainRenderTarget();

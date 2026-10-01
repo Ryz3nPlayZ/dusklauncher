@@ -27,7 +27,9 @@ public class DuskSettingsScreen extends MenuScreen {
     private static final int CARD_GAP = 6, CARD_MIN_W = 110, MAX_COLS = 4, BAR_W = 4, SCROLL_STEP = 24;
 
     /** Modules added since the previous release, listed under the NEW tab. Update this set every release. */
-    private static final Set<String> NEW_IDS = Set.of("behindyou", "nametags", "particles", "hitbox");
+    private static final Set<String> NEW_IDS = Set.of("behindyou", "nametags", "particles", "hitbox",
+            "hungerinfo", "lookingat", "shieldstatuses", "freelook", "compactchat", "chattimestamps", "confirmdisconnect",
+            "autoreconnect", "serverlag", "containerpreview", "chathistory");
 
     private enum Tab {
         ALL("ALL", null), NEW("NEW", null),

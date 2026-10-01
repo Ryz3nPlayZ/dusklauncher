@@ -141,6 +141,19 @@ export default function SettingsView({
                   ]}
                 />
               </Row>
+              <Row
+                label="SYNC CLIENT SETTINGS"
+                hint="Your Dusk HUD layout, module options and menu prefs follow your account to every instance and computer."
+              >
+                <Choice
+                  value={settings.syncClientSettings ? 'on' : 'off'}
+                  onPick={(v) => set({ syncClientSettings: v === 'on' })}
+                  options={[
+                    { value: 'off', label: 'OFF' },
+                    { value: 'on', label: 'ON' },
+                  ]}
+                />
+              </Row>
               <Row label="SCENE FPS" hint="The launcher never takes frames the game could use.">
                 <Choice
                   value={settings.fpsCap}

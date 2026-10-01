@@ -1,6 +1,7 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.gui.Px;
 import dev.dusk.client.gui.Vanilla;
 
 import java.util.ArrayList;
@@ -58,7 +59,8 @@ public class ScrollPane {
     public void render(Canvas c, int mouseX, int mouseY) {
         boolean inside = contains(mouseX, mouseY);
         int mx = inside ? mouseX : -1, my = inside ? mouseY : -1;
-        c.scissor(x, y, x + w, y + h);
+        // a pixel spare on the left for the hover outline rows draw around themselves
+        c.scissor(x - 1, y, x + w, y + h);
         for (Widget wd : widgets) {
             if (wd.hidden() || wd.y + wd.h < y || wd.y > y + h) continue;
             wd.render(c, mx, my);
@@ -67,7 +69,7 @@ public class ScrollPane {
         if (contentHeight > h) {
             int barH = Math.max(32, h * h / contentHeight);
             int barY = y + (h - barH) * scroll / Math.max(1, maxScroll());
-            Vanilla.scrollbar(c, x + w - Vanilla.SCROLLBAR_W, y, y + h, barY, barH);
+            Px.scrollbar(c, x + w - Vanilla.SCROLLBAR_W, Vanilla.SCROLLBAR_W, barY, barH);
         }
     }
 

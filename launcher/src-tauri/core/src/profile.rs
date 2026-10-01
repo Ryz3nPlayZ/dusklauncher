@@ -105,6 +105,7 @@ pub struct Profile {
 pub enum Loader {
     Vanilla,
     Fabric,
+    NeoForge,
 }
 
 impl Loader {
@@ -112,12 +113,15 @@ impl Loader {
         match self {
             Loader::Vanilla => "vanilla",
             Loader::Fabric => "fabric",
+            Loader::NeoForge => "neoforge",
         }
     }
 
     pub fn parse(s: &str) -> Loader {
         if s.eq_ignore_ascii_case("fabric") {
             Loader::Fabric
+        } else if s.eq_ignore_ascii_case("neoforge") {
+            Loader::NeoForge
         } else {
             Loader::Vanilla
         }

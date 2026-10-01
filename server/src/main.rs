@@ -82,6 +82,8 @@ const OUTFIT_NAME_MAX: usize = 32;
 const IMAGE_MAX_BYTES: usize = 8 * 1024 * 1024;
 const IMAGE_DAILY_MAX: i64 = 30;
 const IMAGE_TTL: i64 = 90 * 24 * 3600;
+/// The synced client settings blob (HUD layout, module options, menu prefs).
+const SETTINGS_MAX_BYTES: usize = 64 * 1024;
 
 // ── catalog ────────────────────────────────────────────────────────────────
 
@@ -195,7 +197,9 @@ fn open_db(path: &str) -> Connection {
          CREATE TABLE IF NOT EXISTS images (
            id TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES accounts(uuid), mime TEXT NOT NULL,
            bytes BLOB NOT NULL, created_at INTEGER NOT NULL);
-         CREATE INDEX IF NOT EXISTS images_by_owner ON images (owner, created_at);",
+         CREATE INDEX IF NOT EXISTS images_by_owner ON images (owner, created_at);
+         CREATE TABLE IF NOT EXISTS client_settings (
+           uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), json TEXT NOT NULL, updated_at INTEGER NOT NULL);",
     )
     .expect("schema");
     add_column(&db, "accounts", "launches", "INTEGER NOT NULL DEFAULT 0");
@@ -1605,6 +1609,67 @@ async fn delete_outfit(State(app): State<Shared>, headers: HeaderMap, Path(id): 
     Ok(Json(read_outfits(&db, &uuid)?))
 }
 
+// ── settings sync ──────────────────────────────────────────────────────────
+
+/// The Dusk client's settings as the launcher last pushed them. The service
+/// doesn't read inside it: the launcher merges key by key and pushes the
+/// result; this is last-writer-wins storage with a server clock.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClientSettings {
+    settings: Option<Map<String, Value>>,
+    /// server time of the last push, 0 before the first
+    #[serde(default)]
+    updated_at: i64,
+}
+
+fn read_client_settings(db: &Connection, uuid: &str) -> Result<ClientSettings, rusqlite::Error> {
+    let row: Option<(String, i64)> = db
+        .query_row("SELECT json, updated_at FROM client_settings WHERE uuid = ?1", params![uuid], |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })
+        .optional()?;
+    Ok(match row {
+        Some((json, updated_at)) => ClientSettings {
+            settings: serde_json::from_str::<Value>(&json).ok().and_then(|v| v.as_object().cloned()),
+            updated_at,
+        },
+        None => ClientSettings { settings: None, updated_at: 0 },
+    })
+}
+
+async fn get_client_settings(State(app): State<Shared>, headers: HeaderMap) -> ApiResult<ClientSettings> {
+    let uuid = authed(&app, &headers)?;
+    let db = app.db.lock().unwrap();
+    Ok(Json(read_client_settings(&db, &uuid)?))
+}
+
+async fn put_client_settings(
+    State(app): State<Shared>,
+    headers: HeaderMap,
+    Json(body): Json<ClientSettings>,
+) -> ApiResult<ClientSettings> {
+    let uuid = authed(&app, &headers)?;
+    let settings = body.settings.ok_or_else(|| bad("settings must be an object"))?;
+    let json = Value::Object(settings).to_string();
+    if json.len() > SETTINGS_MAX_BYTES {
+        return Err(bad("Those settings are too large to sync."));
+    }
+    let db = app.db.lock().unwrap();
+    // strictly increasing, so two pushes in one second still order
+    let prev: i64 = db
+        .query_row("SELECT updated_at FROM client_settings WHERE uuid = ?1", params![uuid], |r| r.get(0))
+        .optional()?
+        .unwrap_or(0);
+    let t = now().max(prev + 1);
+    db.execute(
+        "INSERT INTO client_settings (uuid, json, updated_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT(uuid) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at",
+        params![uuid, json, t],
+    )?;
+    Ok(Json(read_client_settings(&db, &uuid)?))
+}
+
 // ── images ─────────────────────────────────────────────────────────────────
 
 fn image_mime(bytes: &[u8]) -> Option<&'static str> {
@@ -1773,6 +1838,12 @@ async fn main() {
         .route("/v1/profile/{uuid}", get(friend_profile))
         .route("/v1/messages/{uuid}", get(get_messages).post(send_message))
         .route("/v1/me/privacy", get(get_privacy).put(put_privacy))
+        .route(
+            "/v1/me/settings",
+            get(get_client_settings)
+                .put(put_client_settings)
+                .layer(axum::extract::DefaultBodyLimit::max(SETTINGS_MAX_BYTES + 1024)),
+        )
         .route("/v1/me/gift", post(gift))
         .route("/v1/me/outfits", get(list_outfits).post(save_outfit))
         .route("/v1/me/outfits/{id}", delete(delete_outfit))
@@ -1802,7 +1873,7 @@ mod tests {
             dashed_uuid("BA4161C03A42496C8AE07D13372F3371").as_deref(),
             Some("ba4161c0-3a42-496c-8ae0-7d13372f3371")
         );
-        assert_eq!(dashed_uuid("ba4161c0-3a42-496c-8ae0-7d13372f3371").is_some(), true);
+        assert!(dashed_uuid("ba4161c0-3a42-496c-8ae0-7d13372f3371").is_some());
         assert!(dashed_uuid("nope").is_none());
     }
 
@@ -2115,6 +2186,23 @@ mod tests {
         assert!(clean_server("a b").is_none());
         assert!(clean_server("x/../y").is_none());
         assert!(clean_server("").is_none());
+    }
+
+    #[test]
+    fn client_settings_round_trip() {
+        let db = three();
+        let empty = read_client_settings(&db, A).unwrap();
+        assert!(empty.settings.is_none());
+        assert_eq!(empty.updated_at, 0);
+        db.execute(
+            "INSERT INTO client_settings (uuid, json, updated_at) VALUES (?1, ?2, 5)",
+            params![A, r#"{"hud":{"fps":{"enabled":true}}}"#],
+        )
+        .unwrap();
+        let got = read_client_settings(&db, A).unwrap();
+        assert_eq!(got.updated_at, 5);
+        assert_eq!(got.settings.unwrap()["hud"]["fps"]["enabled"], true);
+        assert!(read_client_settings(&db, B).unwrap().settings.is_none(), "per account");
     }
 
     #[test]

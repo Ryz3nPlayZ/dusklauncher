@@ -34,14 +34,14 @@ public class Hitbox extends Module {
     public final BoolSetting lookLine = add(new BoolSetting("lookLine", "Look direction as line", true));
     public final ColorSetting lookColor = add(new ColorSetting("lookColor", "Look direction colour", 0xFF0000FF));
     public final IntSetting width = add(new IntSetting("lineScale", "Line width", 100, 20, 400, 10, "%"));
-    public final IntSetting farDistance = add(new IntSetting("farDistance", "Far width after", 32, 1, 128, 1, " blocks"));
+    public final IntSetting farDistance = add(new IntSetting("farDistance", "Far width from", 32, 1, 128, 1, " blocks"));
     public final IntSetting farWidth = add(new IntSetting("farLineScale", "Far line width", 100, 20, 400, 10, "%"));
     public final BoolSetting outline = add(new BoolSetting("outline", "Outline", false));
     public final ColorSetting outlineColor = add(new ColorSetting("outlineColor", "Outline colour", 0xFF000000));
     public final IntSetting outlineScale = add(new IntSetting("outlineScale", "Outline width", 200, 100, 500, 10, "%"));
     public final BoolSetting hideArrows = add(new BoolSetting("hideArrows", "Hide stuck arrows", false));
-    public final BoolSetting hideFireworks = add(new BoolSetting("hideFireworks", "Skip fireworks", false));
-    public final BoolSetting hideItems = add(new BoolSetting("hideItems", "Skip items", false));
+    public final BoolSetting hideFireworks = add(new BoolSetting("hideFireworks", "Hide firework hitboxes", false));
+    public final BoolSetting hideItems = add(new BoolSetting("hideItems", "Hide item hitboxes", false));
 
     public Hitbox() {
         super("hitbox", "Hitboxes", Category.RENDER,

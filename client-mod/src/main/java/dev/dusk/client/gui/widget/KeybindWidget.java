@@ -2,7 +2,7 @@ package dev.dusk.client.gui.widget;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.gui.Canvas;
-import dev.dusk.client.gui.Vanilla;
+import dev.dusk.client.gui.Px;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
@@ -26,7 +26,10 @@ public class KeybindWidget extends SettingRow {
     protected void renderControl(Canvas c, int mouseX, int mouseY) {
         KeyMapping k = mapping.get();
         String text = focused ? "> Press a key <" : k == null ? "" : k.getTranslatedKeyMessage().getString();
-        Vanilla.button(c, text, controlX(), top(), CONTROL_W, SQUARE, inControl(mouseX, mouseY) || focused, true);
+        boolean hot = inControl(mouseX, mouseY) || focused;
+        Px.button(c, controlX(), top(), CONTROL_W, SQUARE, hot, true);
+        Px.label(c, text, controlX(), top(), CONTROL_W, SQUARE, Px.Size.S16, focused ? Px.Tone.ACCENT : Px.Tone.GREY,
+                hot, false, false, 0xFF);
     }
 
     @Override

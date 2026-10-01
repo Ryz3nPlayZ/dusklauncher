@@ -247,7 +247,7 @@ async fn run_webview_login(app: &AppHandle, state: &AppState, config: &AuthConfi
         if !landed {
             return true;
         }
-        match auth::parse_desktop_callback(&url.to_string(), &expected) {
+        match auth::parse_desktop_callback(url.as_ref(), &expected) {
             Ok(code) => {
                 let _ = tx_nav.send(Msg::Code(code));
             }

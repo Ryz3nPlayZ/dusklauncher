@@ -427,6 +427,17 @@ export interface InstalledProject {
   versionNumber: string;
 }
 
+/** an installed file with a newer Modrinth version for its instance */
+export interface ContentUpdate {
+  filename: string;
+  projectId: string;
+  /** the installed version's number */
+  currentVersion: string;
+  /** the version to update to */
+  versionId: string;
+  versionNumber: string;
+}
+
 /** what a profile folder holds — `mod` → mods/, `resourcepack`, `shader` */
 export type ContentKind = 'mod' | 'resourcepack' | 'shader';
 
@@ -514,6 +525,7 @@ export interface Settings {
   notifyMessages: boolean;
   clock24h: boolean;
   warnOnLinks: boolean;
+  syncClientSettings: boolean;
 }
 
 export interface Progress {
@@ -818,6 +830,7 @@ const fixtures: Record<string, unknown> = {
     notifyMessages: true,
     clock24h: false,
     warnOnLinks: true,
+    syncClientSettings: true,
   } satisfies Settings,
 };
 
@@ -834,7 +847,8 @@ const sideEffects = new Set([
   'import_skin',
   'show_in_folder',
   'open_data_dir',
-  'import_local_mod',
+  'import_local_content',
+  'import_content_paths',
   'install_content_to_profile',
   'import_mrpack',
   'export_instance',
@@ -868,6 +882,12 @@ function previewIcon(color: string): string {
   g.fillRect(5, 5, 6, 6);
   return c.toDataURL();
 }
+
+/* two of the preview's jars have something newer on "Modrinth" */
+const previewUpdates = new Map<string, Omit<ContentUpdate, 'filename'>>([
+  ['sodium-fabric-0.6.13+mc1.21.11.jar', { projectId: 'AANobbMI', currentVersion: 'mc1.21.11-0.6.13', versionId: 'u-sodium', versionNumber: 'mc1.21.11-0.7.2' }],
+  ['lithium-fabric-0.15.0+mc1.21.11.jar', { projectId: 'gvQqBUqZ', currentVersion: 'mc1.21.11-0.15.0', versionId: 'u-lithium', versionNumber: 'mc1.21.11-0.15.1' }],
+]);
 
 function previewFolder(profileId: string, kind: string): ProfileMod[] {
   const key = `${profileId}/${kind}`;
@@ -1058,6 +1078,23 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
         : [];
     }) as T;
   }
+  if (cmd === 'check_content_updates') {
+    return previewFolder(String(args?.profileId), String(args?.kind)).flatMap((m) => {
+      const u = previewUpdates.get(m.filename);
+      return u ? [{ filename: m.filename, ...u }] : [];
+    }) as T;
+  }
+  if (cmd === 'update_profile_content') {
+    // swap the row for the new version's file; enabled state carries over
+    const list = previewFolder(String(args?.profileId), String(args?.kind));
+    const row = list.find((m) => m.filename === args?.filename);
+    const u = previewUpdates.get(String(args?.filename));
+    if (!row || !u) throw new Error('that file is no longer in the instance');
+    const fresh = { ...row, filename: row.filename.replace(u.currentVersion.replace(/^mc[\d.]+-/, ''), u.versionNumber.replace(/^mc[\d.]+-/, '')) };
+    list.splice(list.indexOf(row), 1, fresh);
+    previewUpdates.delete(row.filename);
+    return structuredClone(fresh) as T;
+  }
   if (cmd === 'set_content_enabled') {
     const list = previewFolder(String(args?.profileId), String(args?.kind));
     const row = list.find((m) => m.filename === args?.filename);
@@ -1090,6 +1127,17 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     if (patch.memoryMb !== undefined) p.memoryMb = patch.memoryMb > 0 ? patch.memoryMb : null;
     if (patch.javaPath !== undefined) p.javaPath = patch.javaPath.trim() || null;
     return structuredClone(p) as T;
+  }
+  if (cmd === 'duplicate_profile') {
+    const list = fixtures.list_profiles as Profile[];
+    const src = list.find((x) => x.id === args?.id);
+    if (!src) throw new Error('profile not found');
+    let name = `${src.name} (copy)`;
+    for (let n = 2; list.some((x) => x.name === name); n++) name = `${src.name} (copy ${n})`;
+    const copy: Profile = { ...structuredClone(src), id: `p-copy-${Date.now()}`, name, createdAt: Date.now(), lastPlayed: null };
+    list.push(copy);
+    previewFolder(copy.id, 'mod').push(...structuredClone(previewFolder(src.id, 'mod')));
+    return structuredClone(copy) as T;
   }
   if (cmd === 'delete_profile') {
     const list = fixtures.list_profiles as Profile[];
@@ -1283,6 +1331,8 @@ export const api = {
   updateProfile: (id: string, patch: ProfilePatch) =>
     invoke<Profile>('update_profile', { id, patch }),
   deleteProfile: (id: string) => invoke<void>('delete_profile', { id }),
+  /** a new instance with this one's settings and folder (not its logs or screenshots) */
+  duplicateProfile: (id: string) => invoke<Profile>('duplicate_profile', { id }),
   launch: (profileId: string) => invoke<void>('install_and_launch', { profileId }),
   /** launch straight onto a server (a friend's, an invite) without saving it on the instance */
   joinServer: (profileId: string, server: string) =>
@@ -1338,13 +1388,23 @@ export const api = {
   /** which Modrinth projects the folder already holds, by file hash */
   lookupContent: (profileId: string, kind: ContentKind) =>
     invoke<InstalledProject[]>('lookup_profile_content', { profileId, kind }),
+  /** installed files with a newer Modrinth version for this instance */
+  checkContentUpdates: (profileId: string, kind: ContentKind) =>
+    invoke<ContentUpdate[]>('check_content_updates', { profileId, kind }),
+  /** swap an installed file for `versionId` of its project, keeping it on/off */
+  updateContent: (profileId: string, kind: ContentKind, filename: string, versionId: string) =>
+    invoke<ProfileMod>('update_profile_content', { profileId, kind, filename, versionId }),
   setContentEnabled: (profileId: string, kind: ContentKind, filename: string, enabled: boolean) =>
     invoke<ProfileMod>('set_content_enabled', { profileId, kind, filename, enabled }),
   removeContent: (profileId: string, kind: ContentKind, filename: string) =>
     invoke<void>('remove_profile_content', { profileId, kind, filename }),
-  /** native file picker → copies the .jar into mods/ (null if cancelled) */
-  importLocalMod: (profileId: string) =>
-    invoke<ProfileMod | null>('import_local_mod', { profileId }),
+  /** files dropped on an instance: each lands in the folder it belongs in */
+  importContentPaths: (profileId: string, paths: string[]) =>
+    invoke<{ added: ProfileMod[]; skipped: string[] }>('import_content_paths', { profileId, paths }),
+  /** native file picker (several at once) → copies .jar mods / .zip packs
+   *  into the kind's folder; empty if cancelled */
+  importLocalContent: (profileId: string, kind: ContentKind) =>
+    invoke<ProfileMod[]>('import_local_content', { profileId, kind }),
   searchContent: (kind: ContentKind, query: string, gameVersion: string, loader: string, limit = 20) =>
     invoke<ModHit[]>('search_content', { kind, query, gameVersion, loader, limit }),
   installContent: (profileId: string, kind: ContentKind, projectId: string) =>
@@ -1464,6 +1524,7 @@ export function ago(ms: number | null): string {
 }
 
 export function loaderLabel(p: Profile) {
+  if (p.loader === 'neoforge') return 'NeoForge';
   return p.loader.charAt(0).toUpperCase() + p.loader.slice(1);
 }
 

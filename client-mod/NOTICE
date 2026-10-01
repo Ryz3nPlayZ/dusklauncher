@@ -41,3 +41,137 @@ Bundled cosmetics (src/main/resources/assets/duskclient/cosmetics) are
 community capes and one Cosmetica accessory ("Red Fire Arm", cosmetica
 id ufa1T) imported with tools/import_cosmetics.py; they are content, not
 code, and are not covered by the licences above.
+
+Shield Statuses (modules/render/ShieldStatuses.java, render/shield and
+mixin/shield) is a port of:
+
+- Shield Statuses — https://github.com/Walksy/ShieldStatus
+  MIT, Copyright (c) 2025 Walksy. Ported: the colour rules and options of
+  Config.getColor and the per-holder shield tint.
+- WalksyLib — https://github.com/Walksy/WalksyLib
+  MIT, Copyright (c) 2026 Walksy. Ported: WalksyLibShieldStateManager, the
+  raise/disable tracking for every player, and the hooks that feed it.
+
+  Both are distributed under this licence:
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+Chat and HUD modules ported from MIT-licensed mods:
+
+- Compact Chat — https://github.com/caoimhebyrne/compact-chat
+  MIT, Copyright (c) 2025 Caoimhe Byrne. Ported: the occurrence counting,
+  the removal of the earlier copy and its options (modules/misc/CompactChat.java
+  and mixin/chat/ChatStackMixin.java).
+- Plague's Chat Timestamps — https://github.com/PlagueTR/ChatTimestamps
+  MIT, Copyright (c) 2023 PlagueTR. Ported: the timestamp prefix, the hover
+  mode and the format options (modules/misc/ChatTimestamps.java, HoverText).
+- Eymistaken's HUD — https://github.com/Eymistaken/Eymistaken-s-HUD
+  MIT, Copyright (c) 2026 Eymistaken. Ported: ComboTracker's server-confirmed
+  hit counting, received combos and combo rules, and the combo display
+  (modules/hud/ComboTracker.java, ComboDisplay.java and mixin/combo).
+
+  All three are distributed under the MIT licence quoted above for Shield
+  Statuses.
+
+Movement and camera modules ported from permissively licensed mods:
+
+- toggle-toggle-sprint — https://codeberg.org/celestialfault/toggle-toggle-sprint
+  Zlib (celestialfault). Ported, altered: the keys that flip vanilla's
+  Sprint and Sneak toggle options, keeping Sprint toggled through a respawn
+  and the MC-301281 fix for mouse-bound toggles after a menu closes
+  (modules/toggle/ToggleSprint.java and mixin/toggle). The Zlib licence:
+
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
+
+- FreeLook — https://github.com/jmilthedude/FreeLook-MultiLoader
+  MIT, Copyright (c) 2025 (the licence names no holder; repository by
+  jmilthedude). Ported: the free camera rotation with its shoulder clamp,
+  the mouse redirection, the hold and toggle keys and the eased return
+  (modules/render/Freelook.java and mixin/freelook). Distributed under the
+  MIT licence quoted above for Shield Statuses.
+
+- AppleSkin — https://github.com/squeek502/AppleSkin
+  The Unlicense (squeek502). Ported: the saturation and exhaustion HUD
+  overlays, the hunger and health previews for held food, the food values
+  in item tooltips, the appleskin: sync payloads and the HUD icons texture
+  (modules/render/HungerInfo.java, FoodTooltip.java, compat/FoodCompat,
+  compat/AppleSkinChannel, mixin/hunger and
+  assets/duskclient/textures/hud/appleskin_icons.png).
+
+Modules whose behaviour follows LGPL mods (no source files were copied):
+
+- Confirm Disconnect — https://codeberg.org/MicrocontrollersDev/Confirm-Disconnect
+  LGPL-3.0 (MicrocontrollersDev). Replicated: asking before leaving a
+  world or server (modules/misc/ConfirmDisconnect.java).
+- Gamma Utils — https://github.com/Sjouwer/gamma-utils
+  LGPL-3.0 (Sjouwer). Replicated: the gamma toggle, step and limit
+  defaults, the coloured gamma message and the smooth transition
+  (modules/render/Fullbright.java).
+- Zoomify — https://github.com/isXander/Zoomify
+  LGPL-3.0 (isXander). Replicated from its option list: separate zoom-in
+  and zoom-out times and easing curves, scroll steps and a zoom limit,
+  zoom-step keys, relative mouse sensitivity and view bobbing, cinematic
+  camera while zoomed, the spyglass requirement, overlay and sounds, the
+  secondary zoom that hides the HUD, and presets
+  (modules/render/Zoom.java, mixin/zoom).
+- SimpleWaypoints — https://github.com/xpple/SimpleWaypoints
+  LGPL-3.0 (xpple). Replicated from its command and option list: adding,
+  removing, renaming, moving, showing and hiding waypoints by command,
+  importing another world's waypoints, and separate distance limits for
+  labels and markers (waypoints/WaypointCommands.java,
+  waypoints/WaypointStore.java, modules/misc/Waypoints.java,
+  gui/WaypointsScreen.java).
+
+Modules whose idea follows non-commercial mods (behaviour only; no source
+files, textures or text were copied):
+
+- Jade — https://github.com/Snownee/Jade
+  CC BY-NC-SA 4.0 (Snownee; a fork of HWYLA). Followed from its feature
+  list: a panel naming the looked-at block, fluid or entity with its mod,
+  harvest tool, crop growth and block states, health and armour, and
+  breaking progress (modules/hud/LookingAt.java).
+
+Modules whose idea follows GPL utility clients (behaviour only; no source
+files were copied; combat, ESP, automation and movement features were left
+out on purpose):
+
+- Meteor Client — https://github.com/MeteorDevelopment/meteor-client
+  GPL-3.0 (MeteorDevelopment). Followed from its module list: a reconnect
+  button with an optional countdown on the disconnect screen
+  (modules/misc/AutoReconnect.java), a notice when the server stops sending
+  updates (modules/hud/ServerLag.java), container contents as a slot grid
+  in tooltips (modules/render/ContainerPreview.java) and a longer chat
+  history (modules/misc/ChatHistory.java, mixin/chat/ChatHistoryMixin.java).
+- Wurst Client — https://github.com/Wurst-Imperium/Wurst7
+  GPL-3.0 (Wurst-Imperium). Followed from its feature list: Reconnect and
+  InfiniChat, the same two ideas as above.

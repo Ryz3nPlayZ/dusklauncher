@@ -118,7 +118,7 @@ public final class NametagHooks {
 
     public static boolean textShadow(boolean original) {
         Nametags n = Nametags.active();
-        return n == null ? original : n.textShadow.index() != 0;
+        return n == null ? original : n.textShadow.get();
     }
 
     /** The configured text colour, keeping vanilla's faded see-through alpha. */

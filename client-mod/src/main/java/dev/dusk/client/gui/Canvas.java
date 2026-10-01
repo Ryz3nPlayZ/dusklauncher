@@ -44,7 +44,7 @@ public interface Canvas {
      * Draws a region of a texture sheet. {@code texture} is a namespaced id
      * ("minecraft:textures/gui/container/inventory.png"), {@code u}/{@code v}
      * the top-left of the region inside a {@code texW} x {@code texH} sheet and
-     * {@code argb} a tint (ignored on 1.21.1, which has no tinted blit).
+     * {@code argb} a tint.
      */
     void blit(String texture, int x, int y, float u, float v, int w, int h, int texW, int texH, int argb);
 

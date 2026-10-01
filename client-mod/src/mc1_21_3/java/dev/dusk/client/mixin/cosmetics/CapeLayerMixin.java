@@ -7,6 +7,8 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import dev.dusk.client.cosmetics.ExtendedAvatarRenderState;
 import dev.dusk.client.cosmetics.PlayerCosmetics;
+import dev.dusk.client.render.cape.CapeMesh;
+import dev.dusk.client.render.cape.CapeShapeHolder;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -20,7 +22,8 @@ import org.spongepowered.asm.mixin.injection.At;
  * Custom capes are drawn translucent (so PNG alpha works, as in Cosmetica and
  * MinecraftCapes), with the animated frame resolved per draw, and, when the
  * profile asks for it, with the armour enchantment glint layered on top.
- * Vanilla capes are left alone. 1.21.2–1.21.8 flavour: MultiBufferSource.
+ * With Cape Physics on, every cape is drawn bent along its simulated shape
+ * instead of as vanilla's flat board. 1.21.2–1.21.8 flavour: MultiBufferSource.
  */
 @Mixin(CapeLayer.class)
 public abstract class CapeLayerMixin {
@@ -46,9 +49,20 @@ public abstract class CapeLayerMixin {
             HumanoidModel<PlayerRenderState> model, PoseStack poseStack, VertexConsumer consumer, int light, int overlay,
             Operation<Void> original,
             @Local(argsOnly = true) MultiBufferSource buffer, @Local(argsOnly = true) PlayerRenderState state) {
-        original.call(model, poseStack, consumer, light, overlay);
         PlayerCosmetics c = ((ExtendedAvatarRenderState) state).duskclient$getCosmetics();
-        if (c != null && c.hasCape() && c.glint()) {
+        boolean glint = c != null && c.hasCape() && c.glint();
+        float[] shape = ((CapeShapeHolder) state).duskclient$capeShape();
+        if (shape != null) {
+            poseStack.pushPose();
+            model.body.translateAndRotate(poseStack);
+            poseStack.translate(0.0F, 0.0F, 0.125F);
+            CapeMesh.emit(shape, poseStack.last(), consumer, light, overlay);
+            if (glint) CapeMesh.emit(shape, poseStack.last(), buffer.getBuffer(RenderType.armorEntityGlint()), light, overlay);
+            poseStack.popPose();
+            return;
+        }
+        original.call(model, poseStack, consumer, light, overlay);
+        if (glint) {
             model.renderToBuffer(poseStack, buffer.getBuffer(RenderType.armorEntityGlint()), light, overlay);
         }
     }

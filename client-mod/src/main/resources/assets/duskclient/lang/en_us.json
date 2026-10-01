@@ -3,12 +3,18 @@
   "category.duskclient": "DuskClient",
   "key.duskclient.settings": "Open Dusk Menu",
   "key.duskclient.fullbright": "Toggle Fullbright",
-  "key.duskclient.gamma_up": "Fullbright Brighter",
-  "key.duskclient.gamma_down": "Fullbright Darker",
-  "key.duskclient.togglesprint": "Toggle Sprint On/Off",
+  "key.duskclient.gamma_up": "Increase Gamma",
+  "key.duskclient.gamma_down": "Decrease Gamma",
+  "key.duskclient.toggle_sprint": "Toggle Sprint",
+  "key.duskclient.toggle_sneak": "Toggle Sneak",
   "key.duskclient.time_forward": "Time Changer Forward",
   "key.duskclient.time_backward": "Time Changer Backward",
   "key.duskclient.behindyou_back": "Behind You: Back View",
   "key.duskclient.behindyou_front": "Behind You: Front View",
-  "key.duskclient.save_clip": "Save Clip"
+  "key.duskclient.save_clip": "Save Clip",
+  "key.duskclient.zoom": "Zoom",
+  "key.duskclient.freelook": "Freelook",
+  "key.duskclient.freelook_toggle": "Freelook Toggle",
+  "key.duskclient.waypoint_add": "Add Waypoint",
+  "key.duskclient.waypoint_list": "Waypoints"
 }

@@ -66,6 +66,16 @@ public final class Compat {
         return KeyBindingHelper.registerKeyBinding(new KeyMapping(name, InputConstants.Type.KEYSYM, glfwKey, keyCategory));
     }
 
+    /** A line on the action bar, above the hotbar. */
+    public static void actionBar(net.minecraft.world.entity.player.Player player, net.minecraft.network.chat.Component text) {
+        player.displayClientMessage(text, true);
+    }
+
+    /** A key mapping's Controls category as shown on screen (a translation key before 1.21.9). */
+    public static String keyCategoryLabel(KeyMapping key) {
+        return key.getCategory().label().getString();
+    }
+
     /** The framebuffer the world was just drawn into (motion blur). */
     public static RenderTarget mainTarget(Minecraft mc) {
         return mc.getMainRenderTarget();

@@ -66,11 +66,6 @@ pub fn client_mod_jar_for(game_version: &str) -> Option<&'static str> {
     }
 }
 
-/// Whether the bundled client mod may be injected into a `game_version`.
-pub fn client_mod_supports(game_version: &str) -> bool {
-    client_mod_jar_for(game_version).is_some()
-}
-
 /// Whether a `mods/` folder already carries one of our jars (a copy from
 /// "install bundled client mod" wins over the forced one).
 pub fn client_mod_in_mods(mods_dir: &Path) -> bool {
@@ -402,7 +397,7 @@ mod tests {
         assert_eq!(client_mod_jar_for("26.1.2"), Some("duskclient-26.1.jar"));
         assert_eq!(client_mod_jar_for("26.3"), None);
         assert_eq!(client_mod_jar_for("1.20.1"), None);
-        assert!(!client_mod_supports("1.8.9"));
+        assert_eq!(client_mod_jar_for("1.8.9"), None);
     }
 
     #[test]

@@ -126,7 +126,9 @@ public class ConfigScreen extends MenuScreen {
 
         int bx = buttonsX();
         for (Button b : buttons) {
-            Vanilla.button(c, b.label, bx, buttonY(), BUTTON_W, 20, Vanilla.inside(mouseX, mouseY, bx, buttonY(), BUTTON_W, 20), b.active);
+            boolean hover = Vanilla.inside(mouseX, mouseY, bx, buttonY(), BUTTON_W, 20);
+            Px.button(c, bx, buttonY(), BUTTON_W, 20, hover, b.active);
+            Px.label(c, b.label, bx, buttonY(), BUTTON_W, 20, hover && b.active, !b.active, 0xFF);
             bx += BUTTON_W + BUTTON_GAP;
         }
     }

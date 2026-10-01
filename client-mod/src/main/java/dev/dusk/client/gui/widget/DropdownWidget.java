@@ -2,11 +2,10 @@ package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.Icons;
-import dev.dusk.client.gui.Theme;
-import dev.dusk.client.gui.Vanilla;
+import dev.dusk.client.gui.Px;
 import dev.dusk.client.module.setting.ChoiceSetting;
 
-/** A vanilla button showing the current choice; clicking it drops the full list down. */
+/** A grey PxButton showing the current choice; clicking it drops the full list down. */
 public class DropdownWidget extends SettingRow {
     private final ChoiceSetting setting;
     private final Runnable onChange;
@@ -28,10 +27,10 @@ public class DropdownWidget extends SettingRow {
 
     /** The closed dropdown: value on the left, arrow on the right. Shared with the module list's filter. */
     public static void drawButton(Canvas c, String value, int x, int y, int w, int h, boolean hover) {
-        Vanilla.button(c, x, y, w, h, hover, true);
-        c.text(Theme.ellipsize(c, value, w - 22), x + 6, y + (h - 8) / 2 + 1, Vanilla.TEXT, true);
-        Icons.DOWN.draw(c, x + w - 11, y + (h - 4) / 2 + 1, 0xFF3F3F3F);
-        Icons.DOWN.draw(c, x + w - 12, y + (h - 4) / 2, Vanilla.TEXT);
+        Px.button(c, x, y, w, h, hover, true);
+        int arrow = Math.min(h, 14);
+        Px.value(c, value, x, y, w - arrow, h, Px.Tone.GREY, hover, true);
+        Px.glyph(c, Icons.DOWN, x + w - arrow - Px.pad() / 2, y, arrow, h, Px.Tone.GREY, hover, false, 0xFF);
     }
 
     @Override

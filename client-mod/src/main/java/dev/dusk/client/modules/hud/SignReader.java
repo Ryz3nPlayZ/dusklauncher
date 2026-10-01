@@ -35,7 +35,7 @@ public class SignReader extends HudElement {
 
     public SignReader() {
         super("signreader", "Sign Reader", "Shows the text of the sign you are looking at.");
-        setPosition(4, 60);
+        setPosition(80, 60);
     }
 
     @Override

@@ -70,6 +70,48 @@ jobs:
           path: launcher/src-tauri/resources/*.jar
           if-no-files-found: error
 
+  # Boots each client with its gametests (mixin audit, HUD, cosmetics, server API)
+  # under a virtual display. A mixin that no longer matches its target only
+  # crashes once the class loads, which a compile never sees: the 26.x particle
+  # mixins shipped broken that way. publish.sh refuses a release whose run
+  # failed here. 1.21.1/1.21.3 have no client gametest API.
+  client-gametest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { mc: '1.21.4', java: 21 }
+          - { mc: '1.21.5', java: 21 }
+          - { mc: '1.21.8', java: 21 }
+          - { mc: '1.21.10', java: 21 }
+          - { mc: '1.21.11', java: 21 }
+          - { mc: '26.1', java: 25 }
+          - { mc: '26.2', java: 25 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 9.7.1
+      - name: Virtual display + software GL
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri
+      - name: Run the client gametests
+        working-directory: client-mod
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" gradle runClientGameTest -Pmc=${{ matrix.mc }} --console=plain
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: gametest-${{ matrix.mc }}
+          path: |
+            client-mod/build/run/clientGameTest/logs/latest.log
+            client-mod/build/run/clientGameTest/crash-reports/
+            client-mod/build/run/clientGameTest/screenshots/
+          if-no-files-found: ignore
+
   build:
     needs: [check, client-mod]
     strategy:

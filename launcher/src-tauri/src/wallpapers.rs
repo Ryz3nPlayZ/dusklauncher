@@ -63,7 +63,7 @@ pub fn list_wallpapers(state: State<AppState>) -> Vec<WallpaperDto> {
             })
         })
         .collect();
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out.sort_by_key(|a| a.name.to_lowercase());
     out
 }
 

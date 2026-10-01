@@ -91,7 +91,7 @@ public final class ParticleHooks {
         if (blocks == null) return false;
         if (!blocks.enabled.get()) return true;
         if (!blocks.hideRunning.get()) return false;
-        return blocks.hideMode.is("ALL") || entity == null || !entity.isInvisible();
+        return blocks.hideMode.is("All entities") || entity == null || !entity.isInvisible();
     }
 
     public static void onAttack(Player player, Entity target) {

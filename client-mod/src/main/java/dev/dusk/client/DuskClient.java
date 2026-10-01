@@ -19,7 +19,6 @@ import dev.dusk.client.modules.hud.Compass;
 import dev.dusk.client.modules.hud.Coordinates;
 import dev.dusk.client.modules.hud.CpsCounter;
 import dev.dusk.client.modules.hud.DayCounter;
-import dev.dusk.client.modules.hud.Direction;
 import dev.dusk.client.modules.hud.Distance;
 import dev.dusk.client.modules.hud.EntityCount;
 import dev.dusk.client.modules.hud.FpsDisplay;
@@ -29,6 +28,8 @@ import dev.dusk.client.modules.hud.HeldItem;
 import dev.dusk.client.modules.hud.InventoryDisplay;
 import dev.dusk.client.modules.hud.Keystrokes;
 import dev.dusk.client.modules.hud.LightLevel;
+import dev.dusk.client.modules.hud.LookingAt;
+import dev.dusk.client.modules.hud.ServerLag;
 import dev.dusk.client.modules.hud.Memory;
 import dev.dusk.client.modules.hud.NetherCoordinates;
 import dev.dusk.client.modules.hud.Ping;
@@ -36,20 +37,24 @@ import dev.dusk.client.modules.hud.PitchDisplay;
 import dev.dusk.client.modules.hud.Playtime;
 import dev.dusk.client.modules.hud.PotionEffects;
 import dev.dusk.client.modules.hud.Reach;
-import dev.dusk.client.modules.hud.Rotation;
 import dev.dusk.client.modules.hud.ServerAddress;
-import dev.dusk.client.modules.hud.ShieldStatus;
 import dev.dusk.client.modules.hud.SignReader;
 import dev.dusk.client.modules.hud.SneakStatus;
 import dev.dusk.client.modules.hud.Speed;
 import dev.dusk.client.modules.hud.SprintStatus;
 import dev.dusk.client.modules.hud.Tps;
 import dev.dusk.client.modules.hud.Weather;
+import dev.dusk.client.modules.misc.ChatTimestamps;
+import dev.dusk.client.modules.misc.CompactChat;
 import dev.dusk.client.modules.misc.BoatMap;
+import dev.dusk.client.modules.misc.AutoReconnect;
+import dev.dusk.client.modules.misc.ChatHistory;
+import dev.dusk.client.modules.misc.ConfirmDisconnect;
 import dev.dusk.client.modules.misc.GameModeSwitcher;
 import dev.dusk.client.modules.misc.TntCountdown;
 import dev.dusk.client.modules.render.CustomCrosshair;
 import dev.dusk.client.modules.render.ColorSaturation;
+import dev.dusk.client.modules.render.ContainerPreview;
 import dev.dusk.client.modules.render.DamageTint;
 import dev.dusk.client.modules.render.FogControl;
 import dev.dusk.client.modules.render.Fullbright;
@@ -57,17 +62,28 @@ import dev.dusk.client.modules.render.Hitbox;
 import dev.dusk.client.modules.render.ItemScale;
 import dev.dusk.client.modules.render.LowFire;
 import dev.dusk.client.modules.render.LowShield;
+import dev.dusk.client.modules.render.ShieldStatuses;
+import dev.dusk.client.modules.misc.Waypoints;
+import dev.dusk.client.waypoints.WaypointCommands;
 import dev.dusk.client.modules.render.MotionBlur;
 import dev.dusk.client.modules.render.Nametags;
 import dev.dusk.client.modules.render.BehindYou;
+import dev.dusk.client.modules.render.Zoom;
+import dev.dusk.client.modules.render.Freelook;
+import dev.dusk.client.modules.render.HungerInfo;
+import dev.dusk.client.modules.render.CapePhysics;
 import dev.dusk.client.modules.render.Particles;
+import dev.dusk.client.modules.render.SkinLayers3D;
 import dev.dusk.client.modules.render.NoNightVision;
 import dev.dusk.client.modules.render.NoPumpkinBlur;
 import dev.dusk.client.modules.render.RiptideShieldFix;
 import dev.dusk.client.modules.render.TimeChanger;
 import dev.dusk.client.modules.render.WeatherChanger;
 import dev.dusk.client.modules.toggle.ToggleSprint;
+import dev.dusk.client.server.ServerApi;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.KeyMapping;
@@ -115,7 +131,6 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new ArmorStatus());
         modules.register(new HeldItem());
         modules.register(new PotionEffects());
-        modules.register(new ShieldStatus());
         modules.register(new ComboDisplay());
         modules.register(new Reach());
         modules.register(new SprintStatus());
@@ -125,9 +140,7 @@ public class DuskClient implements ClientModInitializer {
         // Info HUD
         modules.register(new Coordinates());
         modules.register(new NetherCoordinates());
-        modules.register(new Direction());
         modules.register(new Compass());
-        modules.register(new Rotation());
         modules.register(new PitchDisplay());
         modules.register(new Speed());
         modules.register(new Biome());
@@ -142,6 +155,8 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new ServerAddress());
         modules.register(new Distance());
         modules.register(new SignReader());
+        modules.register(new LookingAt());
+        modules.register(new ServerLag());
         // Movement / render
         modules.register(new ToggleSprint());
         modules.register(new CustomCrosshair());
@@ -155,6 +170,7 @@ public class DuskClient implements ClientModInitializer {
             modules.register(new LowShield());
             modules.register(new NoNightVision());
             modules.register(new RiptideShieldFix());
+            modules.register(new ShieldStatuses()); // Walksy's Shield Statuses
             modules.register(new ItemScale());
             modules.register(new FogControl());
             modules.register(new BoatMap());
@@ -169,20 +185,44 @@ public class DuskClient implements ClientModInitializer {
         }
         BehindYou behindYou = new BehindYou();
         modules.register(behindYou);
+        // essentials the launcher's injection brings everywhere; each steps aside for its standalone mod
+        FabricLoader fabric = FabricLoader.getInstance();
+        Zoom zoom = fabric.isModLoaded("zoomify") ? null : new Zoom();
+        if (zoom != null) modules.register(zoom);
+        Freelook freelook = fabric.isModLoaded("freelook") || fabric.isModLoaded("perspectivemod") ? null : new Freelook();
+        if (freelook != null) modules.register(freelook);
+        if (!fabric.isModLoaded("appleskin")) modules.register(new HungerInfo());
+        if (!fabric.isModLoaded("shulkerboxtooltip")) modules.register(new ContainerPreview());
+        if (!fabric.isModLoaded("skinlayers3d")) modules.register(new SkinLayers3D());
+        if (!fabric.isModLoaded("waveycapes")) modules.register(new CapePhysics());
+        modules.register(new CompactChat()); // Compact Chat
+        modules.register(new ChatTimestamps()); // Plague's Chat Timestamps
+        modules.register(new ConfirmDisconnect());
+        modules.register(new ChatHistory());
+        modules.register(new AutoReconnect());
+        AutoReconnect.register();
+        Waypoints waypoints = new Waypoints();
+        modules.register(waypoints);
+        ClientCommandRegistrationCallback.EVENT.register(WaypointCommands::register);
         modules.loadConfig();
         DuskConfig.get(); // ensure duskclient.json exists for the launcher bridge
         CosmeticsManager.init();
         HudHooks.register();
+        ServerApi.init();
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             TpsTracker.reset();
             dev.dusk.client.hud.PingTracker.reset();
+            ServerApi.greetIfListening();
             // the launcher reads these lines to show friends where you are; a replay is not a server
             if (MediaBackend.replaying()) return;
             var server = client.getCurrentServer();
             if (server != null && server.ip != null && !server.ip.isBlank()) LOGGER.info("[DuskPresence] server {}", server.ip);
             else LOGGER.info("[DuskPresence] singleplayer");
         });
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> LOGGER.info("[DuskPresence] menu"));
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            ServerApi.reset();
+            LOGGER.info("[DuskPresence] menu");
+        });
         clipKey = Compat.registerKey("key.duskclient.save_clip", GLFW.GLFW_KEY_F8);
         MediaBackend.init();
 
@@ -197,9 +237,13 @@ public class DuskClient implements ClientModInitializer {
             boolean changed = Fullbright.instance().tickKeys();
             changed |= modules.get(ToggleSprint.class).tickKeys();
             if (TimeChanger.instance() != null) changed |= TimeChanger.instance().tickKeys();
+            changed |= ShieldStatuses.tickKeys();
             if (changed) modules.saveConfig();
             while (clipKey.consumeClick()) MediaBackend.saveClip();
             behindYou.tickKeys();
+            if (zoom != null) zoom.tickKeys();
+            if (freelook != null) freelook.tickKeys();
+            waypoints.tickKeys();
             if (modules.get(Distance.class).enabled() || modules.get(SignReader.class).enabled()) {
                 Raycast.tick(client);
             }

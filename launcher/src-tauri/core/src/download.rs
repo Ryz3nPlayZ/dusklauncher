@@ -86,11 +86,31 @@ pub async fn download_one(client: &reqwest::Client, dl: &Download) -> Result<()>
     if verify_existing(dl).await? {
         return Ok(());
     }
-    // One retry on checksum mismatch: a truncated first fetch must not poison
-    // the install with a permanent error.
-    match fetch_and_write(client, dl).await {
-        Err(Error::Checksum { .. }) => fetch_and_write(client, dl).await,
-        other => other,
+    // Retry what a flaky network does to a fetch: a truncated body (checksum
+    // mismatch), a reset or timed-out connection, a 5xx or 429. Mojang's CDN
+    // drops connections mid-body often enough to fail a 4000-object asset
+    // install without this.
+    let mut attempt = 1;
+    loop {
+        match fetch_and_write(client, dl).await {
+            Err(e) if attempt < ATTEMPTS && is_transient(&e) => {
+                tokio::time::sleep(std::time::Duration::from_millis(500 * 3u64.pow(attempt - 1))).await;
+                attempt += 1;
+            }
+            other => return other,
+        }
+    }
+}
+
+const ATTEMPTS: u32 = 3;
+
+fn is_transient(e: &Error) -> bool {
+    match e {
+        Error::Checksum { .. } => true,
+        Error::Http(e) => e
+            .status()
+            .is_none_or(|s| s.is_server_error() || s == reqwest::StatusCode::TOO_MANY_REQUESTS),
+        _ => false,
     }
 }
 
@@ -141,4 +161,17 @@ async fn verify_existing(dl: &Download) -> Result<bool> {
     let mut hasher = Sha1::new();
     hasher.update(&bytes);
     Ok(hex::encode(hasher.finalize()) == *expected)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retries_corrupt_bodies_but_not_local_failures() {
+        let checksum = Error::Checksum { path: "a".into(), expected: "x".into(), actual: "y".into() };
+        assert!(is_transient(&checksum));
+        assert!(!is_transient(&Error::Io(std::io::Error::other("disk full"))));
+        assert!(!is_transient(&Error::Other("nope".into())));
+    }
 }

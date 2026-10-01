@@ -21,7 +21,7 @@ public class PotionEffects extends TextHud {
 
     public PotionEffects() {
         super("effects", "Potion Effects", "Your active status effects and their remaining time.");
-        setPosition(150, 150);
+        setPosition(380, 60);
         setEnabled(true);
     }
 

@@ -65,6 +65,10 @@ pub struct Settings {
     /// Ask before opening a link someone sent in chat.
     #[serde(default = "yes")]
     pub warn_on_links: bool,
+    /// Carry the Dusk client's HUD layout, module options and menu prefs
+    /// across instances and machines (client_settings.rs).
+    #[serde(default = "yes")]
+    pub sync_client_settings: bool,
 }
 
 fn yes() -> bool {
@@ -111,6 +115,7 @@ impl Default for Settings {
             notify_messages: true,
             clock_24h: false,
             warn_on_links: true,
+            sync_client_settings: true,
         }
     }
 }

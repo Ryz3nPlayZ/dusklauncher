@@ -52,6 +52,11 @@ public final class TpsTracker {
         return averageTps;
     }
 
+    /** Milliseconds since the last time update, or -1 before the first one. */
+    public static long millisSinceUpdate() {
+        return lastUpdateTime == -1 ? -1 : (System.nanoTime() - lastUpdateTime) / 1_000_000;
+    }
+
     public static void reset() {
         index = 0;
         samples = 0;

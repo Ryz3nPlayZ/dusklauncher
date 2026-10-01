@@ -109,7 +109,7 @@ pub fn list_screenshots(state: State<AppState>) -> Vec<Screenshot> {
             });
         }
     }
-    out.sort_by(|a, b| b.taken_at.cmp(&a.taken_at));
+    out.sort_by_key(|s| std::cmp::Reverse(s.taken_at));
     out
 }
 

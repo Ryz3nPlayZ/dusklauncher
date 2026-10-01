@@ -247,11 +247,17 @@ pub fn update_profile(state: State<AppState>, id: String, patch: ProfilePatch) -
                     p.name = name.trim().to_string();
                 }
             }
+            // a pinned loader build belongs to its loader, and a NeoForge
+            // build to exactly one game version: drop pins those edits orphan
+            let (was_loader, was_game) = (p.loader, p.game_version.clone());
             if let Some(v) = &patch.game_version {
                 p.game_version = v.clone();
             }
             if let Some(l) = &patch.loader {
                 p.loader = Loader::parse(l);
+            }
+            if p.loader != was_loader || (p.loader == Loader::NeoForge && p.game_version != was_game) {
+                p.loader_version = None;
             }
             if let Some(lv) = &patch.loader_version {
                 p.loader_version = lv.clone();
@@ -282,6 +288,71 @@ pub fn delete_profile(state: State<AppState>, id: String) -> Result<(), String> 
     store.profiles.retain(|p| p.id != id);
     state.save_profiles(&store);
     Ok(())
+}
+
+/// Top-level folders a duplicate leaves behind: the old instance's history,
+/// not its setup.
+const NOT_DUPLICATED: &[&str] = &["logs", "crash-reports", "screenshots"];
+
+/// Copy `from` into `to` file by file; symlinks are skipped, not followed.
+fn copy_tree(from: &std::path::Path, to: &std::path::Path, skip: &[&str]) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for e in std::fs::read_dir(from)? {
+        let e = e?;
+        let name = e.file_name();
+        if skip.iter().any(|s| name == *s) {
+            continue;
+        }
+        let ty = e.file_type()?;
+        if ty.is_dir() {
+            copy_tree(&e.path(), &to.join(&name), &[])?;
+        } else if ty.is_file() {
+            std::fs::copy(e.path(), to.join(&name))?;
+        }
+    }
+    Ok(())
+}
+
+/// A new instance with this one's settings and a copy of its folder — mods,
+/// config, packs and worlds — to try changes on without touching the
+/// original. Named "<name> (copy)", numbered if that's taken.
+#[tauri::command]
+pub async fn duplicate_profile(state: State<'_, AppState>, id: String) -> Result<ProfileDto, String> {
+    let (from, copy) = {
+        let store = state.profiles.lock().unwrap();
+        let src = store.profiles.iter().find(|p| p.id == id).cloned().ok_or("profile not found")?;
+        let taken = |n: &str| store.profiles.iter().any(|p| p.name == n);
+        let mut name = format!("{} (copy)", src.name);
+        let mut n = 2;
+        while taken(&name) {
+            name = format!("{} (copy {n})", src.name);
+            n += 1;
+        }
+        let from = src.dirs(&state.data_dir).root;
+        let copy = Profile {
+            id: format!("p{}", now_millis()),
+            name,
+            created_at: now_millis(),
+            last_played: None,
+            ..src
+        };
+        (from, copy)
+    };
+    let to = copy.dirs(&state.data_dir).root;
+    if from.exists() {
+        let dest = to.clone();
+        let copied = tokio::task::spawn_blocking(move || copy_tree(&from, &dest, NOT_DUPLICATED))
+            .await
+            .map_err(|e| e.to_string())?;
+        if let Err(e) = copied {
+            let _ = std::fs::remove_dir_all(&to);
+            return Err(format!("couldn't copy the instance folder: {e}"));
+        }
+    }
+    let mut store = state.profiles.lock().unwrap();
+    store.profiles.push(copy);
+    state.save_profiles(&store);
+    Ok(dto(store.profiles.last().unwrap()))
 }
 
 /// One world = one subdir of saves/ carrying a level.dat. Name, last
@@ -337,7 +408,7 @@ pub fn list_worlds(state: State<AppState>, profile_id: String) -> Result<Vec<Wor
     let Ok(rd) = std::fs::read_dir(&saves) else { return Ok(out) };
     for entry in rd.flatten() {
         let path = entry.path();
-        if !path.is_dir() || path.join("level.dat").exists() == false {
+        if !path.is_dir() || !path.join("level.dat").exists() {
             continue;
         }
         let name = entry.file_name().to_string_lossy().to_string();
@@ -348,7 +419,7 @@ pub fn list_worlds(state: State<AppState>, profile_id: String) -> Result<Vec<Wor
             .unwrap_or(0);
         out.push(WorldDto { name, modified: stamp, size: dir_size(&path) });
     }
-    out.sort_by(|a, b| b.modified.cmp(&a.modified));
+    out.sort_by_key(|w| std::cmp::Reverse(w.modified));
     Ok(out)
 }
 
@@ -475,37 +546,7 @@ pub async fn install_and_launch(
     let (version, natives_dir) =
         install_profile(&app2, &client, &state, &profile, &dirs).await?;
 
-    // Java: the instance's own executable, else the settings override for
-    // this major version, else the provisioned runtime
-    let java = version.effective_java();
-    let java_bin = {
-        let settings = state.settings.lock().unwrap();
-        profile
-            .java_path
-            .as_deref()
-            .filter(|p| !p.trim().is_empty())
-            .or_else(|| {
-                settings
-                    .java_paths
-                    .get(&java.major_version.to_string())
-                    .map(String::as_str)
-                    .filter(|p| !p.trim().is_empty())
-            })
-            .map(std::path::PathBuf::from)
-    };
-    let java_bin = match java_bin {
-        Some(p) => p,
-        None => {
-            let mut prog = ProgressEmitter::new(app.clone(), &profile_id, "java", 1, 0);
-            let runtime_dir = dirs.runtimes.join(&java.component);
-            fasterlauncher_core::java::provision(&client, &java.component, &dirs.runtimes, |_| {})
-                .await
-                .map_err(|e| e.to_string())?;
-            prog.bump(0);
-            prog.flush(true);
-            fasterlauncher_core::java::java_executable(&runtime_dir)
-        }
-    };
+    let java_bin = java_for(&app, &client, &state, &profile, &dirs, &version.effective_java()).await?;
 
     let env = {
         let settings = state.settings.lock().unwrap();
@@ -569,6 +610,18 @@ pub async fn install_and_launch(
             }
         }
         p
+    };
+    let settings_snapshot = if profile.loader == Loader::Fabric && state.settings.lock().unwrap().sync_client_settings {
+        crate::client_settings::sync(&state).await;
+        match crate::client_settings::apply_to_instance(&state.data_dir, &dirs.root) {
+            Ok(snap) => Some(snap),
+            Err(e) => {
+                tracing::warn!("could not apply synced client settings: {e}");
+                None
+            }
+        }
+    } else {
+        None
     };
     seed_instance_config(&dirs.root);
     let spec = launch::build_launch_spec(&java_bin, &version, &profile, &dirs, &natives_dir, &session, &env);
@@ -664,6 +717,7 @@ pub async fn install_and_launch(
         let app3 = app.clone();
         let pid2 = profile_id.clone();
         let env2 = env.clone();
+        let root2 = dirs.root.clone();
         tokio::spawn(async move {
             let state = app3.state::<AppState>();
             let mut guard = state.running_game.lock().await;
@@ -679,6 +733,13 @@ pub async fn install_and_launch(
             launch::run_post_exit(&env2);
             let code = status.ok().and_then(|s| s.code());
             emit_state(&app3, &pid2, "exited", code);
+            if let Some(snap) = settings_snapshot {
+                match crate::client_settings::collect_from_instance(&state.data_dir, &root2, &snap) {
+                    Ok(true) => crate::client_settings::sync(&state).await,
+                    Ok(false) => {}
+                    Err(e) => tracing::warn!("could not collect client settings: {e}"),
+                }
+            }
         });
         *state.running_game.lock().await = Some(RunningGame { profile_id: profile_id.clone(), child });
     }
@@ -783,6 +844,44 @@ pub async fn game_state(state: State<'_, AppState>) -> Result<Option<GameStatePa
     }))
 }
 
+/// Java for a profile: the instance's own executable, else the settings
+/// override for this major version, else the provisioned runtime.
+async fn java_for(
+    app: &AppHandle,
+    client: &reqwest::Client,
+    state: &AppState,
+    profile: &Profile,
+    dirs: &fasterlauncher_core::profile::ProfileDirs,
+    java: &fasterlauncher_core::meta::JavaVersion,
+) -> Result<std::path::PathBuf, String> {
+    let configured = {
+        let settings = state.settings.lock().unwrap();
+        profile
+            .java_path
+            .as_deref()
+            .filter(|p| !p.trim().is_empty())
+            .or_else(|| {
+                settings
+                    .java_paths
+                    .get(&java.major_version.to_string())
+                    .map(String::as_str)
+                    .filter(|p| !p.trim().is_empty())
+            })
+            .map(std::path::PathBuf::from)
+    };
+    if let Some(p) = configured {
+        return Ok(p);
+    }
+    let mut prog = ProgressEmitter::new(app.clone(), &profile.id, "java", 1, 0);
+    let runtime_dir = dirs.runtimes.join(&java.component);
+    fasterlauncher_core::java::provision(client, &java.component, &dirs.runtimes, |_| {})
+        .await
+        .map_err(|e| e.to_string())?;
+    prog.bump(0);
+    prog.flush(true);
+    Ok(fasterlauncher_core::java::java_executable(&runtime_dir))
+}
+
 type InstallResult = Result<
     (
         fasterlauncher_core::meta::VersionJson,
@@ -805,11 +904,11 @@ async fn install_profile(
         .await
         .map_err(|e| e.to_string())?;
 
-    // Fabric: install the loader profile merged with the vanilla JSON; the
-    // merged profile becomes the effective version (fabric mainClass and
-    // arguments, vanilla java runtime / client jar / asset index).
-    let effective_version = if profile.loader == Loader::Fabric {
-        fasterlauncher_core::fabric::install_fabric(
+    // Loaders: the loader's profile merged with the vanilla JSON becomes the
+    // effective version (loader mainClass and arguments, vanilla java
+    // runtime / client jar / asset index).
+    let effective_version = match profile.loader {
+        Loader::Fabric => fasterlauncher_core::fabric::install_fabric(
             client,
             &profile.game_version,
             profile.loader_version.as_deref(),
@@ -817,9 +916,27 @@ async fn install_profile(
             &version,
         )
         .await
-        .map_err(|e| e.to_string())?
-    } else {
-        version
+        .map_err(|e| e.to_string())?,
+        // NeoForge's installer runs on the game's Java, so that comes first
+        Loader::NeoForge => {
+            let java_bin = java_for(app, client, state, profile, dirs, &version.effective_java()).await?;
+            let mut prog = ProgressEmitter::new(app.clone(), &profile.id, "loader", 1, 0);
+            let merged = fasterlauncher_core::neoforge::install_neoforge(
+                client,
+                &java_bin,
+                &profile.game_version,
+                profile.loader_version.as_deref(),
+                &state.data_dir,
+                &dirs.versions,
+                &version,
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+            prog.bump(0);
+            prog.flush(true);
+            merged
+        }
+        Loader::Vanilla => version,
     };
 
     // Libraries — both Mojang (`downloads.artifact`) and Fabric (maven `url`
@@ -830,7 +947,9 @@ async fn install_profile(
         .iter()
         .filter(|l| meta::library_allowed(l))
         .filter_map(|l| {
-            let artifact = l.resolve_artifact()?;
+            // an empty url marks an installer output (NeoForge's patched
+            // client), already on disk
+            let artifact = l.resolve_artifact().filter(|a| !a.url.is_empty())?;
             Some(download::Download {
                 url: artifact.url.clone(),
                 dest: dirs.libraries.join(&artifact.path),
@@ -1207,9 +1326,8 @@ pub(crate) async fn ensure_play_session(state: &AppState) -> Result<Session, Str
         let config = auth_flow::resolve_auth_config(state);
         return fasterlauncher_core::auth::refresh_session(&state.client, &config, &session)
             .await
-            .map(|fresh| {
-                auth_store::save_session(&state.data_dir, &fresh);
-                fresh
+            .inspect(|fresh| {
+                auth_store::save_session(&state.data_dir, fresh);
             })
             .map_err(|e| format!("session expired and refresh failed ({e}) — sign in again"));
     }
@@ -1287,5 +1405,35 @@ mod presence_tests {
         );
         assert_eq!(presence_from_log("[Render thread/INFO] Connecting to the database"), None);
         assert_eq!(presence_from_log("Loading 12 mods"), None);
+    }
+}
+
+#[cfg(test)]
+mod duplicate_tests {
+    use super::{copy_tree, NOT_DUPLICATED};
+
+    #[test]
+    fn copies_the_setup_and_leaves_the_history() {
+        let base = std::env::temp_dir().join(format!("dusk-dup-{}", std::process::id()));
+        let (from, to) = (base.join("a"), base.join("b"));
+        for dir in ["mods", "saves/World/region", "logs", "screenshots"] {
+            std::fs::create_dir_all(from.join(dir)).unwrap();
+        }
+        std::fs::write(from.join("options.txt"), "fov:90").unwrap();
+        std::fs::write(from.join("mods/sodium.jar"), "jar").unwrap();
+        std::fs::write(from.join("saves/World/region/r.0.0.mca"), "mca").unwrap();
+        std::fs::write(from.join("logs/latest.log"), "log").unwrap();
+        // a nested folder named like a skipped one is still content
+        std::fs::create_dir_all(from.join("config/logs")).unwrap();
+        std::fs::write(from.join("config/logs/keep.txt"), "x").unwrap();
+
+        copy_tree(&from, &to, NOT_DUPLICATED).unwrap();
+        assert_eq!(std::fs::read_to_string(to.join("options.txt")).unwrap(), "fov:90");
+        assert!(to.join("mods/sodium.jar").is_file());
+        assert!(to.join("saves/World/region/r.0.0.mca").is_file());
+        assert!(to.join("config/logs/keep.txt").is_file());
+        assert!(!to.join("logs").exists());
+        assert!(!to.join("screenshots").exists());
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

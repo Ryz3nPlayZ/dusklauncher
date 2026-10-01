@@ -2,7 +2,6 @@ package dev.dusk.client.modules.render;
 
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.BoolSetting;
-import dev.dusk.client.module.setting.ChoiceSetting;
 import dev.dusk.client.module.setting.ColorSetting;
 import dev.dusk.client.module.setting.IntSetting;
 
@@ -18,7 +17,7 @@ public class Nametags extends Module {
     /** Hundredths of a text pixel, -10..10 in steps of 0.25 like the original slider. */
     public final IntSetting heightOffset = add(new IntSetting("heightOffset", "Height offset", 0, -1000, 1000, 25, "").decimals(2), "General");
     public final IntSetting scale = add(new IntSetting("scale", "Scale", 100, 0, 100, 5, "%"), "General");
-    public final ChoiceSetting textShadow = add(new ChoiceSetting("textType", "Text shadow", "No Shadow", "No Shadow", "Shadow"), "General");
+    public final BoolSetting textShadow = add(new BoolSetting("textShadow", "Text shadow", false), "General");
     public final BoolSetting showOwn = add(new BoolSetting("showOwnNametag", "Show own nametag", true), "General");
     public final BoolSetting showInInventory = add(new BoolSetting("showInInventory", "Show in inventory", false), "General");
 
@@ -27,9 +26,9 @@ public class Nametags extends Module {
     public final BoolSetting hideArmorStandsF1 = add(new BoolSetting("hideArmorStandF1", "Hide armor stand nametags when HUD hidden", true), "Hidden HUD");
 
     public final BoolSetting background = add(new BoolSetting("background", "Background", true), "Style");
-    public final ColorSetting backgroundColor = add(new ColorSetting("backgroundColor", "Background color", 0x3F000000), "Style");
-    public final ColorSetting textColor = add(new ColorSetting("textColor", "Text color", 0xFFFFFFFF), "Style");
-    public final BoolSetting overrideTextColor = add(new BoolSetting("overrideTextColor", "Override text color", false), "Style");
+    public final ColorSetting backgroundColor = add(new ColorSetting("backgroundColor", "Background colour", 0x3F000000), "Style");
+    public final ColorSetting textColor = add(new ColorSetting("textColor", "Text colour", 0xFFFFFFFF), "Style");
+    public final BoolSetting overrideTextColor = add(new BoolSetting("overrideTextColor", "Override text colour", false), "Style");
     public final BoolSetting rounded = add(new BoolSetting("rounded", "Rounded corners", false), "Style");
     public final IntSetting cornerRadius = add(new IntSetting("cornerRadius", "Corner radius", 3, 0, 10), "Style");
     public final IntSetting paddingX = add(new IntSetting("paddingX", "Padding X", 0, 0, 10), "Style");

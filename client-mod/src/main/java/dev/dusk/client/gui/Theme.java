@@ -1,10 +1,10 @@
 package dev.dusk.client.gui;
 
 /**
- * The launcher's look for the Dusk title screen (launcher/src/design/tokens.css):
+ * The launcher's look for the Dusk screens (launcher/src/design/tokens.css):
  * a black outline, a #323232 band and #4a4a4a L-corners at the top-right and
- * bottom-left, the gold DUSK wordmark. The in-game menus use {@link Vanilla}
- * instead, so they sit with the rest of the game's screens.
+ * bottom-left, the launcher's brand as the wordmark. The frames are drawn by
+ * {@link Px} in window pixels, at the launcher's proportions.
  */
 public final class Theme {
     private Theme() {}
@@ -15,7 +15,7 @@ public final class Theme {
     public static final int OVERLAY = 0x66000000;
 
     private static final int BLACK = 0xFF000000;
-    private static final int BAND = 0xFF323232, BAND_HOT = 0xFF4A4A4A, CORNER = 0xFF4A4A4A, CORNER_HOT = 0xFF6A6A6A;
+    private static final int BAND = 0xFF323232, CORNER = 0xFF4A4A4A;
     private static final int GOLD_UP = 0xFFFFC600, GOLD_LO = 0xFFDE8105, GOLD_CORNER = 0xFFFFFBCD;
     private static final int SURF_TOP = 0xFF1E1E1E, SURF_BOT = 0xFF2B261C, CTA_BOT = 0xFF413018;
     /** Two-tone label pairs (Figma frames 7/8): idle and active. */
@@ -25,7 +25,6 @@ public final class Theme {
     public static final int MOSS_UP = 0xFF8CCF2D, MOSS_LO = 0xFF468A28, MOSS_BOT = 0xFF202C1D;
     public static final int RED_UP = 0xFFFF1100;
     public static final int SURFACE = SURF_TOP, SURFACE_BOT = SURF_BOT, ACCENT = GOLD_UP;
-    private static final int FIELD_BG = 0xFF101010;
 
     // ---- frames ---------------------------------------------------------
 
@@ -33,18 +32,10 @@ public final class Theme {
     public static void button(Canvas c, int x, int y, int w, int h, boolean hover, Kind kind) {
         if (kind == Kind.NORMAL) {
             // Figma frame 7: flat #1e1e1e body inside the #323232 band
-            plate(c, x, y, w, h, hover ? 0xFF252525 : SURF_TOP, hover ? 0xFF252525 : SURF_TOP, hover);
+            plate(c, x, y, w, h, SURF_TOP, SURF_TOP, hover);
             return;
         }
-        c.fill(x, y, x + w, y + h, BLACK);
-        int mid = y + h / 2;
-        c.fill(x + 1, y + 1, x + w - 1, mid, GOLD_UP);
-        c.fill(x + 1, mid, x + w - 1, y + h - 1, GOLD_LO);
-        // surface: flat through 45%, then blended down (tokens.css --surf-hold)
-        int hold = y + 2 + (h - 4) * 45 / 100;
-        c.fill(x + 2, y + 2, x + w - 2, hold, hover ? 0xFF242424 : SURF_TOP);
-        c.fillGradient(x + 2, hold, x + w - 2, y + h - 2, hover ? 0xFF242424 : SURF_TOP, CTA_BOT);
-        corners(c, x, y, w, h, GOLD_CORNER);
+        Px.box(c, x, y, w, h, Family.ACCENT, hover, false, 0xFF);
     }
 
     /**
@@ -53,16 +44,7 @@ public final class Theme {
      * #4a4a4a L-corners.
      */
     public static void plate(Canvas c, int x, int y, int w, int h, int top, int bot, boolean hot) {
-        c.fill(x, y, x + w, y + h, BLACK);
-        c.fill(x + 1, y + 1, x + w - 1, y + h - 1, hot ? BAND_HOT : BAND);
-        if (top == bot) {
-            c.fill(x + 2, y + 2, x + w - 2, y + h - 2, top);
-        } else {
-            int hold = y + 2 + (h - 4) * 45 / 100;
-            c.fill(x + 2, y + 2, x + w - 2, hold, top);
-            c.fillGradient(x + 2, hold, x + w - 2, y + h - 2, top, bot);
-        }
-        corners(c, x, y, w, h, hot ? CORNER_HOT : CORNER);
+        Px.frame(c, x, y, w, h, true, BAND, BAND, CORNER, top, bot, 45, hot, false, 0xFF);
     }
 
     /**
@@ -104,9 +86,7 @@ public final class Theme {
 
     /** A text-entry box on a plate: black outline, band (gold while focused), dark well. */
     public static void field(Canvas c, int x, int y, int w, int h, boolean focused) {
-        c.fill(x, y, x + w, y + h, BLACK);
-        c.fill(x + 1, y + 1, x + w - 1, y + h - 1, focused ? GOLD_LO : BAND);
-        c.fill(x + 2, y + 2, x + w - 2, y + h - 2, FIELD_BG);
+        Px.field(c, x, y, w, h, focused);
     }
 
     // ---- the launcher's families (launcher/src/design/px.css) --------------------
@@ -153,25 +133,18 @@ public final class Theme {
 
     /** A launcher PxBox: black outline, the family's band (split at mid-height), surface, L-corners. */
     public static void box(Canvas c, int x, int y, int w, int h, Family f, boolean hot, boolean disabled) {
-        c.fill(x, y, x + w, y + h, BLACK);
-        band(c, x + 1, y + 1, w - 2, h - 2, f, hot, disabled);
+        Px.box(c, x, y, w, h, f, hot, disabled, 0xFF);
     }
 
     /** A navbar cell: the grey band and corners on a flat surface, no black of its own (the bar supplies it). */
     public static void cell(Canvas c, int x, int y, int w, int h, boolean hot) {
-        int band = filter(BAND, hot, false);
-        c.fill(x, y, x + w, y + h, band);
-        c.fill(x + 1, y + 1, x + w - 1, y + h - 1, filter(SURF_TOP, hot, false));
-        corners(c, x - 1, y - 1, w + 2, h + 2, filter(CORNER, hot, false));
+        Px.frame(c, x, y, w, h, false, BAND, BAND, CORNER, SURF_TOP, SURF_TOP, 100, hot, false, 0xFF);
     }
 
     /** The window-close cell: red band and corners on a red surface. */
     public static void closeCell(Canvas c, int x, int y, int w, int h, boolean hot) {
-        int mid = y + h / 2;
-        c.fill(x, y, x + w, mid, RED_UP);
-        c.fill(x, mid, x + w, y + h, 0xFFDD0626);
-        c.fill(x + 1, y + 1, x + w - 1, y + h - 1, hot ? RED_UP : 0xFFDD0626);
-        corners(c, x - 1, y - 1, w + 2, h + 2, RED_CORNER);
+        int face = hot ? RED_UP : 0xFFDD0626;
+        Px.frame(c, x, y, w, h, false, RED_UP, 0xFFDD0626, RED_CORNER, face, face, 100, false, false, 0xFF);
     }
 
     public static final int RED_CORNER = 0xFFFF8B8E, GLYPH = 0xFFB8B8B8;
@@ -183,32 +156,11 @@ public final class Theme {
         c.fill(x, y + h - 1, x + w, y + h, BAND);
     }
 
-    private static void band(Canvas c, int x, int y, int w, int h, Family f, boolean hot, boolean disabled) {
-        int up = filter(f.up, hot, disabled), lo = filter(f.lo, hot, disabled);
-        int mid = y + h / 2;
-        c.fill(x, y, x + w, mid, up);
-        c.fill(x, mid, x + w, y + h, lo);
-        int top = filter(SURF_TOP, hot, disabled), bot = filter(f.bot, hot, disabled);
-        int sx = x + 1, sy = y + 1, sw = w - 2, sh = h - 2;
-        int hold = sy + sh * f.hold / 100;
-        if (hold > sy) c.fill(sx, sy, sx + sw, hold, top);
-        if (hold < sy + sh) c.fillGradient(sx, hold, sx + sw, sy + sh, top, bot);
-        if (f.corner != 0) corners(c, x - 1, y - 1, w + 2, h + 2, filter(f.corner, hot, disabled));
-    }
 
     public static void vDivider(Canvas c, int x, int y0, int y1) {
         c.fill(x, y0, x + 1, y1, BLACK);
     }
 
-    /** The launcher's L-corners: top-right and bottom-left only, on the band. */
-    private static void corners(Canvas c, int x, int y, int w, int h, int color) {
-        int leg = Math.max(2, Math.min(4, Math.min(w, h) / 5));
-        int r = x + w - 2, b = y + h - 2;
-        c.fill(r - leg + 1, y + 1, r + 1, y + 2, color);
-        c.fill(r, y + 1, r + 1, y + 1 + leg, color);
-        c.fill(x + 1, b, x + 1 + leg, b + 1, color);
-        c.fill(x + 1, b - leg + 1, x + 2, b + 1, color);
-    }
 
     /** Cuts {@code text} to fit {@code max} pixels, ending in "...". */
     public static String ellipsize(Canvas c, String text, int max) {
@@ -221,38 +173,31 @@ public final class Theme {
     // ---- wordmark -------------------------------------------------------
 
     /**
-     * DUSK in the game font's own glyphs (5x7, what Monocraft is drawn
-     * after), bolded the way the font does it: each glyph again one pixel right.
+     * The brand: the dusk app icon, then DUSK in heavy two-cell-stem pixel
+     * letters in the accent's gold (the sun in the icon), cut hard into its
+     * two tones like every launcher label and dropped a cell onto a dark
+     * shadow. Drawn in window pixels so the icon's art pixels and the letter
+     * cells all land on whole pixels at any GUI scale.
      */
     private static final String[][] LETTERS = {
-            {"1111.", "1...1", "1...1", "1...1", "1...1", "1...1", "1111."},
-            {"1...1", "1...1", "1...1", "1...1", "1...1", "1...1", ".111."},
-            {".1111", "1....", "1....", ".111.", "....1", "....1", "1111."},
-            {"1...1", "1..1.", "111..", "1..1.", "1...1", "1...1", "1...1"},
+            {"11111.", "11..11", "11..11", "11..11", "11..11", "11..11", "11111."},
+            {"11..11", "11..11", "11..11", "11..11", "11..11", "11..11", ".1111."},
+            {".11111", "11....", "11....", ".1111.", "....11", "....11", "11111."},
+            {"11..11", "11.11.", "1111..", "111...", "1111..", "11.11.", "11..11"},
     };
-    private static final int GLYPH_W = 5, GLYPH_H = 7, BOLD_W = GLYPH_W + 1, LETTER_GAP = 2;
-    private static final int LETTERS_W = LETTERS.length * (BOLD_W + LETTER_GAP) - LETTER_GAP;
-    /** Rows above this are the light gold, the rest the deep one: a hard split like the buttons'. */
-    private static final int SPLIT = 4;
-    private static final int OUTLINE = 0x12061E, DROP = 0x5A1A4A;
+    private static final String MARK = "duskclient:textures/gui/dusk_mark.png";
+    /** The icon's pixel art is 26x26; it is drawn {@code art} window pixels to the art pixel. */
+    private static final int MARK_ART = 26;
+    /** The icon in launcher-wordmark cells, as before, so callers keep their layout. */
+    private static final int MARK_CELLS = 11;
+    private static final int GLYPH_W = 6, GLYPH_H = 7, LETTER_GAP = 1, MARK_GAP = 3;
+    private static final int LETTERS_W = LETTERS.length * (GLYPH_W + LETTER_GAP) - LETTER_GAP;
+    /** Cap height over icon height. */
+    private static final float CAP = 0.6f;
+    private static final int TEXT_TOP = 0xFFC600, TEXT_BOT = 0xDE8105, SPLIT = 3, SHADOW = 0x3A1E00;
     private static final boolean[][] LETTER_MASK = mask(LETTERS_W, GLYPH_H, (r, col) -> {
-        int l = col / (BOLD_W + LETTER_GAP), lc = col % (BOLD_W + LETTER_GAP);
-        if (lc >= BOLD_W) return false;
-        String row = LETTERS[l][r];
-        return lc < GLYPH_W && row.charAt(lc) == '1' || lc > 0 && row.charAt(lc - 1) == '1';
-    });
-    /** The letters and their drop one cell below, grown by a cell all round. */
-    private static final boolean[][] OUTLINE_MASK = mask(LETTERS_W + 2, GLYPH_H + 3, (r, col) -> {
-        for (int dr = -1; dr <= 1; dr++) {
-            for (int dc = -1; dc <= 1; dc++) {
-                int rr = r - 1 + dr, cc = col - 1 + dc;
-                if (cc < 0 || cc >= LETTERS_W) continue;
-                if (rr >= 0 && rr < GLYPH_H && LETTER_MASK[rr][cc] || rr >= 1 && rr <= GLYPH_H && LETTER_MASK[rr - 1][cc]) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        int l = col / (GLYPH_W + LETTER_GAP), lc = col % (GLYPH_W + LETTER_GAP);
+        return lc < GLYPH_W && LETTERS[l][r].charAt(lc) == '1';
     });
 
     private interface Cell { boolean at(int r, int col); }
@@ -265,43 +210,105 @@ public final class Theme {
         return m;
     }
 
-    /** Width of {@link #wordmark} at {@code unit} pixels per font pixel. */
-    public static int wordmarkWidth(int unit) {
-        return (LETTERS_W + 2) * unit;
+    /** Window pixels per icon art pixel, for a wordmark {@code unit} GUI pixels to the cell. */
+    private static int art(int unit) {
+        return Math.max(1, Math.round(MARK_CELLS * unit * (float) Px.gui() / MARK_ART));
     }
 
-    /** Height of {@link #wordmark}: the outlined letters and their drop. */
+    /** Window pixels per letter cell. */
+    private static int letterCell(int unit) {
+        return Math.max(1, Math.round(MARK_ART * art(unit) * CAP / GLYPH_H));
+    }
+
+    /** Width of {@link #wordmark} in GUI pixels at {@code unit}. */
+    public static int wordmarkWidth(int unit) {
+        int cell = letterCell(unit);
+        return (int) Math.ceil((MARK_ART * art(unit) + (MARK_GAP + LETTERS_W + 1) * cell) / Px.gui());
+    }
+
+    /** Height of {@link #wordmark} in GUI pixels: the icon, which the letters are centred on. */
     public static int wordmarkHeight(int unit) {
-        return (GLYPH_H + 3) * unit;
+        return (int) Math.ceil(MARK_ART * art(unit) / Px.gui());
     }
 
     public static void wordmark(Canvas c, int x, int y, int unit) {
         wordmark(c, x, y, unit, 1f);
     }
 
-    /**
-     * The title: bold DUSK, gold over deep gold split hard across the
-     * middle, a plum drop and a dark outline so it holds on any backdrop,
-     * faded by {@code alpha}.
-     */
+    /** The brand, faded by {@code alpha}. */
     public static void wordmark(Canvas c, int x, int y, int unit, float alpha) {
         float a = Math.max(0f, Math.min(1f, alpha));
-        cells(c, OUTLINE_MASK, x, y, unit, a, r -> OUTLINE);
-        cells(c, LETTER_MASK, x + unit, y + 2 * unit, unit, a, r -> DROP);
-        cells(c, LETTER_MASK, x + unit, y + unit, unit, a, r -> r < SPLIT ? GOLD_UP : GOLD_LO);
+        int alpha255 = Math.max(5, Math.round(255 * a));
+        double s = Px.gui();
+        int art = art(unit), cell = letterCell(unit), size = MARK_ART * art;
+        int wx = (int) Math.round(x * s), wy = (int) Math.round(y * s);
+        c.push();
+        c.scale((float) (1 / s), (float) (1 / s));
+        c.push();
+        c.translate(wx, wy);
+        c.scale(art, art);
+        c.blit(MARK, 0, 0, 0, 0, MARK_ART, MARK_ART, MARK_ART, MARK_ART, alpha255 << 24 | 0xFFFFFF);
+        c.pop();
+
+        int tx = wx + size + MARK_GAP * cell, ty = wy + (size - GLYPH_H * cell) / 2;
+        cells(c, LETTER_MASK, tx + cell, ty + cell, cell, cell, alpha255, r -> SHADOW);
+        cells(c, LETTER_MASK, tx, ty, cell, cell, alpha255, r -> r < SPLIT ? TEXT_TOP : TEXT_BOT);
+        c.pop();
+    }
+
+    // ---- the menu brand -------------------------------------------------
+
+    /**
+     * The launcher's nav brand cell (Nav.tsx), for the menu: the app icon and
+     * DUSK in grey TT stretched 1.4 wide on a grey PxBox {@code h} GUI pixels
+     * tall. Proportions follow nav.css (icon 76 of 88, padding 20 / gap 14 /
+     * 28, cap about 0.3 of the icon); the icon and the type are sized in whole
+     * window pixels so the pixel art stays crisp.
+     */
+    private record Brand(int k, int icon, int fy, int fx, int padL, int gap, int padR) {
+        static Brand at(int h) {
+            double hh = h * Px.gui();
+            int k = Math.max(1, (int) Math.floor(hh * 76 / 88 / MARK_ART));
+            int icon = MARK_ART * k;
+            int fy = Math.max(1, (int) Math.round(icon * 0.3 / 7));
+            int fx = Math.max(1, (int) Math.round(fy * 1.4));
+            int padL = (int) Math.round((hh - icon) / 2 + hh * 14 / 88);
+            return new Brand(k, icon, fy, fx, padL, (int) Math.round(hh * 14 / 88), (int) Math.round(hh * 28 / 88));
+        }
+    }
+
+    /** Width of {@link #brand} in GUI pixels. */
+    public static int brandWidth(Canvas c, int h) {
+        Brand b = Brand.at(h);
+        return (int) Math.ceil((b.padL + b.icon + b.gap + Px.ttWidth(c, "DUSK", b.fx) + b.padR) / Px.gui());
+    }
+
+    public static void brand(Canvas c, int x, int y, int h, int alpha) {
+        Brand b = Brand.at(h);
+        double s = Px.gui();
+        Px.box(c, x, y, brandWidth(c, h), h, Family.GREY, false, false, alpha);
+        int wx = (int) Math.round(x * s), wy = (int) Math.round(y * s), wh = (int) Math.round(h * s);
+        int iy = wy + (wh - b.icon) / 2;
+        c.push();
+        c.scale((float) (1 / s), (float) (1 / s));
+        c.translate(wx + b.padL, iy);
+        c.scale(b.k, b.k);
+        c.blit(MARK, 0, 0, 0, 0, MARK_ART, MARK_ART, MARK_ART, MARK_ART, Math.max(5, alpha) << 24 | 0xFFFFFF);
+        c.pop();
+        Px.tt(c, "DUSK", wx + b.padL + b.icon + b.gap, wy + wh / 2, b.fx, b.fy, Px.Tone.GREY, alpha);
     }
 
     private interface RowColor { int at(int r); }
 
     /** Fills a cell mask in horizontal runs, each row one flat colour. */
-    private static void cells(Canvas c, boolean[][] m, int x, int y, int unit, float a, RowColor color) {
+    private static void cells(Canvas c, boolean[][] m, int x, int y, int cw, int ch, int alpha255, RowColor color) {
         for (int r = 0; r < m.length; r++) {
-            int argb = Math.max(5, Math.round(255 * a)) << 24 | color.at(r) & 0xFFFFFF;
+            int argb = alpha255 << 24 | color.at(r) & 0xFFFFFF;
             for (int col = 0; col < m[r].length; col++) {
                 if (!m[r][col]) continue;
                 int end = col;
                 while (end + 1 < m[r].length && m[r][end + 1]) end++;
-                c.fill(x + col * unit, y + r * unit, x + (end + 1) * unit, y + (r + 1) * unit, argb);
+                c.fill(x + col * cw, y + r * ch, x + (end + 1) * cw, y + (r + 1) * ch, argb);
                 col = end;
             }
         }

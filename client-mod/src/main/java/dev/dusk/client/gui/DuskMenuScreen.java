@@ -5,8 +5,9 @@ import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * What the menu key opens, after Flex-HUD's: the wordmark rising into
- * place, and under it Preferences (gear), Modules and Edit layout (arrows).
+ * What the menu key opens, after Flex-HUD's: the launcher's brand cell
+ * rising into place, and under it Preferences (gear), Modules and Edit layout (arrows),
+ * drawn as the launcher's grey PxButtons.
  */
 public class DuskMenuScreen extends MenuScreen {
     private static final long INTRO_MS = 500;
@@ -32,34 +33,27 @@ public class DuskMenuScreen extends MenuScreen {
     protected void drawMenu(Canvas c, int mouseX, int mouseY, float delta) {
         float e = intro();
         int rowY = rowY();
-        int unit = Math.max(2, Math.min(6, (rowY - 24) / 11));
-        int ty = rowY - 16 - Theme.wordmarkHeight(unit) + Math.round((1 - e) * 16);
-        Theme.wordmark(c, (this.width - Theme.wordmarkWidth(unit)) / 2, ty, unit, e);
+        int alpha = Math.max(5, Math.round(255 * e));
+        int bh = Math.max(Px.H, Math.min(32, rowY - 20));
+        int ty = rowY - 12 - bh + Math.round((1 - e) * 16);
+        Theme.brand(c, (this.width - Theme.brandWidth(c, bh)) / 2, ty, bh, alpha);
 
-        int tint = Math.max(5, Math.round(255 * e)) << 24 | 0xFFFFFF;
         boolean prefsHover = Vanilla.inside(mouseX, mouseY, prefsX(), rowY, 20, 20);
         boolean modulesHover = Vanilla.inside(mouseX, mouseY, modulesX(), rowY, 120, 20);
         boolean layoutHover = Vanilla.inside(mouseX, mouseY, layoutX(), rowY, 20, 20);
-        int alpha = tint >>> 24;
+        boolean layoutOn = inWorld();
 
-        Vanilla.button(c, prefsX(), rowY, 20, 20, prefsHover, true, tint);
-        glyph(c, Icons.GEAR, prefsX(), rowY, true, alpha);
-        Vanilla.button(c, modulesX(), rowY, 120, 20, modulesHover, true, tint);
-        Vanilla.buttonLabel(c, "Modules", modulesX(), rowY, 120, 20, true, alpha);
-        Vanilla.button(c, layoutX(), rowY, 20, 20, layoutHover, inWorld(), tint);
-        glyph(c, Icons.MOVE, layoutX(), rowY, inWorld(), alpha);
+        Px.box(c, prefsX(), rowY, 20, 20, Theme.Family.GREY, prefsHover, false, alpha);
+        Px.glyph(c, Icons.GEAR, prefsX(), rowY, 20, 20, Px.Tone.GREY, prefsHover, false, alpha);
+        Px.box(c, modulesX(), rowY, 120, 20, Theme.Family.GREY, modulesHover, false, alpha);
+        Px.label(c, "Modules", modulesX(), rowY, 120, 20, modulesHover, false, alpha);
+        Px.box(c, layoutX(), rowY, 20, 20, Theme.Family.GREY, layoutHover && layoutOn, !layoutOn, alpha);
+        Px.glyph(c, Icons.MOVE, layoutX(), rowY, 20, 20, Px.Tone.GREY, layoutHover && layoutOn, !layoutOn, alpha);
 
         if (prefsHover) Vanilla.tooltip(c, "Preferences", mouseX, mouseY, this.width, this.height);
         if (layoutHover) {
             Vanilla.tooltip(c, inWorld() ? "Edit HUD layout" : "Join a world to edit the HUD layout", mouseX, mouseY, this.width, this.height);
         }
-    }
-
-    /** A 7x7 glyph at 2x, centred on a 20x20 button, with vanilla's text shadow. */
-    private static void glyph(Canvas c, Icons icon, int x, int y, boolean active, int alpha) {
-        int a = Math.max(5, alpha) << 24;
-        icon.draw(c, x + 4, y + 4, a | 0x3F3F3F, 2);
-        icon.draw(c, x + 3, y + 3, a | ((active ? Vanilla.TEXT : Vanilla.TEXT_OFF) & 0xFFFFFF), 2);
     }
 
     @Override

@@ -7,3 +7,5 @@ java/dev/dusk/client/mixin/PostChainAccessor.java
 java/dev/dusk/client/mixin/PostPassAccessor.java
 resources/assets/duskclient/post_effect/motion_blur.json
 resources/assets/duskclient/shaders/post/motion_blur.fsh
+# 1.21–1.21.1 draw the physics cape from the entity (no render states)
+java/dev/dusk/client/mixin/capes/**

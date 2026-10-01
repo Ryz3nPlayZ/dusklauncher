@@ -1,6 +1,7 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.gui.Px;
 import dev.dusk.client.gui.Vanilla;
 import dev.dusk.client.module.setting.PixelGridSetting;
 import dev.dusk.client.modules.render.CrosshairPresets;
@@ -69,8 +70,7 @@ public class CrosshairEditorPopup implements Popup {
     public void render(Canvas c, int mouseX, int mouseY, int screenW, int screenH) {
         place(screenW, screenH);
         c.fill(0, 0, screenW, screenH, 0xA0000000);
-        c.fill(px, py, px + pw, py + ph, 0xFF4A4A4A);
-        c.outline(px - 1, py - 1, pw + 2, ph + 2, 0xFF000000);
+        Px.panel(c, px - 1, py - 1, pw + 2, ph + 2);
 
         int hx = -1, hy = -1;
         if (Vanilla.inside(mouseX, mouseY, gx(), gy(), N * ps, N * ps)) {
@@ -94,7 +94,9 @@ public class CrosshairEditorPopup implements Popup {
         c.text("Color", ax, gy() + 1, Vanilla.TEXT, true);
         ColorWidget.swatch(c, ax, swatchY(), 20, crosshair.pixelColor().argb(),
                 Vanilla.inside(mouseX, mouseY, ax, swatchY(), 20, 20));
-        Vanilla.button(c, "Clear", ax, clearY(), ASIDE, 20, Vanilla.inside(mouseX, mouseY, ax, clearY(), ASIDE, 20), true);
+        boolean clearHover = Vanilla.inside(mouseX, mouseY, ax, clearY(), ASIDE, 20);
+        Px.button(c, ax, clearY(), ASIDE, 20, clearHover, true);
+        Px.label(c, "Clear", ax, clearY(), ASIDE, 20, clearHover, false, 0xFF);
         c.text("Presets", ax, presetsTop() - 11, Vanilla.TEXT, true);
 
         int top = presetsTop(), bottom = presetsBottom();
@@ -115,7 +117,9 @@ public class CrosshairEditorPopup implements Popup {
         }
         c.unscissor();
 
-        Vanilla.button(c, "Done", doneX(), doneY(), doneW(), 20, Vanilla.inside(mouseX, mouseY, doneX(), doneY(), doneW(), 20), true);
+        boolean doneHover = Vanilla.inside(mouseX, mouseY, doneX(), doneY(), doneW(), 20);
+        Px.button(c, doneX(), doneY(), doneW(), 20, doneHover, true);
+        Px.label(c, "Done", doneX(), doneY(), doneW(), 20, doneHover, false, 0xFF);
     }
 
     @Override
