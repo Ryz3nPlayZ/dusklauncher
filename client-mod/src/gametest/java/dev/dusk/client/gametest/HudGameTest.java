@@ -36,7 +36,8 @@ public final class HudGameTest implements FabricClientGameTest {
         ctx.runOnClient(client -> {
             Fullbright.instance().setEnabled(true);
             MotionBlur.instance().setEnabled(true);
-            DuskClient.modules().get(ShieldStatuses.class).setEnabled(true);
+            // only registered where its hooks exist (1.21.11+)
+            if (Compat.MODERN_CLIENT_HOOKS) DuskClient.modules().get(ShieldStatuses.class).setEnabled(true);
             DuskClient.modules().get(HeldItem.class).setEnabled(true);
             client.options.setCameraType(CameraType.FIRST_PERSON);
         });
