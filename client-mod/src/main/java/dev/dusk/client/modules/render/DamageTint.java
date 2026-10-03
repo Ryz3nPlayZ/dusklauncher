@@ -37,6 +37,7 @@ public class DamageTint extends Module {
     private final BoolSetting fade = add(new BoolSetting("fade", "Fade the tint out", false));
     private final IntSetting fadeDuration = add(new IntSetting("fadeDuration", "Fade length", 10, 1, 10, 1, "t"));
     private final BoolSetting fadeDeath = add(new BoolSetting("fadeDeath", "Fade out dead entities", false));
+    private final BoolSetting armor = add(new BoolSetting("armor", "Tint armour too", true));
 
     /** The columns last uploaded, so a settled config uploads nothing. */
     private int[] uploaded;
@@ -66,6 +67,12 @@ public class DamageTint extends Module {
     public static boolean fadesDead() {
         DamageTint m = instance;
         return m != null && m.fadeDeath.get();
+    }
+
+    /** Whether worn armour flashes with the entity (vanilla leaves it untinted). */
+    public static boolean tintsArmor() {
+        DamageTint m = instance;
+        return m != null && m.enabled() && m.armor.get();
     }
 
     public static float fadeDuration() {

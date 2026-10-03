@@ -28,7 +28,19 @@ public class PotionEffects extends TextHud {
     /** One effect's lines and where its text and icon groups sit before alignment. */
     private record Entry(MobEffectInstance effect, String name, String duration, int textWidth) {}
 
+    /** Entries for the frame {@link #entriesFor} was built for: width, height, clamping and drawing each ask. */
+    private HudContext entriesFor;
+    private List<Entry> entriesCache;
+
     private List<Entry> entries(HudContext ctx) {
+        if (entriesFor != ctx) {
+            entriesCache = buildEntries(ctx);
+            entriesFor = ctx;
+        }
+        return entriesCache;
+    }
+
+    private List<Entry> buildEntries(HudContext ctx) {
         List<MobEffectInstance> effects;
         if (ctx.player() == null || ctx.editing() && ctx.player().getActiveEffects().isEmpty()) {
             effects = List.of(new MobEffectInstance(Compat.speedEffect(), 1800, 1),

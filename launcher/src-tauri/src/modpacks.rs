@@ -220,8 +220,7 @@ pub async fn install_modpack(
     let version = versions
         .first()
         .ok_or_else(|| "modpack has no versions".to_string())?;
-    let dusk = id == DUSK_PACK_ID;
-    install_version_inner(app, state, version, None, dusk).await
+    install_version_inner(app, state, version, None, false).await
 }
 
 #[derive(Serialize)]
@@ -347,10 +346,10 @@ pub async fn install_modpack_version(
     let version = mr::version(&state.client, &version_id)
         .await
         .map_err(|e| e.to_string())?;
-    // the version isn't checked against the project; `id` only says whether
-    // this is the launcher's own pack
-    let dusk = id == DUSK_PACK_ID;
-    install_version_inner(app, state, &version, name, dusk).await
+    // the version isn't checked against the project; `id` is part of the
+    // command's shape only
+    let _ = id;
+    install_version_inner(app, state, &version, name, false).await
 }
 
 /// `name`: what the user typed in the install dialog; `None` falls back to
@@ -431,10 +430,6 @@ pub async fn install_bundled_pack(
     install_mrpack_bytes(app, state, &bytes, &[], None, pack == "dusk-essentials").await
 }
 
-/// Modrinth project of the pack the launcher installs as its default
-/// instance (`DUSK_PACK` in the frontend).
-const DUSK_PACK_ID: &str = "IDrxZk6D";
-
 /// Video settings the launcher's own instance starts with, tuned like a
 /// Prism setup: auto GUI scale, cheaper shadows/blending/mipmaps/clouds and
 /// a shorter simulation distance. Only for a fresh install, so nothing a
@@ -448,13 +443,13 @@ simulationDistance:5
 entityDistanceScaling:0.75
 ";
 
-/// Defaults for the launcher's own instance, applied right after its
-/// overrides land. The pack ships a sodium-extra config that renders at
+/// Defaults for the launcher's own instances (the bundled pack, and every
+/// Dusk profile once its essentials land). The pack ships a sodium-extra config that renders at
 /// Retina resolution on macOS (4x the pixels), so that flag is merged in
 /// rather than seeded-if-absent like other instances get at launch. Sodium
 /// may queue 3 frames ahead of the GPU; 2 trims a frame of input latency
 /// (about 4 ms at 240 fps) for next to no throughput.
-fn seed_dusk_defaults(root: &Path) {
+pub(crate) fn seed_dusk_defaults(root: &Path) {
     let options = root.join("options.txt");
     if !options.exists() {
         let _ = std::fs::write(&options, DUSK_OPTIONS);

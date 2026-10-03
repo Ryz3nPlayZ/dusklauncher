@@ -65,8 +65,8 @@ public class HungerInfo extends Module {
     private final HeldFood heldFood = new HeldFood();
 
     public HungerInfo() {
-        super("hungerinfo", "Saturation", Category.RENDER,
-                "AppleSkin: your saturation and exhaustion on the hunger bar, what held food restores, and food values in tooltips.");
+        super("hungerinfo", "Hunger & Food Saturation", Category.RENDER,
+                "AppleSkin: your food saturation and exhaustion on the hunger bar, what held food restores, and food values in tooltips.");
         instance = this;
         setEnabled(true);
         AppleSkinChannel.register();

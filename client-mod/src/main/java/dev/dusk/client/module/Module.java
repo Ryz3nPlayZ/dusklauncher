@@ -1,6 +1,7 @@
 package dev.dusk.client.module;
 
 import dev.dusk.client.module.setting.Setting;
+import dev.dusk.client.module.setting.ToggleKeySetting;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -20,6 +21,7 @@ public abstract class Module {
     private final String description;
     private final Category category;
     private final List<Setting<?>> settings = new ArrayList<>();
+    private final ToggleKeySetting toggleKey = new ToggleKeySetting();
     private boolean enabled;
     /** Switched off by the connected server (see ServerApi); the player's own choice is kept. */
     private boolean blocked;
@@ -44,6 +46,9 @@ public abstract class Module {
     public Category category() { return category; }
     public boolean enabled() { return enabled && !blocked; }
     public boolean blocked() { return blocked; }
+
+    /** Switches the module on and off from in game; see ModuleManager#tickToggleKeys. */
+    public ToggleKeySetting toggleKey() { return toggleKey; }
 
     public void setEnabled(boolean enabled) {
         if (this.enabled == enabled) return;
@@ -90,6 +95,8 @@ public abstract class Module {
         m.put("enabled", enabled); // the player's choice, not the server's block
         m.put("x", x);
         m.put("y", y);
+        Object key = toggleKey.save();
+        if (key != null) m.put("toggleKey", key);
         if (!settings.isEmpty()) {
             Map<String, Object> s = new LinkedHashMap<>();
             for (Setting<?> setting : settings) {
@@ -105,6 +112,7 @@ public abstract class Module {
         setEnabled(Boolean.TRUE.equals(m.get("enabled")));
         if (m.get("x") instanceof Number n) this.x = n.intValue();
         if (m.get("y") instanceof Number n) this.y = n.intValue();
+        toggleKey.load(m.get("toggleKey"));
         if (m.get("settings") instanceof Map<?, ?> s) {
             for (Setting<?> setting : settings) {
                 Object raw = s.get(setting.id());

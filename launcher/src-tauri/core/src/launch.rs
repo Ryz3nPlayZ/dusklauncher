@@ -195,10 +195,17 @@ pub fn build_launch_spec(
     values.insert("classpath".into(), classpath_str);
     values.insert("auth_player_name".into(), session.username.clone());
     values.insert("auth_uuid".into(), session.uuid.clone());
-    values.insert("auth_access_token".into(), session.access_token.clone());
+    // an offline session has no token: pass a placeholder (an empty
+    // `--accessToken` value trips some versions' argument parser) and say so
+    // in the user type
+    let offline = session.access_token.is_empty();
+    values.insert(
+        "auth_access_token".into(),
+        if offline { "0".into() } else { session.access_token.clone() },
+    );
     values.insert("auth_xuid".into(), session.xuid.clone());
     values.insert("clientid".into(), String::new());
-    values.insert("user_type".into(), "msa".into());
+    values.insert("user_type".into(), if offline { "legacy" } else { "msa" }.into());
     values.insert("version_name".into(), version.id.clone());
     values.insert(
         "version_type".into(),

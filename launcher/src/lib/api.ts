@@ -54,6 +54,9 @@ export interface Account {
   authenticated: boolean;
   /** the arm model Mojang reports for the active skin; '' when unknown */
   skinVariant: SkinModel | '';
+  /** offline play (no Microsoft account): singleplayer and offline-mode
+   *  servers only */
+  offline?: boolean;
 }
 
 /** Minecraft's two arm widths: classic (4px) and slim (3px) */
@@ -153,6 +156,8 @@ export interface Wallet {
 export interface Redeemed {
   granted: number;
   coins: number;
+  /** a launcher feature the code switched on locally ('offline') */
+  unlocked?: string;
 }
 
 /** this account's referral code and who brought it (server-side) */
@@ -381,20 +386,51 @@ export interface ProjectVersion {
   downloads: number;
 }
 
-/** The pack a DUSK PROFILE wraps. For now that is Performium (Modrinth
- *  IDrxZk6D) as-is — a Dusk instance is the whole pack at whichever version
- *  the user picks, plus what the launcher forces into every Fabric instance
- *  at launch (DuskClient + the cosmetics loadout; see commands.rs). The
- *  launcher's own pack takes this slot later. */
-export const DUSK_PACK = {
-  id: 'IDrxZk6D',
-  slug: 'performium-was-taken',
-  title: 'Performium',
+/** A DUSK PROFILE: a Fabric instance filled with Dusk Essentials (the
+ *  launcher's own lineup, mods::DUSK_ESSENTIALS) for the chosen game version,
+ *  plus what the launcher forces into every Fabric instance at launch
+ *  (DuskClient + the cosmetics loadout; see commands.rs). */
+export const DUSK_PROFILE = {
   /** what the instance is called unless the user renames it */
-  instanceName: 'DUSK OPTIMIZED',
+  instanceName: (gameVersion: string) => `DUSK ${gameVersion}`,
   /** the game version the first-run instance is created on */
   defaultGameVersion: '1.21.11',
 } as const;
+
+/** Mojang's art for one Java release (release_art.rs) */
+export interface ReleaseArt {
+  version: string;
+  kind: 'release' | 'snapshot' | string;
+  imageUrl: string;
+  blurb: string;
+}
+
+/** The versions NEW INSTANCE offers as big cards: the newest release of each
+ *  update line (26.3, 26.2, 26.1.x …, then 1.21.11), newest first, `max` of
+ *  them. A line with no release yet adds one more card in front: its newest
+ *  snapshot, and only while that snapshot is newer than every release. */
+export function featuredVersions(versions: Version[], max = 4): Version[] {
+  const line = (id: string) => {
+    const m = /^(\d+)\.(\d+)/.exec(id);
+    // 1.x lines are one card for the whole 1.21 line: its newest patch
+    return m ? (m[1] === '1' ? `1.${m[2]}` : `${m[1]}.${m[2]}`) : id;
+  };
+  const out: Version[] = [];
+  const seen = new Set<string>();
+  const newestRelease = versions.find((v) => v.type === 'release');
+  for (const v of versions) {
+    if (v.type === 'snapshot') {
+      const ahead = newestRelease && v.releaseAt > newestRelease.releaseAt;
+      if (!ahead || out.length > 0 || seen.has(line(v.id))) continue;
+    } else if (v.type !== 'release') continue;
+    const key = line(v.id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(v);
+    if (out.filter((x) => x.type === 'release').length >= max) break;
+  }
+  return out;
+}
 
 /** Whether a bundled DuskClient jar loads on a game version — mirrors
  *  cosmetics::client_mod_jar_for (one build per API line: 1.21–1.21.1,
@@ -526,6 +562,8 @@ export interface Settings {
   clock24h: boolean;
   warnOnLinks: boolean;
   syncClientSettings: boolean;
+  /** offline play's username; '' while offline play is locked */
+  offlineName: string;
 }
 
 export interface Progress {
@@ -539,7 +577,8 @@ export interface Progress {
 
 export interface GameState {
   profileId: string;
-  state: 'starting' | 'running' | 'exited';
+  /* `stopping` is UI-only: STOP was pressed and the game is shutting down */
+  state: 'starting' | 'running' | 'stopping' | 'exited';
   code: number | null;
 }
 
@@ -561,21 +600,11 @@ const shot = (w: number, h: number, fill: string, label: string) =>
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="${fill}"/><text x="50%" y="50%" fill="#fff" font-size="${Math.round(w / 12)}" text-anchor="middle" dominant-baseline="middle">${label} ${w}×${h}</text></svg>`,
   )}`;
 
-/** the DUSK PROFILE popup in the preview: Performium's real shape — the
- *  bracketed names, a release + betas per game version */
-const duskPackVersions: ProjectVersion[] = [
-  { id: 'pf-1', name: '[26.2] Performium v2.0.0-Release+1', versionNumber: 'v2.0.0-Release+1', changelog: null, gameVersions: ['26.2'], loaders: ['fabric'], published: '2026-09-10T00:00:00Z', versionType: 'release', downloads: 16_726 },
-  { id: 'pf-2', name: '[26.2] Performium v2.0.0-Beta+2', versionNumber: 'v2.0.0-Beta+2', changelog: null, gameVersions: ['26.2'], loaders: ['fabric'], published: '2026-09-02T00:00:00Z', versionType: 'beta', downloads: 11_696 },
-  { id: 'pf-3', name: '[26.1.1] Performium v1.6.8-Release+1', versionNumber: 'v1.6.8-Release+1', changelog: null, gameVersions: ['26.1.1'], loaders: ['fabric'], published: '2026-08-14T00:00:00Z', versionType: 'release', downloads: 4_877 },
-  { id: 'pf-4', name: '[1.21.11] Performium v1.6.2-Release+1', versionNumber: 'v1.6.2-Release+1', changelog: null, gameVersions: ['1.21.11'], loaders: ['fabric'], published: '2026-07-01T00:00:00Z', versionType: 'release', downloads: 61_200 },
-  { id: 'pf-5', name: '[1.21.10] Performium v1.5.9-Release+1', versionNumber: 'v1.5.9-Release+1', changelog: null, gameVersions: ['1.21.10'], loaders: ['fabric'], published: '2026-05-20T00:00:00Z', versionType: 'release', downloads: 98_400 },
-];
-
 const fixtures: Record<string, unknown> = {
   list_profiles: [
     {
-      id: 'p-performium',
-      name: 'PERFORMIUM',
+      id: 'p-dusk',
+      name: 'DUSK 1.21.11',
       gameVersion: '1.21.11',
       loader: 'fabric',
       loaderVersion: '0.16.10',
@@ -692,7 +721,13 @@ const fixtures: Record<string, unknown> = {
     { name: 'sunset.mp4', path: '/tmp/sunset.mp4', kind: 'video' },
   ] satisfies Wallpaper[],
   list_versions: [
-    { id: '1.21.11', type: 'release', releaseAt: '2026-08-20' },
+    { id: '26.4-snapshot-2', type: 'snapshot', releaseAt: '2026-09-29' },
+    { id: '26.3', type: 'release', releaseAt: '2026-09-15' },
+    { id: '26.2', type: 'release', releaseAt: '2026-06-16' },
+    { id: '26.1.2', type: 'release', releaseAt: '2026-04-09' },
+    { id: '26.1.1', type: 'release', releaseAt: '2026-04-01' },
+    { id: '26.1', type: 'release', releaseAt: '2026-03-24' },
+    { id: '1.21.11', type: 'release', releaseAt: '2025-12-09' },
     { id: '1.21.10', type: 'release', releaseAt: '2026-07-15' },
     { id: '1.21.9', type: 'release', releaseAt: '2026-06-30' },
     { id: '1.21.8', type: 'release', releaseAt: '2026-06-02' },
@@ -812,7 +847,7 @@ const fixtures: Record<string, unknown> = {
     muted: false,
     reduceMotion: false,
     fpsCap: 30,
-    selectedProfileId: 'p-performium',
+    selectedProfileId: 'p-dusk',
     memoryMb: 4096,
     defaultJvmArgs: '-Xms2G -Xmx4G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M',
     javaPaths: {},
@@ -831,6 +866,7 @@ const fixtures: Record<string, unknown> = {
     clock24h: false,
     warnOnLinks: true,
     syncClientSettings: true,
+    offlineName: '',
   } satisfies Settings,
 };
 
@@ -894,7 +930,7 @@ function previewFolder(profileId: string, kind: string): ProfileMod[] {
   let list = previewContent.get(key);
   if (!list) {
     list =
-      kind === 'mod' && profileId === 'p-performium'
+      kind === 'mod' && profileId === 'p-dusk'
         ? [
             { filename: 'fabric-api-0.116.0+1.21.11.jar', size: 2_310_000, enabled: true, name: 'Fabric API', icon: previewIcon('#c9a24a') },
             { filename: 'sodium-fabric-0.6.13+mc1.21.11.jar', size: 1_180_000, enabled: true, name: 'Sodium', icon: previewIcon('#3a86ff') },
@@ -964,7 +1000,7 @@ let previewFriendRequests: FriendRequests = {
 };
 let previewNextRequestId = 2;
 const previewMessages = new Map<string, ChatMessage[]>();
-let previewNextMessageId = 6;
+let previewNextMessageId = 14;
 let previewPrivacy: Privacy = { appearOffline: false, shareActivity: true, friendRequests: 'everyone' };
 let previewBlocked: BlockedPlayer[] = [];
 let previewOutfits: Outfit[] = [
@@ -983,6 +1019,9 @@ function previewConversation(uuid: string): ChatMessage[] {
             { id: 3, fromUuid: uuid, toUuid: '', body: 'hop on 1.21.4, we\'re building the base — map at https://dusk-smp.net/map', sentAt: t - 3 * 60, kind: 'text' },
             { id: 4, fromUuid: uuid, toUuid: '', body: 'Join me on play.dusk-smp.net', sentAt: t - 2 * 60, kind: 'invite', meta: { server: 'play.dusk-smp.net', version: '1.21.4' } },
             { id: 5, fromUuid: uuid, toUuid: '', body: 'Sent you Aurora Cape as a gift', sentAt: t - 60, kind: 'gift', meta: { item: 5, name: 'Aurora Cape', kind: 'cape' } },
+            ...['Ember Halo', 'Night Wings', 'Lantern', 'Star Trail', 'Moth Cape', 'Crown', 'Fox Ears', 'Comet'].map(
+              (n, i): ChatMessage => ({ id: 6 + i, fromUuid: '', toUuid: uuid, body: `Sent ${n} as a gift`, sentAt: t - 50 + i, kind: 'gift', meta: { item: 20 + i, name: n, kind: 'accessory' } }),
+            ),
           ]
         : [];
     previewMessages.set(uuid, list);
@@ -1007,10 +1046,20 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
   if (sideEffects.has(cmd)) {
     throw new Error(`"${cmd}" needs the desktop app — this is the browser preview.`);
   }
-  if (cmd === 'list_modpack_versions' && args?.id === DUSK_PACK.id) return structuredClone(duskPackVersions) as T;
-  if (cmd === 'get_modpack_project' && args?.id === DUSK_PACK.id) {
-    const base = structuredClone(fixtures.get_modpack_project) as ProjectDetails;
-    return { ...base, id: DUSK_PACK.id, slug: DUSK_PACK.slug, title: DUSK_PACK.title, iconUrl: shot(96, 96, '#3a2f5a', 'P') } as T;
+  if (cmd === 'install_dusk_essentials') return 16 as T;
+  if (cmd === 'release_art') {
+    const art = (version: string, fill: string, blurb: string): ReleaseArt => ({
+      version,
+      kind: 'release',
+      imageUrl: shot(540, 540, fill, version),
+      blurb,
+    });
+    return [
+      art('26.3', '#3f5a2e', 'Wilderness Bound is out now in Minecraft Java Edition'),
+      art('26.2', '#4a2f5a', 'Chaos Cubed has landed in Minecraft Java Edition'),
+      art('26.1', '#2f4a5a', 'Ready or not, here comes the Tiny Takeover drop'),
+      art('1.21.11', '#5a3a2f', 'Today Mounts of Mayhem charges into Minecraft'),
+    ] as T;
   }
   if (cmd in fixtures) return structuredClone(fixtures[cmd]) as T;
   if (cmd === 'list_cosmetics') return structuredClone(await previewCosmetics()) as T;
@@ -1037,6 +1086,9 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
   }
   if (cmd === 'list_account_capes') return [] as T;
   if (cmd === 'redeem_code') {
+    if (String(args?.code).trim().toLowerCase() === 'cracked') {
+      return { granted: 0, coins: previewCoins, unlocked: 'offline' } as T;
+    }
     if (String(args?.code).trim().toLowerCase() !== 'yourewelcome') throw new Error('unknown code');
     if (previewRedeemed) throw new Error('code already redeemed');
     previewRedeemed = true;
@@ -1278,17 +1330,17 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
   if (cmd === 'list_screenshots') {
     const t = Date.now();
     return [
-      { path: shot(1280, 720, '#3a2f5a', 'base at dusk'), name: '2026-09-25_21.14.03.png', profileId: 'p-performium', profileName: 'Performium', takenAt: t - 3 * HOUR, size: 2_400_000, favorite: true },
-      { path: shot(1280, 720, '#1f4a3a', 'jungle'), name: '2026-09-24_18.02.44.png', profileId: 'p-performium', profileName: 'Performium', takenAt: t - 27 * HOUR, size: 3_100_000, favorite: false },
-      { path: shot(1280, 720, '#4a2f1f', 'nether hub'), name: '2026-09-20_12.40.10.png', profileId: 'p-performium', profileName: 'Performium', takenAt: t - 6 * 24 * HOUR, size: 2_800_000, favorite: false },
+      { path: shot(1280, 720, '#3a2f5a', 'base at dusk'), name: '2026-09-25_21.14.03.png', profileId: 'p-dusk', profileName: 'DUSK 1.21.11', takenAt: t - 3 * HOUR, size: 2_400_000, favorite: true },
+      { path: shot(1280, 720, '#1f4a3a', 'jungle'), name: '2026-09-24_18.02.44.png', profileId: 'p-dusk', profileName: 'DUSK 1.21.11', takenAt: t - 27 * HOUR, size: 3_100_000, favorite: false },
+      { path: shot(1280, 720, '#4a2f1f', 'nether hub'), name: '2026-09-20_12.40.10.png', profileId: 'p-dusk', profileName: 'DUSK 1.21.11', takenAt: t - 6 * 24 * HOUR, size: 2_800_000, favorite: false },
     ] satisfies Screenshot[] as T;
   }
   if (cmd === 'set_screenshot_favorite') return undefined as T;
   if (cmd === 'list_recordings') {
     const t = Date.now();
     return [
-      { path: '/preview/clips/clip_2026-09-25_21-20-11.mcpr', name: 'clip_2026-09-25_21-20-11.mcpr', kind: 'clip', profileId: 'p-performium', profileName: 'Performium', recordedAt: t - 2 * HOUR, size: 1_900_000, durationMs: 30_000, server: 'play.example.net', mcVersion: '1.21.11' },
-      { path: '/preview/replays/replay_2026-09-24_17-40-02.mcpr', name: 'replay_2026-09-24_17-40-02.mcpr', kind: 'replay', profileId: 'p-performium', profileName: 'Performium', recordedAt: t - 28 * HOUR, size: 41_000_000, durationMs: 1_512_000, server: '', mcVersion: '1.21.11' },
+      { path: '/preview/clips/clip_2026-09-25_21-20-11.mcpr', name: 'clip_2026-09-25_21-20-11.mcpr', kind: 'clip', profileId: 'p-dusk', profileName: 'DUSK 1.21.11', recordedAt: t - 2 * HOUR, size: 1_900_000, durationMs: 30_000, server: 'play.example.net', mcVersion: '1.21.11' },
+      { path: '/preview/replays/replay_2026-09-24_17-40-02.mcpr', name: 'replay_2026-09-24_17-40-02.mcpr', kind: 'replay', profileId: 'p-dusk', profileName: 'DUSK 1.21.11', recordedAt: t - 28 * HOUR, size: 41_000_000, durationMs: 1_512_000, server: '', mcVersion: '1.21.11' },
     ] satisfies Recording[] as T;
   }
   if (cmd === 'recording_thumb') return shot(480, 270, '#2a2346', 'recording') as T;
@@ -1337,6 +1389,9 @@ export const api = {
   /** launch straight onto a server (a friend's, an invite) without saving it on the instance */
   joinServer: (profileId: string, server: string) =>
     invoke<void>('install_and_launch', { profileId, joinServer: server }),
+  /** launch the instance that recorded it, straight into this clip or replay */
+  watchRecording: (profileId: string, path: string) =>
+    invoke<void>('install_and_launch', { profileId, watchReplay: path }),
   gameActivity: () => invoke<GameActivity | null>('game_activity'),
   stopGame: () => invoke<void>('stop_game'),
   /** the game the backend is running right now, or null — the UI's source
@@ -1370,6 +1425,12 @@ export const api = {
   projectTags: (kind: ProjectKind) => invoke<ProjectTags>('modrinth_tags', { kind }),
   /** install a pack shipped inside the app bundle (e.g. 'dusk-essentials') */
   installBundledPack: (pack: string) => invoke<Profile>('install_bundled_pack', { pack }),
+  /** fill a Fabric instance with Dusk Essentials for its version; resolves to how many files were added */
+  installDuskEssentials: (profileId: string) => invoke<number>('install_dusk_essentials', { profileId }),
+  /** Mojang's picture for each release, for the version cards */
+  releaseArt: () => invoke<ReleaseArt[]>('release_art'),
+  /** Fabric API plus Sodium, Lithium, FerriteCore & co., skipping any already there; resolves to how many were added */
+  installPerformanceMods: (profileId: string) => invoke<number>('install_performance_mods', { profileId }),
   /** native picker → installs a .mrpack as a new instance (null if cancelled) */
   importMrpack: () => invoke<Profile | null>('import_mrpack'),
   /** save dialog → writes the instance as a .mrpack; resolves to a short
@@ -1424,6 +1485,8 @@ export const api = {
   getAccount: () => invoke<Account | null>('get_current_account'),
   login: () => invoke<Account>('begin_login'),
   loginWithCode: () => invoke<Account>('begin_code_login'),
+  /** stop the sign-in in flight (closes the sign-in window if open) */
+  cancelLogin: () => invoke<void>('cancel_login'),
   logout: () => invoke<void>('logout'),
   listAccounts: () => invoke<SavedAccount[]>('list_accounts'),
   switchAccount: (uuid: string) => invoke<Account>('switch_account', { uuid }),

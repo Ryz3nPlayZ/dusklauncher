@@ -20,6 +20,7 @@ public class Nametags extends Module {
     public final BoolSetting textShadow = add(new BoolSetting("textShadow", "Text shadow", false), "General");
     public final BoolSetting showOwn = add(new BoolSetting("showOwnNametag", "Show own nametag", true), "General");
     public final BoolSetting showInInventory = add(new BoolSetting("showInInventory", "Show in inventory", false), "General");
+    public final BoolSetting duskBadge = add(new BoolSetting("duskBadge", "Dusk badge", true), "General");
 
     public final BoolSetting hideEntitiesF1 = add(new BoolSetting("hideEntityF1", "Hide entity nametags when HUD hidden", true), "Hidden HUD");
     public final BoolSetting hidePlayersF1 = add(new BoolSetting("hidePlayerF1", "Hide player nametags when HUD hidden", true), "Hidden HUD");
@@ -38,6 +39,14 @@ public class Nametags extends Module {
         super("nametags", "Nametags", Category.RENDER,
                 "PolyNametag: scale, move, recolour and restyle nametags, and show your own.");
         instance = this;
+    }
+
+    /**
+     * Whether other Dusk players get the Dusk mark before their name. On by
+     * default even with the module off; the module's setting turns it off.
+     */
+    public static boolean showsDuskBadge() {
+        return instance == null || !instance.enabled() || instance.duskBadge.get();
     }
 
     /** The module while it is switched on, else null. */

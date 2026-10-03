@@ -32,6 +32,11 @@ public final class SkinVoxelCache {
     };
     private static final Map<Object, Long> RETRY_AT = new HashMap<>();
 
+    // Each player's mesh is asked for several times a frame; skip the map for a repeat.
+    private static Object lastTexture;
+    private static boolean lastSlim;
+    private static SkinVoxels lastMesh;
+
     /**
      * The voxels for {@code texture}, or null when it can't be drawn in 3D
      * (yet). {@code loader} gives the 64×64 alpha, null while not loaded, or
@@ -39,9 +44,22 @@ public final class SkinVoxelCache {
      */
     @Nullable
     public static SkinVoxels get(Object texture, boolean slim, Function<Object, int[]> loader) {
+        if (texture == lastTexture && slim == lastSlim && lastMesh != null) return lastMesh == NONE ? null : lastMesh;
+        SkinVoxels found = lookup(texture, slim, loader);
+        if (found != null) {
+            lastTexture = texture;
+            lastSlim = slim;
+            lastMesh = found;
+        }
+        return found == NONE ? null : found;
+    }
+
+    /** The cached or freshly built mesh ({@link #NONE} when flat), or null to ask again later. */
+    @Nullable
+    private static SkinVoxels lookup(Object texture, boolean slim, Function<Object, int[]> loader) {
         Key key = new Key(texture, slim);
         SkinVoxels mesh = MESHES.get(key);
-        if (mesh != null) return mesh == NONE ? null : mesh;
+        if (mesh != null) return mesh;
         Long retry = RETRY_AT.get(texture);
         long now = System.nanoTime();
         if (retry != null && now < retry) return null;
@@ -59,7 +77,7 @@ public final class SkinVoxelCache {
         RETRY_AT.remove(texture);
         mesh = alpha.length == 64 * 64 ? SkinVoxels.build(alpha, slim) : NONE;
         MESHES.put(key, mesh);
-        return mesh == NONE ? null : mesh;
+        return mesh;
     }
 
     /** The alpha channel of a 64×64 skin; {@code pixel} returns ABGR or ARGB (alpha is the top byte in both). */
@@ -75,5 +93,7 @@ public final class SkinVoxelCache {
     public static void clear() {
         MESHES.clear();
         RETRY_AT.clear();
+        lastTexture = null;
+        lastMesh = null;
     }
 }

@@ -46,7 +46,19 @@ public class Coordinates extends TextHud {
         return (int) Math.floor((y + 22.5f) / 45f) % 8;
     }
 
+    /** Lines for the frame {@link #linesFor} was built for: width, height, clamping and drawing each ask. */
+    private HudContext linesFor;
+    private List<Line> linesCache;
+
     private List<Line> lines(HudContext ctx) {
+        if (linesFor != ctx) {
+            linesCache = buildLines(ctx);
+            linesFor = ctx;
+        }
+        return linesCache;
+    }
+
+    private List<Line> buildLines(HudContext ctx) {
         var p = ctx.player();
         double px, py, pz;
         float yaw;

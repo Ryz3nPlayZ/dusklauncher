@@ -2,6 +2,7 @@ package dev.dusk.client.cosmetics;
 
 import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.cosmetics.model.AccessoryModel;
+import dev.dusk.client.modules.render.Nametags;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.User;
@@ -13,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -52,6 +54,8 @@ public final class CosmeticsManager {
         return t;
     });
     private static final AtomicLong GENERATION = new AtomicLong();
+    /** Players the Dusk service says have an account; read every frame by the nametag badge. */
+    private static final Set<UUID> DUSK_USERS = ConcurrentHashMap.newKeySet();
 
     private static final class Entry {
         volatile PlayerCosmetics current = PlayerCosmetics.NONE;
@@ -103,6 +107,11 @@ public final class CosmeticsManager {
         return original;
     }
 
+    /** Whether this player uses Dusk (known once their cosmetics have resolved). */
+    public static boolean isDuskUser(UUID uuid) {
+        return DUSK_USERS.contains(uuid);
+    }
+
     /** Force the local player to be re-resolved (after the loadout changed). */
     public static void reloadLocal() {
         ENTRIES.forEach((id, en) -> {
@@ -114,6 +123,7 @@ public final class CosmeticsManager {
     public static void clear() {
         List<Entry> old = List.copyOf(ENTRIES.values());
         ENTRIES.clear();
+        DUSK_USERS.clear();
         Minecraft.getInstance().execute(() -> old.forEach(e -> e.current.release()));
     }
 
@@ -192,9 +202,12 @@ public final class CosmeticsManager {
         if (local) {
             capeId = cfg.capeId();
             accessoryIds = cfg.accessoryIds();
-        } else if (cfg.showOthers) {
+            DUSK_USERS.add(uuid);
+        } else if (cfg.showOthers || Nametags.showsDuskBadge()) {
             DuskProvider.Loadout l = DuskProvider.fetch(uuid);
-            if (l != null) {
+            if (l != null && l.dusk()) DUSK_USERS.add(uuid);
+            else DUSK_USERS.remove(uuid);
+            if (l != null && cfg.showOthers) {
                 capeId = l.cape();
                 accessoryIds = l.accessories();
             }

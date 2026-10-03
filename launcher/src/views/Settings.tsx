@@ -11,9 +11,15 @@ type Tab = (typeof TABS)[number];
 export default function SettingsView({
   settings,
   onSave,
+  offline = false,
+  onUnlocked,
 }: {
   settings: Settings;
   onSave: (s: Settings) => void;
+  /** playing under the offline name (no Microsoft account signed in) */
+  offline?: boolean;
+  /** a redeem code unlocked something on this machine (offline play) */
+  onUnlocked?: (what: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>('GENERAL');
   const [info, setInfo] = useState<AppInfo | null>(null);
@@ -32,13 +38,26 @@ export default function SettingsView({
     setRedeemNote(null);
     try {
       const r = await api.redeemCode(trimmed);
-      setRedeemNote({ ok: true, text: `+${r.granted} COINS · BALANCE ${r.coins}` });
+      setRedeemNote({
+        ok: true,
+        text: r.unlocked === 'offline' ? 'OFFLINE PLAY UNLOCKED' : `+${r.granted} COINS · BALANCE ${r.coins}`,
+      });
+      if (r.unlocked) onUnlocked?.(r.unlocked);
       setCode('');
     } catch (e) {
       setRedeemNote({ ok: false, text: String(e).replace(/^Error: /, '').toUpperCase() });
     } finally {
       setRedeeming(false);
     }
+  };
+
+  /* the offline name: edited locally, saved once it's a valid player name */
+  const [offlineName, setOfflineName] = useState(settings.offlineName);
+  useEffect(() => setOfflineName(settings.offlineName), [settings.offlineName]);
+  const nameOk = /^[A-Za-z0-9_]{3,16}$/.test(offlineName);
+  const saveOfflineName = () => {
+    if (nameOk && offlineName !== settings.offlineName) set({ offlineName });
+    else if (!nameOk) setOfflineName(settings.offlineName);
   };
 
   /* referrals: your code to share, and (new accounts, once) who invited you */
@@ -195,6 +214,29 @@ export default function SettingsView({
                   </TT>
                 )}
               </Row>
+              {offline && settings.offlineName && (
+                <Row
+                  label="OFFLINE NAME"
+                  hint={
+                    nameOk
+                      ? 'The name you play under without a Microsoft account. Online-mode servers will turn you away.'
+                      : '3–16 letters, digits or underscores.'
+                  }
+                >
+                  <PxBox family="panel" height="md">
+                    <input
+                      className="input"
+                      value={offlineName}
+                      maxLength={16}
+                      spellCheck={false}
+                      autoCapitalize="off"
+                      onChange={(e) => setOfflineName(e.target.value)}
+                      onBlur={saveOfflineName}
+                      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                    />
+                  </PxBox>
+                </Row>
+              )}
               <Row
                 label="INVITE FRIENDS"
                 hint={

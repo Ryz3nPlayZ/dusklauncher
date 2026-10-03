@@ -29,7 +29,10 @@ public class DuskSettingsScreen extends MenuScreen {
     /** Modules added since the previous release, listed under the NEW tab. Update this set every release. */
     private static final Set<String> NEW_IDS = Set.of("behindyou", "nametags", "particles", "hitbox",
             "hungerinfo", "lookingat", "shieldstatuses", "freelook", "compactchat", "chattimestamps", "confirmdisconnect",
-            "autoreconnect", "serverlag", "containerpreview", "chathistory");
+            "autoreconnect", "serverlag", "containerpreview", "chathistory", "freecam", "chatmacros",
+            "stopwatch", "resourcepacks", "scoreboard", "bossbar", "tabping",
+            "blockoutline", "backgroundfps", "namehider", "fovchanger", "totems", "itemcounter", "bedwarsresources",
+            "skyblockstats", "hypixel", "slotlock");
 
     private enum Tab {
         ALL("ALL", null), NEW("NEW", null),

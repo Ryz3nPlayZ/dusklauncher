@@ -9,6 +9,7 @@ import dev.dusk.client.gui.widget.PopupHost;
 import dev.dusk.client.gui.widget.ScrollPane;
 import dev.dusk.client.gui.widget.SettingRow;
 import dev.dusk.client.gui.widget.SliderWidget;
+import dev.dusk.client.gui.widget.TextWidget;
 import dev.dusk.client.gui.widget.ToggleWidget;
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.BoolSetting;
@@ -18,6 +19,8 @@ import dev.dusk.client.module.setting.IntSetting;
 import dev.dusk.client.module.setting.KeySetting;
 import dev.dusk.client.module.setting.PixelGridSetting;
 import dev.dusk.client.module.setting.Setting;
+import dev.dusk.client.module.setting.TextSetting;
+import dev.dusk.client.module.setting.ToggleKeySetting;
 import dev.dusk.client.modules.render.CrosshairPresets;
 import dev.dusk.client.modules.render.CustomCrosshair;
 import net.minecraft.client.gui.Font;
@@ -41,6 +44,9 @@ public final class SettingsBuilder {
     /** @param onChange runs after any edit (the screen saves when it closes) */
     public static void build(ScrollPane pane, Module m, PopupHost host, Runnable onChange) {
         pane.add(new ToggleWidget("Enabled", m::enabled, v -> { m.setEnabled(v); onChange.run(); }), ROW_H);
+        ToggleKeySetting toggleKey = m.toggleKey();
+        pane.add(new KeybindWidget(toggleKey.name(), toggleKey::keyName, key -> { toggleKey.set(key); onChange.run(); })
+                .resets(toggleKey, onChange), ROW_H);
         List<Setting<?>> settings = m.settings();
         boolean expandAll = settings.size() <= EXPAND_ALL_LIMIT;
         String currentGroup = null;
@@ -72,6 +78,7 @@ public final class SettingsBuilder {
         if (s instanceof ChoiceSetting c) return new DropdownWidget(c, onChange, host).resets(s, onChange);
         if (s instanceof KeySetting k) return new KeybindWidget(k.name(), k::mapping).resets(s, onChange);
         if (s instanceof ColorSetting c) return new ColorWidget(c, onChange, host).resets(s, onChange);
+        if (s instanceof TextSetting t) return new TextWidget(t, onChange).resets(s, onChange);
         if (s instanceof PixelGridSetting && module instanceof CustomCrosshair crosshair) {
             return new CrosshairWidget(crosshair, onChange, host).resets(s, () -> {
                 crosshair.applyPreset(CrosshairPresets.NAMES[0]);

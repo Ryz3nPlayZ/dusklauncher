@@ -79,13 +79,15 @@ export default function Wallpapers({
   return (
     <div className="page">
       <div className="page__head">
+        {/* the title leads; BACK sits on the right, beside any CTA (as in the
+           instance editor and project pages) */}
+        <h1 className="page__title">Wallpapers</h1>
         <PxButton family="red" height="md" className="browse__back" onClick={onBack}>
           <PixelGlyph glyph="left" size={22} color="var(--r-co)" />
           <TT size={20} tone="red">
             BACK
           </TT>
         </PxButton>
-        <h1 className="page__title">Wallpapers</h1>
         <PxButton
           family="blue"
           height="md"

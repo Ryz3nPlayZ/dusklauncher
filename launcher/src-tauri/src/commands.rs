@@ -503,6 +503,7 @@ pub async fn install_and_launch(
     state: State<'_, AppState>,
     profile_id: String,
     join_server: Option<String>,
+    watch_replay: Option<String>,
 ) -> Result<(), String> {
     // Only one install+spawn at a time; the guard is held until the child spawns.
     let _launch_guard = state
@@ -535,16 +536,42 @@ pub async fn install_and_launch(
         }
         None => profile,
     };
+    // WATCH on the media page: this launch opens that recording as soon as
+    // the title screen is up. Only a clip or replay this instance recorded.
+    let replay = match watch_replay.as_deref() {
+        Some(path) => {
+            let path = crate::recordings::resolve(&state, path)?;
+            let root = std::fs::canonicalize(&profile.dirs(&state.data_dir).root).map_err(|e| e.to_string())?;
+            if !path.starts_with(&root) {
+                return Err("That recording belongs to another instance.".into());
+            }
+            Some(path)
+        }
+        None => None,
+    };
     emit_state(&app, &profile_id, "starting", None);
 
-    let session = ensure_play_session(&state).await?;
+    let session = launch_session(&state).await?;
 
     let client = state.client.clone();
     let dirs = profile.dirs(&state.data_dir);
     let app2 = app.clone();
 
-    let (version, natives_dir) =
-        install_profile(&app2, &client, &state, &profile, &dirs).await?;
+    // the install check needs the network; without it, launch what
+    // installed fine last time
+    let (version, natives_dir) = match install_profile(&app2, &client, &state, &profile, &dirs).await {
+        Ok(installed) => {
+            save_last_install(&profile, &dirs, &installed);
+            installed
+        }
+        Err(e) => match load_last_install(&profile, &dirs) {
+            Some(installed) => {
+                tracing::warn!("install check failed ({e}); launching the last good install offline");
+                installed
+            }
+            None => return Err(e),
+        },
+    };
 
     let java_bin = java_for(&app, &client, &state, &profile, &dirs, &version.effective_java()).await?;
 
@@ -582,10 +609,17 @@ pub async fn install_and_launch(
     // runs the jar the launcher shipped with. A copy already in mods/ (from
     // "install bundled client mod") wins, otherwise the loader would see the
     // mod twice. The mod reads other players' loadouts from the Dusk service.
+    // DuskClient needs Fabric API; fetch it if missing, and if that can't
+    // happen (offline, no copy) leave DuskClient out so the game still starts.
+    let fabric_api_ok =
+        profile.loader != Loader::Fabric || crate::mods::ensure_fabric_api(&app, &state, &profile, &dirs.mods).await;
     let profile = {
         let mut p = profile;
         p.jvm_args.retain(|a| {
-            !a.starts_with("-Dfabric.addMods=") && !a.starts_with("-Ddusk.api=") && !a.starts_with("-Ddusk.loadout=")
+            !a.starts_with("-Dfabric.addMods=")
+                && !a.starts_with("-Ddusk.api=")
+                && !a.starts_with("-Ddusk.loadout=")
+                && !a.starts_with("-Ddusk.replay=")
         });
         if p.loader == Loader::Fabric {
             let in_mods = crate::cosmetics::client_mod_in_mods(&dirs.mods);
@@ -596,6 +630,9 @@ pub async fn install_and_launch(
                     p.game_version
                 ),
                 Some(name) => match crate::cosmetics::bundled_client_mod_jar(&app, &state.data_dir, name) {
+                    Some(_) if !in_mods && !fabric_api_ok => {
+                        tracing::warn!("Fabric API is missing and couldn't be downloaded; launching without DuskClient")
+                    }
                     Some(jar) if !in_mods => {
                         p.jvm_args.push(format!("-Dfabric.addMods={}", jar.display()));
                     }
@@ -605,6 +642,9 @@ pub async fn install_and_launch(
             }
             p.jvm_args.push(format!("-Ddusk.api={}", crate::dusk::api_base()));
             p.jvm_args.push(format!("-Ddusk.loadout={}", crate::cosmetics::loadout_path(&state.data_dir).display()));
+            if let Some(replay) = &replay {
+                p.jvm_args.push(format!("-Ddusk.replay={}", replay.display()));
+            }
             if let Err(e) = crate::cosmetics::write_loadout_to_instance(&state.data_dir, &dirs.root) {
                 tracing::warn!("could not write cosmetics loadout to instance: {e}");
             }
@@ -718,15 +758,15 @@ pub async fn install_and_launch(
         let pid2 = profile_id.clone();
         let env2 = env.clone();
         let root2 = dirs.root.clone();
+        let stop = std::sync::Arc::new(tokio::sync::Notify::new());
+        *state.running_game.lock().await = Some(RunningGame { profile_id: profile_id.clone(), stop: stop.clone() });
         tokio::spawn(async move {
             let state = app3.state::<AppState>();
-            let mut guard = state.running_game.lock().await;
-            let status = match guard.as_mut() {
-                Some(game) => game.child.wait().await,
-                None => return,
+            let status = tokio::select! {
+                s = child.wait() => s,
+                _ = stop.notified() => stop_child(&mut child).await,
             };
-            *guard = None;
-            drop(guard);
+            *state.running_game.lock().await = None;
             *state.activity.lock().unwrap() = None;
             let _ = app3.emit("game-activity", None::<crate::appstate::GameActivity>);
             crate::discord::refresh(&app3);
@@ -741,7 +781,6 @@ pub async fn install_and_launch(
                 }
             }
         });
-        *state.running_game.lock().await = Some(RunningGame { profile_id: profile_id.clone(), child });
     }
 
     // count the launch on the Dusk account (the first one settles a
@@ -825,12 +864,25 @@ fn emit_state(app: &AppHandle, profile_id: &str, state: &str, code: Option<i32>)
 
 #[tauri::command]
 pub async fn stop_game(state: State<'_, AppState>) -> Result<(), String> {
-    let mut guard = state.running_game.lock().await;
-    if let Some(game) = guard.as_mut() {
-        game.child.kill().await.map_err(|e| e.to_string())?;
+    // the supervisor ends the process and sends `exited`, which clears the UI
+    if let Some(game) = state.running_game.lock().await.as_ref() {
+        game.stop.notify_one();
     }
-    *guard = None;
     Ok(())
+}
+
+/// End the game for STOP: ask it to quit first, so Minecraft's shutdown hook
+/// can save a singleplayer world, then force it if it's still up.
+async fn stop_child(child: &mut tokio::process::Child) -> std::io::Result<std::process::ExitStatus> {
+    #[cfg(unix)]
+    if let Some(pid) = child.id() {
+        let _ = tokio::process::Command::new("kill").args(["-TERM", &pid.to_string()]).status().await;
+        if let Ok(status) = tokio::time::timeout(Duration::from_secs(8), child.wait()).await {
+            return status;
+        }
+    }
+    let _ = child.start_kill();
+    child.wait().await
 }
 
 /// The game currently running, if any — what the UI syncs its PLAY / STOP
@@ -880,6 +932,49 @@ async fn java_for(
     prog.bump(0);
     prog.flush(true);
     Ok(fasterlauncher_core::java::java_executable(&runtime_dir))
+}
+
+/// The resolved version of an instance's last good install, so it can
+/// launch without the network.
+#[derive(Serialize, Deserialize)]
+struct LastInstall {
+    key: String,
+    version: fasterlauncher_core::meta::VersionJson,
+    natives: std::path::PathBuf,
+}
+
+const LAST_INSTALL_FILE: &str = ".dusk-last-install.json";
+
+/// What the cached install must match: a changed version or loader means a
+/// different game.
+fn install_key(profile: &Profile) -> String {
+    format!(
+        "{}|{:?}|{}",
+        profile.game_version,
+        profile.loader,
+        profile.loader_version.as_deref().unwrap_or("")
+    )
+}
+
+fn save_last_install(
+    profile: &Profile,
+    dirs: &fasterlauncher_core::profile::ProfileDirs,
+    (version, natives): &(fasterlauncher_core::meta::VersionJson, std::path::PathBuf),
+) {
+    let last = LastInstall { key: install_key(profile), version: version.clone(), natives: natives.clone() };
+    if let Ok(json) = serde_json::to_vec(&last) {
+        let _ = std::fs::write(dirs.root.join(LAST_INSTALL_FILE), json);
+    }
+}
+
+fn load_last_install(
+    profile: &Profile,
+    dirs: &fasterlauncher_core::profile::ProfileDirs,
+) -> Option<(fasterlauncher_core::meta::VersionJson, std::path::PathBuf)> {
+    let bytes = std::fs::read(dirs.root.join(LAST_INSTALL_FILE)).ok()?;
+    let last: LastInstall = serde_json::from_slice(&bytes).ok()?;
+    let jar = dirs.versions.join(format!("{}.jar", last.version.id));
+    (last.key == install_key(profile) && jar.exists() && last.natives.exists()).then_some((last.version, last.natives))
 }
 
 type InstallResult = Result<
@@ -1116,6 +1211,11 @@ pub fn set_settings(app: AppHandle, state: State<AppState>, mut settings: Settin
         let mut s = state.settings.lock().unwrap();
         // the UI doesn't know this field; don't let a round-trip rewind it
         settings.jvm_defaults_rev = settings.jvm_defaults_rev.max(s.jvm_defaults_rev);
+        // a settings object read before offline play was unlocked must not
+        // lock it again; renaming to something non-empty still goes through
+        if settings.offline_name.trim().is_empty() {
+            settings.offline_name = s.offline_name.clone();
+        }
         *s = settings.clone();
     }
     state.save_settings(&settings);
@@ -1134,6 +1234,9 @@ pub struct AccountDto {
     /// the arm model Mojang reports for the active skin: "classic" | "slim"
     /// ("" when unknown)
     pub skin_variant: String,
+    /// an offline-play identity (no Microsoft account): launches singleplayer
+    /// and offline-mode servers only
+    pub offline: bool,
 }
 
 #[tauri::command]
@@ -1165,6 +1268,15 @@ pub async fn get_current_account(state: State<'_, AppState>) -> Result<Option<Ac
         });
         return Ok(Some(dto));
     }
+    if let Some(session) = offline_session(&state) {
+        return Ok(Some(AccountDto {
+            username: session.username,
+            uuid: session.uuid,
+            authenticated: false,
+            skin_variant: String::new(),
+            offline: true,
+        }));
+    }
     Ok(state
         .account
         .lock()
@@ -1175,6 +1287,7 @@ pub async fn get_current_account(state: State<'_, AppState>) -> Result<Option<Ac
             uuid: a.uuid.clone(),
             authenticated: a.authenticated,
             skin_variant: String::new(),
+            offline: false,
         }))
 }
 
@@ -1186,7 +1299,7 @@ pub async fn begin_login(app: AppHandle, state: State<'_, AppState>) -> Result<A
         .login_lock
         .try_lock()
         .map_err(|_| "a sign-in is already in progress".to_string())?;
-    let session = auth_flow::run_login(&app, &state).await?;
+    let session = cancellable_login(&app, &state, auth_flow::run_login(&app, &state)).await?;
     let dto = account_dto(&session);
     *state.account.lock().unwrap() = Some(Account {
         username: session.username.clone(),
@@ -1207,7 +1320,7 @@ pub async fn begin_code_login(
         .login_lock
         .try_lock()
         .map_err(|_| "a sign-in is already in progress".to_string())?;
-    let session = auth_flow::run_code_login(&app, &state).await?;
+    let session = cancellable_login(&app, &state, auth_flow::run_code_login(&app, &state)).await?;
     let dto = account_dto(&session);
     *state.account.lock().unwrap() = Some(Account {
         username: session.username.clone(),
@@ -1230,7 +1343,7 @@ pub async fn begin_reconsent_login(
         .login_lock
         .try_lock()
         .map_err(|_| "a sign-in is already in progress".to_string())?;
-    let session = auth_flow::run_reconsent_login(&app, &state).await?;
+    let session = cancellable_login(&app, &state, auth_flow::run_reconsent_login(&app, &state)).await?;
     let dto = account_dto(&session);
     *state.account.lock().unwrap() = Some(Account {
         username: session.username.clone(),
@@ -1246,7 +1359,34 @@ fn account_dto(session: &Session) -> AccountDto {
         uuid: session.uuid.clone(),
         authenticated: true,
         skin_variant: session.skin_variant.to_lowercase(),
+        offline: false,
     }
+}
+
+/// Run one interactive sign-in, unless the popup cancels it first. A
+/// cancelled webview sign-in also closes its window.
+async fn cancellable_login(
+    app: &AppHandle,
+    state: &AppState,
+    login: impl std::future::Future<Output = Result<Session, String>>,
+) -> Result<Session, String> {
+    tokio::select! {
+        r = login => r,
+        _ = state.login_cancel.notified() => {
+            if let Some(w) = app.get_webview_window("msa-signin") {
+                let _ = w.close();
+            }
+            Err("sign-in cancelled".into())
+        }
+    }
+}
+
+/// Stop the sign-in in flight (the popup's other options, or ADD ACCOUNT
+/// LATER). Only wakes a login that is waiting now, so it can't cancel the
+/// next one.
+#[tauri::command]
+pub fn cancel_login(state: State<AppState>) {
+    state.login_cancel.notify_waiters();
 }
 
 /// Sign out of the active account and forget it; other saved accounts stay
@@ -1324,12 +1464,19 @@ pub(crate) async fn ensure_play_session(state: &AppState) -> Result<Session, Str
             return Ok(session);
         }
         let config = auth_flow::resolve_auth_config(state);
-        return fasterlauncher_core::auth::refresh_session(&state.client, &config, &session)
-            .await
-            .inspect(|fresh| {
-                auth_store::save_session(&state.data_dir, fresh);
-            })
-            .map_err(|e| format!("session expired and refresh failed ({e}) — sign in again"));
+        return match fasterlauncher_core::auth::refresh_session(&state.client, &config, &session).await {
+            Ok(fresh) => {
+                auth_store::save_session(&state.data_dir, &fresh);
+                Ok(fresh)
+            }
+            // no connection (not a rejected login): play offline as the
+            // saved account. Singleplayer works; servers need a fresh login.
+            Err(fasterlauncher_core::Error::Http(e)) if !e.is_status() => {
+                tracing::warn!("could not refresh the session ({e}); launching offline");
+                Ok(session)
+            }
+            Err(e) => Err(format!("session expired and refresh failed ({e}) — sign in again")),
+        };
     }
     // No session: real auth is required. The demo Player session exists only
     // behind an explicit dev escape hatch so release builds can never
@@ -1348,6 +1495,51 @@ pub(crate) async fn ensure_play_session(state: &AppState) -> Result<Session, Str
         });
     }
     Err("Not signed in — use Sign in with Microsoft first.".into())
+}
+
+/// The offline-play identity, once unlocked: the username from settings and
+/// the UUID vanilla gives an offline player (`UUID.nameUUIDFromBytes(
+/// "OfflinePlayer:" + name)`, an MD5 v3), with no token. Only when no
+/// Microsoft session exists — a signed-in account always wins.
+pub(crate) fn offline_session(state: &AppState) -> Option<Session> {
+    if auth_store::load_session(&state.data_dir).is_some() {
+        return None;
+    }
+    let name = state.settings.lock().unwrap().offline_name.trim().to_string();
+    if name.is_empty() {
+        return None;
+    }
+    let uuid = offline_uuid(&name);
+    Some(Session {
+        access_token: String::new(),
+        expires_at: 0,
+        uuid,
+        username: name,
+        xuid: String::new(),
+        refresh_token: String::new(),
+        skin_url: String::new(),
+        skin_variant: String::new(),
+    })
+}
+
+fn offline_uuid(name: &str) -> String {
+    use md5::{Digest, Md5};
+    let mut b: [u8; 16] = Md5::digest(format!("OfflinePlayer:{name}").as_bytes()).into();
+    b[6] = (b[6] & 0x0f) | 0x30; // version 3
+    b[8] = (b[8] & 0x3f) | 0x80; // IETF variant
+    let h = hex::encode(b);
+    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
+}
+
+/// The session PLAY launches with: the Microsoft one, or the offline-play
+/// identity when that's unlocked and nobody is signed in. Everything else
+/// that needs a real account (Dusk sign-in, skins) keeps using
+/// [`ensure_play_session`].
+async fn launch_session(state: &AppState) -> Result<Session, String> {
+    match offline_session(state) {
+        Some(s) => Ok(s),
+        None => ensure_play_session(state).await,
+    }
 }
 
 /// A desktop notification (friend online, new message, gift). The UI
@@ -1435,5 +1627,14 @@ mod duplicate_tests {
         assert!(!to.join("logs").exists());
         assert!(!to.join("screenshots").exists());
         let _ = std::fs::remove_dir_all(&base);
+    }
+}
+
+#[cfg(test)]
+mod offline_tests {
+    #[test]
+    fn matches_vanillas_offline_uuid() {
+        // UUID.nameUUIDFromBytes("OfflinePlayer:Notch".getBytes(UTF_8))
+        assert_eq!(super::offline_uuid("Notch"), "b50ad385-829d-3141-a216-7e7d7539ba7f");
     }
 }

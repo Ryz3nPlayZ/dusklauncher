@@ -21,7 +21,7 @@ public class ColorSaturation extends Module {
 
     public ColorSaturation() {
         super("colorsaturation", "Color Saturation", Category.RENDER,
-                "Grades the world's colours: saturation, contrast, brightness and hue.");
+                "Visual filter over the world: colour saturation, contrast, brightness and hue. Nothing to do with hunger.");
         instance = this;
     }
 

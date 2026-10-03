@@ -1,7 +1,9 @@
 package dev.dusk.client.render.nametag;
 
 import dev.dusk.client.compat.Compat;
+import dev.dusk.client.cosmetics.CosmeticsManager;
 import dev.dusk.client.modules.render.Nametags;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.screens.Screen;
@@ -10,8 +12,10 @@ import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FontDescription;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.TextColor;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
@@ -36,6 +40,11 @@ public final class NametagHooks {
     private static final float[] ARC_SIN = new float[PERIMETER_POINTS];
     private static final float[] perimeter = new float[PERIMETER_POINTS * 2];
     private static final float[] quads = new float[PERIMETER_POINTS * 8];
+
+    /** The Dusk mark, one glyph of the duskclient:badge bitmap font. */
+    private static final Component DUSK_BADGE = Component.literal("\uE000").withStyle(style -> style
+            .withFont(new FontDescription.Resource(Identifier.fromNamespaceAndPath("duskclient", "badge")))
+            .withColor(ChatFormatting.WHITE));
 
     private static Object lastWidthText;
     private static int lastWidth;
@@ -70,6 +79,13 @@ public final class NametagHooks {
         Minecraft mc = Minecraft.getInstance();
         if (Compat.hudHidden(mc) && hiddenInF1(n, entity)) return false;
         return n.showInInventory.get() || !(state instanceof AvatarRenderState) || !inventoryOpen(mc);
+    }
+
+    /** The nametag with the Dusk mark in front when the player uses Dusk, else unchanged. */
+    public static Component badged(Entity entity, Component name) {
+        if (!(entity instanceof Player) || !Nametags.showsDuskBadge()
+                || !CosmeticsManager.isDuskUser(entity.getUUID())) return name;
+        return Component.empty().append(DUSK_BADGE).append(" ").append(name);
     }
 
     /** The F1 rule for an entity's kind: true hides its nametag. */

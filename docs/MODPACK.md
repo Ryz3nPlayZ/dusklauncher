@@ -1,95 +1,73 @@
-# The default modpack — Dusk Essentials
+# Dusk Essentials — what every Dusk profile carries
 
-The pack that ships inside the launcher and seeds the first instance on first
-run. Target: **Minecraft 1.21.11, Fabric** (matches `client-mod`). Built with:
+Every DUSK PROFILE (a NEW INSTANCE version card, and the instance seeded on
+first run) is Fabric plus this set, resolved **live** for that exact game
+version by `mods::install_dusk_essentials` (lineup in `DUSK_ESSENTIALS`).
+Each mod takes its newest **release** build for the version; a beta/alpha
+only when the mod has no release there at all (`modrinth::newest_preferring_release`).
+A mod with no build for that version is skipped. Required dependencies
+(Cloth Config, Text Placeholder API, …) are pulled in afterwards, and the
+instance gets the tuned video defaults (`modpacks::seed_dusk_defaults`).
+
+The DuskClient jar is **not** part of the set — the launcher force-loads it
+into every Fabric profile at launch wherever a build exists (1.21 – 26.2).
+
+## Offline fallback
+
+`launcher/src-tauri/resources/modpacks/dusk-essentials.mrpack` is the same
+lineup pinned to **1.21.11**, used only when first run can't reach Modrinth.
+Rebuild it whenever the lineup changes:
 
 ```
 node tools/build-default-pack.mjs
 ```
 
-which resolves every slug below to its newest Fabric/1.21.11 build on
-Modrinth, pulls required dependencies recursively, and zips
-`launcher/src-tauri/resources/modpacks/dusk-essentials.mrpack` (bundled via the
-existing `resources/` rule in `tauri.conf.json`). Rerun + commit whenever the
-lineup changes. The DuskClient jar is **not** in the pack — the launcher
-force-loads it into every Fabric profile at launch (`install_and_launch`), so
-the pack carries only third-party mods.
-
-First-run wiring: `modpacks::install_bundled_pack` (Rust) + a one-shot effect
-in `App.tsx` guarded by `localStorage['dusk.defaultPackSeeded']`.
+First-run wiring: a one-shot effect in `App.tsx` guarded by
+`localStorage['dusk.defaultPackSeeded']` — create `DUSK 1.21.11`, install the
+essentials; on failure, `modpacks::install_bundled_pack('dusk-essentials')`.
 
 ## Division of labor
 
-The launcher-brand utilities (keystrokes, CPS counter, FPS display,
-toggle-sprint, armor status, combo counter — already registered as modules in
-`DuskClient`) are ours. The pack therefore carries **performance** mods we
-could never maintain ourselves, and **utility** mods that are big, subtle, or
-server-adjacent enough that forking them would be a liability. Anything small
-and client-render-only is a candidate to absorb into DuskClient instead
-(see "Fork / absorb candidates" below).
+Anything a DuskClient module already does stays out of the set: zoom,
+freelook, fullbright, tab ping, hunger/saturation, container previews,
+crosshair and background FPS are all modules. The set carries the
+**performance** mods we could never maintain ourselves and a few QoL mods
+that DuskClient doesn't cover.
 
-## The lineup (27 files: 23 picked + 4 auto-deps)
+## The lineup (16 + auto-deps)
 
 ### Performance core — depend, never fork
 
-| Mod | License | Why in the pack |
+| Mod | License | Why |
 |---|---|---|
+| fabric-api | Apache-2.0 | Everything else needs it. |
 | sodium | PolyForm-Shield-1.0.0 | The rendering engine. Ship **unmodified** + license notice; license bars building a competing renderer from it. |
 | sodium-extra | LGPL-3.0 | Extra toggles (animations, particles, fog). |
 | reeses-sodium-options | MIT | Usable settings GUI over Sodium. |
-| iris | LGPL-3.0 | Shaders; user installs shaderpacks themselves. |
+| iris | LGPL-3.0 | Shaders; users bring their own shaderpacks. |
 | lithium | LGPL-3.0 | Game-logic optimization. |
 | ferrite-core | MIT | Memory reduction. |
 | immediatelyfast | LGPL-3.0+ | Batches immediate-mode (HUD/entity) rendering. |
 | entityculling | tr7zw-Protective | Skips hidden-entity rendering. **Non-commercial** — fine while the launcher is free; revisit if we ever monetize bundles. |
-| dynamic-fps | MIT | Throttles when unfocused. |
-| krypton | LGPL-3.0 | Network-stack optimization. |
+| moreculling | GPL-3.0 | Culls block faces/models Sodium leaves in. |
 | badoptimizations | MIT | Micro frame/render checks. |
+| krypton | LGPL-3.0 | Network-stack optimization. |
 
-### Utilities — depend
+### QoL — depend
 
 | Mod | License | Role |
 |---|---|---|
-| modmenu | MIT | Mod list + config screens (also how users reach Zoomify/YACL configs). |
-| zoomify | LGPL-3.0 | The zoom. Infinite configurability, actively maintained (isxander). Do **not** fork — LGPL + huge surface. |
-| freelook | AGPL-3.0 | Detached camera (Celibistrial's, 2.5M downloads). AGPL is fine for unmodified redistribution; **forking/vendoring would AGPL our client** — never absorb. |
-| gamma-utils | LGPL-3.0 | Fullbright/gamma (the one Performium ships too). |
-| betterf3 | MIT | Replace F3 screen. |
+| modmenu | MIT | Mod list + config screens. |
+| betterf3 | MIT | Replacement F3 screen (no 26.3 build yet — skipped there). |
 | chat-heads | MPL-2.0 | Player heads in chat. |
-| shulkerboxtooltip | MIT | Shulker previews. |
 | held-item-info | LGPL-3.0 | Held-item tooltip. |
-| appleskin | Unlicense | Food/saturation HUD. |
-| better-ping-display-fabric | MIT | Numeric ping in tab list. |
-| dynamiccrosshair | LGPL-3.0 | Crosshair behavior/style (20M downloads). |
 
-### Auto-resolved dependencies
+### Dropped in v2 (DuskClient covers them)
 
-fabric-api · yetanotherconfiglib (Zoomify) · cloth-config (Gamma Utils) ·
-fabric-language-kotlin (Zoomify) · text-placeholder-api (Mod Menu).
-
-## What Performium taught us (and where we differ)
-
-Performium (`performium-was-taken`, 490k downloads, MIT) is the closest prior
-art: client-only Fabric, "under 50 mods", performance-core + curated configs.
-Its v2 (MC 26.2) runs Sodium/Lithium/C2ME/Krypton/FerriteCore/VMP/
-ScalableLux/ImmediatelyFast/EntityCulling/MoreCulling/BadOptimizations/Packet
-Fixer + Iris/Continuity/Puzzle/ETF/EMF/OptiGUI/Capes + Zoomify/Gamma Utils/
-Language Reload/Resourcify + ~40 hand-tuned config overrides, and it contains
-**no mods of the author's own** — the value is curation, not code.
-
-Differences, deliberately:
-
-- **1.21.11, not 26.2** — the pack's mod lineup is pinned to 1.21.11 (DuskClient
-  itself builds for both 1.21.11 and 26.2); revisit when the lineup moves to 26.x.
-- **No C2ME / VMP / ScalableLux / Packet Fixer** — chunk-gen and server-side
-  throughput don't help a client/utility pack; C2ME is alpha-quality.
-- **No ModernFix** — its Fabric line skips 1.21.11 entirely.
-- **PvP/QoL utilities in the pack** (freelook, crosshair, ping, shulker
-  tooltip…) — Performium is perf-only; our pack is the Lunar-style default
-  instance, and the HUD basics come from DuskClient instead of FlexHUD.
-- **No config overrides yet** — Performium's biggest hidden value. Worth
-  copying later via `overrides/` in the generator (options.txt presets,
-  sodium-options.json, etc.).
+zoomify → Zoom · freelook → Freelook · gamma-utils → Fullbright ·
+better-ping-display → TabPing · appleskin → HungerInfo / FoodTooltip ·
+shulkerboxtooltip → ContainerPreview · dynamiccrosshair → CustomCrosshair ·
+dynamic-fps → BackgroundFps.
 
 ## Fork / absorb candidates (the "build the rest of the utilities" list)
 
@@ -106,8 +84,8 @@ study (all MIT/Zlib/BSD, so reference-and-rewrite is unproblematic):
 | Screenshot gallery | LGatodu47/screenshot-viewer | MIT | Later; launcher could own this surface instead. |
 | Time/weather changer | alex265/time-weather-changer | BSD-2 | Small mixin into client time rendering. |
 
-**Never absorb** (license or size): zoomify (LGPL), freelook (AGPL),
-gamma-utils, sodium stack, anything tr7zw (protective license).
+**Never absorb** (license or size): the sodium stack, anything tr7zw
+(protective license).
 
 **Optional tiers for the Store** (not the default pack): Xaero's Minimap +
 World Map (ARR — requires a visible credit link to the mod page when
@@ -123,6 +101,5 @@ users).
 2. **tr7zw mods** (entityculling is in-pack) — non-commercial; fine while the
    launcher/pack is free, must be dropped if we monetize.
 3. **Xaero's** (not in pack) — ARR with conditional pack permission.
-4. **AGPL freelook** — redistribute unmodified only.
-5. Avoid entirely: `custom-crosshair-mod` (ARR, no pack permission stated),
+4. Avoid entirely: `custom-crosshair-mod` (ARR, no pack permission stated),
    NC-licensed fullbright variants.

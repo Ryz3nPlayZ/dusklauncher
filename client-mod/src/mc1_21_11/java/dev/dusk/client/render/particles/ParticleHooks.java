@@ -23,6 +23,9 @@ import java.util.Map;
  */
 public final class ParticleHooks {
     private static final Map<ParticleType<?>, String> KEYS = new IdentityHashMap<>();
+    /** Type to Entry, resolved once; the module's key-to-entry table never changes after startup. */
+    private static final Map<ParticleType<?>, Object> ENTRIES = new IdentityHashMap<>();
+    private static final Object UNTRACKED = new Object();
 
     /** Set just before vanilla spawns an already-multiplied particle, so the spawner skips it once. */
     public static boolean multiplied;
@@ -42,7 +45,14 @@ public final class ParticleHooks {
     // Both check active() first: the quad mixins call these five or six times
     // per particle per frame, and with the module off that must cost nothing.
     public static Particles.Entry of(ParticleType<?> type) {
-        return type == null || !Particles.active() ? null : Particles.entry(key(type));
+        if (type == null || !Particles.active()) return null;
+        Object entry = ENTRIES.get(type);
+        if (entry == null) {
+            entry = Particles.entry(key(type));
+            if (entry == null) entry = UNTRACKED;
+            ENTRIES.put(type, entry);
+        }
+        return entry == UNTRACKED ? null : (Particles.Entry) entry;
     }
 
     public static Particles.Entry of(Particle particle) {

@@ -29,11 +29,28 @@ public class EntityCount extends TextHud {
         return prefix + ": " + n + " (" + radius + ")";
     }
 
+    /** Entities only move once a tick, so the count is redone once a tick rather than every frame. */
+    private long countedAt = Long.MIN_VALUE;
+    private Object countedFor;
+    private int countedWith;
+    private String counted;
+
     @Override
     protected String text(HudContext ctx) {
         var level = ctx.level();
         var player = ctx.player();
         if (level == null || player == null) return null;
+        long now = level.getGameTime();
+        // the settings are part of the key so editing them while paused still updates
+        int with = (count.index() * 1031 + range.get()) * 1031 + yRange.get();
+        if (now == countedAt && countedFor == level && countedWith == with && counted != null) return counted;
+        countedAt = now;
+        countedFor = level;
+        countedWith = with;
+        return counted = tally(level, player);
+    }
+
+    private String tally(net.minecraft.client.multiplayer.ClientLevel level, net.minecraft.client.player.LocalPlayer player) {
         int n = 0;
         for (Entity e : level.entitiesForRendering()) {
             if (e == player) continue;

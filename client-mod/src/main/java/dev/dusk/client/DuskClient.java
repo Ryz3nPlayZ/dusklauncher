@@ -14,6 +14,8 @@ import dev.dusk.client.module.ModuleManager;
 import dev.dusk.client.modules.hud.ArmorStatus;
 import dev.dusk.client.modules.hud.Biome;
 import dev.dusk.client.modules.hud.Clock;
+import dev.dusk.client.modules.hud.ResourcePacks;
+import dev.dusk.client.modules.hud.Stopwatch;
 import dev.dusk.client.modules.hud.ComboDisplay;
 import dev.dusk.client.modules.hud.Compass;
 import dev.dusk.client.modules.hud.Coordinates;
@@ -30,6 +32,12 @@ import dev.dusk.client.modules.hud.Keystrokes;
 import dev.dusk.client.modules.hud.LightLevel;
 import dev.dusk.client.modules.hud.LookingAt;
 import dev.dusk.client.modules.hud.ServerLag;
+import dev.dusk.client.modules.misc.BackgroundFps;
+import dev.dusk.client.modules.misc.NameHider;
+import dev.dusk.client.modules.render.BlockOutline;
+import dev.dusk.client.modules.render.BossBarTweaks;
+import dev.dusk.client.modules.render.ScoreboardTweaks;
+import dev.dusk.client.modules.render.TabPing;
 import dev.dusk.client.modules.hud.Memory;
 import dev.dusk.client.modules.hud.NetherCoordinates;
 import dev.dusk.client.modules.hud.Ping;
@@ -49,6 +57,7 @@ import dev.dusk.client.modules.misc.CompactChat;
 import dev.dusk.client.modules.misc.BoatMap;
 import dev.dusk.client.modules.misc.AutoReconnect;
 import dev.dusk.client.modules.misc.ChatHistory;
+import dev.dusk.client.modules.misc.ChatMacros;
 import dev.dusk.client.modules.misc.ConfirmDisconnect;
 import dev.dusk.client.modules.misc.GameModeSwitcher;
 import dev.dusk.client.modules.misc.TntCountdown;
@@ -69,11 +78,19 @@ import dev.dusk.client.modules.render.MotionBlur;
 import dev.dusk.client.modules.render.Nametags;
 import dev.dusk.client.modules.render.BehindYou;
 import dev.dusk.client.modules.render.Zoom;
+import dev.dusk.client.modules.render.Freecam;
 import dev.dusk.client.modules.render.Freelook;
 import dev.dusk.client.modules.render.HungerInfo;
 import dev.dusk.client.modules.render.CapePhysics;
 import dev.dusk.client.modules.render.Particles;
 import dev.dusk.client.modules.render.SkinLayers3D;
+import dev.dusk.client.modules.render.FovChanger;
+import dev.dusk.client.modules.hud.TotemCounter;
+import dev.dusk.client.modules.hud.ItemCounter;
+import dev.dusk.client.modules.hud.BedwarsResources;
+import dev.dusk.client.modules.hud.SkyblockStats;
+import dev.dusk.client.modules.misc.HypixelTweaks;
+import dev.dusk.client.modules.misc.SlotLock;
 import dev.dusk.client.modules.render.NoNightVision;
 import dev.dusk.client.modules.render.NoPumpkinBlur;
 import dev.dusk.client.modules.render.RiptideShieldFix;
@@ -137,6 +154,8 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new SneakStatus());
         modules.register(new FullInventory());
         modules.register(new InventoryDisplay());
+        modules.register(new TotemCounter());
+        modules.register(new ItemCounter());
         // Info HUD
         modules.register(new Coordinates());
         modules.register(new NetherCoordinates());
@@ -157,12 +176,23 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new SignReader());
         modules.register(new LookingAt());
         modules.register(new ServerLag());
+        modules.register(new Stopwatch());
+        modules.register(new ResourcePacks());
         // Movement / render
         modules.register(new ToggleSprint());
         modules.register(new CustomCrosshair());
         modules.register(new Fullbright());
         modules.register(new MotionBlur());
         modules.register(new TntCountdown());
+        modules.register(new NameHider());
+        modules.register(new FovChanger());
+        modules.register(new SlotLock());
+        // Hypixel: chat tweaks, Bed Wars and SkyBlock HUDs
+        modules.register(new HypixelTweaks());
+        HypixelTweaks.register();
+        modules.register(new BedwarsResources());
+        modules.register(new SkyblockStats());
+        SkyblockStats.register();
         if (Compat.MODERN_CLIENT_HOOKS) {
             // BactroMod ports; they hook client internals only 1.21.11+ has
             modules.register(new NoPumpkinBlur());
@@ -182,6 +212,12 @@ public class DuskClient implements ClientModInitializer {
             modules.register(new Hitbox());
             modules.register(new Particles());
             modules.register(new Nametags());
+            modules.register(new ScoreboardTweaks());
+            modules.register(new BossBarTweaks());
+            // both step aside for the standalone mods the default pack already ships
+            if (!FabricLoader.getInstance().isModLoaded("betterpingdisplay")) modules.register(new TabPing());
+            modules.register(new BlockOutline());
+            if (!FabricLoader.getInstance().isModLoaded("dynamic_fps")) modules.register(new BackgroundFps());
         }
         BehindYou behindYou = new BehindYou();
         modules.register(behindYou);
@@ -191,6 +227,8 @@ public class DuskClient implements ClientModInitializer {
         if (zoom != null) modules.register(zoom);
         Freelook freelook = fabric.isModLoaded("freelook") || fabric.isModLoaded("perspectivemod") ? null : new Freelook();
         if (freelook != null) modules.register(freelook);
+        Freecam freecam = fabric.isModLoaded("freecam") ? null : new Freecam();
+        if (freecam != null) modules.register(freecam);
         if (!fabric.isModLoaded("appleskin")) modules.register(new HungerInfo());
         if (!fabric.isModLoaded("shulkerboxtooltip")) modules.register(new ContainerPreview());
         if (!fabric.isModLoaded("skinlayers3d")) modules.register(new SkinLayers3D());
@@ -199,6 +237,8 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new ChatTimestamps()); // Plague's Chat Timestamps
         modules.register(new ConfirmDisconnect());
         modules.register(new ChatHistory());
+        ChatMacros chatMacros = new ChatMacros();
+        modules.register(chatMacros);
         modules.register(new AutoReconnect());
         AutoReconnect.register();
         Waypoints waypoints = new Waypoints();
@@ -238,11 +278,14 @@ public class DuskClient implements ClientModInitializer {
             changed |= modules.get(ToggleSprint.class).tickKeys();
             if (TimeChanger.instance() != null) changed |= TimeChanger.instance().tickKeys();
             changed |= ShieldStatuses.tickKeys();
+            changed |= modules.tickToggleKeys(client);
             if (changed) modules.saveConfig();
             while (clipKey.consumeClick()) MediaBackend.saveClip();
             behindYou.tickKeys();
             if (zoom != null) zoom.tickKeys();
             if (freelook != null) freelook.tickKeys();
+            if (freecam != null) freecam.tickKeys();
+            chatMacros.tickKeys();
             waypoints.tickKeys();
             if (modules.get(Distance.class).enabled() || modules.get(SignReader.class).enabled()) {
                 Raycast.tick(client);

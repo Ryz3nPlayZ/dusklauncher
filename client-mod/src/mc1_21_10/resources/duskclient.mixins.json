@@ -3,6 +3,7 @@
   "package": "dev.dusk.client.mixin",
   "compatibilityLevel": "${java_level}",
   "client": [
+    "namehider.NameHiderMixin",
     "WorldProjectionMixin",
     "skinlayers.SkinLayersAddMixin",
     "skinlayers.SkinLayersHideMixin",
@@ -41,7 +42,14 @@
     "behindyou.BehindYouFovMixin",
     "zoom.ZoomBobMixin",
     "zoom.ZoomFovMixin",
+    "fov.FovChangerMixin",
+    "slotlock.SlotLockDropMixin",
+    "slotlock.SlotLockScreenMixin",
     "zoom.ZoomMouseMixin",
+    "freecam.FreecamCameraMixin",
+    "freecam.FreecamHandMixin",
+    "freecam.FreecamInputMixin",
+    "freecam.FreecamKeyMixin",
     "freelook.FreelookCameraMixin",
     "freelook.FreelookMouseMixin",
     "behindyou.BehindYouLevelMixin"

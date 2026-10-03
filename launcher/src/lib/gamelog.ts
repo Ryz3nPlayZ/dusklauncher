@@ -42,7 +42,7 @@ export function startGameLog() {
   if (started) return;
   started = true;
   if (!isTauri) {
-    current = { profileId: 'p-performium', lines: PREVIEW_LINES };
+    current = { profileId: 'p-dusk', lines: PREVIEW_LINES };
     return;
   }
   void listen<GameState>('game-state', (s) => {

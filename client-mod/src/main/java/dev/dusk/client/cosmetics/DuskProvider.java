@@ -26,8 +26,11 @@ public final class DuskProvider {
     private static final Logger LOG = LoggerFactory.getLogger("duskclient/dusk");
     public static final String DEFAULT_API = "https://dusk.129-213-43-152.sslip.io";
 
-    /** A player's published loadout. {@code cape} is -1 when none is equipped. */
-    public record Loadout(int cape, List<Integer> accessories) {
+    /**
+     * A player's published loadout. {@code cape} is -1 when none is equipped;
+     * {@code dusk} is true when they have a Dusk account (the nametag badge).
+     */
+    public record Loadout(int cape, List<Integer> accessories, boolean dusk) {
         public boolean isEmpty() {
             return cape < 0 && accessories.isEmpty();
         }
@@ -57,7 +60,9 @@ public final class DuskProvider {
                     if (v.isJsonPrimitive() && v.getAsJsonPrimitive().isNumber()) acc.add(v.getAsInt());
                 }
             }
-            return new Loadout(capeId, List.copyOf(acc));
+            JsonElement dusk = o.get("dusk");
+            boolean isDusk = dusk != null && dusk.isJsonPrimitive() && dusk.getAsJsonPrimitive().isBoolean() && dusk.getAsBoolean();
+            return new Loadout(capeId, List.copyOf(acc), isDusk);
         } catch (Exception e) {
             LOG.warn("Unparseable Dusk loadout for {}", uuid);
             return null;

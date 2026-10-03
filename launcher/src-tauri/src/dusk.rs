@@ -226,7 +226,13 @@ pub struct Store {
 pub struct Redeemed {
     pub granted: i64,
     pub coins: i64,
+    /// a launcher feature the code switched on locally ("offline")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unlocked: Option<String>,
 }
+
+/// The code that unlocks offline play. Deliberately undocumented in the UI.
+const OFFLINE_CODE: &str = "cracked";
 
 #[derive(Deserialize)]
 struct Bought {
@@ -324,6 +330,20 @@ pub async fn redeem_code(state: State<'_, AppState>, code: String) -> Result<Red
     let code = code.trim();
     if code.is_empty() {
         return Err("Enter a code first.".into());
+    }
+    // offline play: only while no Microsoft account is signed in, and never
+    // sent to the service. Signed in, the code goes to the server like any
+    // other (and is simply unknown there).
+    if code.eq_ignore_ascii_case(OFFLINE_CODE) && crate::auth_store::load_session(&state.data_dir).is_none() {
+        let settings = {
+            let mut s = state.settings.lock().unwrap();
+            if s.offline_name.trim().is_empty() {
+                s.offline_name = "Player".into();
+            }
+            s.clone()
+        };
+        state.save_settings(&settings);
+        return Ok(Redeemed { granted: 0, coins: 0, unlocked: Some("offline".into()) });
     }
     call(&state, reqwest::Method::POST, "/v1/me/redeem", Some(json!({ "code": code }))).await
 }

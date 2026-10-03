@@ -1,6 +1,7 @@
 package dev.dusk.client.mixin;
 
 import dev.dusk.client.modules.render.DamageTint;
+import dev.dusk.client.render.DamageTintState;
 import dev.dusk.client.render.DamageVariants;
 import dev.dusk.client.render.OverlayTint;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
@@ -14,15 +15,12 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.util.Collections;
-import java.util.Map;
-import java.util.WeakHashMap;
-
 /**
  * DamageTint: which pixel of the overlay sheet an entity samples this frame.
  * The column picks the damage type's colour and the row picks how far the
  * flash has faded. The render state carries neither the hurt timer nor the
- * damage type, so both are stashed as the state is extracted.
+ * damage type, so both are stashed on the state as it is extracted. With the
+ * module off both hooks return before touching anything.
  */
 @Mixin(LivingEntityRenderer.class)
 public class DamageOverlayMixin {
@@ -33,28 +31,24 @@ public class DamageOverlayMixin {
     @Unique
     private static final int DUSKCLIENT$LAST_FADE_ROW = 7;
 
-    @Unique
-    private static final Map<Object, Integer> duskclient$hurtTime = Collections.synchronizedMap(new WeakHashMap<>());
-    @Unique
-    private static final Map<Object, Integer> duskclient$deathTime = Collections.synchronizedMap(new WeakHashMap<>());
-    @Unique
-    private static final Map<Object, Integer> duskclient$variant = Collections.synchronizedMap(new WeakHashMap<>());
-
     @Inject(method = "extractRenderState(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/client/renderer/entity/state/LivingEntityRenderState;F)V",
             at = @At("HEAD"))
     private void duskclient$captureHurt(LivingEntity entity, LivingEntityRenderState state, float partialTick,
                                         CallbackInfo ci) {
-        duskclient$hurtTime.put(state, entity.hurtTime);
-        duskclient$deathTime.put(state, entity.deathTime);
-        duskclient$variant.put(state, DamageVariants.get(entity));
+        if (!DamageTint.active()) return;
+        boolean flashing = entity.hurtTime > 0 || entity.deathTime > 0;
+        ((DamageTintState) state).duskclient$setDamage(entity.hurtTime, entity.deathTime,
+                flashing && DamageTint.perType() ? DamageVariants.get(entity) : OverlayTint.OTHER);
     }
 
     @Inject(method = "getOverlayCoords", at = @At("HEAD"), cancellable = true)
     private static void duskclient$overlayCoords(LivingEntityRenderState state, float whiteProgress,
                                                  CallbackInfoReturnable<Integer> cir) {
-        int hurtTime = duskclient$hurtTime.getOrDefault(state, 0);
-        int deathTime = duskclient$deathTime.getOrDefault(state, 0);
-        int variant = duskclient$variant.getOrDefault(state, OverlayTint.OTHER);
+        if (!DamageTint.active()) return;
+        DamageTintState damage = (DamageTintState) state;
+        int hurtTime = damage.duskclient$hurtTime();
+        int deathTime = damage.duskclient$deathTime();
+        int variant = damage.duskclient$variant();
 
         boolean flashing = hurtTime > 0 || deathTime > 0;
         int coords = duskclient$coords(flashing, hurtTime, deathTime, variant, OverlayTexture.u(whiteProgress));

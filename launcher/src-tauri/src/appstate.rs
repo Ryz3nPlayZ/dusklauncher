@@ -24,9 +24,11 @@ impl Default for Account {
     }
 }
 
+/// The game while it runs. The supervisor task owns the process itself;
+/// STOP only signals it, so nothing has to hold a lock for the game's lifetime.
 pub struct RunningGame {
     pub profile_id: String,
-    pub child: tokio::process::Child,
+    pub stop: std::sync::Arc<tokio::sync::Notify>,
 }
 
 /// Where the running game is, as far as its log says: which instance, and
@@ -56,6 +58,8 @@ pub struct AppState {
     pub launch_lock: tokio::sync::Mutex<()>,
     /// held across the interactive login flow so only one browser flow runs
     pub login_lock: tokio::sync::Mutex<()>,
+    /// wakes the login in flight so the sign-in popup can be closed mid-way
+    pub login_cancel: tokio::sync::Notify,
     /// cached version manifest (10 min TTL)
     pub manifest: tokio::sync::RwLock<Option<(Instant, VersionManifest)>>,
     pub client: reqwest::Client,
@@ -94,6 +98,7 @@ impl AppState {
             activity: Mutex::new(None),
             launch_lock: tokio::sync::Mutex::new(()),
             login_lock: tokio::sync::Mutex::new(()),
+            login_cancel: tokio::sync::Notify::new(),
             manifest: tokio::sync::RwLock::new(None),
             client: reqwest::Client::builder()
                 // Modrinth requires a descriptive UA; set it once here so no
@@ -104,6 +109,8 @@ impl AppState {
                     " (github.com/dusklauncher)"
                 ))
                 .timeout(std::time::Duration::from_secs(30))
+                // a dead network should fail fast so offline launch kicks in
+                .connect_timeout(std::time::Duration::from_secs(8))
                 .build()
                 .unwrap_or_else(|_| reqwest::Client::new()),
         }

@@ -51,6 +51,11 @@ public final class Mcpr {
         return Minecraft.getInstance().gameDirectory.toPath().resolve("replays");
     }
 
+    /** Where EXPORT VIDEO writes its .mp4 files. */
+    public static Path videosDir() {
+        return Minecraft.getInstance().gameDirectory.toPath().resolve("videos");
+    }
+
     /** A fresh file name in {@code dir}: {@code <prefix>yyyy-MM-dd_HH-mm-ss.mcpr}, suffixed if taken. */
     public static Path newFile(Path dir, String prefix) {
         String base = prefix + LocalDateTime.now().format(STAMP);

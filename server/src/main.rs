@@ -1749,19 +1749,23 @@ struct PublicLoadout {
     uuid: String,
     cape: Option<u32>,
     accessories: Vec<u32>,
+    /// Always true: the account exists, so Dusk clients badge its name tag.
+    /// Says nothing about whether it's online; presence stays friends-only.
+    dusk: bool,
 }
 
 /// What a Dusk client draws on another Dusk player. Only slots the mod knows
-/// today; `settings` and unknown slots stay private.
+/// today; `settings` and unknown slots stay private. Any account answers,
+/// with or without cosmetics, so its name tag gets the Dusk badge.
 async fn public_loadout(State(app): State<Shared>, Path(raw): Path<String>) -> Result<Response, ApiError> {
     let uuid = dashed_uuid(&raw).ok_or_else(|| bad("bad uuid"))?;
     let db = app.db.lock().unwrap();
     let exists: bool = db
-        .query_row("SELECT 1 FROM loadouts WHERE uuid = ?1", params![uuid], |_| Ok(true))
+        .query_row("SELECT 1 FROM accounts WHERE uuid = ?1", params![uuid], |_| Ok(true))
         .optional()?
         .unwrap_or(false);
     if !exists {
-        return Ok((StatusCode::NOT_FOUND, Json(json!({ "error": "no loadout" }))).into_response());
+        return Ok((StatusCode::NOT_FOUND, Json(json!({ "error": "no account" }))).into_response());
     }
     let lo = read_loadout(&db, &uuid)?;
     let cape = lo.get("cape").and_then(Value::as_u64).and_then(|n| u32::try_from(n).ok());
@@ -1770,7 +1774,7 @@ async fn public_loadout(State(app): State<Shared>, Path(raw): Path<String>) -> R
         .and_then(Value::as_array)
         .map(|a| a.iter().filter_map(Value::as_u64).filter_map(|n| u32::try_from(n).ok()).collect())
         .unwrap_or_default();
-    Ok(([(header::CACHE_CONTROL, "public, max-age=60")], Json(PublicLoadout { uuid, cape, accessories })).into_response())
+    Ok(([(header::CACHE_CONTROL, "public, max-age=60")], Json(PublicLoadout { uuid, cape, accessories, dusk: true })).into_response())
 }
 
 async fn catalog(State(app): State<Shared>) -> Json<Value> {

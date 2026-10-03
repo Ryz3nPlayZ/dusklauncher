@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavCell, PxBox, PxButton, TT } from '../components/px/Px';
-import { Choice } from '../components/px/Form';
+import { Choice, Combobox } from '../components/px/Form';
 import InstanceEditor from './InstanceEditor';
 import BrowseProjects from './Browse';
 import Project from './Project';
@@ -14,11 +14,13 @@ import {
   ago,
   api,
   clientModSupports,
-  DUSK_PACK,
+  DUSK_PROFILE,
+  featuredVersions,
   isTauri,
   loaderLabel,
   type GameState,
   type Profile,
+  type ReleaseArt,
   type Version,
 } from '../lib/api';
 
@@ -33,6 +35,7 @@ export default function Instances({
   onLaunch,
   onSelect,
   onStop,
+  onWatch,
   clock24h,
 }: {
   profiles: Profile[];
@@ -42,6 +45,8 @@ export default function Instances({
   onLaunch: (id: string) => void;
   onSelect: (id: string) => void;
   onStop: () => void;
+  /** WATCH on the media page: launch that instance straight into the recording */
+  onWatch: (profileId: string, path: string) => void;
   clock24h: boolean;
 }) {
   const [filter, setFilter] = useState<Filter>('ALL');
@@ -123,7 +128,15 @@ export default function Instances({
     </div>
   );
 
-  if (gallery) return <Screenshots clock24h={clock24h} onBack={() => setGallery(false)} />;
+  if (gallery)
+    return (
+      <Screenshots
+        clock24h={clock24h}
+        gameBusy={game !== null}
+        onWatch={onWatch}
+        onBack={() => setGallery(false)}
+      />
+    );
 
   if (editing) {
     return (
@@ -247,7 +260,7 @@ export default function Instances({
                         onClick={onStop}
                       >
                         <TT size={22} tone="red" sx={1.15}>
-                          {live.state === 'running' ? 'STOP GAME' : 'STARTING…'}
+                          {live.state === 'running' ? 'STOP GAME' : live.state === 'stopping' ? 'STOPPING…' : 'STARTING…'}
                         </TT>
                       </PxButton>
                     ) : (
@@ -305,16 +318,40 @@ export default function Instances({
 }
 
 /* ── NEW INSTANCE ───────────────────────────────────────────────────────────
-   Figma 98:88 — a 307×223 chooser: CREATE JAVA PROFILE in the accent, then
-   DUSK PROFILE (purple) and BROWSE MODPACKS (moss), 265×46 grey-ring
-   buttons with tinted surfaces. Two more grey rows: CUSTOM PROFILE (a bare
-   vanilla / fabric / neoforge instance) and IMPORT .MRPACK off disk (desktop only).
-   DUSK PROFILE is the frame-6 install popup pointed at DUSK_PACK: pick the
-   pack release + game version exactly as for any modpack, and the instance
-   is the whole pack plus everything the launcher forces in at launch. The
-   custom form is name + Minecraft version + LOADER; the fabric loader
-   resolves itself and shows up read-only, NeoForge picks the newest build
-   for the version at first launch. */
+   The chooser leads with the game itself: the newest release of each recent
+   line as a big card wearing the art Mojang publishes for it (the square the
+   official launcher shows beside its patch notes), plus the newest snapshot
+   when it's ahead of every release. Every card is a DUSK PROFILE: Fabric
+   with Dusk Essentials resolved for exactly that version, and DuskClient at
+   launch wherever a build exists. The VERSION field under the cards takes any
+   other release. Underneath, the other ways in: BROWSE MODPACKS, CUSTOM
+   PROFILE (a bare vanilla / fabric / neoforge instance — name + Minecraft
+   version + LOADER; the fabric loader resolves itself, NeoForge picks the
+   newest build at first launch) and IMPORT .MRPACK off disk. */
+
+/* what each update was called; the patch-notes blurb covers the rest */
+const DROP_NAMES: Record<string, string> = {
+  '26.3': 'WILDERNESS BOUND',
+  '26.2': 'CHAOS CUBED',
+  '26.1': 'TINY TAKEOVER',
+  '1.21.11': 'MOUNTS OF MAYHEM',
+  '1.21.9': 'THE COPPER AGE',
+  '1.21.6': 'CHASE THE SKIES',
+  '1.21.5': 'SPRING TO LIFE',
+};
+
+/** "26.1.2" → "26.1"; 1.x keeps its patch ("1.21.11") — those were drops */
+const lineOf = (id: string) => {
+  const m = /^(\d+)\.(\d+)(?:\.(\d+))?/.exec(id);
+  if (!m) return id;
+  return m[1] === '1' ? id.split('-')[0] : `${m[1]}.${m[2]}`;
+};
+
+const artFor = (art: ReleaseArt[], id: string) =>
+  art.find((a) => a.version === id) ??
+  art.find((a) => a.version === lineOf(id)) ??
+  art.find((a) => a.version.startsWith(`${lineOf(id)}-`) || a.version.startsWith(`${lineOf(id)}.`));
+
 function NewInstance({
   onClose,
   onBrowse,
@@ -324,23 +361,20 @@ function NewInstance({
   onBrowse: () => void;
   onCreated: (p: Profile) => void;
 }) {
-  const [step, setStep] = useState<'pick' | 'dusk' | 'custom'>('pick');
+  const [step, setStep] = useState<'pick' | 'custom'>('pick');
   const [versions, setVersions] = useState<Version[]>([]);
+  const [art, setArt] = useState<ReleaseArt[]>([]);
+  /* the DUSK PROFILE's version and name; the name follows the version until
+     the user types their own */
+  const [duskVer, setDuskVer] = useState('');
+  const [duskName, setDuskName] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [version, setVersion] = useState('');
   const [loader, setLoader] = useState<'fabric' | 'neoforge' | 'vanilla'>('fabric');
+  const [perf, setPerf] = useState<'on' | 'off'>('on');
   const [fabricVer, setFabricVer] = useState<string | null>(null);
-  /* the pack's icon for the DUSK PROFILE popup; the box glyph until it lands */
-  const [duskIcon, setDuskIcon] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    void api
-      .getProject(DUSK_PACK.id)
-      .then((p) => setDuskIcon(p.iconUrl))
-      .catch(() => setDuskIcon(null));
-  }, []);
 
   useEffect(() => {
     void api
@@ -349,15 +383,35 @@ function NewInstance({
         setVersions(v);
         const latest = v.find((x) => x.type === 'release');
         if (latest) setVersion((cur) => cur || latest.id);
+        const lead = featuredVersions(v).find((x) => x.type === 'release');
+        if (lead) setDuskVer((cur) => cur || lead.id);
       })
       .catch((e) => setErr(String(e)));
+    void api
+      .releaseArt()
+      .then(setArt)
+      .catch(() => setArt([]));
     void api
       .fabricLoaderVersion()
       .then(setFabricVer)
       .catch(() => setFabricVer(null));
   }, []);
 
-  const releases = versions.filter((v) => v.type === 'release').slice(0, 60);
+  const featured = useMemo(() => featuredVersions(versions), [versions]);
+  const releases = useMemo(
+    () => versions.filter((v) => v.type === 'release').map((v) => ({ value: v.id })),
+    [versions],
+  );
+  /* the VERSION field also offers the featured snapshot, flagged */
+  const duskOptions = useMemo(
+    () => [
+      ...featured.filter((v) => v.type !== 'release').map((v) => ({ value: v.id, meta: 'SNAPSHOT' })),
+      ...releases,
+    ],
+    [featured, releases],
+  );
+  const known = versions.some((v) => v.id === duskVer.trim());
+  const finalName = (duskName ?? DUSK_PROFILE.instanceName(duskVer.trim())).trim();
 
   const importFile = async () => {
     setBusy(true);
@@ -372,61 +426,132 @@ function NewInstance({
     }
   };
 
+  const createDusk = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const created = await api.createProfile(finalName, duskVer.trim(), 'fabric');
+      // the essentials download in the background; the instance is usable meanwhile
+      void api.installDuskEssentials(created.id).catch(() => {});
+      onCreated(created);
+    } catch (e) {
+      setErr(String(e));
+      setBusy(false);
+    }
+  };
+
   if (step === 'pick') {
+    const v = duskVer.trim();
     return (
       <div className="modal-scrim" onClick={onClose}>
-        <PxBox family="grey" className="px--window modal modal--pick" onClick={(e) => e.stopPropagation()}>
-          <TT size={16} tone="accent" className="modal--pick__title">
-            CREATE JAVA PROFILE
-          </TT>
-          <PxButton family="dusk" height="md" onClick={() => setStep('dusk')}>
-            <TT size={20} tone="purple">
-              DUSK PROFILE
-            </TT>
-          </PxButton>
-          <PxButton family="moss" height="md" onClick={onBrowse}>
-            <TT size={20} tone="moss">
-              BROWSE MODPACKS
-            </TT>
-          </PxButton>
-          <PxButton family="grey" height="md" onClick={() => setStep('custom')} title="A bare vanilla, Fabric or NeoForge instance">
-            <TT size={20}>CUSTOM PROFILE</TT>
-          </PxButton>
-          <PxButton
-            family="grey"
-            height="md"
-            disabled={!isTauri || busy}
-            title={isTauri ? 'Import a .mrpack from disk' : 'Needs the desktop app'}
-            onClick={() => void importFile()}
-          >
-            <TT size={20} tone={isTauri ? 'plain' : 'dim'}>
-              {busy ? 'IMPORTING…' : 'IMPORT .MRPACK'}
-            </TT>
-          </PxButton>
+        <PxBox family="grey" className="px--window modal modal--versions" onClick={(e) => e.stopPropagation()}>
+          <div className="vpick__head">
+            <TT size={22}>NEW INSTANCE</TT>
+            <span className="meta">Pick a version — every card is a Dusk profile.</span>
+          </div>
+
+          <div className="vcards">
+            {featured.length === 0
+              ? [0, 1, 2, 3].map((i) => <div key={i} className="vcard vcard--ghost" />)
+              : featured.map((ver) => {
+                  const a = artFor(art, ver.id);
+                  const snap = ver.type !== 'release';
+                  const drop = DROP_NAMES[lineOf(ver.id)];
+                  return (
+                    <button
+                      key={ver.id}
+                      type="button"
+                      className={`vcard${v === ver.id ? ' is-picked' : ''}`}
+                      aria-pressed={v === ver.id}
+                      onClick={() => setDuskVer(ver.id)}
+                      onDoubleClick={() => {
+                        setDuskVer(ver.id);
+                        if (!busy) void createDusk();
+                      }}
+                      title={a?.blurb || ver.id}
+                    >
+                      <img src={a?.imageUrl ?? instanceBanner} alt="" draggable={false} />
+                      <span className={`vcard__tag${snap ? ' vcard__tag--snap' : ''}`}>
+                        {snap ? 'SNAPSHOT' : 'DUSK PROFILE'}
+                      </span>
+                      <span className="vcard__info">
+                        <TT size={36}>{ver.id.toUpperCase()}</TT>
+                        <span className="vcard__drop">
+                          {drop ?? (snap ? 'NEXT UPDATE PREVIEW' : a?.blurb?.toUpperCase() ?? 'RELEASE')}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+          </div>
+
+          <div className="modal__row vpick__form">
+            <PxBox family="panel" height="md">
+              <input
+                className="input"
+                aria-label="Instance name"
+                placeholder="INSTANCE NAME"
+                value={duskName ?? DUSK_PROFILE.instanceName(v)}
+                onChange={(e) => setDuskName(e.target.value)}
+              />
+            </PxBox>
+            <Combobox
+              className="vpick__ver"
+              value={duskVer}
+              options={duskOptions}
+              onChange={setDuskVer}
+              placeholder="OTHER VERSION"
+            />
+            <PxButton
+              family="dusk"
+              height="md"
+              className="vpick__create"
+              disabled={busy || !known || !finalName}
+              title={known ? undefined : 'Pick a Minecraft version'}
+              onClick={() => void createDusk()}
+            >
+              <TT size={20} tone="purple">
+                {busy ? 'CREATING…' : 'CREATE'}
+              </TT>
+            </PxButton>
+          </div>
+
+          <span className="meta">
+            {!v
+              ? ' '
+              : clientModSupports(v)
+                ? `Fabric with Dusk Essentials (Sodium, Iris, Lithium and friends, the newest builds for ${v}), plus DuskClient and your cosmetics at every launch.`
+                : `Fabric with Dusk Essentials for ${v}. DuskClient isn't out for ${v} yet (it runs on 1.21 – 26.2), so no client modules or cosmetics there.`}
+          </span>
           {err && <span className="meta">{err}</span>}
+
+          <div className="modal__row vpick__more">
+            <PxButton family="moss" height="md" onClick={onBrowse}>
+              <TT size={16} tone="moss">
+                BROWSE MODPACKS
+              </TT>
+            </PxButton>
+            <PxButton family="grey" height="md" onClick={() => setStep('custom')} title="A bare vanilla, Fabric or NeoForge instance">
+              <TT size={16}>CUSTOM PROFILE</TT>
+            </PxButton>
+            <PxButton
+              family="grey"
+              height="md"
+              disabled={!isTauri || busy}
+              title={isTauri ? 'Import a .mrpack from disk' : 'Needs the desktop app'}
+              onClick={() => void importFile()}
+            >
+              <TT size={16} tone={isTauri ? 'plain' : 'dim'}>
+                {busy ? 'IMPORTING…' : 'IMPORT .MRPACK'}
+              </TT>
+            </PxButton>
+            <span className="modal__spacer" />
+            <PxButton family="grey" height="md" onClick={onClose}>
+              <TT size={16}>CANCEL</TT>
+            </PxButton>
+          </div>
         </PxBox>
       </div>
-    );
-  }
-
-  if (step === 'dusk') {
-    return (
-      <InstallModpack
-        target={{ id: DUSK_PACK.id, title: DUSK_PACK.title, iconUrl: duskIcon }}
-        heading="DUSK PROFILE"
-        action="CREATE"
-        defaultName={DUSK_PACK.instanceName}
-        note={(chosen) =>
-          !chosen || clientModSupports(chosen.gameVersions[0] ?? '')
-            ? `All of ${DUSK_PACK.title} at that release, plus DuskClient and your cosmetics at every launch.`
-            : `All of ${DUSK_PACK.title} at that release. DuskClient and cosmetics need a 1.21.11 – 26.2 release.`
-        }
-        onBack={() => setStep('pick')}
-        onClose={onClose}
-        onInstall={async (versionId, instName) => {
-          onCreated(await api.installModpackVersion(DUSK_PACK.id, versionId, instName));
-        }}
-      />
     );
   }
 
@@ -457,20 +582,12 @@ function NewInstance({
               MINECRAFT VERSION
             </TT>
           </span>
-          <PxBox family="panel" height="md">
-            <input
-              className="input"
-              list="mc-versions"
-              placeholder={releases[0]?.id ?? '1.21.11'}
-              value={version}
-              onChange={(e) => setVersion(e.target.value)}
-            />
-            <datalist id="mc-versions">
-              {releases.map((v) => (
-                <option key={v.id} value={v.id} />
-              ))}
-            </datalist>
-          </PxBox>
+          <Combobox
+            value={version}
+            options={releases}
+            onChange={setVersion}
+            placeholder={releases[0]?.value ?? '1.21.11'}
+          />
         </div>
 
         <div className="modal__row">
@@ -508,8 +625,30 @@ function NewInstance({
           </div>
         )}
 
+        {loader === 'fabric' && (
+          <div className="modal__row">
+            <span className="modal__label">
+              <TT size={16} tone="dim">
+                PERFORMANCE MODS
+              </TT>
+            </span>
+            <div className="newinst__choice">
+              <Choice
+                value={perf}
+                options={[
+                  { value: 'on', label: 'ADD' },
+                  { value: 'off', label: 'NONE' },
+                ]}
+                onPick={setPerf}
+              />
+            </div>
+          </div>
+        )}
+
         <span className="meta">
-          {loader === 'fabric'
+          {loader === 'fabric' && perf === 'on'
+            ? 'Sodium, Lithium, FerriteCore, ImmediatelyFast, Entity Culling and friends, the newest builds for that version. DuskClient rides along.'
+            : loader === 'fabric'
             ? 'Pinned automatically for that version; DuskClient rides along.'
             : loader === 'neoforge'
               ? 'The newest NeoForge build for that version, installed at first launch. DuskClient is Fabric-only.'
@@ -534,9 +673,10 @@ function NewInstance({
               setBusy(true);
               setErr(null);
               try {
-                onCreated(
-                  await api.createProfile(name.trim(), version.trim(), loader),
-                );
+                const created = await api.createProfile(name.trim(), version.trim(), loader);
+                // downloads in the background; the instance is usable meanwhile
+                if (loader === 'fabric' && perf === 'on') void api.installPerformanceMods(created.id).catch(() => {});
+                onCreated(created);
               } catch (e) {
                 setErr(String(e));
                 setBusy(false);

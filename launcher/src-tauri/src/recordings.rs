@@ -41,7 +41,7 @@ fn is_mcpr(path: &Path) -> bool {
 
 /// `path` checked to be an `.mcpr` directly inside an instance's clips or
 /// replays folder; answers the canonical path.
-fn resolve(state: &AppState, path: &str) -> Result<PathBuf, String> {
+pub(crate) fn resolve(state: &AppState, path: &str) -> Result<PathBuf, String> {
     let not_found = || "That recording isn't there any more.".to_string();
     let path = std::fs::canonicalize(path).map_err(|_| not_found())?;
     let profiles_root = std::fs::canonicalize(state.data_dir.join("profiles")).map_err(|_| not_found())?;

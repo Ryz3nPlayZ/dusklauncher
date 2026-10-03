@@ -70,6 +70,11 @@ final class ReplayFilter extends ChannelInboundHandlerAdapter {
                     || g.getEvent() == ClientboundGameEventPacket.DEMO_EVENT ? null : p;
             case ClientboundPlayerChatPacket c -> new ClientboundSystemChatPacket(c.chatType().decorate(
                     c.unsignedContent() != null ? c.unsignedContent() : Component.literal(c.body().content())), false);
+            // the viewer would take damage or die with it; the HUD reads hunger from here while watching them
+            case ClientboundSetHealthPacket h -> {
+                ReplayPlayer.onHealth(h.getFood(), h.getSaturation());
+                yield null;
+            }
             case ClientboundExplodePacket e -> e.playerKnockback().isEmpty() ? p : new ClientboundExplodePacket(e.center(), e.radius(),
                     e.blockCount(), Optional.empty(), e.explosionParticle(), e.explosionSound(), e.blockParticles());
             default -> dropped(p) ? null : p;
@@ -86,7 +91,7 @@ final class ReplayFilter extends ChannelInboundHandlerAdapter {
                 || p instanceof ClientboundLoginCompressionPacket || p instanceof ClientboundHelloPacket
                 || p instanceof ClientboundCustomQueryPacket
                 || p instanceof ClientboundDeleteChatPacket || p instanceof ClientboundPlayerAbilitiesPacket
-                || p instanceof ClientboundSetHealthPacket || p instanceof ClientboundSetCameraPacket
+                || p instanceof ClientboundSetCameraPacket
                 || p instanceof ClientboundPlayerLookAtPacket || p instanceof ClientboundPlayerRotationPacket
                 || p instanceof ClientboundMoveVehiclePacket || p instanceof ClientboundOpenScreenPacket
                 || p instanceof ClientboundOpenBookPacket || p instanceof ClientboundOpenSignEditorPacket

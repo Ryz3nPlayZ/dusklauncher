@@ -69,6 +69,11 @@ pub struct Settings {
     /// across instances and machines (client_settings.rs).
     #[serde(default = "yes")]
     pub sync_client_settings: bool,
+    /// Offline play's username. Empty = locked: it only gets a value from the
+    /// redeem code that unlocks offline play (dusk::redeem_code), and then
+    /// lets PLAY launch with no Microsoft account (commands::launch_session).
+    #[serde(default)]
+    pub offline_name: String,
 }
 
 fn yes() -> bool {
@@ -116,6 +121,7 @@ impl Default for Settings {
             clock_24h: false,
             warn_on_links: true,
             sync_client_settings: true,
+            offline_name: String::new(),
         }
     }
 }

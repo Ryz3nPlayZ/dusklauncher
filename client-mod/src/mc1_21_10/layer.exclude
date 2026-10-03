@@ -34,8 +34,12 @@ java/dev/dusk/client/mixin/WeatherTickMixin.java
 java/dev/dusk/client/mixin/AnimatePacketMixin.java
 java/dev/dusk/client/mixin/DamageEventMixin.java
 java/dev/dusk/client/mixin/DamageOverlayMixin.java
+java/dev/dusk/client/mixin/DamageStateMixin.java
+java/dev/dusk/client/mixin/DamageArmorMixin.java
+java/dev/dusk/client/render/ArmorTint.java
 java/dev/dusk/client/mixin/OverlayTextureMixin.java
 java/dev/dusk/client/render/DamageVariants.java
+java/dev/dusk/client/render/DamageTintState.java
 java/dev/dusk/client/mixin/HitboxMixin.java
 java/dev/dusk/client/mixin/HitboxRenderMixin.java
 java/dev/dusk/client/mixin/StuckArrowMixin.java
@@ -61,3 +65,6 @@ java/dev/dusk/client/render/nametag/**
 # carries a stub MediaBackend instead.
 java/dev/dusk/client/media/impl/**
 java/dev/dusk/client/mixin/media/**
+# Scoreboard / boss bar / tab ping / block outline / background FPS tweaks
+# hook 1.21.11+ Gui and renderer methods.
+java/dev/dusk/client/mixin/tweaks/**

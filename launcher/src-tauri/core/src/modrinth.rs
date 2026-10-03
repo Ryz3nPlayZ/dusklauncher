@@ -362,7 +362,8 @@ pub async fn project(client: &reqwest::Client, project_id: &str) -> Result<Proje
     decode(check(resp, "project").await?, "project").await
 }
 
-/// Newest version of a project playable on this game version + loader.
+/// Newest version of a project playable on this game version + loader —
+/// the newest release, or the newest beta/alpha when there is no release.
 /// `loader` is the Modrinth loader slug (`fabric`, `forge`, ...).
 /// Pass `None` for loader-agnostic types (resource packs, shaders).
 pub async fn project_version_for(
@@ -385,7 +386,7 @@ pub async fn project_version_for_loader(
         .header(reqwest::header::USER_AGENT, USER_AGENT)
         .query(&[
             ("game_versions", format!("[\"{game_version}\"]")),
-            ("limit", "1".to_string()),
+            ("include_changelog", "false".to_string()),
         ]);
     if let Some(l) = loader {
         req = req.query(&[("loaders", format!("[\"{l}\"]"))]);
@@ -393,9 +394,21 @@ pub async fn project_version_for_loader(
     let resp = req.send().await?;
     let versions: Vec<Version> =
         decode(check(resp, "project version lookup").await?, "project version lookup").await?;
-    versions.into_iter().next().ok_or_else(|| {
+    newest_preferring_release(versions).ok_or_else(|| {
         crate::Error::Other(format!("no release for Minecraft {game_version}"))
     })
+}
+
+/// The newest release build; a beta or alpha only when the project has no
+/// release at all for that game version (then the newest of those).
+/// Modrinth lists versions newest first.
+pub fn newest_preferring_release(versions: Vec<Version>) -> Option<Version> {
+    let release = versions.iter().position(|v| v.version_type == "release");
+    let mut versions = versions;
+    match release {
+        Some(i) => Some(versions.swap_remove(i)),
+        None => versions.into_iter().next(),
+    }
 }
 
 // ── .mrpack ────────────────────────────────────────────────────────────────

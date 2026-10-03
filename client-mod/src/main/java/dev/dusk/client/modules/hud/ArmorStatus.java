@@ -77,7 +77,19 @@ public class ArmorStatus extends TextHud {
         return new Entry(new ItemStack(item), text, textColor(), ITEM + ctx.textWidth(text) + 1);
     }
 
+    /** Entries for the frame {@link #entriesFor} was built for: width, height, clamping and drawing each ask. */
+    private HudContext entriesFor;
+    private List<Entry> entriesCache;
+
     private List<Entry> entries(HudContext ctx) {
+        if (entriesFor != ctx) {
+            entriesCache = buildEntries(ctx);
+            entriesFor = ctx;
+        }
+        return entriesCache;
+    }
+
+    private List<Entry> buildEntries(HudContext ctx) {
         List<Entry> out = new ArrayList<>(9);
         if (ctx.level() == null || !ctx.editing() && ctx.player() == null) return out;
         boolean sample = ctx.editing();

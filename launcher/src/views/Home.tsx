@@ -121,7 +121,7 @@ export default function Home({
               {!live && <PixelArrow />}
               <span className="home__play-text">
                 <TT size={22} tone={live ? 'red' : 'accent'} sx={1.15}>
-                  {live ? (running ? 'STOP GAME' : 'STARTING…') : 'PLAY NOW'}
+                  {live ? (running ? 'STOP GAME' : live.state === 'stopping' ? 'STOPPING…' : 'STARTING…') : 'PLAY NOW'}
                 </TT>
                 <span className="home__play-sub">
                   {live

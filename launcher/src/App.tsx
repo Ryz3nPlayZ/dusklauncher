@@ -6,7 +6,7 @@ import UpdateButton from './components/UpdateButton';
 import type { Pose } from './components/PlayerRender';
 import {
   api,
-  DUSK_PACK,
+  DUSK_PROFILE,
   isTauri,
   listen,
   type Account,
@@ -56,7 +56,9 @@ export default function App() {
   const syncGame = useCallback(async () => {
     try {
       const live = await api.gameState();
-      setGame((prev) => live ?? (prev?.state === 'starting' ? prev : null));
+      setGame((prev) =>
+        live ? (prev?.state === 'stopping' ? prev : live) : prev?.state === 'starting' ? prev : null,
+      );
       if (live) setProgress(null);
     } catch (e) {
       console.warn('game state query failed:', e);
@@ -78,37 +80,63 @@ export default function App() {
     void api.gameActivity().then(setActivity).catch(() => {});
   }, [refreshProfiles, refreshAccount, syncGame]);
 
-  // first run: seed the same instance NEW INSTANCE → DUSK PROFILE makes —
-  // the pack's newest release build for the default game version — so the
-  // launcher never opens empty. The bundled Dusk Essentials pack is only the
-  // offline fallback. One attempt per install.
+  /* the same instance NEW INSTANCE → a version card makes: Fabric plus Dusk
+     Essentials resolved for the default game version. The bundled Dusk
+     Essentials pack is only the offline fallback. */
+  const seedDuskInstance = useCallback(async () => {
+    const seedDusk = async () => {
+      const v = DUSK_PROFILE.defaultGameVersion;
+      const p = await api.createProfile(DUSK_PROFILE.instanceName(v), v, 'fabric');
+      try {
+        await api.installDuskEssentials(p.id);
+      } catch (e) {
+        // offline: drop the bare instance so the bundled pack takes its place
+        await api.deleteProfile(p.id).catch(() => {});
+        throw e;
+      }
+      return p;
+    };
+    try {
+      const p = await seedDusk().catch((e) => {
+        console.warn('dusk profile seed failed, using the bundled pack:', e);
+        return api.installBundledPack('dusk-essentials');
+      });
+      setProfiles(await api.listProfiles());
+      const s = await api.getSettings();
+      if (!s.selectedProfileId) void saveSettings({ ...s, selectedProfileId: p.id });
+    } catch (e) {
+      console.warn('default pack install failed:', e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // first run: seed the Dusk instance so the launcher never opens empty.
+  // One attempt per install.
   useEffect(() => {
     void (async () => {
       const list = await api.listProfiles();
       if (list.length > 0 || localStorage.getItem('dusk.defaultPackSeeded')) return;
       localStorage.setItem('dusk.defaultPackSeeded', '1');
-      const seedDusk = async () => {
-        const versions = await api.listProjectVersions(DUSK_PACK.id);
-        const v = versions.find(
-          (x) => x.versionType === 'release' && x.gameVersions.includes(DUSK_PACK.defaultGameVersion),
-        );
-        if (!v) throw new Error(`no ${DUSK_PACK.title} release for ${DUSK_PACK.defaultGameVersion}`);
-        return api.installModpackVersion(DUSK_PACK.id, v.id, DUSK_PACK.instanceName);
-      };
-      try {
-        const p = await seedDusk().catch((e) => {
-          console.warn('dusk profile seed failed, using the bundled pack:', e);
-          return api.installBundledPack('dusk-essentials');
-        });
-        setProfiles(await api.listProfiles());
-        const s = await api.getSettings();
-        if (!s.selectedProfileId) void saveSettings({ ...s, selectedProfileId: p.id });
-      } catch (e) {
-        console.warn('default pack install failed:', e);
-      }
+      await seedDuskInstance();
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [seedDuskInstance]);
+
+  /* the sign-in gate: up while nobody is signed in, until ADD ACCOUNT LATER;
+     PLAY without an account brings it back */
+  const [gateDismissed, setGateDismissed] = useState(false);
+  const canPlay = !!account?.authenticated || !!account?.offline;
+
+  /* redeeming the offline code: the account becomes the offline name, and an
+     empty launcher gets its Dusk instance to play */
+  const onUnlocked = useCallback(
+    async (what: string) => {
+      if (what !== 'offline') return;
+      await refreshAccount();
+      setSettings(await api.getSettings());
+      if ((await api.listProfiles()).length === 0) await seedDuskInstance();
+    },
+    [refreshAccount, seedDuskInstance],
+  );
 
   // theme drives both the accent family and which scene plays behind
   useEffect(() => {
@@ -153,16 +181,21 @@ export default function App() {
     [settings, saveSettings],
   );
 
-  /* `server`: straight onto that multiplayer server (a friend's JOIN) */
+  /* `server`: straight onto that multiplayer server (a friend's JOIN);
+     `replay`: straight into that clip or replay (WATCH on the media page) */
   const launch = useCallback(
-    async (id: string, server?: string) => {
+    async (id: string, server?: string, replay?: string) => {
+      if (!canPlay) {
+        setGateDismissed(false);
+        return;
+      }
       setError(null);
       setGame({ profileId: id, state: 'starting', code: null });
       setProgress({ profileId: id, stage: 'starting', done: 0, total: 0, doneBytes: 0, totalBytes: 0 });
       try {
         // resolves once the process has spawned — from here on the game is
         // running whatever order the events landed in
-        await (server ? api.joinServer(id, server) : api.launch(id));
+        await (replay ? api.watchRecording(id, replay) : server ? api.joinServer(id, server) : api.launch(id));
         setProgress(null);
         setGame({ profileId: id, state: 'running', code: null });
         void refreshProfiles();
@@ -174,7 +207,7 @@ export default function App() {
         void syncGame();
       }
     },
-    [refreshProfiles, syncGame],
+    [refreshProfiles, syncGame, canPlay],
   );
 
   /* JOIN from the social pane: the selected instance when it runs the
@@ -199,9 +232,11 @@ export default function App() {
   );
 
   const stop = useCallback(async () => {
+    setGame((g) => (g?.state === 'running' ? { ...g, state: 'stopping' } : g));
     try {
       await api.stopGame();
     } catch (e) {
+      setGame((g) => (g?.state === 'stopping' ? { ...g, state: 'running' } : g));
       setError(String(e));
     }
     // the supervisor's `exited` event clears the button; this covers a kill
@@ -254,6 +289,10 @@ export default function App() {
             onLaunch={launch}
             onSelect={selectProfile}
             onStop={() => void stop()}
+            onWatch={(id, path) => {
+              setRoute('home');
+              void launch(id, undefined, path);
+            }}
             clock24h={settings?.clock24h ?? false}
           />
         )}
@@ -270,10 +309,19 @@ export default function App() {
           <Store account={account} skin={skin} pose={pose} onPose={setPose} onWardrobe={() => setRoute('cosmetics')} />
         )}
         {route === 'profile' && <ProfileView account={account} skin={skin} onChange={refreshAccount} />}
-        {route === 'settings' && settings && <SettingsView settings={settings} onSave={saveSettings} />}
+        {route === 'settings' && settings && (
+          <SettingsView
+            settings={settings}
+            onSave={saveSettings}
+            offline={!!account?.offline}
+            onUnlocked={(w) => void onUnlocked(w)}
+          />
+        )}
       </main>
 
-      {accountKnown && !account?.authenticated && <SignInGate onDone={refreshAccount} />}
+      {accountKnown && !canPlay && !gateDismissed && (
+        <SignInGate onDone={refreshAccount} onLater={() => setGateDismissed(true)} />
+      )}
 
       <div className="status-bar">
         <UpdateButton status={updater.status} onInstall={() => void updater.install()} onRestart={() => void updater.restart()} />
@@ -281,7 +329,7 @@ export default function App() {
           // a different account starts from a clean pane — no stale friends or chat
           key={account?.uuid ?? 'signed-out'}
           account={account}
-          gameRunning={game?.state === 'running' || game?.state === 'starting'}
+          gameRunning={!!game && game.state !== 'exited'}
           playing={playing}
           activity={activity}
           prefs={{

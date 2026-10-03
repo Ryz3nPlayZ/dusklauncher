@@ -1,0 +1,11 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "duskclient:gui/dusk_mark.png",
+      "height": 8,
+      "ascent": 7,
+      "chars": [""]
+    }
+  ]
+}

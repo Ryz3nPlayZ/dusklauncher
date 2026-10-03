@@ -33,7 +33,9 @@ back sessions the way ReplayMod does:
   and thumb), the capture point (every clientbound packet as the connection
   reads it, plus synthesized packets for the recording player's own
   entity), and playback through a serverless connection fed on the client
-  thread, with backward seeks replaying from the start. Opening Dusk
+  thread, with backward seeks replaying from the start, and video export
+  (a fixed-step frame clock, each frame read back and piped to ffmpeg,
+  which the player installs themselves). Opening Dusk
   files in ReplayMod itself is untested. No source files were copied;
   the rolling clip buffer, the replay filter and all UI are Dusk's own.
 

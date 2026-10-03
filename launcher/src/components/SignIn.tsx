@@ -1,13 +1,15 @@
 /**
  * Microsoft sign-in, shared by the launch gate and the Profile page.
  *
- * Default flow opens an in-app Microsoft sign-in window — pick the account
- * there and you come straight back, nothing to type. If that window can't
- * run, the user is offered the choice (window again vs the official title's
- * device-code flow) rather than a silent switch; the code panel then shows
- * the prefilled verification link (`?otc=`) plus manual fallbacks.
+ * The gate leads with the device-code flow: it starts on its own, the
+ * browser opens on Microsoft's page with the code already filled in, and the
+ * code sits big on screen in case it has to be typed. "Or sign in here"
+ * switches to the in-app Microsoft window instead; "add account later"
+ * closes the gate (PLAY brings it back while nobody is signed in). If the
+ * in-app window can't run, the user is offered the way forward rather than a
+ * silent switch.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { PxBox, PxButton, TT } from './px/Px';
 import { api, isTauri, listen } from '../lib/api';
@@ -30,6 +32,10 @@ export function useLogin(onDone: () => Promise<void> | void) {
     return () => off?.();
   }, []);
 
+  /* the login in flight, so a switch can cancel it and wait for the backend
+     to let go of its sign-in lock before starting the next one */
+  const pending = useRef<Promise<unknown> | null>(null);
+
   // Shared attempt runner. On failure `auth` is kept — a trailing
   // `webviewFailed` event is what tells the UI to offer the code choice.
   const run = useCallback(
@@ -37,24 +43,44 @@ export function useLogin(onDone: () => Promise<void> | void) {
       setBusy(true);
       setErr(null);
       setAuth(null);
+      const attempt = invokeLogin();
+      pending.current = attempt;
       try {
-        await invokeLogin();
+        await attempt;
         await onDone();
       } catch (e) {
-        setErr(String(e));
+        if (pending.current === attempt) pending.current = null;
+        // a cancel is the user's choice, not a failure
+        if (!String(e).includes('sign-in cancelled')) setErr(String(e));
+        else setAuth(null);
         setBusy(false);
         return;
       }
+      if (pending.current === attempt) pending.current = null;
       setBusy(false);
       setAuth(null);
     },
     [onDone],
   );
 
-  const start = useCallback(() => run(api.login), [run]);
-  const startWithCode = useCallback(() => run(api.loginWithCode), [run]);
+  /** stop the login in flight (if any) and wait until it has unwound */
+  const cancel = useCallback(async () => {
+    const p = pending.current;
+    if (!p) return;
+    await api.cancelLogin().catch(() => {});
+    await p.catch(() => {});
+  }, []);
 
-  return { busy, err, auth, start, startWithCode, dismiss: () => setErr(null) };
+  const start = useCallback(async () => {
+    await cancel();
+    await run(api.login);
+  }, [cancel, run]);
+  const startWithCode = useCallback(async () => {
+    await cancel();
+    await run(api.loginWithCode);
+  }, [cancel, run]);
+
+  return { busy, err, auth, start, startWithCode, cancel, dismiss: () => setErr(null) };
 }
 
 /** The in-progress panel: what to do, the code, and the two fallbacks. */
@@ -109,11 +135,30 @@ export function DevicePanel({ auth }: { auth: AuthEvent | null }) {
 }
 
 /**
- * The launch gate: nothing else is reachable until a Microsoft account is
- * signed in. Only in the desktop app — the browser preview has no auth.
+ * The launch gate: shown while no Microsoft account is signed in (and
+ * offline play isn't unlocked). Only in the desktop app — the browser
+ * preview has no auth.
  */
-export default function SignInGate({ onDone }: { onDone: () => Promise<void> | void }) {
-  const { busy, err, auth, start, startWithCode } = useLogin(onDone);
+export default function SignInGate({
+  onDone,
+  onLater,
+}: {
+  onDone: () => Promise<void> | void;
+  /** ADD ACCOUNT LATER: close the gate without signing in */
+  onLater: () => void;
+}) {
+  const { busy, err, auth, start, startWithCode, cancel } = useLogin(onDone);
+  /* which flow the user is on: the code (default) or the in-app window */
+  const [mode, setMode] = useState<'code' | 'window'>('code');
+
+  /* the code flow starts by itself — once, even under StrictMode's double
+     mount (a second begin would just hit "already in progress") */
+  const started = useRef(false);
+  useEffect(() => {
+    if (!isTauri || started.current) return;
+    started.current = true;
+    void startWithCode();
+  }, [startWithCode]);
 
   /** When the Azure flow is rejected (app ID not allow-listed), Settings is
    * unreachable behind this gate — the switch has to be offered right here. */
@@ -127,6 +172,15 @@ export default function SignInGate({ onDone }: { onDone: () => Promise<void> | v
     await start();
   };
 
+  const useWindow = () => {
+    setMode('window');
+    void start();
+  };
+  const useCode = () => {
+    setMode('code');
+    void startWithCode();
+  };
+
   if (!isTauri) return null;
 
   return (
@@ -135,16 +189,21 @@ export default function SignInGate({ onDone }: { onDone: () => Promise<void> | v
         <TT size={22}>SIGN IN TO PLAY</TT>
         <span className="meta">
           Dusk launches your own copy of Minecraft: Java Edition, so it needs the Microsoft account
-          that owns it. Sign-in happens in your browser and comes straight back here.
+          that owns it.
         </span>
 
         {busy ? (
           <DevicePanel auth={auth} />
         ) : (
           <div className="modal__row">
-            <PxButton family="blue" height="md" className="signin__cta" onClick={() => void start()}>
+            <PxButton
+              family="blue"
+              height="md"
+              className="signin__cta"
+              onClick={mode === 'code' ? useCode : useWindow}
+            >
               <TT size={20} tone="blue">
-                SIGN IN WITH MICROSOFT
+                {mode === 'code' ? 'GET A SIGN-IN CODE' : 'OPEN THE SIGN-IN WINDOW'}
               </TT>
             </PxButton>
           </div>
@@ -157,12 +216,12 @@ export default function SignInGate({ onDone }: { onDone: () => Promise<void> | v
              * instead of silently switching flows on them. */}
             {auth?.state === 'webviewFailed' && (
               <div className="modal__row">
-                <PxButton family="blue" height="md" onClick={() => void start()}>
+                <PxButton family="blue" height="md" onClick={useWindow}>
                   <TT size={14} tone="blue">
                     TRY THE SIGN-IN WINDOW AGAIN
                   </TT>
                 </PxButton>
-                <PxButton family="grey" height="md" onClick={() => void startWithCode()}>
+                <PxButton family="grey" height="md" onClick={useCode}>
                   <TT size={14}>SIGN IN WITH A CODE</TT>
                 </PxButton>
               </div>
@@ -177,6 +236,28 @@ export default function SignInGate({ onDone }: { onDone: () => Promise<void> | v
             )}
           </PxBox>
         )}
+
+        <div className="signin__links">
+          {mode === 'code' ? (
+            <button type="button" className="signin__link" onClick={useWindow}>
+              or sign in here instead
+            </button>
+          ) : (
+            <button type="button" className="signin__link" onClick={useCode}>
+              or use a code in your browser
+            </button>
+          )}
+          <button
+            type="button"
+            className="signin__link signin__link--quiet"
+            onClick={() => {
+              void cancel();
+              onLater();
+            }}
+          >
+            add account later
+          </button>
+        </div>
       </PxBox>
     </div>
   );

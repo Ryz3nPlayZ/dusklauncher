@@ -207,7 +207,7 @@ export default function InstanceEditor({
             onClick={onStop}
           >
             <TT size={16} tone="red">
-              {live.state === 'running' ? 'STOP GAME' : 'STARTING…'}
+              {live.state === 'running' ? 'STOP GAME' : live.state === 'stopping' ? 'STOPPING…' : 'STARTING…'}
             </TT>
           </PxButton>
         ) : (
@@ -962,7 +962,9 @@ function LogTab({
   const status = game
     ? game.state === 'running'
       ? 'RUNNING'
-      : 'STARTING…'
+      : game.state === 'stopping'
+        ? 'STOPPING…'
+        : 'STARTING…'
     : lines.length
       ? 'LAST RUN'
       : 'NOT RUNNING';

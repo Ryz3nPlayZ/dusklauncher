@@ -20,11 +20,13 @@ import { fileURLToPath } from 'node:url';
 const MC = '1.21.11';
 const LOADER = 'fabric';
 const PACK_NAME = 'Dusk Essentials';
-const PACK_VERSION = '1.0.0';
+const PACK_VERSION = '2.0.0';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** the lineup — see docs/MODPACK.md for licenses + rationale */
+/** the lineup — see docs/MODPACK.md for licenses + rationale. Keep in step
+ *  with DUSK_ESSENTIALS in launcher/src-tauri/src/mods.rs, which installs the
+ *  same set live into every Dusk profile; this file is only the offline copy. */
 const MODS = [
   // performance core
   'fabric-api',
@@ -36,22 +38,15 @@ const MODS = [
   'ferrite-core',
   'immediatelyfast',
   'entityculling',
-  'dynamic-fps',
-  'krypton',
+  'moreculling',
   'badoptimizations',
-  // QoL / utilities (HUD basics — keystrokes, CPS, FPS, armor, combo,
-  // toggle-sprint — come from the bundled DuskClient, not the pack)
+  'krypton',
+  // QoL that DuskClient doesn't cover (zoom, freelook, fullbright, ping,
+  // hunger, container previews, crosshair and background FPS are modules)
   'modmenu',
-  'zoomify',
-  'freelook',
-  'gamma-utils',
   'betterf3',
   'chat-heads',
-  'shulkerboxtooltip',
   'held-item-info',
-  'appleskin',
-  'better-ping-display-fabric',
-  'dynamiccrosshair',
 ];
 
 const API = 'https://api.modrinth.com/v2';
@@ -83,13 +78,14 @@ async function project(idOrSlug) {
   return projectCache.get(idOrSlug);
 }
 
-/** newest fabric build of `slug` for MC, or null when it doesn't have one */
+/** newest fabric *release* of `slug` for MC — a beta/alpha only when there is
+ *  no release at all (the launcher's rule too) — or null when it has none */
 async function latestVersion(slug) {
   if (versionCache.has(slug)) return versionCache.get(slug);
   const gv = encodeURIComponent(JSON.stringify([MC]));
   const ld = encodeURIComponent(JSON.stringify([LOADER]));
   const versions = await getJson(`${API}/project/${slug}/version?game_versions=${gv}&loaders=${ld}`);
-  const v = versions[0] ?? null;
+  const v = versions.find((x) => x.version_type === 'release') ?? versions[0] ?? null;
   versionCache.set(slug, v);
   return v;
 }

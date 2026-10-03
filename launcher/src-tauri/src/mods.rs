@@ -733,6 +733,182 @@ async fn install_required_deps(
     }
 }
 
+/// Fabric API on Modrinth. DuskClient needs it, and so do most Fabric mods.
+const FABRIC_API: (&str, &str) = ("P7dR8mSH", "fabric-api");
+
+/// The performance set the Dusk instance ships, as (Modrinth project, mod id):
+/// renderer, game logic, memory, GUI batching, entity culling, misc
+/// rendering fast paths and networking.
+const PERFORMANCE_MODS: &[(&str, &str)] = &[
+    ("sodium", "sodium"),
+    ("lithium", "lithium"),
+    ("ferrite-core", "ferritecore"),
+    ("immediatelyfast", "immediatelyfast"),
+    ("entityculling", "entityculling"),
+    ("badoptimizations", "badoptimizations"),
+    ("krypton", "krypton"),
+];
+
+/// Mod ids (and what they `provides`) of every enabled Fabric jar in `dir`,
+/// read from each jar's fabric.mod.json, so a renamed jar still counts.
+fn fabric_mod_ids(dir: &std::path::Path) -> std::collections::HashSet<String> {
+    let mut ids = std::collections::HashSet::new();
+    let Ok(entries) = std::fs::read_dir(dir) else { return ids };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("jar") {
+            continue;
+        }
+        let Some(raw) = std::fs::File::open(&path)
+            .ok()
+            .and_then(|f| zip::ZipArchive::new(f).ok())
+            .and_then(|mut zip| read_zip_entry(&mut zip, "fabric.mod.json", 256 * 1024))
+        else {
+            continue;
+        };
+        let Ok(meta) = serde_json::from_slice::<serde_json::Value>(&raw) else { continue };
+        if let Some(id) = meta.get("id").and_then(|v| v.as_str()) {
+            ids.insert(id.to_string());
+        }
+        for id in meta.get("provides").and_then(|v| v.as_array()).into_iter().flatten() {
+            if let Some(id) = id.as_str() {
+                ids.insert(id.to_string());
+            }
+        }
+    }
+    ids
+}
+
+/// Install each `(project, mod id)` whose mod isn't already in the profile's
+/// mods/, as the newest version for the instance. Ones Modrinth has no build
+/// of for this version are skipped. Returns how many were added.
+async fn install_missing(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    profile: &Profile,
+    dir: &std::path::Path,
+    wanted: &[(&str, &str)],
+) -> usize {
+    let held = fabric_mod_ids(dir);
+    let mut added = 0;
+    for (project, id) in wanted {
+        if held.contains(*id) {
+            continue;
+        }
+        let Ok(ver) =
+            mr::project_version_for_loader(&state.client, project, &profile.game_version, Some("fabric")).await
+        else {
+            continue;
+        };
+        if install_version_file(app.clone(), state.clone(), profile.id.clone(), "mod", dir.to_path_buf(), ver)
+            .await
+            .is_ok()
+        {
+            added += 1;
+        }
+    }
+    added
+}
+
+/// Make sure a Fabric profile has Fabric API before launch. Returns whether
+/// it's there afterwards: offline with no copy, it isn't, and the caller
+/// leaves DuskClient out rather than have the loader refuse to start.
+pub async fn ensure_fabric_api(app: &AppHandle, state: &State<'_, AppState>, profile: &Profile, dir: &std::path::Path) -> bool {
+    if fabric_mod_ids(dir).contains(FABRIC_API.1) {
+        return true;
+    }
+    install_missing(app, state, profile, dir, &[FABRIC_API]).await;
+    fabric_mod_ids(dir).contains(FABRIC_API.1)
+}
+
+/// Dusk Essentials — what every Dusk profile is built from (docs/MODPACK.md):
+/// the performance core plus a few utilities DuskClient doesn't cover.
+/// Zoom, freelook, fullbright, ping, crosshair, food and container previews
+/// and the background frame cap are DuskClient modules, so their third-party
+/// equivalents are left out to avoid doubling up.
+const DUSK_ESSENTIALS: &[(&str, &str)] = &[
+    FABRIC_API,
+    ("sodium", "sodium"),
+    ("sodium-extra", "sodium-extra"),
+    ("reeses-sodium-options", "reeses-sodium-options"),
+    ("iris", "iris"),
+    ("lithium", "lithium"),
+    ("ferrite-core", "ferritecore"),
+    ("immediatelyfast", "immediatelyfast"),
+    ("entityculling", "entityculling"),
+    ("moreculling", "moreculling"),
+    ("badoptimizations", "badoptimizations"),
+    ("krypton", "krypton"),
+    ("modmenu", "modmenu"),
+    ("betterf3", "betterf3"),
+    ("chat-heads", "chat_heads"),
+    ("held-item-info", "held-item-info"),
+];
+
+/// Fill a Fabric profile with Dusk Essentials for its game version: each
+/// mod's newest release (or its newest build when it has no release), plus
+/// their required libraries. Mods without a build for the version are
+/// skipped. Returns how many files were added.
+#[tauri::command]
+pub async fn install_dusk_essentials(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    profile_id: String,
+) -> Result<usize, String> {
+    let (profile, dir) = profile_and_mods(&state, &profile_id)?;
+    if profile.loader != fasterlauncher_core::profile::Loader::Fabric {
+        return Err("Dusk Essentials is for Fabric instances.".into());
+    }
+    let held = fabric_mod_ids(&dir);
+    let mut added = 0;
+    let mut deps = Vec::new();
+    for (project, id) in DUSK_ESSENTIALS {
+        if held.contains(*id) {
+            continue;
+        }
+        let Ok(ver) =
+            mr::project_version_for_loader(&state.client, project, &profile.game_version, Some("fabric")).await
+        else {
+            continue;
+        };
+        let next = ver.dependencies.clone();
+        if install_version_file(app.clone(), state.clone(), profile.id.clone(), "mod", dir.clone(), ver)
+            .await
+            .is_ok()
+        {
+            added += 1;
+            deps.extend(next);
+        }
+    }
+    // nothing resolved on a fresh instance: Modrinth is unreachable, and the
+    // first-run seed falls back to the bundled pack on this error
+    if added == 0 && held.is_empty() {
+        return Err("Couldn't reach Modrinth for Dusk Essentials.".into());
+    }
+    install_required_deps(&app, &state, &profile, &dir, deps).await;
+    if let Some(root) = dir.parent() {
+        crate::modpacks::seed_dusk_defaults(root);
+    }
+    Ok(added)
+}
+
+/// Add the performance set (plus Fabric API) to a Fabric profile, skipping
+/// anything already installed. Returns how many mods were added.
+#[tauri::command]
+pub async fn install_performance_mods(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    profile_id: String,
+) -> Result<usize, String> {
+    let (profile, dir) = profile_and_mods(&state, &profile_id)?;
+    if profile.loader != fasterlauncher_core::profile::Loader::Fabric {
+        return Err("Performance mods are for Fabric instances.".into());
+    }
+    let mut wanted = vec![FABRIC_API];
+    wanted.extend_from_slice(PERFORMANCE_MODS);
+    Ok(install_missing(&app, &state, &profile, &dir, &wanted).await)
+}
+
 /// Download a version's primary file into `dir` and register it.
 async fn install_version_file(
     app: AppHandle,

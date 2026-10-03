@@ -10,8 +10,8 @@ import { fileSize, stamp } from '../lib/time';
    Every instance's screenshots, clips and replays, newest first: the
    instances layout again, one tile each. A screenshot's VIEW opens it full
    size (← / → step through), the star keeps it under FAVORITES, SEND drops
-   it into a friend's chat. Clips and replays are watched in game (MEDIA on
-   the title screen); here they're listed, found in the folder and binned.
+   it into a friend's chat. A clip or replay's WATCH launches the instance
+   that recorded it straight into the replay viewer — no menus on the way.
    The red square always moves the file to the OS trash. */
 
 const FILTERS = ['SCREENSHOTS', 'FAVORITES', 'CLIPS', 'REPLAYS'] as const;
@@ -30,7 +30,18 @@ function length(ms: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
 
-export default function Screenshots({ clock24h, onBack }: { clock24h: boolean; onBack: () => void }) {
+export default function Screenshots({
+  clock24h,
+  gameBusy,
+  onWatch,
+  onBack,
+}: {
+  clock24h: boolean;
+  /** a game is already up (one at a time) */
+  gameBusy: boolean;
+  onWatch: (profileId: string, path: string) => void;
+  onBack: () => void;
+}) {
   const [filter, setFilter] = useState<Filter>('SCREENSHOTS');
   const [shots, setShots] = useState<Screenshot[] | null>(null);
   const [recordings, setRecordings] = useState<Recording[] | null>(null);
@@ -126,13 +137,15 @@ export default function Screenshots({ clock24h, onBack }: { clock24h: boolean; o
   return (
     <div className="page">
       <div className="page__head">
+        {/* the title leads; BACK sits on the right, beside any CTA (as in the
+           instance editor and project pages) */}
+        <h1 className="page__title">Media</h1>
         <PxButton family="red" height="md" className="browse__back" onClick={onBack}>
           <PixelGlyph glyph="left" size={22} color="var(--r-co)" />
           <TT size={20} tone="red">
             BACK
           </TT>
         </PxButton>
-        <h1 className="page__title">Media</h1>
       </div>
 
       <div className="win">
@@ -183,16 +196,28 @@ export default function Screenshots({ clock24h, onBack }: { clock24h: boolean; o
                     </span>
                     <div className="card__row">
                       <PxButton
-                        family="grey"
+                        family="install"
                         height="fill"
                         className="card__play"
+                        disabled={!isTauri || gameBusy}
+                        title={
+                          gameBusy
+                            ? 'Close the game first'
+                            : `Opens ${r.profileName} straight into this ${r.kind}`
+                        }
+                        onClick={() => onWatch(r.profileId, r.path)}
+                      >
+                        <TT size={16}>WATCH</TT>
+                      </PxButton>
+                      <PxButton
+                        family="grey"
+                        height="fill"
+                        className="card__gear"
                         disabled={!isTauri}
-                        title="Watch it in game from MEDIA on the title screen (1.21.11 and newer)"
+                        title="Show in folder"
                         onClick={() => revealRecording(r)}
                       >
-                        <TT size={16} tone="accent">
-                          SHOW IN FOLDER
-                        </TT>
+                        <PixelGlyph glyph="box" size={16} color="var(--text-2)" />
                       </PxButton>
                       <PxButton
                         family="red"

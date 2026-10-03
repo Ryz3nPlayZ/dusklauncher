@@ -45,6 +45,42 @@ const CHAT_POLL_MS = 3_500;
 const MESSAGE_MAX = 1000;
 /** a chat gap longer than this gets a timestamp line */
 const STAMP_GAP_S = 10 * 60;
+/** one sender's lines closer together than this read as one run */
+const RUN_GAP_S = 5 * 60;
+/** gifts sent back to back fold into one card */
+const GIFT_RUN_GAP_S = 10 * 60;
+/** gift names a folded card lists before "+N more" */
+const GIFT_PREVIEW = 6;
+
+/** a chat line: one message, or a run of gifts folded into one card */
+type ChatRow = {
+  key: number;
+  messages: ChatMessage[];
+  mine: boolean;
+  /** continues the previous line's run — drawn tight under it */
+  cont: boolean;
+  /** a divider above it, when the conversation picks up after a gap */
+  stamp: number | null;
+};
+
+function chatRows(messages: ChatMessage[], theirUuid: string): ChatRow[] {
+  const rows: ChatRow[] = [];
+  let prev: ChatMessage | undefined;
+  for (const m of messages) {
+    const mine = m.fromUuid !== theirUuid;
+    const last = rows[rows.length - 1];
+    const gap = prev ? m.sentAt - prev.sentAt : Infinity;
+    const sameSender = !!prev && prev.fromUuid === m.fromUuid;
+    if (m.kind === 'gift' && last && sameSender && prev?.kind === 'gift' && gap <= GIFT_RUN_GAP_S) {
+      last.messages.push(m);
+    } else {
+      const stamp = gap > STAMP_GAP_S ? m.sentAt : null;
+      rows.push({ key: m.id, messages: [m], mine, cont: sameSender && stamp == null && gap <= RUN_GAP_S, stamp });
+    }
+    prev = m;
+  }
+  return rows;
+}
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -900,6 +936,9 @@ function ChatView({
   // follow new lines only when already at the bottom — never yank someone
   // who scrolled up to read back
   const pinned = useRef(true);
+  // messages landed while scrolled up — offer a jump back down
+  const [missed, setMissed] = useState(0);
+  const seenCount = useRef(0);
   const onSeenRef = useRef(onSeen);
   onSeenRef.current = onSeen;
 
@@ -920,6 +959,8 @@ function ChatView({
     let live = true;
     afterId.current = 0;
     pinned.current = true;
+    seenCount.current = 0;
+    setMissed(0);
     setMessages(null);
     const poll = async () => {
       try {
@@ -945,8 +986,22 @@ function ChatView({
 
   useEffect(() => {
     const el = listRef.current;
-    if (el && pinned.current) el.scrollTo({ top: el.scrollHeight });
+    const count = messages?.length ?? 0;
+    if (el && pinned.current) {
+      el.scrollTo({ top: el.scrollHeight });
+      setMissed(0);
+    } else if (count > seenCount.current) {
+      setMissed((n) => n + count - seenCount.current);
+    }
+    seenCount.current = count;
   }, [messages]);
+
+  const jumpDown = () => {
+    const el = listRef.current;
+    pinned.current = true;
+    setMissed(0);
+    el?.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  };
 
   const send = (e?: FormEvent) => {
     e?.preventDefault();
@@ -1017,46 +1072,66 @@ function ChatView({
           )}
         </PersonRow>
 
-        <div
-          className="social__chat scroll"
-          ref={listRef}
-          onScroll={(e) => {
-            const el = e.currentTarget;
-            pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-          }}
-          aria-live="polite"
-        >
-          {messages === null ? (
-            <span className="meta social__chat-empty">Loading…</span>
-          ) : messages.length === 0 ? (
-            <span className="meta social__chat-empty">
-              Say hello — this is the start of your conversation with {name}.
-            </span>
-          ) : (
-            messages.map((m, i) => {
-              const prev = messages[i - 1];
-              const showStamp = !prev || m.sentAt - prev.sentAt > STAMP_GAP_S;
-              const mine = m.fromUuid !== uuid;
-              return (
-                <div key={m.id} className={`social__line ${mine ? 'social__line--mine' : ''}`}>
-                  {showStamp && <span className="meta social__stamp">{timeStamp(m.sentAt * 1000, clock24h)}</span>}
-                  <PxBox
-                    family={mine ? 'soft' : 'panel'}
-                    className={`social__bubble social__bubble--${m.kind ?? 'text'}`}
-                    title={timeStamp(m.sentAt * 1000, clock24h)}
+        <div className="social__chat-wrap">
+          <div
+            className="social__chat scroll"
+            ref={listRef}
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+              if (pinned.current) setMissed(0);
+            }}
+            aria-live="polite"
+          >
+            {messages === null ? (
+              <span className="meta social__chat-empty">Loading…</span>
+            ) : messages.length === 0 ? (
+              <span className="meta social__chat-empty">
+                Say hello — this is the start of your conversation with {name}.
+              </span>
+            ) : (
+              chatRows(messages, uuid).map((row) => {
+                const m = row.messages[0];
+                const lastAt = row.messages[row.messages.length - 1].sentAt;
+                return (
+                  <div
+                    key={row.key}
+                    className={`social__line${row.mine ? ' social__line--mine' : ''}${row.cont ? ' social__line--cont' : ''}`}
                   >
-                    <MessageBody
-                      m={m}
-                      mine={mine}
-                      name={name}
-                      gameRunning={gameRunning}
-                      onJoin={onJoin}
-                      onLink={onLink}
-                    />
-                  </PxBox>
-                </div>
-              );
-            })
+                    {row.stamp != null && (
+                      <div className="social__stamp" role="separator">
+                        <span className="meta">{timeStamp(row.stamp * 1000, clock24h)}</span>
+                      </div>
+                    )}
+                    <PxBox
+                      family={row.mine ? 'soft' : 'panel'}
+                      className={`social__bubble social__bubble--${m.kind ?? 'text'}`}
+                      title={timeStamp(lastAt * 1000, clock24h)}
+                    >
+                      {row.messages.length > 1 ? (
+                        <GiftRun gifts={row.messages} mine={row.mine} name={name} />
+                      ) : (
+                        <MessageBody
+                          m={m}
+                          mine={row.mine}
+                          name={name}
+                          gameRunning={gameRunning}
+                          onJoin={onJoin}
+                          onLink={onLink}
+                        />
+                      )}
+                    </PxBox>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          {missed > 0 && (
+            <PxButton family="accent" height="sm" className="social__jump" onClick={jumpDown}>
+              <TT size={14} tone="accent">
+                {missed === 1 ? '1 NEW MESSAGE ↓' : `${missed} NEW MESSAGES ↓`}
+              </TT>
+            </PxButton>
           )}
         </div>
 
@@ -1136,19 +1211,45 @@ function MessageBody({
   }
   if (m.kind === 'gift') {
     return (
-      <div className="social__card">
+      <div className="social__card social__card--gift">
         <TT size={14} tone="dim">
-          {mine ? 'YOU SENT A GIFT' : 'GIFT'}
+          {mine ? `YOU GIFTED ${name.toUpperCase()}` : `${name.toUpperCase()} GIFTED YOU`}
         </TT>
         <span className="social__text social__card-title">{meta.name ?? 'A cosmetic'}</span>
-        <span className="meta">
-          {mine ? `It's in ${name}'s wardrobe now.` : `It's in your wardrobe — equip it under COSMETICS.`}
-        </span>
+        {!mine && <span className="meta">Equip it under COSMETICS.</span>}
       </div>
     );
   }
   if (m.kind === 'image' && meta.image) return <ChatImage id={meta.image} />;
   return <LinkText text={m.body} onLink={onLink} />;
+}
+
+/** gifts sent back to back, as one card listing what was sent */
+function GiftRun({ gifts, mine, name }: { gifts: ChatMessage[]; mine: boolean; name: string }) {
+  const [open, setOpen] = useState(false);
+  const names = gifts.map((g) => g.meta?.name ?? 'A cosmetic');
+  const shown = open ? names : names.slice(0, GIFT_PREVIEW);
+  const more = names.length - shown.length;
+  return (
+    <div className="social__card social__card--gift">
+      <TT size={14} tone="dim">
+        {mine ? `YOU GIFTED ${name.toUpperCase()} ${gifts.length} ITEMS` : `${name.toUpperCase()} GIFTED YOU ${gifts.length} ITEMS`}
+      </TT>
+      <ul className="social__gift-names">
+        {shown.map((n, i) => (
+          <li key={gifts[i].id} className="social__text">
+            {n}
+          </li>
+        ))}
+      </ul>
+      {more > 0 && (
+        <button type="button" className="meta social__more" onClick={() => setOpen(true)}>
+          +{more} more
+        </button>
+      )}
+      {!mine && <span className="meta">Equip them under COSMETICS.</span>}
+    </div>
+  );
 }
 
 /* chat images come through the backend (which caches them on disk); keep

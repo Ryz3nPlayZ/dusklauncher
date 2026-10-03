@@ -10,6 +10,7 @@ mod friends;
 mod modpacks;
 mod mods;
 mod recordings;
+mod release_art;
 mod screenshots;
 mod settings;
 mod skins;
@@ -64,6 +65,7 @@ pub fn run() {
             // account
             commands::begin_login,
             commands::begin_code_login,
+            commands::cancel_login,
             commands::begin_reconsent_login,
             commands::logout,
             commands::get_current_account,
@@ -79,6 +81,7 @@ pub fn run() {
             screenshots::delete_screenshot,
             screenshots::reveal_screenshot,
             // clips and replays
+            release_art::release_art,
             recordings::list_recordings,
             recordings::recording_thumb,
             recordings::delete_recording,
@@ -109,6 +112,8 @@ pub fn run() {
             mods::install_content_to_profile,
             mods::install_content_version_to_profile,
             mods::install_bundled_client_mod,
+            mods::install_performance_mods,
+            mods::install_dusk_essentials,
             // cosmetics
             cosmetics::list_cosmetics,
             cosmetics::read_cosmetic_texture,
