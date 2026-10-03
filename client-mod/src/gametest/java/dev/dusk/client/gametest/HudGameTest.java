@@ -42,7 +42,7 @@ public final class HudGameTest implements FabricClientGameTest {
             client.options.setCameraType(CameraType.FIRST_PERSON);
         });
 
-        try (TestSingleplayerContext sp = ctx.worldBuilder().create()) {
+        try (TestSingleplayerContext sp = Worlds.create(ctx)) {
             HarnessCompat.waitForChunksRender(sp);
             sp.getServer().runCommand("time set midnight");
             sp.getServer().runCommand("gamemode survival Dusk");

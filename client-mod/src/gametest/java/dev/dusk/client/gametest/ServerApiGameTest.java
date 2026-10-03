@@ -26,7 +26,7 @@ public final class ServerApiGameTest implements FabricClientGameTest {
             DuskClient.modules().get(Coordinates.class).setEnabled(true);
         });
 
-        try (TestSingleplayerContext sp = ctx.worldBuilder().create()) {
+        try (TestSingleplayerContext sp = Worlds.create(ctx)) {
             HarnessCompat.waitForChunksRender(sp);
             ctx.waitFor(client -> hello.get() != null, 100);
             String greeting = hello.get();

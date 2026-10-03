@@ -49,7 +49,7 @@ public final class CosmeticsGameTest implements FabricClientGameTest {
             CosmeticsManager.reloadLocal();
         });
 
-        try (TestSingleplayerContext sp = ctx.worldBuilder().create()) {
+        try (TestSingleplayerContext sp = Worlds.create(ctx)) {
             HarnessCompat.waitForChunksRender(sp);
             sp.getServer().runCommand("time set noon");
             sp.getServer().runCommand("gamemode creative Dusk");
