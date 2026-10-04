@@ -5,7 +5,7 @@ import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * What the menu key opens, after Flex-HUD's: the launcher's brand cell
+ * What the menu key opens, after Flex-HUD's: the bare app icon
  * rising into place, and under it Preferences (gear), Modules and Edit layout (arrows),
  * drawn as the launcher's grey PxButtons.
  */
@@ -34,9 +34,9 @@ public class DuskMenuScreen extends MenuScreen {
         float e = intro();
         int rowY = rowY();
         int alpha = Math.max(5, Math.round(255 * e));
-        int bh = Math.max(Px.H, Math.min(32, rowY - 20));
+        int bh = Theme.markSize(Math.max(Px.H, Math.min(40, rowY - 20)));
         int ty = rowY - 12 - bh + Math.round((1 - e) * 16);
-        Theme.brand(c, (this.width - Theme.brandWidth(c, bh)) / 2, ty, bh, alpha);
+        Theme.mark(c, (this.width - bh) / 2, ty, bh, alpha);
 
         boolean prefsHover = Vanilla.inside(mouseX, mouseY, prefsX(), rowY, 20, 20);
         boolean modulesHover = Vanilla.inside(mouseX, mouseY, modulesX(), rowY, 120, 20);

@@ -78,7 +78,8 @@ public class Freecam extends Module {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
         while (toggleKey.mapping().consumeClick()) {
-            if (player == null || !enabled()) continue;
+            // a key shared with freelook stays freelook's, as it was before freecam
+            if (player == null || !enabled() || Freelook.usesKey(toggleKey.mapping())) continue;
             if (active == this) stop(); else start(mc, player);
             Compat.actionBar(player, Component.literal(active == this ? "Freecam on" : "Freecam off"));
         }

@@ -5,6 +5,7 @@ import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.BoolSetting;
 import dev.dusk.client.module.setting.IntSetting;
 import dev.dusk.client.module.setting.KeySetting;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
@@ -57,6 +58,13 @@ public class Freelook extends Module {
         Freelook m = instance;
         if (m != null) m.update();
         return looking();
+    }
+
+    /** True when {@code key} is bound to the same key as freelook's, which then wins. */
+    public static boolean usesKey(KeyMapping key) {
+        Freelook m = instance;
+        return m != null && m.enabled() && !key.isUnbound()
+                && (key.same(m.useKey.mapping()) || key.same(m.toggleKey.mapping()));
     }
 
     public float yaw() { return state.yaw; }

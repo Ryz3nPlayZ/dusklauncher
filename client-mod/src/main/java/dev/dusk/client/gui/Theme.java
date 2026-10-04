@@ -256,46 +256,28 @@ public final class Theme {
         c.pop();
     }
 
-    // ---- the menu brand -------------------------------------------------
+    // ---- the bare icon --------------------------------------------------
 
-    /**
-     * The launcher's nav brand cell (Nav.tsx), for the menu: the app icon and
-     * DUSK in grey TT stretched 1.4 wide on a grey PxBox {@code h} GUI pixels
-     * tall. Proportions follow nav.css (icon 76 of 88, padding 20 / gap 14 /
-     * 28, cap about 0.3 of the icon); the icon and the type are sized in whole
-     * window pixels so the pixel art stays crisp.
-     */
-    private record Brand(int k, int icon, int fy, int fx, int padL, int gap, int padR) {
-        static Brand at(int h) {
-            double hh = h * Px.gui();
-            int k = Math.max(1, (int) Math.floor(hh * 76 / 88 / MARK_ART));
-            int icon = MARK_ART * k;
-            int fy = Math.max(1, (int) Math.round(icon * 0.3 / 7));
-            int fx = Math.max(1, (int) Math.round(fy * 1.4));
-            int padL = (int) Math.round((hh - icon) / 2 + hh * 14 / 88);
-            return new Brand(k, icon, fy, fx, padL, (int) Math.round(hh * 14 / 88), (int) Math.round(hh * 28 / 88));
-        }
+    /** Window pixels per art pixel for an icon about {@code h} GUI pixels tall. */
+    private static int markScale(int h) {
+        return Math.max(1, (int) Math.floor(h * Px.gui() / MARK_ART));
     }
 
-    /** Width of {@link #brand} in GUI pixels. */
-    public static int brandWidth(Canvas c, int h) {
-        Brand b = Brand.at(h);
-        return (int) Math.ceil((b.padL + b.icon + b.gap + Px.ttWidth(c, "DUSK", b.fx) + b.padR) / Px.gui());
+    /** Side of {@link #mark} in GUI pixels. */
+    public static int markSize(int h) {
+        return (int) Math.ceil(MARK_ART * markScale(h) / Px.gui());
     }
 
-    public static void brand(Canvas c, int x, int y, int h, int alpha) {
-        Brand b = Brand.at(h);
+    /** Just the app icon, no box and no type, at most {@code h} GUI pixels square. */
+    public static void mark(Canvas c, int x, int y, int h, int alpha) {
         double s = Px.gui();
-        Px.box(c, x, y, brandWidth(c, h), h, Family.GREY, false, false, alpha);
-        int wx = (int) Math.round(x * s), wy = (int) Math.round(y * s), wh = (int) Math.round(h * s);
-        int iy = wy + (wh - b.icon) / 2;
+        int k = markScale(h);
         c.push();
         c.scale((float) (1 / s), (float) (1 / s));
-        c.translate(wx + b.padL, iy);
-        c.scale(b.k, b.k);
+        c.translate((int) Math.round(x * s), (int) Math.round(y * s));
+        c.scale(k, k);
         c.blit(MARK, 0, 0, 0, 0, MARK_ART, MARK_ART, MARK_ART, MARK_ART, Math.max(5, alpha) << 24 | 0xFFFFFF);
         c.pop();
-        Px.tt(c, "DUSK", wx + b.padL + b.icon + b.gap, wy + wh / 2, b.fx, b.fy, Px.Tone.GREY, alpha);
     }
 
     private interface RowColor { int at(int r); }
