@@ -203,7 +203,6 @@ export default function Project({
       <div className="project">
         <div className="win project__win">
           <div className="win__bar">
-            <div className="project__lead" />
             {(['DESCRIPTION', 'VERSIONS', 'GALLERY'] as Tab[]).map((t) => (
               <NavCell key={t} label={t} active={tab === t} onClick={() => setTab(t)} />
             ))}

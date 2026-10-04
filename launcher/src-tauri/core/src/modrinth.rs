@@ -13,6 +13,27 @@ use std::path::Path;
 pub const MODRINTH_API: &str = "https://api.modrinth.com/v2";
 const USER_AGENT: &str = concat!("DuskLauncher/", env!("CARGO_PKG_VERSION"), " (github.com/dusklauncher)");
 
+/// Modrinth calls are small JSON requests, so a request still silent after
+/// 10s is a dead connection — a pooled keep-alive socket that went stale
+/// while the launcher sat open through a sleep or a network change — not a
+/// slow answer. Retry once on a fresh connection instead of leaving the
+/// browse page on LOADING… until the client-wide 30s timeout.
+trait SendRetry {
+    async fn send_retry(self) -> reqwest::Result<reqwest::Response>;
+}
+
+impl SendRetry for reqwest::RequestBuilder {
+    async fn send_retry(self) -> reqwest::Result<reqwest::Response> {
+        let Some(again) = self.try_clone() else { return self.send().await };
+        match self.timeout(std::time::Duration::from_secs(10)).send().await {
+            Err(e) if e.is_timeout() || e.is_connect() || e.is_request() => {
+                again.timeout(std::time::Duration::from_secs(15)).send().await
+            }
+            other => other,
+        }
+    }
+}
+
 /// Turn a non-2xx Modrinth response into an error carrying the status AND a
 /// body snippet. A bare `error_for_status` hides the reason (rate limit?
 /// bad facet? outage?) and the UI can only shrug.
@@ -115,7 +136,7 @@ pub async fn search(client: &reqwest::Client, params: &SearchParams) -> Result<S
             ("offset", &params.offset.to_string()),
             ("limit", &params.limit.to_string()),
         ])
-        .send()
+        .send_retry()
         .await?;
     decode(check(resp, "search").await?, "search").await
 }
@@ -175,7 +196,7 @@ pub async fn project_versions(client: &reqwest::Client, project_id: &str) -> Res
     let resp = client
         .get(format!("{MODRINTH_API}/project/{project_id}/version"))
         .header(reqwest::header::USER_AGENT, USER_AGENT)
-        .send()
+        .send_retry()
         .await?;
     decode(check(resp, "project versions").await?, "project versions").await
 }
@@ -184,7 +205,7 @@ pub async fn version(client: &reqwest::Client, version_id: &str) -> Result<Versi
     let resp = client
         .get(format!("{MODRINTH_API}/version/{version_id}"))
         .header(reqwest::header::USER_AGENT, USER_AGENT)
-        .send()
+        .send_retry()
         .await?;
     decode(check(resp, "version").await?, "version").await
 }
@@ -203,7 +224,7 @@ pub async fn version_files(
         .post(format!("{MODRINTH_API}/version_files"))
         .header(reqwest::header::USER_AGENT, USER_AGENT)
         .json(&serde_json::json!({ "hashes": hashes, "algorithm": "sha1" }))
-        .send()
+        .send_retry()
         .await?;
     decode(check(resp, "version lookup").await?, "version lookup").await
 }
@@ -232,7 +253,7 @@ pub async fn version_files_update(
         .post(format!("{MODRINTH_API}/version_files/update"))
         .header(reqwest::header::USER_AGENT, USER_AGENT)
         .json(&body)
-        .send()
+        .send_retry()
         .await?;
     decode(check(resp, "update lookup").await?, "update lookup").await
 }
@@ -277,7 +298,7 @@ async fn tag<T: serde::de::DeserializeOwned>(client: &reqwest::Client, name: &st
     let resp = client
         .get(format!("{MODRINTH_API}/tag/{name}"))
         .header(reqwest::header::USER_AGENT, USER_AGENT)
-        .send()
+        .send_retry()
         .await?;
     let what = format!("tag/{name}");
     decode(check(resp, &what).await?, &what).await
@@ -357,7 +378,7 @@ pub async fn project(client: &reqwest::Client, project_id: &str) -> Result<Proje
     let resp = client
         .get(format!("{MODRINTH_API}/project/{project_id}"))
         .header(reqwest::header::USER_AGENT, USER_AGENT)
-        .send()
+        .send_retry()
         .await?;
     decode(check(resp, "project").await?, "project").await
 }
@@ -391,7 +412,8 @@ pub async fn project_version_for_loader(
     if let Some(l) = loader {
         req = req.query(&[("loaders", format!("[\"{l}\"]"))]);
     }
-    let resp = req.send().await?;
+    let resp = req.send_retry()
+        .await?;
     let versions: Vec<Version> =
         decode(check(resp, "project version lookup").await?, "project version lookup").await?;
     newest_preferring_release(versions).ok_or_else(|| {
@@ -471,8 +493,8 @@ pub async fn download_mrpack(client: &reqwest::Client, ver: &Version) -> Result<
         client
             .get(&file.url)
             .header(reqwest::header::USER_AGENT, USER_AGENT)
-            .send()
-            .await?,
+            .send_retry()
+        .await?,
         "modpack download",
     )
     .await?

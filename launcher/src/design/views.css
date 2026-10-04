@@ -1182,7 +1182,7 @@
 }
 .editor__actions {
   flex: none;
-  width: calc(400 * var(--u));
+  width: calc(560 * var(--u));
   display: flex;
   justify-content: flex-end;
   gap: calc(14 * var(--u));
@@ -1651,10 +1651,6 @@
 .project__win {
   flex: 1;
   min-width: 0;
-}
-.project__lead {
-  width: calc(12 * var(--u));
-  flex: none;
 }
 .project__body {
   display: flex;

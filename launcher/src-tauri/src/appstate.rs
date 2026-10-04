@@ -111,6 +111,10 @@ impl AppState {
                 .timeout(std::time::Duration::from_secs(30))
                 // a dead network should fail fast so offline launch kicks in
                 .connect_timeout(std::time::Duration::from_secs(8))
+                // never reuse a socket that has sat idle long enough for the
+                // far end (or a sleeping laptop's network) to have dropped it
+                .pool_idle_timeout(std::time::Duration::from_secs(15))
+                .tcp_keepalive(std::time::Duration::from_secs(20))
                 .build()
                 .unwrap_or_else(|_| reqwest::Client::new()),
         }

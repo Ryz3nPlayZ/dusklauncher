@@ -66,6 +66,9 @@ const CONTENT: Record<Exclude<KindTab, 'ALL'>, ContentInfo> = {
   },
 };
 const KIND_INFO = Object.values(CONTENT);
+const CONTENT_BY_KIND: Record<ContentKind, ContentInfo> = Object.fromEntries(
+  KIND_INFO.map((c) => [c.kind, c]),
+) as Record<ContentKind, ContentInfo>;
 
 export default function InstanceEditor({
   profile,
@@ -90,6 +93,9 @@ export default function InstanceEditor({
      for this kind; BACK lands on the CONTENT tab, which reloads */
   const [browsing, setBrowsing] = useState<ContentInfo | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
+  /* the project page was opened from an installed row, not from the browse
+     list — BACK then returns to the content list instead of the browse page */
+  const [fromList, setFromList] = useState(false);
   /* what the folder already holds, keyed by Modrinth project id — the
      browse rows read INSTALLED off it, the project page marks the version */
   const [held, setHeld] = useState<Map<string, InstalledProject>>(() => new Map());
@@ -140,7 +146,13 @@ export default function InstanceEditor({
           await lookupHeld(b.kind);
           return true;
         }}
-        onBack={() => setProjectId(null)}
+        onBack={() => {
+          setProjectId(null);
+          if (fromList) {
+            setBrowsing(null);
+            setFromList(false);
+          }
+        }}
       />
     );
   }
@@ -164,7 +176,10 @@ export default function InstanceEditor({
           return true;
         }}
         alreadyInstalled={heldIds}
-        onOpen={(hit) => setProjectId(hit.id)}
+        onOpen={(hit) => {
+          setFromList(false);
+          setProjectId(hit.id);
+        }}
         onBack={() => setBrowsing(null)}
       />
     );
@@ -243,6 +258,11 @@ export default function InstanceEditor({
             onKindTab={setKindTab}
             content={content}
             onBrowse={setBrowsing}
+            onOpenProject={(c, id) => {
+              setFromList(true);
+              setBrowsing(c);
+              setProjectId(id);
+            }}
           />
         )}
         {tab === 'SETTINGS' && (
@@ -580,18 +600,24 @@ function ContentTab({
   onKindTab,
   content,
   onBrowse,
+  onOpenProject,
 }: {
   profile: Profile;
   kindTab: KindTab;
   onKindTab: (k: KindTab) => void;
   content: ContentInfo | null;
   onBrowse: (c: ContentInfo) => void;
+  /** open an installed file's Modrinth page — its VERSIONS tab installs any version */
+  onOpenProject: (c: ContentInfo, projectId: string) => void;
 }) {
   const [rows, setRows] = useState<{ file: ProfileMod; kind: ContentKind; label: string }[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
   /* newer Modrinth versions, keyed `kind/filename`; null while checking */
   const [updates, setUpdates] = useState<Map<string, ContentUpdate> | null>(null);
+  /* which Modrinth project each file is, keyed `kind/filename`; files Modrinth
+     doesn't know (hand-made packs) have no entry and no VERSIONS button */
+  const [projects, setProjects] = useState<Map<string, string>>(() => new Map());
   /* the rows an UPDATE is running on — their buttons wait */
   const [updating, setUpdating] = useState<Set<string>>(() => new Set());
   /* files are being dragged over the window */
@@ -615,6 +641,18 @@ function ContentTab({
     setUpdates(new Map(found.flat()));
   };
 
+  const lookupProjects = async () => {
+    const found = await Promise.all(
+      targets.map((t) =>
+        api
+          .lookupContent(profile.id, t.kind)
+          .then((list) => list.map((p) => [`${t.kind}/${p.filename}`, p.projectId] as const))
+          .catch(() => []),
+      ),
+    );
+    setProjects(new Map(found.flat()));
+  };
+
   const reload = () => {
     return Promise.all(
       targets.map(async (t) => {
@@ -632,6 +670,7 @@ function ContentTab({
     setRows(null);
     void reload();
     void checkUpdates();
+    void lookupProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile.id, kindTab]);
 
@@ -797,6 +836,7 @@ function ContentTab({
         {shown?.map(({ file: m, kind: fileKind, label }) => {
           const key = `${fileKind}/${m.filename}`;
           const upd = updates?.get(key);
+          const projectId = projects.get(key);
           return (
             <div key={key} className={['editor__row', m.enabled ? '' : 'is-off'].join(' ')}>
               {/* the on/off box leads the row — the one control every row has */}
@@ -836,6 +876,17 @@ function ContentTab({
               </span>
               {/* fixed width, so the type column lines up with or without UPDATE */}
               <span className="editor__actions">
+                {projectId && (
+                  <PxButton
+                    family="grey"
+                    height="sm"
+                    title="Open on Modrinth — pick a specific version to install"
+                    disabled={updating.has(key)}
+                    onClick={() => onOpenProject(CONTENT_BY_KIND[fileKind], projectId)}
+                  >
+                    <TT size={16}>VERSIONS</TT>
+                  </PxButton>
+                )}
                 {upd && (
                   <PxButton
                     family="accent"
