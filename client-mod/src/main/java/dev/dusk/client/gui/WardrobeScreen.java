@@ -10,12 +10,15 @@ import dev.dusk.client.account.SkinLibrary;
 import dev.dusk.client.compat.SkinCompat;
 import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.cosmetics.CapeRegistry;
+import dev.dusk.client.gui.widget.TextFieldWidget;
+import dev.dusk.client.social.Social;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.PointerBuffer;
+import org.lwjgl.glfw.GLFW;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
@@ -36,7 +39,8 @@ import java.util.concurrent.Executors;
 /**
  * The launcher's Cosmetics page in game (launcher/src/views/Cosmetics.tsx),
  * drawn and behaving the same: the window bar with SKINS / CAPES /
- * ACCESSORIES and the current skin's name; the viewer (a 3D model, CANCEL and
+ * ACCESSORIES / OUTFITS (and the launcher's store as STORE, which the GET
+ * MORE tiles open) and the current skin's name; the viewer (a 3D model, CANCEL and
  * APPLY) on the left; the gallery, a window of its own, on the right. A skin
  * is picked, previewed, then applied with the arm model read off its PNG.
  * Dusk capes and accessories are a draft until APPLY LOOK; Minecraft capes
@@ -44,14 +48,26 @@ import java.util.concurrent.Executors;
  * profile, so on a server: leave, change, rejoin.
  */
 public class WardrobeScreen extends PanelScreen {
-    private static final String[] TABS = {"SKINS", "CAPES", "ACCESSORIES"};
-    private static final int GAP = 4, TILE_MIN_W = 64, ACTIONS_H = 20, NAME_H = 10;
+    private static final String[] TABS = {"SKINS", "CAPES", "ACCESSORIES", "OUTFITS", "STORE"};
+    private static final int SKINS = 0, CAPES = 1, ACCESSORIES = 2, OUTFITS = 3, STORE = 4;
+    private static final String[] FILTERS = {"ALL", "CAPES", "ACCESSORIES"};
+    private static final int GAP = 4, TILE_MIN_W = 64, ACTIONS_H = 20, NAME_H = 10, ROW_H = 28, BTN_H = 18, OUTFIT_NAME_MAX = 32;
+    private static final long CONFIRM_MS = 4000;
 
     private static int tab;
+    private static int storeFilter;
     private static boolean mojangCapes;
 
-    /** One gallery tile: {@code picked} wears the accent, {@code worn} the green. */
-    private record Tile(String label, boolean picked, boolean worn, Theme.Family family, Thumb thumb, Runnable click) {}
+    /**
+     * One gallery tile: {@code picked} wears the accent, {@code worn} the
+     * green; {@code badge} a corner tag (a price), {@code tip} the hover text.
+     */
+    private record Tile(String label, boolean picked, boolean worn, Theme.Family family, Thumb thumb, Runnable click,
+                        @Nullable String badge, String tip) {
+        Tile(String label, boolean picked, boolean worn, Theme.Family family, Thumb thumb, Runnable click) {
+            this(label, picked, worn, family, thumb, click, null, "");
+        }
+    }
 
     private interface Thumb {
         void draw(Canvas c, int x, int y, int w, int h);
@@ -78,6 +94,19 @@ public class WardrobeScreen extends PanelScreen {
     private boolean busy;
     private String status = "";
     private boolean statusError;
+
+    @Nullable private List<Social.Outfit> outfits;
+    @Nullable private String outfitsError;
+    @Nullable private Social.Store store;
+    @Nullable private String storeError;
+    /** The store tile waiting for its second click to buy, and since when. */
+    private int buyArmed = -1;
+    private long buyArmedAt;
+    private String outfitName = "";
+    private final TextFieldWidget outfitField = new TextFieldWidget(() -> outfitName, s -> outfitName = s, true, OUTFIT_NAME_MAX)
+            .themed().placeholder("NAME THIS LOOK");
+    private int saveX, saveY, saveW;
+    private List<String> lookLines = List.of();
 
     @Nullable private AbstractWidget model;
     private final NavBar gallery = new NavBar();
@@ -125,7 +154,32 @@ public class WardrobeScreen extends PanelScreen {
                 ids.remove(-1);
                 owned = ids;
             });
+            try {
+                List<Social.Outfit> saved = Social.outfits();
+                post(() -> {
+                    outfits = saved;
+                    outfitsError = null;
+                });
+            } catch (IOException | RuntimeException e) {
+                post(() -> {
+                    outfits = List.of();
+                    outfitsError = message(e);
+                });
+            }
+            try {
+                Social.Store st = Social.store();
+                post(() -> {
+                    store = st;
+                    storeError = null;
+                });
+            } catch (IOException | RuntimeException e) {
+                post(() -> storeError = message(e));
+            }
         });
+    }
+
+    private static String message(Exception e) {
+        return e.getMessage() == null ? e.toString() : e.getMessage();
     }
 
     private void post(Runnable r) {
@@ -243,6 +297,122 @@ public class WardrobeScreen extends PanelScreen {
         if (!pickedAcc.remove((Integer) id)) pickedAcc.add(id);
     }
 
+    // ---- outfits and the store ----------------------------------------------
+
+    /** The look on the viewer, as a loadout: what SAVE OUTFIT keeps. */
+    private Map<String, JsonElement> pickedLook() {
+        Map<String, JsonElement> l = new LinkedHashMap<>();
+        if (pickedCape >= 0) l.put("cape", new JsonPrimitive(pickedCape));
+        JsonArray a = new JsonArray();
+        pickedAcc.forEach(a::add);
+        l.put("accessories", a);
+        return l;
+    }
+
+    /** "Cape · Acc · Acc", the launcher's outfit summary. */
+    private static String summary(Map<String, JsonElement> loadout) {
+        List<String> parts = new ArrayList<>();
+        int cape = capeOf(loadout);
+        if (cape >= 0) {
+            CapeRegistry.CapeEntry e = CapeRegistry.cape(cape);
+            parts.add(e != null ? e.name() : "Cape #" + cape);
+        }
+        for (int id : accessoriesOf(loadout)) {
+            CapeRegistry.AccessoryEntry e = CapeRegistry.accessory(id);
+            parts.add(e != null ? e.name() : "#" + id);
+        }
+        return parts.isEmpty() ? "Nothing equipped" : String.join(" \u00b7 ", parts);
+    }
+
+    private static int capeOf(Map<String, JsonElement> loadout) {
+        JsonElement e = loadout.get("cape");
+        return e != null && e.isJsonPrimitive() && e.getAsJsonPrimitive().isNumber() ? e.getAsInt() : -1;
+    }
+
+    private static List<Integer> accessoriesOf(Map<String, JsonElement> loadout) {
+        List<Integer> out = new ArrayList<>();
+        JsonElement e = loadout.get("accessories");
+        if (e != null && e.isJsonArray()) {
+            for (JsonElement x : e.getAsJsonArray()) if (x.isJsonPrimitive() && x.getAsJsonPrimitive().isNumber()) out.add(x.getAsInt());
+        }
+        return out;
+    }
+
+    private void saveOutfit() {
+        String name = outfitName.trim();
+        if (name.isEmpty() || busy) return;
+        Map<String, JsonElement> look = pickedLook();
+        act("Saving outfit...", () -> {
+            List<Social.Outfit> list = Social.saveOutfit(name, look);
+            post(() -> {
+                outfits = list;
+                outfitsError = null;
+                outfitField.setText("");
+            });
+            return "Saved \"" + name + "\".";
+        });
+    }
+
+    /** Puts an outfit on the viewer (only what's still owned); APPLY LOOK wears it. */
+    private void wearOutfit(Social.Outfit o) {
+        Set<Integer> have = owned;
+        int cape = capeOf(o.loadout());
+        pickedCape = cape >= 0 && (have == null || have.contains(cape)) ? cape : -1;
+        pickedAcc = new ArrayList<>(accessoriesOf(o.loadout()).stream().filter(id -> have == null || have.contains(id)).toList());
+        status = lookDirty() ? "\"" + o.name() + "\" is on the viewer. APPLY LOOK to wear it." : "You're wearing \"" + o.name() + "\".";
+        statusError = false;
+    }
+
+    private void deleteOutfit(Social.Outfit o) {
+        act("Deleting...", () -> {
+            List<Social.Outfit> list = Social.deleteOutfit(o.id());
+            post(() -> outfits = list);
+            return "Deleted \"" + o.name() + "\".";
+        });
+    }
+
+    private boolean buyArmed(int id) {
+        return buyArmed == id && System.currentTimeMillis() - buyArmedAt < CONFIRM_MS;
+    }
+
+    /** A store tile: owned ones go on the viewer, the rest take a second click to buy. */
+    private void storeClick(Social.StoreItem item) {
+        boolean cape = item.kind().equals("cape");
+        Set<Integer> have = owned;
+        Social.Store st = store;
+        if (have != null && have.contains(item.id())) {
+            if (cape) pickedCape = item.id();
+            else if (!pickedAcc.contains(item.id())) pickedAcc.add(item.id());
+            selectTab(cape ? CAPES : ACCESSORIES);
+            status = lookDirty() ? item.name() + " is on the viewer. APPLY LOOK to wear it." : "";
+            statusError = false;
+            return;
+        }
+        if (st == null) return;
+        if (item.price() > st.coins()) {
+            status = "You need " + (item.price() - st.coins()) + " more coins for " + item.name() + ".";
+            statusError = true;
+            buyArmed = -1;
+            return;
+        }
+        if (!buyArmed(item.id())) {
+            buyArmed = item.id();
+            buyArmedAt = System.currentTimeMillis();
+            status = "Buy " + item.name() + " for " + item.price() + " coins? Click it again.";
+            statusError = false;
+            return;
+        }
+        buyArmed = -1;
+        act("Buying...", () -> {
+            long coins = Social.buy(item.id());
+            post(() -> {
+                if (owned != null) owned.add(item.id());
+                if (store != null) store = new Social.Store(store.items(), coins);
+            });
+            return "Bought " + item.name() + ". Click it to try it on.";
+        });
+    }
+
     // ---- tiles --------------------------------------------------------------
 
     private static Theme.Family family(boolean picked, boolean worn) {
@@ -299,31 +469,93 @@ public class WardrobeScreen extends PanelScreen {
                     out.add(new Tile("NONE", pickedCape < 0, worn < 0, family(pickedCape < 0, worn < 0), WardrobeScreen::none, () -> pickedCape = -1));
                     for (CapeRegistry.CapeEntry cape : CapeRegistry.capes().values()) {
                         if (!have.contains(cape.id())) continue;
-                        String key = "dcape:" + cape.id();
                         boolean on = cape.id() == pickedCape, isWorn = cape.id() == worn;
-                        out.add(new Tile(cape.name(), on, isWorn, family(on, isWorn), (c, x, y, w, h) -> {
-                            RemoteImages.Image img = images.get(key, () -> CapeRegistry.texture(cape.id(), "cape.png"));
-                            if (img != null) capeFront(c, img, x, y, w, h);
-                        }, () -> pickedCape = cape.id()));
+                        out.add(new Tile(cape.name(), on, isWorn, family(on, isWorn), capeThumb(cape.id()),
+                                () -> pickedCape = cape.id(), null, capeTraits(cape)));
                     }
+                    out.add(getMore(1));
                 }
             }
+            case OUTFITS -> {}
+            case STORE -> storeTiles(out);
             default -> {
                 Set<Integer> have = owned;
                 if (have == null) break;
                 List<Integer> worn = DuskConfig.get().cosmetics.accessoryIds();
                 for (CapeRegistry.AccessoryEntry acc : CapeRegistry.accessories().values()) {
                     if (!have.contains(acc.id())) continue;
-                    String key = "acc:" + acc.id();
                     boolean on = pickedAcc.contains(acc.id()), isWorn = worn.contains(acc.id());
-                    out.add(new Tile(acc.name(), on, isWorn, family(on, isWorn), (c, x, y, w, h) -> {
-                        RemoteImages.Image img = images.get(key, () -> CapeRegistry.accessoryFile(acc.id(), "texture.png"));
-                        if (img != null) fit(c, img.id(), img.w(), img.h() / Math.max(1, acc.frames()), img.w(), img.h(), x, y, w, h);
-                    }, () -> toggleAccessory(acc.id())));
+                    out.add(new Tile(acc.name(), on, isWorn, family(on, isWorn), accThumb(acc.id()),
+                            () -> toggleAccessory(acc.id()), null, accTraits(acc)));
                 }
+                out.add(getMore(2));
             }
         }
         return out;
+    }
+
+    private void storeTiles(List<Tile> out) {
+        Social.Store st = store;
+        Set<Integer> have = owned;
+        if (st == null || have == null) return;
+        int wornCape = DuskConfig.get().cosmetics.capeId();
+        List<Integer> wornAcc = DuskConfig.get().cosmetics.accessoryIds();
+        for (Social.StoreItem item : st.items()) {
+            boolean cape = item.kind().equals("cape");
+            if (storeFilter == 1 && !cape || storeFilter == 2 && cape) continue;
+            boolean own = have.contains(item.id()), worn = cape ? wornCape == item.id() : wornAcc.contains(item.id());
+            boolean armed = buyArmed(item.id());
+            String badge = worn ? "WORN" : own ? "OWNED" : armed ? "BUY?" : item.price() + " COINS";
+            Theme.Family f = armed ? Theme.Family.ACCENT : worn ? Theme.Family.GREEN : Theme.Family.PANEL;
+            String tip;
+            if (cape) {
+                CapeRegistry.CapeEntry e = CapeRegistry.cape(item.id());
+                tip = "cape" + (e == null || capeTraits(e).isEmpty() ? "" : " \u00b7 " + capeTraits(e));
+            } else {
+                CapeRegistry.AccessoryEntry e = CapeRegistry.accessory(item.id());
+                tip = e == null ? "accessory" : "accessory \u00b7 " + accTraits(e);
+            }
+            out.add(new Tile(item.name(), armed, worn, f, cape ? capeThumb(item.id()) : accThumb(item.id()),
+                    () -> storeClick(item), badge, tip));
+        }
+    }
+
+    /** The last tile of the Dusk cape and accessory grids: the way to the store. */
+    private Tile getMore(int filter) {
+        return new Tile("GET MORE", false, false, Theme.Family.GREY, WardrobeScreen::plus, () -> {
+            storeFilter = filter;
+            selectTab(STORE);
+        }, null, "Open the store");
+    }
+
+    private Thumb capeThumb(int id) {
+        return (c, x, y, w, h) -> {
+            if (CapeRegistry.cape(id) == null) return;
+            RemoteImages.Image img = images.get("dcape:" + id, () -> CapeRegistry.texture(id, "cape.png"));
+            if (img != null) capeFront(c, img, x, y, w, h);
+        };
+    }
+
+    private Thumb accThumb(int id) {
+        return (c, x, y, w, h) -> {
+            CapeRegistry.AccessoryEntry acc = CapeRegistry.accessory(id);
+            if (acc == null) return;
+            RemoteImages.Image img = images.get("acc:" + id, () -> CapeRegistry.accessoryFile(id, "texture.png"));
+            if (img != null) fit(c, img.id(), img.w(), img.h() / Math.max(1, acc.frames()), img.w(), img.h(), x, y, w, h);
+        };
+    }
+
+    private static String capeTraits(CapeRegistry.CapeEntry cape) {
+        List<String> t = new ArrayList<>();
+        if (cape.glint()) t.add("glint");
+        if (cape.ears()) t.add("ears");
+        if (cape.upsideDown()) t.add("upside down");
+        return String.join(" \u00b7 ", t);
+    }
+
+    private static String accTraits(CapeRegistry.AccessoryEntry acc) {
+        String where = acc.attachment().name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        return acc.frames() > 1 ? where + " \u00b7 animated" : where;
     }
 
     /** What the gallery says under the tiles: progress, errors, the launcher's hints. */
@@ -335,18 +567,28 @@ public class WardrobeScreen extends PanelScreen {
             if (profile.capes().isEmpty()) return "This account has no Minecraft capes.";
             return "Changes apply right away. Others see them after they rejoin.";
         }
+        if (tab == OUTFITS) return outfitsError != null ? outfitsError : "";
+        if (tab == STORE) {
+            if (store == null) return storeError != null ? storeError : "Loading the store...";
+            return "Bought cosmetics are yours on every Dusk instance, in game and in the launcher.";
+        }
         if (owned == null) return "Loading your cosmetics...";
-        if (tab == 2 && tiles().isEmpty()) return "No accessories yet. Get them in the launcher's store.";
+        if (tab == ACCESSORIES && tiles().size() <= 1) return "No accessories yet. GET MORE opens the store.";
         return "";
     }
 
     private boolean noteIsError() {
-        return !status.isEmpty() ? statusError : profile == null && profileError != null;
+        if (!status.isEmpty()) return statusError;
+        if (tab == OUTFITS) return outfitsError != null;
+        if (tab == STORE) return store == null && storeError != null;
+        return profile == null && profileError != null;
     }
 
     private String countLabel() {
+        if (tab == OUTFITS) return "SAVED LOOKS";
+        if (tab == STORE) return store == null ? "STORE" : store.coins() + " COINS";
         int n = 0;
-        for (Tile t : tiles()) if (!t.label.equals("ADD SKIN") && !t.label.equals("NONE")) n++;
+        for (Tile t : tiles()) if (!t.label.equals("ADD SKIN") && !t.label.equals("NONE") && !t.label.equals("GET MORE")) n++;
         String noun = switch (tab) {
             case 0 -> n == 1 ? "SKIN" : "SKINS";
             case 1 -> (mojangCapes ? "MINECRAFT " : "") + (n == 1 ? "CAPE" : "CAPES");
@@ -430,6 +672,10 @@ public class WardrobeScreen extends PanelScreen {
     @Override
     protected void selectTab(int i) {
         tab = i;
+        scroll = 0;
+        buyArmed = -1;
+        status = "";
+        if (i != OUTFITS) outfitField.setFocused(false);
     }
 
     @Override
@@ -487,13 +733,26 @@ public class WardrobeScreen extends PanelScreen {
         gh = bottom - top;
         List<NavBar.Tool> t = new ArrayList<>();
         t.add(new NavBar.Tool("label", null, countLabel(), ""));
-        gallery.layout(gx, gy, gw, tab == 1 ? new String[] {mojangCapes ? "MINECRAFT" : "DUSK"} : new String[0],
-                t, null, 0, this.font::width);
+        String[] cells = tab == CAPES ? new String[] {mojangCapes ? "MINECRAFT" : "DUSK"}
+                : tab == STORE ? new String[] {FILTERS[storeFilter]} : new String[0];
+        gallery.layout(gx, gy, gw, cells, t, null, 0, this.font::width);
 
         String note = note();
         List<String> noteLines = note.isEmpty() ? List.of() : wrapLines(note, gw - 2 - 2 * GAP);
         listX = gx + 1 + GAP;
         listY = gy + NavBar.H + GAP;
+        if (tab == OUTFITS) {
+            // NAME THIS LOOK + SAVE OUTFIT, the summary of what it saves, then the outfits
+            int inner = gx + gw - 1 - GAP - listX;
+            saveW = this.font.width("SAVE OUTFIT") + 20;
+            saveY = listY;
+            saveX = listX + inner - saveW;
+            outfitField.setBounds(listX, saveY, saveX - GAP - listX, BTN_H);
+            lookLines = wrapLines("Saves the look on the viewer: " + summary(pickedLook()) + ".", inner);
+            listY = saveY + BTN_H + 4 + lookLines.size() * 10 + 4;
+        } else {
+            outfitField.setBounds(0, 0, 0, 0);
+        }
         listW = gx + gw - 1 - GAP - BAR_W - 3 - listX;
         listBottom = gy + gh - 1 - GAP - (noteLines.isEmpty() ? 0 : noteLines.size() * 10 + 2);
         cols = Math.max(1, (listW + GAP) / (TILE_MIN_W + GAP));
@@ -522,6 +781,7 @@ public class WardrobeScreen extends PanelScreen {
 
     @Override
     protected int contentHeight() {
+        if (tab == OUTFITS) return outfits == null || outfits.isEmpty() ? 40 : outfits.size() * ROW_H;
         int n = tiles().size(), rows = (n + cols - 1) / cols;
         return rows == 0 ? 0 : rows * (tileH + GAP) - GAP;
     }
@@ -579,15 +839,22 @@ public class WardrobeScreen extends PanelScreen {
         String apply = busy ? "..." : tab == 0 ? (applied() ? "APPLIED" : "APPLY") : "APPLY LOOK";
         boxButton(c, apply, ab[0], ab[1], ab[2], ab[3], mouseX, mouseY, Theme.Family.INSTALL, false, canApply());
 
-        List<Tile> tiles = tiles();
-        boolean hotList = inList(mouseX, mouseY) && !busy;
-        c.scissor(listX, listY, listX + listW, listBottom);
-        for (int i = 0; i < tiles.size(); i++) {
-            int x = tileX(i), y = tileY(i);
-            if (y + tileH < listY || y > listBottom) continue;
-            drawTile(c, tiles.get(i), x, y, hotList && Vanilla.inside(mouseX, mouseY, x, y, tileW, tileH));
+        Tile tipFor = null;
+        if (tab == OUTFITS) {
+            drawOutfits(c, mouseX, mouseY);
+        } else {
+            List<Tile> tiles = tiles();
+            boolean hotList = inList(mouseX, mouseY) && !busy;
+            c.scissor(listX, listY, listX + listW, listBottom);
+            for (int i = 0; i < tiles.size(); i++) {
+                int x = tileX(i), y = tileY(i);
+                if (y + tileH < listY || y > listBottom) continue;
+                boolean hot = hotList && Vanilla.inside(mouseX, mouseY, x, y, tileW, tileH);
+                drawTile(c, tiles.get(i), x, y, hot);
+                if (hot && !tiles.get(i).tip.isEmpty()) tipFor = tiles.get(i);
+            }
+            c.unscissor();
         }
-        c.unscissor();
         drawScrollbar(c);
 
         String note = note();
@@ -598,6 +865,60 @@ public class WardrobeScreen extends PanelScreen {
                 ty += 10;
             }
         }
+        if (tipFor != null) {
+            // the launcher's title attribute: traits under the pointer
+            int w = c.textWidth(tipFor.tip) + 8;
+            int x = Math.max(2, Math.min(this.width - 2 - w, mouseX + 8)), y = Math.min(this.height - 15, mouseY + 12);
+            c.beginLayer();
+            c.fill(x, y, x + w, y + 13, 0xE0000000);
+            c.text(tipFor.tip, x + 4, y + 3, Theme.TEXT, false);
+            c.endLayer();
+        }
+    }
+
+    private void drawOutfits(Canvas c, int mx, int my) {
+        outfitField.render(c, mx, my);
+        boxButton(c, busy ? "SAVING..." : "SAVE OUTFIT", saveX, saveY, saveW, BTN_H, mx, my, Theme.Family.ACCENT, false,
+                !busy && !outfitName.isBlank());
+        int ty = saveY + BTN_H + 4;
+        for (String line : lookLines) {
+            c.text(line, listX, ty, Theme.TEXT_MUTED, false);
+            ty += 10;
+        }
+        List<Social.Outfit> list = outfits;
+        c.scissor(listX, listY, listX + listW, listBottom);
+        if (list == null) {
+            c.text("Loading your outfits...", listX, listY + 4, Theme.TEXT_MUTED, false);
+        } else if (list.isEmpty() && outfitsError == null) {
+            Theme.box(c, listX, listY, listW, 36, Theme.Family.PANEL, false, false);
+            Theme.label(c, "NO OUTFITS YET", listX + 8, listY + 7, Theme.LABEL_UP, Theme.LABEL_LO, 1f);
+            c.text(Theme.ellipsize(c, "Pick a cape and accessories, name the look and save it to switch back any time.", listW - 16),
+                    listX + 8, listY + 21, Theme.TEXT_FAINT, false);
+        } else {
+            boolean hotList = inList(mx, my) && !busy;
+            for (int i = 0; i < list.size(); i++) {
+                int y = listY + i * ROW_H - scroll;
+                if (y + ROW_H < listY || y > listBottom) continue;
+                Social.Outfit o = list.get(i);
+                int[] wear = outfitButton(i, true), del = outfitButton(i, false);
+                c.fill(listX, y + ROW_H - 1, listX + listW, y + ROW_H, 0x30FFFFFF);
+                int textW = wear[0] - GAP - listX - 4;
+                c.text(Theme.ellipsize(c, o.name(), textW), listX + 4, y + 5, Theme.TEXT, false);
+                c.text(Theme.ellipsize(c, summary(o.loadout()), textW), listX + 4, y + 16, Theme.TEXT_FAINT, false);
+                int hx = hotList ? mx : -1, hy = hotList ? my : -1;
+                boxButton(c, "WEAR", wear[0], wear[1], wear[2], wear[3], hx, hy, Theme.Family.SOFT, false, !busy);
+                boxButton(c, "DELETE", del[0], del[1], del[2], del[3], hx, hy, Theme.Family.GREY, false, !busy);
+            }
+        }
+        c.unscissor();
+    }
+
+    /** {x, y, w, h} of outfit {@code i}'s WEAR or DELETE. */
+    private int[] outfitButton(int i, boolean wear) {
+        int dw = this.font.width("DELETE") + 16, ww = this.font.width("WEAR") + 20;
+        int y = listY + i * ROW_H - scroll + (ROW_H - 1 - BTN_H) / 2;
+        int dx = listX + listW - dw;
+        return wear ? new int[] {dx - GAP - ww, y, ww, BTN_H} : new int[] {dx, y, dw, BTN_H};
     }
 
     private void drawTile(Canvas c, Tile t, int x, int y, boolean hot) {
@@ -608,6 +929,13 @@ public class WardrobeScreen extends PanelScreen {
         int lx = x + (tileW - c.textWidth(label)) / 2, ly = y + tileH - m - NAME_H + (NAME_H - 7) / 2;
         if (t.worn) Theme.label(c, label, lx, ly, Theme.GREEN_UP, Theme.GREEN_LO, 1f);
         else c.text(label, lx, ly, Theme.DIM, false);
+        if (t.badge != null) {
+            String b = Theme.ellipsize(c, t.badge, tileW - 8);
+            int bw = c.textWidth(b) + 6, bx = x + tileW - 3 - bw;
+            c.fill(bx, y + 3, bx + bw, y + 14, 0xC0000000);
+            int col = t.worn ? Theme.GREEN_LO : t.badge.equals("OWNED") ? Theme.TEXT_MUTED : Theme.ACCENT;
+            c.text(b, bx + 3, y + 5, col, false);
+        }
     }
 
     // ---- input --------------------------------------------------------------
@@ -615,6 +943,8 @@ public class WardrobeScreen extends PanelScreen {
     @Override
     protected boolean menuClick(double mx, double my, int button) {
         layout();
+        if (outfitField.w > 0 && outfitField.contains(mx, my)) return outfitField.click(mx, my, button);
+        outfitField.setFocused(false);
         if (clickChrome(mx, my, button)) return true;
         if (Vanilla.inside(mx, my, stageX, stageY, stageW, stageH)) return false; // spin the model
         if (button != 0) return Vanilla.inside(mx, my, px, py, pw, ph);
@@ -637,12 +967,36 @@ public class WardrobeScreen extends PanelScreen {
             return true;
         }
         if (gallery.contains(mx, my)) {
-            if (tab == 1 && gallery.tabAt(mx, my) == 0) {
+            if (tab == CAPES && gallery.tabAt(mx, my) == 0) {
                 mojangCapes = !mojangCapes;
                 scroll = 0;
                 status = "";
+            } else if (tab == STORE && gallery.tabAt(mx, my) == 0) {
+                storeFilter = (storeFilter + 1) % FILTERS.length;
+                scroll = 0;
+                buyArmed = -1;
             }
             return true;
+        }
+        if (tab == OUTFITS) {
+            if (Vanilla.inside(mx, my, saveX, saveY, saveW, BTN_H)) {
+                saveOutfit();
+                return true;
+            }
+            List<Social.Outfit> list = outfits;
+            if (!busy && list != null && inList(mx, my)) {
+                for (int i = 0; i < list.size(); i++) {
+                    if (in(outfitButton(i, true), mx, my)) {
+                        wearOutfit(list.get(i));
+                        return true;
+                    }
+                    if (in(outfitButton(i, false), mx, my)) {
+                        deleteOutfit(list.get(i));
+                        return true;
+                    }
+                }
+            }
+            return Vanilla.inside(mx, my, px, py, pw, ph);
         }
         if (!busy && inList(mx, my)) {
             List<Tile> tiles = tiles();
@@ -654,6 +1008,34 @@ public class WardrobeScreen extends PanelScreen {
             }
         }
         return Vanilla.inside(mx, my, px, py, pw, ph);
+    }
+
+    @Override
+    protected boolean menuKey(int key, int scancode, int modifiers) {
+        if (!outfitField.focused()) return super.menuKey(key, scancode, modifiers);
+        if ((modifiers & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) != 0 && key == GLFW.GLFW_KEY_V) {
+            String clip = Minecraft.getInstance().keyboardHandler.getClipboard();
+            if (clip != null) {
+                String text = (outfitName + clip.replaceAll("\\s+", " "));
+                outfitField.setText(text.substring(0, Math.min(OUTFIT_NAME_MAX, text.length())));
+            }
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+            saveOutfit();
+            return true;
+        }
+        if (key == GLFW.GLFW_KEY_ESCAPE) {
+            outfitField.setFocused(false);
+            return true;
+        }
+        return outfitField.keyPressed(key, modifiers);
+    }
+
+    @Override
+    protected boolean menuChar(char ch) {
+        if (outfitField.focused()) return outfitField.charTyped(ch);
+        return super.menuChar(ch);
     }
 
     @Override

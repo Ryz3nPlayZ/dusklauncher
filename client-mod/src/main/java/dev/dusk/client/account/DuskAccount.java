@@ -93,7 +93,29 @@ public final class DuskAccount {
         return saved;
     }
 
+    /** An authenticated JSON call to the Dusk service (friends, messages, outfits...). */
+    public static JsonElement api(String method, String path, @Nullable JsonElement body) throws IOException {
+        return call(method, path, body);
+    }
+
+    /** An authenticated raw request: {@code GET} bytes back, or upload {@code bytes} as {@code contentType}. */
+    public static Http.Response raw(String method, String path, @Nullable String contentType, byte @Nullable [] bytes) throws IOException {
+        String token = token();
+        for (int attempt = 0; ; attempt++) {
+            Http.Response r = Http.send(method, DuskProvider.apiBase() + path, token, contentType, bytes);
+            if (r.code() == 401 && attempt == 0) {
+                token = signIn();
+                continue;
+            }
+            return r;
+        }
+    }
+
     // ---- auth -----------------------------------------------------------------
+
+    /** The session token this game last used, so polling doesn't re-join Mojang every call. */
+    @Nullable
+    private static volatile String cached;
 
     private static JsonElement call(String method, String path, @Nullable JsonElement body) throws IOException {
         String token = token();
@@ -109,12 +131,17 @@ public final class DuskAccount {
     }
 
     private static String token() throws IOException {
+        String t = cached;
+        return t != null ? t : fileToken();
+    }
+
+    private static String fileToken() throws IOException {
         Path dir = dataDir();
         if (dir != null) {
             try {
                 JsonObject t = JsonParser.parseString(Files.readString(dir.resolve("dusk-session.json"))).getAsJsonObject();
                 String self = undashed(Minecraft.getInstance().getUser().getProfileId().toString());
-                if (self.equals(undashed(t.get("uuid").getAsString()))) return t.get("token").getAsString();
+                if (self.equals(undashed(t.get("uuid").getAsString()))) return cached = t.get("token").getAsString();
             } catch (Exception ignored) {
                 // none cached, or another account's
             }
@@ -148,7 +175,7 @@ public final class DuskAccount {
             } catch (IOException ignored) {
             }
         }
-        return t.get("token").getAsString();
+        return cached = t.get("token").getAsString();
     }
 
     private static String undashed(String uuid) {

@@ -6,6 +6,7 @@ import dev.dusk.client.media.MediaBackend;
 import dev.dusk.client.module.ModuleManager;
 import dev.dusk.client.modules.misc.Waypoints;
 import dev.dusk.client.modules.render.Zoom;
+import dev.dusk.client.social.SocialNotifier;
 
 /** Draws every enabled {@link HudElement} at its anchor with its scale. */
 public final class HudRenderer {
@@ -25,7 +26,10 @@ public final class HudRenderer {
             if (!ctx.editing() && !e.visible(ctx)) continue;
             draw(c, e, ctx);
         }
-        if (!ctx.editing()) MediaBackend.drawHud(c, ctx);
+        if (!ctx.editing()) {
+            MediaBackend.drawHud(c, ctx);
+            SocialNotifier.draw(c, ctx.width());
+        }
     }
 
     public static void draw(Canvas c, HudElement e, HudContext ctx) {

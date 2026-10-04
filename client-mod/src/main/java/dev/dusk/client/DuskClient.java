@@ -98,6 +98,14 @@ import dev.dusk.client.modules.render.TimeChanger;
 import dev.dusk.client.modules.render.WeatherChanger;
 import dev.dusk.client.modules.toggle.ToggleSprint;
 import dev.dusk.client.server.ServerApi;
+import dev.dusk.client.social.SocialNotifier;
+import dev.dusk.client.gui.SocialScreen;
+import dev.dusk.client.compat.ScreenWidgets;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.PauseScreen;
+import net.minecraft.network.chat.Component;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -119,6 +127,7 @@ public class DuskClient implements ClientModInitializer {
     private static ModuleManager modules;
     private static KeyMapping settingsKey;
     private static KeyMapping clipKey;
+    private static KeyMapping friendsKey;
 
     public static ModuleManager modules() {
         return modules;
@@ -264,7 +273,12 @@ public class DuskClient implements ClientModInitializer {
             LOGGER.info("[DuskPresence] menu");
         });
         clipKey = Compat.registerKey("key.duskclient.save_clip", GLFW.GLFW_KEY_F8);
+        friendsKey = Compat.registerKey("key.duskclient.friends", GLFW.GLFW_KEY_UNKNOWN);
         MediaBackend.init();
+        SocialNotifier.start();
+        ScreenEvents.AFTER_INIT.register((client, screen, w, h) -> {
+            if (screen instanceof PauseScreen) addFriendsButton(screen);
+        });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             LoadoutWatcher.tick();
@@ -281,6 +295,10 @@ public class DuskClient implements ClientModInitializer {
             changed |= modules.tickToggleKeys(client);
             if (changed) modules.saveConfig();
             while (clipKey.consumeClick()) MediaBackend.saveClip();
+            while (friendsKey.consumeClick()) {
+                Screen current = Compat.currentScreen(client);
+                if (!(current instanceof SocialScreen)) SocialScreen.show(current);
+            }
             behindYou.tickKeys();
             if (zoom != null) zoom.tickKeys();
             if (freelook != null) freelook.tickKeys();
@@ -293,5 +311,23 @@ public class DuskClient implements ClientModInitializer {
             modules.tick();
         });
         LOGGER.info("DuskClient initialized with {} modules", modules.all().size());
+    }
+
+    /** Friends & Chat under the pause menu's buttons (none when the menu is hidden, F3+Esc). */
+    private static void addFriendsButton(Screen screen) {
+        var widgets = ScreenWidgets.of(screen);
+        int x = -1, width = 204, bottom = 0;
+        for (AbstractWidget b : widgets) {
+            if (b.getY() + b.getHeight() >= bottom) {
+                bottom = b.getY() + b.getHeight();
+                x = b.getX();
+                width = b.getWidth();
+            }
+        }
+        if (x < 0) return;
+        int n = SocialNotifier.badge();
+        String label = n > 0 ? "Friends & Chat (" + n + ")" : "Friends & Chat";
+        widgets.add(Button.builder(Component.literal(label), b -> SocialScreen.show(screen))
+                .bounds(screen.width / 2 - width / 2, Math.min(bottom + 4, screen.height - 24), width, 20).build());
     }
 }

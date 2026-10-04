@@ -33,6 +33,8 @@ public final class DuskConfig {
     public String recordingMode = "off";
     /** How far back a clip reaches, in seconds. */
     public int clipSeconds = 30;
+    /** In game: a toast when a friend messages you, comes online or sends a request. */
+    public boolean friendToasts = true;
 
     private static DuskConfig instance;
 

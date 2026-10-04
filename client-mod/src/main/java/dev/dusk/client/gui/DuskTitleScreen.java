@@ -2,6 +2,7 @@ package dev.dusk.client.gui;
 
 import com.mojang.realmsclient.RealmsMainScreen;
 import dev.dusk.client.compat.Compat;
+import dev.dusk.client.social.SocialNotifier;
 import dev.dusk.client.compat.SkinCompat;
 import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.media.MediaScreen;
@@ -76,6 +77,8 @@ public class DuskTitleScreen extends DuskScreen {
         icon(ix, top, ib, Icons.PACK, "Resource Packs", () -> open(new PackBrowserScreen(this, PackBrowserScreen.RESOURCE_PACKS)));
         ix -= ib + ig;
         icon(ix, top, ib, Icons.MEDIA, "Media", () -> open(new MediaScreen(this, MediaScreen.SCREENSHOTS)));
+        ix -= ib + ig;
+        icon(ix, top, ib, Icons.CHAT, "Friends & Chat", () -> SocialScreen.show(this));
         ix -= ib + ig;
         icon(ix, top, ib, Icons.GRID, "Dusk Menu", () -> open(new DuskSettingsScreen(this)));
         if (DuskConfig.get().showAccountTile && this.minecraft != null) {
@@ -187,6 +190,7 @@ public class DuskTitleScreen extends DuskScreen {
                 Theme.cell(c, a.x + 1, a.y + 1, a.w - 2, a.h - 2, hover);
                 int iw = a.icon.width() * iconScale, ih = a.icon.height() * iconScale;
                 a.icon.draw(c, a.x + (a.w - iw) / 2, a.y + (a.h - ih) / 2, Theme.filter(Theme.GLYPH, hover, false), iconScale);
+                if (a.icon == Icons.CHAT) badge(c, a, SocialNotifier.badge());
                 if (hover) tipFor = a;
                 continue;
             }
@@ -214,6 +218,17 @@ public class DuskTitleScreen extends DuskScreen {
 
         String version = "Dusk " + modVersion() + "  \u00b7  Minecraft " + mcVersion();
         c.text(version, cx - c.textWidth(version) / 2, versionY, Theme.TEXT_FAINT, true);
+    }
+
+    /** Unread messages plus requests, a gold count on the cell's corner like the launcher's sidebar. */
+    private static void badge(Canvas c, Action a, int n) {
+        if (n <= 0) return;
+        String s = n > 99 ? "99+" : String.valueOf(n);
+        int w = Math.max(10, c.textWidth(s) + 5), h = 10;
+        int x = a.x + a.w - w + 3, y = a.y - 3;
+        c.fill(x - 1, y - 1, x + w + 1, y + h + 1, 0xFF000000);
+        c.fill(x, y, x + w, y + h, Theme.ACCENT);
+        c.text(s, x + (w - c.textWidth(s)) / 2 + 1, y + 1, 0xFF1A1A1A, false);
     }
 
     /** The account pill: the player's face (with the hat layer) and name. */

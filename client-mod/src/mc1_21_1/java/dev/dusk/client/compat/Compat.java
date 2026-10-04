@@ -125,4 +125,13 @@ public final class Compat {
     public static boolean flatSignSheet() {
         return false;
     }
+
+    /** Leaves the world or server, as the pause menu's Disconnect does. */
+    public static void leaveWorld(Minecraft mc) {
+        boolean local = mc.isLocalServer();
+        if (mc.level != null) mc.level.disconnect();
+        mc.disconnect(local ? new net.minecraft.client.gui.screens.GenericMessageScreen(
+                net.minecraft.network.chat.Component.translatable("menu.savingLevel"))
+                : new net.minecraft.client.gui.screens.ProgressScreen(true));
+    }
 }

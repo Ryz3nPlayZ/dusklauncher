@@ -137,4 +137,9 @@ public final class Compat {
     public static boolean flatSignSheet() {
         return false;
     }
+
+    /** Leaves the world or server, as the pause menu's Disconnect does (lands on the title or server list). */
+    public static void leaveWorld(Minecraft mc) {
+        mc.disconnectFromWorld(net.minecraft.client.multiplayer.ClientLevel.DEFAULT_QUIT_MESSAGE);
+    }
 }
