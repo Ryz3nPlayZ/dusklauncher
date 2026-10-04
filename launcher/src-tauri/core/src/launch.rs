@@ -286,6 +286,10 @@ pub fn build_launch_spec(
     }
 }
 
+/// Windows' CREATE_NO_WINDOW: start a console program without a console window.
+#[cfg(windows)]
+pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 fn run_hook(cmd: &str, cwd: &Path) {
     if cmd.trim().is_empty() {
         return;
@@ -299,6 +303,11 @@ fn run_hook(cmd: &str, cwd: &Path) {
         c.args(["-c", cmd]);
         c
     };
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        formed.creation_flags(CREATE_NO_WINDOW);
+    }
     let status = formed.current_dir(cwd).status();
     tracing::info!(?cmd, ?status, "hook finished");
 }
@@ -342,6 +351,10 @@ pub async fn launch(spec: &LaunchSpec, env: &LaunchEnv) -> Result<tokio::process
     for (k, v) in &spec.env {
         command.env(k, v);
     }
+    // java.exe is a console program: without this Windows opens a console
+    // window next to the game
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
 
     let child = command.spawn().map_err(|e| Error::Other(format!("spawn {}: {e}", java_bin.display())))?;
     Ok(child)

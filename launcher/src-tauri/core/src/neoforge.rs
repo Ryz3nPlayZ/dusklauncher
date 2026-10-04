@@ -173,7 +173,10 @@ async fn run_installer(
     if !profiles.exists() {
         tokio::fs::write(&profiles, br#"{"profiles":{}}"#).await?;
     }
-    let out = tokio::process::Command::new(java_bin)
+    let mut installer = tokio::process::Command::new(java_bin);
+    #[cfg(windows)]
+    installer.creation_flags(crate::launch::CREATE_NO_WINDOW);
+    let out = installer
         .arg("-jar")
         .arg(&jar)
         .arg("--install-client")
