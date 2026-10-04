@@ -5,6 +5,7 @@ import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.BoolSetting;
 import dev.dusk.client.module.setting.IntSetting;
 import dev.dusk.client.module.setting.KeySetting;
+import net.minecraft.client.CameraType;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -16,7 +17,9 @@ import org.lwjgl.glfw.GLFW;
  * FreeLook (freelook-og, MIT, jmilthedude — see NOTICE): hold Left Alt, or
  * flip it on with Right Alt, and the mouse turns your head while your body
  * keeps facing where it was, up to 100° either way; letting go eases the view
- * back. Off in front view. Not registered when a standalone freelook mod is
+ * back. With Third person on (the default, as Lunar's and Celibistrial's
+ * freelook do it) the view also pulls back behind you while you look and
+ * snaps back to first person when you let go. Off in front view. Not registered when a standalone freelook mod is
  * installed. The camera mixin calls {@link #aim} as the camera is aimed and
  * reads {@link #yaw}/{@link #pitch}; the mouse mixin feeds {@link #turn}.
  */
@@ -27,6 +30,7 @@ public class Freelook extends Module {
 
     private final KeySetting useKey = add(new KeySetting("freelook", "Freelook key", GLFW.GLFW_KEY_LEFT_ALT), "Keybinds");
     private final KeySetting toggleKey = add(new KeySetting("freelook_toggle", "Toggle key", GLFW.GLFW_KEY_RIGHT_ALT), "Keybinds");
+    private final BoolSetting thirdPerson = add(new BoolSetting("thirdPerson", "Third person", true), "Camera");
     private final BoolSetting clampView = add(new BoolSetting("clampView", "Clamp to shoulders", true), "Camera");
     private final BoolSetting interpolate = add(new BoolSetting("interpolate", "Smooth return", true), "Camera");
     private final IntSetting interpolateTime = add(new IntSetting("interpolateSpeed", "Return time", 200, 50, 1000, 50, "ms"), "Camera");
@@ -35,10 +39,12 @@ public class Freelook extends Module {
     /** Non-null from the first aimed frame until the view is back where it started. */
     private State state;
     private boolean interpolating;
+    /** The view to go back to, while freelook has pulled the camera into third person. */
+    private CameraType restoreCamera;
 
     public Freelook() {
         super("freelook", "Freelook", Category.RENDER,
-                "Hold Left Alt to look around without turning your body.");
+                "Hold Left Alt to look around you in third person without turning.");
         instance = this;
         setEnabled(true);
     }
@@ -99,6 +105,10 @@ public class Freelook extends Module {
             interpolating = false;
             if (state == null) {
                 state = new State(player.getYRot(), player.getXRot());
+                if (thirdPerson.get() && mc.options.getCameraType() == CameraType.FIRST_PERSON) {
+                    restoreCamera = CameraType.FIRST_PERSON;
+                    mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+                }
                 return;
             }
             lockPlayerRotation(player);
@@ -106,7 +116,8 @@ public class Freelook extends Module {
             lockPlayerRotation(player);
             if (state.interpolate(interpolateTime.get())) deactivate();
         } else if (state != null) {
-            if (interpolate.get()) {
+            // back in first person the view just snaps home, nothing to ease
+            if (interpolate.get() && restoreCamera == null) {
                 state.startInterpolation();
                 interpolating = true;
             } else {
@@ -119,23 +130,34 @@ public class Freelook extends Module {
     public void turn(double dx, double dy) {
         if (state == null || interpolating) return;
         state.yaw += (float) dx * 0.15F;
-        if (clampView.get()) {
+        // behind you there are no shoulders to stop at: the camera goes all the way round
+        if (clampView.get() && restoreCamera == null) {
             state.yaw = Mth.clamp(state.yaw, state.originalYaw - SHOULDER_LIMIT, state.originalYaw + SHOULDER_LIMIT);
         }
         state.pitch = Mth.clamp(state.pitch + (float) dy * 0.15F, -90f, 90f);
     }
 
-    /** The body keeps its heading; the head and the aim follow the view. */
+    /**
+     * The body keeps its heading; in first person the head and the aim follow
+     * the view, in third person the player stays exactly as it was.
+     */
     private void lockPlayerRotation(LocalPlayer player) {
+        boolean still = restoreCamera != null;
         player.setYRot(state.originalYaw);
         player.yBodyRot = state.originalYaw;
-        player.yHeadRot = state.yaw;
-        player.setXRot(state.pitch);
+        player.yHeadRot = still ? state.originalYaw : state.yaw;
+        player.setXRot(still ? state.originalPitch : state.pitch);
     }
 
     private void deactivate() {
         state = null;
         interpolating = false;
+        if (restoreCamera != null) {
+            Minecraft mc = Minecraft.getInstance();
+            // only undo our own switch, not an F5 pressed meanwhile
+            if (mc.options.getCameraType() == CameraType.THIRD_PERSON_BACK) mc.options.setCameraType(restoreCamera);
+            restoreCamera = null;
+        }
     }
 
     private static final class State {
