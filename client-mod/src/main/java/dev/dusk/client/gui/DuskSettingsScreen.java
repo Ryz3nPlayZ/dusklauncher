@@ -32,7 +32,7 @@ public class DuskSettingsScreen extends MenuScreen {
             "autoreconnect", "serverlag", "containerpreview", "chathistory", "freecam", "chatmacros",
             "stopwatch", "resourcepacks", "scoreboard", "bossbar", "tabping",
             "blockoutline", "backgroundfps", "namehider", "fovchanger", "totems", "itemcounter", "bedwarsresources",
-            "skyblockstats", "hypixel", "slotlock");
+            "skyblockstats", "hypixel", "slotlock", "totempop");
 
     private enum Tab {
         ALL("ALL", null), NEW("NEW", null),

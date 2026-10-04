@@ -55,6 +55,7 @@
     "KeyboardDebugMixin",
     "NightVisionMixin",
     "ScreenEffectMixin",
+    "TotemPopMixin",
     "HitboxMixin",
     "HitboxRenderMixin",
     "StuckArrowMixin",

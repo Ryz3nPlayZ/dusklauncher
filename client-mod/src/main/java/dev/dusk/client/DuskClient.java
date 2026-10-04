@@ -70,6 +70,7 @@ import dev.dusk.client.modules.render.Fullbright;
 import dev.dusk.client.modules.render.Hitbox;
 import dev.dusk.client.modules.render.ItemScale;
 import dev.dusk.client.modules.render.LowFire;
+import dev.dusk.client.modules.render.TotemPop;
 import dev.dusk.client.modules.render.LowShield;
 import dev.dusk.client.modules.render.ShieldStatuses;
 import dev.dusk.client.modules.misc.Waypoints;
@@ -207,6 +208,7 @@ public class DuskClient implements ClientModInitializer {
             // BactroMod ports; they hook client internals only 1.21.11+ has
             modules.register(new NoPumpkinBlur());
             modules.register(new LowFire());
+            modules.register(new TotemPop());
             modules.register(new LowShield());
             modules.register(new NoNightVision());
             modules.register(new RiptideShieldFix());
