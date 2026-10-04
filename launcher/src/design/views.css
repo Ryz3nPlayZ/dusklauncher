@@ -2409,3 +2409,57 @@
 .outfits > .meta {
   flex: none;
 }
+
+/* ── quests: streak card, boards, achievements ───────────────────────── */
+.quests__head {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+.quests__head .px {
+  min-width: calc(220 * var(--u));
+}
+.quests__row {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+.quests__row > .meta:first-of-type {
+  margin-left: auto;
+}
+.quests__section {
+  flex: none;
+}
+.quests__section .srow {
+  align-self: stretch;
+  min-height: 0;
+}
+.quests__bar {
+  align-self: stretch;
+  height: calc(14 * var(--u));
+  background: var(--black);
+  box-shadow: 0 0 0 2px var(--panel-bd);
+}
+.quests__fill {
+  height: 100%;
+  background: linear-gradient(var(--accent-up) 50%, var(--accent-lo) 50%);
+}
+.quests__cycle {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--gap-sm);
+}
+.quests__day {
+  flex-direction: column;
+  align-items: center;
+  gap: calc(6 * var(--u));
+  padding: calc(12 * var(--u)) 0;
+}
+/* the claimable count on the nav's QUESTS cell */
+.nav__cell .social__badge {
+  min-width: calc(28 * var(--u));
+  height: calc(28 * var(--u));
+}

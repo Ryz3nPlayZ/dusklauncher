@@ -23,6 +23,7 @@ import Home from './views/Home';
 import Instances from './views/Instances';
 import Cosmetics from './views/Cosmetics';
 import Store from './views/Store';
+import Quests from './views/Quests';
 import ProfileView from './views/Profile';
 import SettingsView from './views/Settings';
 import SignInGate from './components/SignIn';
@@ -40,6 +41,9 @@ export default function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [pose, setPose] = useState<Pose>('IDLE');
+  /* the store buys for this friend while set (SEND A GIFT in the social pane) */
+  const [giftFor, setGiftFor] = useState<{ uuid: string; name: string } | null>(null);
+  const [claimable, setClaimable] = useState(0);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [game, setGame] = useState<GameState | null>(null);
   /* where the running game is (server / singleplayer) — INVITE sends it */
@@ -71,6 +75,33 @@ export default function App() {
     setAccountKnown(true);
     setSkin(await api.accountSkin());
   }, []);
+
+  // gifting ends when you leave the store
+  useEffect(() => {
+    if (route !== 'store') setGiftFor(null);
+  }, [route]);
+
+  /* the QUESTS badge: rewards waiting to be claimed, rechecked every few
+     minutes and whenever the page changes (the Quests view keeps it live) */
+  const signedIn = !isTauri || !!account?.authenticated;
+  useEffect(() => {
+    if (!signedIn) {
+      setClaimable(0);
+      return;
+    }
+    let live = true;
+    const check = () =>
+      api
+        .getQuests()
+        .then((q) => live && setClaimable(q.claimable))
+        .catch(() => {});
+    void check();
+    const t = window.setInterval(check, 5 * 60_000);
+    return () => {
+      live = false;
+      window.clearInterval(t);
+    };
+  }, [signedIn, route]);
 
   useEffect(() => {
     void refreshProfiles();
@@ -260,7 +291,7 @@ export default function App() {
         <SceneBackground scene={settings?.theme === 'nether' ? 'mcpvp' : 'dusk'} />
       )}
 
-      <Nav route={route} onRoute={setRoute} account={account} skin={skin} />
+      <Nav route={route} onRoute={setRoute} account={account} skin={skin} claimable={claimable} />
 
       <main className={`view${route === 'home' ? '' : ' view--dim'}`}>
         {route === 'home' && (
@@ -306,8 +337,17 @@ export default function App() {
           />
         )}
         {route === 'store' && (
-          <Store account={account} skin={skin} pose={pose} onPose={setPose} onWardrobe={() => setRoute('cosmetics')} />
+          <Store
+            account={account}
+            skin={skin}
+            pose={pose}
+            onPose={setPose}
+            onWardrobe={() => setRoute('cosmetics')}
+            giftFor={giftFor}
+            onEndGift={() => setGiftFor(null)}
+          />
         )}
+        {route === 'quests' && <Quests account={account} onClaimable={setClaimable} />}
         {route === 'profile' && <ProfileView account={account} skin={skin} onChange={refreshAccount} />}
         {route === 'settings' && settings && (
           <SettingsView
@@ -339,6 +379,10 @@ export default function App() {
             notifyMessages: settings?.notifyMessages ?? true,
           }}
           onJoin={join}
+          onGift={(uuid, name) => {
+            setGiftFor({ uuid, name });
+            setRoute('store');
+          }}
           isTauri={isTauri}
         />
       </div>

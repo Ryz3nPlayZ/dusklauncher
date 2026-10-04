@@ -9,6 +9,7 @@ import {
   type AccessoryEntry,
   type AccessoryModelJson,
   type CapeEntry,
+  type FriendProfile,
   type Loadout,
   type StoreItem,
 } from '../lib/api';
@@ -20,6 +21,10 @@ import {
  * live on the Dusk API — animated capes 750, static items 500; coins come
  * from redeem codes in Settings), EQUIP writes it into the launcher-wide
  * loadout the mod reads. The wardrobe only ever lists what was bought here.
+ *
+ * With `giftFor` it buys for a friend instead: their skin and look on the
+ * viewer, what they own marked THEY OWN, a second click to send, and the
+ * store stays open for the next gift until DONE.
  */
 
 type Filter = 'ALL' | 'CAPES' | 'ACCESSORIES';
@@ -43,12 +48,17 @@ export default function Store({
   pose,
   onPose,
   onWardrobe,
+  giftFor = null,
+  onEndGift,
 }: {
   account: Account | null;
   skin: string | null;
   pose: Pose;
   onPose: (p: Pose) => void;
   onWardrobe: () => void;
+  /** buying for this friend instead of you */
+  giftFor?: { uuid: string; name: string } | null;
+  onEndGift?: () => void;
 }) {
   const [capes, setCapes] = useState<CapeEntry[]>([]);
   const [capeData, setCapeData] = useState<Record<number, { cape: string; ears?: string; animated: boolean }>>({});
@@ -64,6 +74,11 @@ export default function Store({
   const [elytra, setElytra] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // gift mode: the friend's profile (their look, what they own) and skin, and the armed second click
+  const [friend, setFriend] = useState<FriendProfile | null>(null);
+  const [friendSkin, setFriendSkin] = useState<string | null>(null);
+  const [armed, setArmed] = useState(false);
+  const gifting = giftFor !== null;
 
   const load = useCallback(async () => {
     setNote(null);
@@ -120,16 +135,43 @@ export default function Store({
     }
   }, []);
 
+  // also on a new recipient: coins may have moved since the store opened
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, giftFor]);
 
-  const wornCape = equippedCape(loadout);
-  const wornAcc = useMemo(() => equippedAccessories(loadout), [loadout]);
+  useEffect(() => {
+    setFriend(null);
+    setFriendSkin(null);
+    if (!giftFor) return;
+    let live = true;
+    api
+      .getFriendProfile(giftFor.uuid)
+      .then((p) => live && setFriend(p))
+      .catch((e) => live && setNote(String(e)));
+    api
+      .getPublicSkin(giftFor.uuid)
+      .then((s) => live && setFriendSkin(s))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [giftFor]);
+
+  // a new pick (or recipient) needs its own second click
+  useEffect(() => setArmed(false), [picked, giftFor]);
+
+  const wornCape = gifting ? (friend?.cape ?? null) : equippedCape(loadout);
+  const wornAcc = useMemo(
+    () => (gifting ? (friend?.accessories ?? []) : equippedAccessories(loadout)),
+    [gifting, friend, loadout],
+  );
+  /** what the shelf marks as had: yours, or in gift mode theirs */
+  const have = useMemo(() => (gifting ? new Set(friend?.owned ?? []) : owned), [gifting, friend, owned]);
 
   const pickedCape = picked?.kind === 'cape' ? capes.find((c) => c.id === picked.id) ?? null : null;
   const pickedAcc = picked?.kind === 'accessory' ? accessories.find((a) => a.id === picked.id) ?? null : null;
-  const pickedOwned = picked ? owned.has(picked.id) : false;
+  const pickedOwned = picked ? have.has(picked.id) : false;
   const pickedWorn = picked
     ? picked.kind === 'cape'
       ? wornCape === picked.id
@@ -168,6 +210,28 @@ export default function Store({
     }
   }, [picked]);
 
+  const gift = useCallback(async () => {
+    if (!picked || !giftFor) return;
+    if (!armed) {
+      setArmed(true);
+      return;
+    }
+    setArmed(false);
+    setBusy(true);
+    setNote(null);
+    const item = prices[picked.id]?.name ?? 'it';
+    try {
+      const r = await api.giftCosmetic(giftFor.uuid, picked.id);
+      setCoins(r.coins);
+      setFriend((f) => (f ? { ...f, owned: [...f.owned, picked.id] } : f));
+      setNote(`Sent ${item} to ${giftFor.name}. Pick another to send more.`);
+    } catch (e) {
+      setNote(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [picked, giftFor, armed, prices]);
+
   const setWorn = useCallback(
     async (wear: boolean) => {
       if (!picked) return;
@@ -196,13 +260,25 @@ export default function Store({
   const showCapes = filter !== 'ACCESSORIES';
   const showAcc = filter !== 'CAPES';
   const total = capes.length + accessories.length;
-  const ownedCount = [...capes, ...accessories].filter((i) => owned.has(i.id)).length;
+  const ownedCount = [...capes, ...accessories].filter((i) => have.has(i.id)).length;
   const priceOf = (id: number) => prices[id]?.price ?? null;
   const pickedPrice = picked ? priceOf(picked.id) : null;
   const canAfford = coins !== null && pickedPrice !== null && coins >= pickedPrice;
   /* the tile / card tag: what the item is to you, or what it costs */
   const tagFor = (id: number, worn: boolean) =>
-    worn ? 'WORN' : owned.has(id) ? 'OWNED' : priceOf(id) === null ? '—' : `${priceOf(id)} COINS`;
+    gifting
+      ? have.has(id)
+        ? 'THEY OWN'
+        : priceOf(id) === null
+          ? '—'
+          : `${priceOf(id)} COINS`
+      : worn
+        ? 'WORN'
+        : owned.has(id)
+          ? 'OWNED'
+          : priceOf(id) === null
+            ? '—'
+            : `${priceOf(id)} COINS`;
 
   const detail = pickedCape
     ? [
@@ -221,12 +297,20 @@ export default function Store({
   return (
     <div className="page">
       <div className="page__head">
-        <h1 className="page__title">Store</h1>
-        <PxButton family="soft" height="md" onClick={onWardrobe} title="Everything you have claimed, ready to wear">
-          <TT size={20} tone="accent">
-            WARDROBE
-          </TT>
-        </PxButton>
+        <h1 className="page__title">{giftFor ? `Gift for ${giftFor.name}` : 'Store'}</h1>
+        {giftFor ? (
+          <PxButton family="soft" height="md" onClick={onEndGift} title="Back to shopping for yourself">
+            <TT size={20} tone="accent">
+              DONE
+            </TT>
+          </PxButton>
+        ) : (
+          <PxButton family="soft" height="md" onClick={onWardrobe} title="Everything you have claimed, ready to wear">
+            <TT size={20} tone="accent">
+              WARDROBE
+            </TT>
+          </PxButton>
+        )}
       </div>
 
       <div className="win">
@@ -236,7 +320,7 @@ export default function Store({
           <NavCell label="ACCESSORIES" active={filter === 'ACCESSORIES'} onClick={() => setFilter('ACCESSORIES')} />
           <div className="win__fill" />
           <NavLabel label={coins === null ? 'NOT SIGNED IN' : `${coins} COINS`} />
-          <NavLabel label={`${ownedCount} / ${total} OWNED`} />
+          <NavLabel label={gifting ? `THEY OWN ${ownedCount} / ${total}` : `${ownedCount} / ${total} OWNED`} />
         </div>
 
         <div className="win__body">
@@ -245,8 +329,8 @@ export default function Store({
             <PxBox family="panel" className="viewer">
               <div className="viewer__stage">
                 <PlayerRender
-                  skin={skin}
-                  model={account?.skinVariant || 'auto'}
+                  skin={gifting ? friendSkin : skin}
+                  model={gifting ? 'auto' : account?.skinVariant || 'auto'}
                   cape={previewCape === null ? null : capeData[previewCape]?.cape}
                   capeFrameMs={previewCape === null ? 100 : (capes.find((c) => c.id === previewCape)?.frameMs ?? 100)}
                   ears={previewCape === null ? null : capeData[previewCape]?.ears}
@@ -279,7 +363,29 @@ export default function Store({
               </div>
 
               <div className="viewer__actions">
-                {!pickedOwned ? (
+                {gifting ? (
+                  <PxButton
+                    family={pickedOwned || !canAfford ? 'grey' : armed ? 'accent' : 'install'}
+                    height="fill"
+                    disabled={!picked || !friend || busy || !signedIn || pickedOwned || !canAfford}
+                    title={pickedOwned ? 'They already have this' : 'Spend your coins on this; it lands in their wardrobe'}
+                    onClick={() => void gift()}
+                  >
+                    <TT size={16} tone={pickedOwned || !canAfford ? 'sub' : armed ? 'accent' : undefined}>
+                      {pickedOwned
+                        ? 'THEY OWN THIS'
+                        : busy
+                          ? 'SENDING…'
+                          : pickedPrice === null
+                            ? 'GIFT'
+                            : !canAfford
+                              ? `NEED ${pickedPrice - (coins ?? 0)} MORE COINS`
+                              : armed
+                                ? `SURE? GIFT · ${pickedPrice}`
+                                : `GIFT · ${pickedPrice}`}
+                    </TT>
+                  </PxButton>
+                ) : !pickedOwned ? (
                   <PxButton
                     family={canAfford ? 'install' : 'grey'}
                     height="fill"
@@ -343,7 +449,7 @@ export default function Store({
                     capes.map((c) => {
                       const on = picked?.kind === 'cape' && picked.id === c.id;
                       const worn = wornCape === c.id;
-                      const own = owned.has(c.id);
+                      const own = have.has(c.id);
                       return (
                         <PxBox
                           key={`cape-${c.id}`}
@@ -376,7 +482,7 @@ export default function Store({
                     accessories.map((a) => {
                       const on = picked?.kind === 'accessory' && picked.id === a.id;
                       const worn = wornAcc.includes(a.id);
-                      const own = owned.has(a.id);
+                      const own = have.has(a.id);
                       return (
                         <PxBox
                           key={`acc-${a.id}`}

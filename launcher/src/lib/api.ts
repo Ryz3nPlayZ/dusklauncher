@@ -236,6 +236,50 @@ export interface FriendProfile {
   server?: string;
   cape: number | null;
   accessories: number[];
+  /** everything they own, so a gift can skip it */
+  owned: number[];
+  /** achievements they've claimed */
+  badges: string[];
+}
+
+/** a quest, daily or weekly, or an achievement (GET /v1/me/quests) */
+export interface Quest {
+  id: string;
+  title: string;
+  progress: number;
+  goal: number;
+  /** "min" for minutes played, else a count */
+  unit: string;
+  coins: number;
+  done: boolean;
+  claimed: boolean;
+}
+
+export interface Streak {
+  /** played days in a row, counting today once it reaches needMinutes */
+  days: number;
+  todayMinutes: number;
+  needMinutes: number;
+  /** what today pays once it counts */
+  coins: number;
+  done: boolean;
+  claimed: boolean;
+  /** the week's cycle of payouts and today's place in it (0-based) */
+  cycle: number[];
+  cycleDay: number;
+}
+
+export interface Quests {
+  coins: number;
+  daily: Quest[];
+  weekly: Quest[];
+  streak: Streak;
+  achievements: Quest[];
+  /** rewards waiting for CLAIM */
+  claimable: number;
+  /** seconds until the daily / weekly boards change */
+  dailyReset: number;
+  weeklyReset: number;
 }
 
 /** one chat line, either direction (GET/POST /v1/messages/:uuid) */
@@ -974,6 +1018,41 @@ async function previewStore(): Promise<Store> {
   ];
   return { items, coins: previewCoins, owned: [...previewOwned].sort((a, b) => a - b), signedIn: true, error: null };
 }
+/** what each preview friend owns, so gift mode can mark it */
+const previewGifted = new Map<string, Set<number>>();
+const pq = (id: string, title: string, progress: number, goal: number, unit: string, coins: number, claimed = false): Quest => ({
+  id, title, progress, goal, unit, coins, done: progress >= goal, claimed,
+});
+const previewQuests: Quests = {
+  coins: 0,
+  daily: [
+    pq('play_30', 'Play for 30 minutes', 30, 30, 'min', 50),
+    pq('friend_20', 'Play 20 minutes with a friend', 7, 20, 'min', 80),
+    pq('chat_5', 'Send 5 messages to friends', 5, 5, 'count', 40, true),
+  ],
+  weekly: [
+    pq('w_play_300', 'Play for 5 hours', 142, 300, 'min', 200),
+    pq('w_days_5', 'Play on 5 different days', 3, 5, 'count', 200),
+    pq('w_gift_1', 'Gift a friend a cosmetic', 0, 1, 'count', 150),
+  ],
+  streak: { days: 4, todayMinutes: 15, needMinutes: 15, coins: 35, done: true, claimed: false, cycle: [20, 25, 30, 35, 40, 50, 100], cycleDay: 3 },
+  achievements: [
+    pq('first_hour', 'First hour', 60, 60, 'min', 100, true),
+    pq('hours_10', '10 hours played', 412, 600, 'min', 250),
+    pq('first_friend', 'Made a friend', 1, 1, 'count', 100),
+    pq('streak_7', '7-day streak', 4, 7, 'count', 200),
+  ],
+  claimable: 0,
+  dailyReset: 5 * 3600 + 12 * 60,
+  weeklyReset: 3 * 86400 + 4 * 3600,
+};
+function previewQuestsNow(): Quests {
+  const q = previewQuests;
+  const all = [...q.daily, ...q.weekly, ...q.achievements];
+  q.claimable = all.filter((x) => x.done && !x.claimed).length + (q.streak.done && !q.streak.claimed ? 1 : 0);
+  q.coins = previewCoins;
+  return structuredClone(q);
+}
 let previewCatalog: Promise<CosmeticsCatalog> | null = null;
 function previewCosmetics(): Promise<CosmeticsCatalog> {
   previewCatalog ??= fetch('/__cosmetics/registry.json')
@@ -1247,7 +1326,12 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     const uuid = String(args?.uuid);
     const friend = previewFriends.find((f) => f.uuid === uuid);
     if (!friend) throw new Error('not friends');
-    return { uuid, username: friend.username, online: friend.online, lastSeen: friend.lastSeen, cape: 5, accessories: [16] } as T;
+    const owned = previewGifted.get(uuid) ?? new Set([5, 16]);
+    previewGifted.set(uuid, owned);
+    return {
+      uuid, username: friend.username, online: friend.online, lastSeen: friend.lastSeen, cape: 5, accessories: [16],
+      owned: [...owned], badges: ['First hour', 'Made a friend'],
+    } as T;
   }
   if (cmd === 'get_messages') {
     const uuid = String(args?.uuid);
@@ -1298,14 +1382,34 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     const item = store.items.find((i) => i.id === args?.id);
     if (!item) throw new Error('no such cosmetic');
     if (previewCoins < item.price) throw new Error(`Not enough coins — ${item.name} costs ${item.price}.`);
-    previewCoins -= item.price;
     const uuid = String(args?.uuid);
+    if (previewGifted.get(uuid)?.has(item.id)) throw new Error('they already own that');
+    previewCoins -= item.price;
+    previewGifted.set(uuid, new Set([...(previewGifted.get(uuid) ?? [5, 16]), item.id]));
     const message: ChatMessage = {
       id: previewNextMessageId++, fromUuid: '', toUuid: uuid, body: `Sent you ${item.name} as a gift`, sentAt: previewNow(),
       kind: 'gift', meta: { item: item.id, name: item.name, kind: item.kind },
     };
     previewConversation(uuid).push(message);
     return { coins: previewCoins, message } as T;
+  }
+  if (cmd === 'get_quests') return previewQuestsNow() as T;
+  if (cmd === 'claim_quest') {
+    const q = previewQuests;
+    const id = String(args?.id);
+    let paid = 0;
+    for (const x of [...q.daily, ...q.weekly, ...q.achievements]) {
+      if (x.done && !x.claimed && (id === 'all' || id === x.id)) {
+        x.claimed = true;
+        paid += x.coins;
+      }
+    }
+    if (q.streak.done && !q.streak.claimed && (id === 'all' || id === 'streak')) {
+      q.streak.claimed = true;
+      paid += q.streak.coins;
+    }
+    previewCoins += paid;
+    return { paid, quests: previewQuestsNow() } as T;
   }
   if (cmd === 'list_outfits') return structuredClone(previewOutfits) as T;
   if (cmd === 'save_outfit') {
@@ -1567,6 +1671,9 @@ export const api = {
   blockPlayer: (uuid: string) => invoke<BlockedPlayer[]>('block_player', { uuid }),
   unblockPlayer: (uuid: string) => invoke<BlockedPlayer[]>('unblock_player', { uuid }),
   giftCosmetic: (uuid: string, id: number) => invoke<{ coins: number; message: ChatMessage }>('gift_cosmetic', { uuid, id }),
+  getQuests: () => invoke<Quests>('get_quests'),
+  /** a quest id, "streak", or "all" */
+  claimQuest: (id: string) => invoke<{ paid: number; quests: Quests }>('claim_quest', { id }),
   listOutfits: () => invoke<Outfit[]>('list_outfits'),
   saveOutfit: (name: string, loadout: Loadout) => invoke<Outfit[]>('save_outfit', { name, loadout }),
   deleteOutfit: (id: number) => invoke<Outfit[]>('delete_outfit', { id }),

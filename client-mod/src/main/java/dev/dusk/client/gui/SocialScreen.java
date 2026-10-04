@@ -52,7 +52,7 @@ public class SocialScreen extends PanelScreen {
     private static final DateTimeFormatter HM = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH);
 
-    private enum View { CHAT, PROFILE, SHOTS, GIFT }
+    private enum View { CHAT, PROFILE, SHOTS }
 
     private interface Draw { void draw(Canvas c, int x, int y, int w, int mx, int my); }
 
@@ -90,8 +90,6 @@ public class SocialScreen extends PanelScreen {
 
     @Nullable private Social.Profile profile;
     @Nullable private String profileError;
-    @Nullable private Social.Store store;
-    @Nullable private String storeError;
     @Nullable private List<Path> shots;
     @Nullable private Path sending;
 
@@ -423,16 +421,6 @@ public class SocialScreen extends PanelScreen {
                     mc.execute(() -> profileError = message(e));
                 }
             });
-        } else if (v == View.GIFT) {
-            storeError = null;
-            io.execute(() -> {
-                try {
-                    Social.Store s = Social.store();
-                    mc.execute(() -> store = s);
-                } catch (Exception e) {
-                    mc.execute(() -> storeError = message(e));
-                }
-            });
         } else if (v == View.SHOTS) {
             shots = null;
             io.execute(() -> {
@@ -564,18 +552,10 @@ public class SocialScreen extends PanelScreen {
         });
     }
 
-    private void gift(Social.Friend f, Social.StoreItem item) {
-        if (!confirmed("gift:" + item.id())) return;
-        act("Sending gift...", () -> {
-            long coins = Social.gift(f.uuid(), item.id());
-            mc.execute(() -> {
-                if (store != null) store = new Social.Store(store.items(), coins);
-            });
-        }, () -> {
-            note(item.name() + " sent to " + f.username() + ".", false);
-            openView(View.CHAT);
-            nextChat = 0;
-        });
+    /** The store, buying for this friend; it stays open for more than one gift. */
+    private void giftStore() {
+        Social.Friend f = friend();
+        if (f != null) WardrobeScreen.gift(this, f.uuid(), f.username());
     }
 
     // ---- rows -------------------------------------------------------------------
@@ -592,7 +572,6 @@ public class SocialScreen extends PanelScreen {
             case CHAT -> buildChat(out, f);
             case PROFILE -> buildProfile(out, f);
             case SHOTS -> buildShots(out, f);
-            case GIFT -> buildGift(out, f);
         }
         return out;
     }
@@ -679,6 +658,11 @@ public class SocialScreen extends PanelScreen {
                 CapeRegistry.AccessoryEntry a = CapeRegistry.accessory(id);
                 out.add(text(a != null ? a.name() : "Accessory #" + id, Theme.TEXT, false));
             }
+            if (!p.badges().isEmpty()) {
+                out.add(gap(6));
+                out.add(section("BADGES"));
+                for (String b : p.badges()) out.add(text(b, Theme.ACCENT, false));
+            }
         }
         out.add(gap(10));
         List<Btn> btns = new ArrayList<>();
@@ -687,7 +671,7 @@ public class SocialScreen extends PanelScreen {
             String ip = f.server();
             btns.add(new Btn(armed("join:" + ip) ? "SURE?" : "JOIN", Theme.Family.GREEN, true, () -> join(ip)));
         }
-        btns.add(new Btn("GIFT", Theme.Family.SOFT, true, () -> openView(View.GIFT)));
+        btns.add(new Btn("GIFT", Theme.Family.SOFT, true, this::giftStore));
         btns.add(new Btn(armed("remove") ? "SURE?" : "REMOVE", Theme.Family.GREY, true, () -> remove(f, false)));
         btns.add(new Btn(armed("block") ? "SURE?" : "BLOCK", Theme.Family.GREY, true, () -> remove(f, true)));
         out.add(row(BTN_H + 4, null, false, btns.toArray(Btn[]::new)));
@@ -733,25 +717,6 @@ public class SocialScreen extends PanelScreen {
                 }
                 return false;
             }));
-        }
-    }
-
-    private void buildGift(List<Row> out, Social.Friend f) {
-        out.add(section("GIFT " + f.username().toUpperCase(Locale.ROOT)));
-        Social.Store s = store;
-        if (s == null) {
-            out.add(text(storeError != null ? storeError : "Loading...", storeError != null ? Theme.RED_UP : Theme.TEXT_MUTED, false));
-            return;
-        }
-        out.add(text("You have " + s.coins() + " coins.", Theme.TEXT_MUTED, false));
-        out.add(gap(4));
-        for (Social.StoreItem item : s.items()) {
-            String kind = item.kind().equals("cape") ? "Cape" : "Accessory";
-            String price = armed("gift:" + item.id()) ? "SURE?" : item.price() + " COINS";
-            out.add(row(24, (c, x, y, w, mx, my) -> {
-                c.text(Theme.ellipsize(c, item.name(), w - 110), x + 4, y + 4, Theme.TEXT, false);
-                c.text(kind, x + 4, y + 14, Theme.TEXT_FAINT, false);
-            }, true, new Btn(price, Theme.Family.ACCENT, item.price() <= s.coins(), () -> gift(f, item))));
         }
     }
 
@@ -1125,7 +1090,7 @@ public class SocialScreen extends PanelScreen {
                     switch (tool.id()) {
                         case "shot" -> openView(View.SHOTS);
                         case "invite" -> invite();
-                        case "gift" -> openView(View.GIFT);
+                        case "gift" -> giftStore();
                         default -> {}
                     }
                 }
@@ -1197,7 +1162,7 @@ public class SocialScreen extends PanelScreen {
             }
             return f.keyPressed(key, modifiers);
         }
-        if (key == GLFW.GLFW_KEY_ESCAPE && tab == FRIENDS && (view == View.SHOTS || view == View.GIFT || view == View.PROFILE)) {
+        if (key == GLFW.GLFW_KEY_ESCAPE && tab == FRIENDS && (view == View.SHOTS || view == View.PROFILE)) {
             openView(View.CHAT);
             return true;
         }

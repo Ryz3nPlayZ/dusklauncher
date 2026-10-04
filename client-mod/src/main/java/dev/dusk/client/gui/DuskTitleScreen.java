@@ -80,6 +80,8 @@ public class DuskTitleScreen extends DuskScreen {
         ix -= ib + ig;
         icon(ix, top, ib, Icons.CHAT, "Friends & Chat", () -> SocialScreen.show(this));
         ix -= ib + ig;
+        icon(ix, top, ib, Icons.STAR, "Quests", () -> QuestsScreen.show(this));
+        ix -= ib + ig;
         icon(ix, top, ib, Icons.GRID, "Dusk Menu", () -> open(new DuskSettingsScreen(this)));
         if (DuskConfig.get().showAccountTile && this.minecraft != null) {
             // 5 | 28 face | 10 | name | 14
@@ -191,6 +193,7 @@ public class DuskTitleScreen extends DuskScreen {
                 int iw = a.icon.width() * iconScale, ih = a.icon.height() * iconScale;
                 a.icon.draw(c, a.x + (a.w - iw) / 2, a.y + (a.h - ih) / 2, Theme.filter(Theme.GLYPH, hover, false), iconScale);
                 if (a.icon == Icons.CHAT) badge(c, a, SocialNotifier.badge());
+                if (a.icon == Icons.STAR) badge(c, a, SocialNotifier.ready());
                 if (hover) tipFor = a;
                 continue;
             }

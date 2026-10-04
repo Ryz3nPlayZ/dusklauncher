@@ -99,6 +99,7 @@ import dev.dusk.client.modules.render.WeatherChanger;
 import dev.dusk.client.modules.toggle.ToggleSprint;
 import dev.dusk.client.server.ServerApi;
 import dev.dusk.client.social.SocialNotifier;
+import dev.dusk.client.gui.QuestsScreen;
 import dev.dusk.client.gui.SocialScreen;
 import dev.dusk.client.compat.ScreenWidgets;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -282,6 +283,7 @@ public class DuskClient implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             LoadoutWatcher.tick();
+            SocialNotifier.tick(client);
             while (settingsKey.consumeClick()) {
                 Screen current = Compat.currentScreen(client);
                 if (client.player != null && !(current instanceof MenuScreen)) {
@@ -313,7 +315,7 @@ public class DuskClient implements ClientModInitializer {
         LOGGER.info("DuskClient initialized with {} modules", modules.all().size());
     }
 
-    /** Friends & Chat under the pause menu's buttons (none when the menu is hidden, F3+Esc). */
+    /** Friends & Chat and Quests under the pause menu's buttons (none when the menu is hidden, F3+Esc). */
     private static void addFriendsButton(Screen screen) {
         var widgets = ScreenWidgets.of(screen);
         int x = -1, width = 204, bottom = 0;
@@ -325,9 +327,13 @@ public class DuskClient implements ClientModInitializer {
             }
         }
         if (x < 0) return;
-        int n = SocialNotifier.badge();
+        int n = SocialNotifier.badge(), q = SocialNotifier.ready();
         String label = n > 0 ? "Friends & Chat (" + n + ")" : "Friends & Chat";
+        String quests = q > 0 ? "Quests (" + q + ")" : "Quests";
+        int left = screen.width / 2 - width / 2, y = Math.min(bottom + 4, screen.height - 24), half = (width - 4) / 2;
         widgets.add(Button.builder(Component.literal(label), b -> SocialScreen.show(screen))
-                .bounds(screen.width / 2 - width / 2, Math.min(bottom + 4, screen.height - 24), width, 20).build());
+                .bounds(left, y, half, 20).build());
+        widgets.add(Button.builder(Component.literal(quests), b -> QuestsScreen.show(screen))
+                .bounds(left + width - half, y, half, 20).build());
     }
 }

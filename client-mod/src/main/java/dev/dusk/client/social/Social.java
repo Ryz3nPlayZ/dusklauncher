@@ -43,14 +43,33 @@ public final class Social {
         }
     }
 
+    /** {@code owned}: every cosmetic they have, so a gift can skip it; {@code badges}: achievements they've claimed. */
     public record Profile(String uuid, String username, boolean online, long lastSeen, @Nullable String playing,
-                          @Nullable String server, int cape, List<Integer> accessories) {}
+                          @Nullable String server, int cape, List<Integer> accessories, List<Integer> owned,
+                          List<String> badges) {}
 
     public record Outfit(long id, String name, Map<String, JsonElement> loadout) {}
 
     public record StoreItem(int id, String name, String kind, long price) {}
 
     public record Store(List<StoreItem> items, long coins) {}
+
+    /** {@code unit} is "min" for minutes played, else a count. */
+    public record Quest(String id, String title, long progress, long goal, String unit, long coins, boolean done,
+                        boolean claimed) {}
+
+    /** {@code cycle}: the week's payouts; {@code cycleDay}: today's place in it. */
+    public record Streak(long days, long todayMinutes, long needMinutes, long coins, boolean done, boolean claimed,
+                         List<Long> cycle, int cycleDay) {}
+
+    /** The boards; the resets are seconds from when they were read. */
+    public record Quests(long coins, List<Quest> daily, List<Quest> weekly, Streak streak, List<Quest> achievements,
+                         int claimable, long dailyReset, long weeklyReset) {}
+
+    public record Claimed(long paid, Quests quests) {}
+
+    /** A reward waiting for CLAIM. */
+    public record Ready(String id, String title, long coins) {}
 
     private Social() {}
 
@@ -97,8 +116,13 @@ public final class Social {
         if (o.has("accessories") && o.get("accessories").isJsonArray()) {
             for (JsonElement e : o.getAsJsonArray("accessories")) acc.add(e.getAsInt());
         }
+        List<Integer> owned = new ArrayList<>();
+        for (JsonElement e : arr(o.get("owned"))) owned.add(e.getAsInt());
+        List<String> badges = new ArrayList<>();
+        for (JsonElement e : arr(o.get("badges"))) badges.add(e.getAsString());
         return new Profile(str(o, "uuid"), str(o, "username"), bool(o, "online"), num(o, "lastSeen"),
-                opt(o, "playing"), opt(o, "server"), o.has("cape") && !o.get("cape").isJsonNull() ? o.get("cape").getAsInt() : -1, acc);
+                opt(o, "playing"), opt(o, "server"), o.has("cape") && !o.get("cape").isJsonNull() ? o.get("cape").getAsInt() : -1, acc,
+                owned, badges);
     }
 
     // ---- chat -----------------------------------------------------------------
@@ -226,6 +250,58 @@ public final class Social {
 
     public static List<Outfit> deleteOutfit(long id) throws IOException {
         return outfits(DuskAccount.api("DELETE", "/v1/me/outfits/" + id, null));
+    }
+
+    // ---- quests ---------------------------------------------------------------
+
+    public static Quests quests() throws IOException {
+        return quests(DuskAccount.api("GET", "/v1/me/quests", null).getAsJsonObject());
+    }
+
+    /** Claims a quest by id, "streak", or "all". */
+    public static Claimed claim(String id) throws IOException {
+        JsonObject b = new JsonObject();
+        b.addProperty("id", id);
+        JsonObject o = DuskAccount.api("POST", "/v1/me/quests/claim", b).getAsJsonObject();
+        return new Claimed(num(o, "paid"), quests(o.getAsJsonObject("quests")));
+    }
+
+    /**
+     * One play tick: the service credits the real time since the last one
+     * (capped), so these only need to come about once a minute. Returns
+     * everything waiting for CLAIM.
+     */
+    public static List<Ready> play(boolean active, @Nullable String server) throws IOException {
+        JsonObject b = new JsonObject();
+        b.addProperty("active", active);
+        if (server != null) b.addProperty("server", server);
+        JsonObject o = DuskAccount.api("POST", "/v1/me/play", b).getAsJsonObject();
+        List<Ready> out = new ArrayList<>();
+        for (JsonElement e : arr(o.get("ready"))) {
+            JsonObject r = e.getAsJsonObject();
+            out.add(new Ready(str(r, "id"), str(r, "title"), num(r, "coins")));
+        }
+        return out;
+    }
+
+    private static Quests quests(JsonObject o) {
+        JsonObject s = o.getAsJsonObject("streak");
+        List<Long> cycle = new ArrayList<>();
+        for (JsonElement e : arr(s.get("cycle"))) cycle.add(e.getAsLong());
+        Streak streak = new Streak(num(s, "days"), num(s, "todayMinutes"), num(s, "needMinutes"), num(s, "coins"),
+                bool(s, "done"), bool(s, "claimed"), cycle, (int) num(s, "cycleDay"));
+        return new Quests(num(o, "coins"), questList(o.get("daily")), questList(o.get("weekly")), streak,
+                questList(o.get("achievements")), (int) num(o, "claimable"), num(o, "dailyReset"), num(o, "weeklyReset"));
+    }
+
+    private static List<Quest> questList(@Nullable JsonElement e) {
+        List<Quest> out = new ArrayList<>();
+        for (JsonElement x : arr(e)) {
+            JsonObject q = x.getAsJsonObject();
+            out.add(new Quest(str(q, "id"), str(q, "title"), num(q, "progress"), num(q, "goal"), str(q, "unit"),
+                    num(q, "coins"), bool(q, "done"), bool(q, "claimed")));
+        }
+        return out;
     }
 
     // ---- parsing --------------------------------------------------------------

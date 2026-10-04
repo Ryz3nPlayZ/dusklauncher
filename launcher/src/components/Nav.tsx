@@ -23,11 +23,14 @@ export default function Nav({
   onRoute,
   account,
   skin,
+  claimable = 0,
 }: {
   route: Route;
   onRoute: (r: Route) => void;
   account: Account | null;
   skin: string | null;
+  /** quest rewards waiting for CLAIM */
+  claimable?: number;
 }) {
   return (
     <header className="nav">
@@ -61,6 +64,21 @@ export default function Nav({
         <TT size={16} sx={NAV_SX}>
           {account?.username ?? 'SIGN IN'}
         </TT>
+      </button>
+
+      <button
+        className={cellClass(route === 'quests')}
+        onClick={() => onRoute('quests')}
+        title={claimable > 0 ? `Quests — ${claimable} reward${claimable === 1 ? '' : 's'} to claim` : 'Quests'}
+      >
+        <TT size={16} sx={NAV_SX}>
+          QUESTS
+        </TT>
+        {claimable > 0 && (
+          <span className="social__badge">
+            <TT size={11}>{claimable > 99 ? '99+' : String(claimable)}</TT>
+          </span>
+        )}
       </button>
 
       <button

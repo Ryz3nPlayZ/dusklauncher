@@ -46,6 +46,9 @@ import java.util.concurrent.Executors;
  * Dusk capes and accessories are a draft until APPLY LOOK; Minecraft capes
  * apply on click. Mojang changes reach other players when they next load the
  * profile, so on a server: leave, change, rejoin.
+ *
+ * <p>{@link #gift} opens the store alone, for a friend: what they already
+ * own is marked, a second click sends one, and it stays open for the next.
  */
 public class WardrobeScreen extends PanelScreen {
     private static final String[] TABS = {"SKINS", "CAPES", "ACCESSORIES", "OUTFITS", "STORE"};
@@ -108,6 +111,12 @@ public class WardrobeScreen extends PanelScreen {
     private int saveX, saveY, saveW;
     private List<String> lookLines = List.of();
 
+    /** Gift mode: the friend the store is buying for (null: your own wardrobe), and what they own. */
+    @Nullable private final String giftTo;
+    private final String giftName;
+    @Nullable private Set<Integer> theyOwn;
+    private final int tabBefore;
+
     @Nullable private AbstractWidget model;
     private final NavBar gallery = new NavBar();
     /** Viewer box, the model's stage inside it, the gallery window. */
@@ -115,7 +124,20 @@ public class WardrobeScreen extends PanelScreen {
     private int cols, tileW, tileH;
 
     public WardrobeScreen(@Nullable Screen parent) {
-        super(Component.literal("Wardrobe"), parent);
+        this(parent, null, "");
+    }
+
+    /** The store, buying for {@code uuid} instead of you. */
+    public static void gift(@Nullable Screen parent, String uuid, String name) {
+        dev.dusk.client.compat.Compat.setScreen(Minecraft.getInstance(), new WardrobeScreen(parent, uuid, name));
+    }
+
+    private WardrobeScreen(@Nullable Screen parent, @Nullable String giftTo, String giftName) {
+        super(Component.literal(giftTo != null ? "Gift" : "Wardrobe"), parent);
+        this.giftTo = giftTo;
+        this.giftName = giftName;
+        this.tabBefore = tab;
+        if (giftTo != null) tab = STORE;
         pickedCape = DuskConfig.get().cosmetics.capeId();
         pickedAcc = new ArrayList<>(DuskConfig.get().cosmetics.accessoryIds());
         reload();
@@ -165,6 +187,14 @@ public class WardrobeScreen extends PanelScreen {
                     outfits = List.of();
                     outfitsError = message(e);
                 });
+            }
+            if (giftTo != null) {
+                try {
+                    Set<Integer> theirs = new LinkedHashSet<>(Social.profile(giftTo).owned());
+                    post(() -> theyOwn = theirs);
+                } catch (IOException | RuntimeException e) {
+                    post(() -> storeError = message(e));
+                }
             }
             try {
                 Social.Store st = Social.store();
@@ -377,6 +407,10 @@ public class WardrobeScreen extends PanelScreen {
 
     /** A store tile: owned ones go on the viewer, the rest take a second click to buy. */
     private void storeClick(Social.StoreItem item) {
+        if (giftTo != null) {
+            giftClick(item, giftTo);
+            return;
+        }
         boolean cape = item.kind().equals("cape");
         Set<Integer> have = owned;
         Social.Store st = store;
@@ -410,6 +444,40 @@ public class WardrobeScreen extends PanelScreen {
                 if (store != null) store = new Social.Store(store.items(), coins);
             });
             return "Bought " + item.name() + ". Click it to try it on.";
+        });
+    }
+
+    /** Gift mode's store tile: a second click sends it, and the store stays open for the next. */
+    private void giftClick(Social.StoreItem item, String to) {
+        Set<Integer> theirs = theyOwn;
+        Social.Store st = store;
+        if (theirs == null || st == null) return;
+        statusError = false;
+        if (theirs.contains(item.id())) {
+            status = giftName + " already owns " + item.name() + ".";
+            buyArmed = -1;
+            return;
+        }
+        if (item.price() > st.coins()) {
+            status = "You need " + (item.price() - st.coins()) + " more coins for " + item.name() + ".";
+            statusError = true;
+            buyArmed = -1;
+            return;
+        }
+        if (!buyArmed(item.id())) {
+            buyArmed = item.id();
+            buyArmedAt = System.currentTimeMillis();
+            status = "Gift " + item.name() + " to " + giftName + " for " + item.price() + " coins? Click it again.";
+            return;
+        }
+        buyArmed = -1;
+        act("Sending gift...", () -> {
+            long coins = Social.gift(to, item.id());
+            post(() -> {
+                if (theyOwn != null) theyOwn.add(item.id());
+                if (store != null) store = new Social.Store(store.items(), coins);
+            });
+            return "Sent " + item.name() + " to " + giftName + ".";
         });
     }
 
@@ -496,16 +564,19 @@ public class WardrobeScreen extends PanelScreen {
 
     private void storeTiles(List<Tile> out) {
         Social.Store st = store;
-        Set<Integer> have = owned;
+        Set<Integer> have = giftTo != null ? theyOwn : owned;
         if (st == null || have == null) return;
+        boolean gifting = giftTo != null;
         int wornCape = DuskConfig.get().cosmetics.capeId();
         List<Integer> wornAcc = DuskConfig.get().cosmetics.accessoryIds();
         for (Social.StoreItem item : st.items()) {
             boolean cape = item.kind().equals("cape");
             if (storeFilter == 1 && !cape || storeFilter == 2 && cape) continue;
-            boolean own = have.contains(item.id()), worn = cape ? wornCape == item.id() : wornAcc.contains(item.id());
+            boolean own = have.contains(item.id());
+            boolean worn = !gifting && (cape ? wornCape == item.id() : wornAcc.contains(item.id()));
             boolean armed = buyArmed(item.id());
-            String badge = worn ? "WORN" : own ? "OWNED" : armed ? "BUY?" : item.price() + " COINS";
+            String badge = gifting ? (own ? "THEY OWN" : armed ? "GIFT?" : item.price() + " COINS")
+                    : worn ? "WORN" : own ? "OWNED" : armed ? "BUY?" : item.price() + " COINS";
             Theme.Family f = armed ? Theme.Family.ACCENT : worn ? Theme.Family.GREEN : Theme.Family.PANEL;
             String tip;
             if (cape) {
@@ -569,7 +640,8 @@ public class WardrobeScreen extends PanelScreen {
         }
         if (tab == OUTFITS) return outfitsError != null ? outfitsError : "";
         if (tab == STORE) {
-            if (store == null) return storeError != null ? storeError : "Loading the store...";
+            if (store == null || giftTo != null && theyOwn == null) return storeError != null ? storeError : "Loading the store...";
+            if (giftTo != null) return "Pick something for " + giftName + ". Click it twice to send it.";
             return "Bought cosmetics are yours on every Dusk instance, in game and in the launcher.";
         }
         if (owned == null) return "Loading your cosmetics...";
@@ -580,7 +652,7 @@ public class WardrobeScreen extends PanelScreen {
     private boolean noteIsError() {
         if (!status.isEmpty()) return statusError;
         if (tab == OUTFITS) return outfitsError != null;
-        if (tab == STORE) return store == null && storeError != null;
+        if (tab == STORE) return (store == null || giftTo != null && theyOwn == null) && storeError != null;
         return profile == null && profileError != null;
     }
 
@@ -661,17 +733,17 @@ public class WardrobeScreen extends PanelScreen {
 
     @Override
     protected String[] tabs() {
-        return TABS;
+        return giftTo != null ? new String[] {"GIFT FOR " + giftName.toUpperCase(Locale.ROOT)} : TABS;
     }
 
     @Override
     protected int activeTab() {
-        return tab;
+        return giftTo != null ? 0 : tab;
     }
 
     @Override
     protected void selectTab(int i) {
-        tab = i;
+        tab = giftTo != null ? STORE : i;
         scroll = 0;
         buyArmed = -1;
         status = "";
@@ -680,6 +752,7 @@ public class WardrobeScreen extends PanelScreen {
 
     @Override
     protected List<Tool> tools() {
+        if (giftTo != null) return List.of(new Tool("close", Icons.CLOSE, "", "Close"));
         SkinLibrary.Entry cur = current();
         String name = cur != null ? cur.name().toUpperCase(Locale.ROOT) : "NO SKIN SELECTED";
         return List.of(new Tool("close", Icons.CLOSE, "", "Close"),
@@ -835,9 +908,15 @@ public class WardrobeScreen extends PanelScreen {
         gallery.draw(c, -1, mouseX, mouseY, this.width, this.height);
 
         int[] cb = actionBox(false), ab = actionBox(true);
-        boxButton(c, "CANCEL", cb[0], cb[1], cb[2], cb[3], mouseX, mouseY, Theme.Family.GREY, false, canCancel());
-        String apply = busy ? "..." : tab == 0 ? (applied() ? "APPLIED" : "APPLY") : "APPLY LOOK";
-        boxButton(c, apply, ab[0], ab[1], ab[2], ab[3], mouseX, mouseY, Theme.Family.INSTALL, false, canApply());
+        if (giftTo != null) {
+            // no look to apply: the viewer's foot says who's getting it
+            String to = Theme.ellipsize(c, "FOR " + giftName.toUpperCase(Locale.ROOT), vw - 8);
+            Theme.label(c, to, vx + (vw - c.textWidth(to)) / 2, cb[1] + (cb[3] - 7) / 2, Theme.LABEL_UP, Theme.LABEL_LO, 1f);
+        } else {
+            boxButton(c, "CANCEL", cb[0], cb[1], cb[2], cb[3], mouseX, mouseY, Theme.Family.GREY, false, canCancel());
+            String apply = busy ? "..." : tab == 0 ? (applied() ? "APPLIED" : "APPLY") : "APPLY LOOK";
+            boxButton(c, apply, ab[0], ab[1], ab[2], ab[3], mouseX, mouseY, Theme.Family.INSTALL, false, canApply());
+        }
 
         Tile tipFor = null;
         if (tab == OUTFITS) {
@@ -948,7 +1027,7 @@ public class WardrobeScreen extends PanelScreen {
         if (clickChrome(mx, my, button)) return true;
         if (Vanilla.inside(mx, my, stageX, stageY, stageW, stageH)) return false; // spin the model
         if (button != 0) return Vanilla.inside(mx, my, px, py, pw, ph);
-        if (in(actionBox(false), mx, my)) {
+        if (giftTo == null && in(actionBox(false), mx, my)) {
             if (canCancel()) {
                 if (tab == 0) {
                     SkinLibrary.Entry cur = current();
@@ -959,7 +1038,7 @@ public class WardrobeScreen extends PanelScreen {
             }
             return true;
         }
-        if (in(actionBox(true), mx, my)) {
+        if (giftTo == null && in(actionBox(true), mx, my)) {
             if (canApply()) {
                 if (tab == 0) applySkin();
                 else applyLook();
@@ -1041,6 +1120,8 @@ public class WardrobeScreen extends PanelScreen {
     @Override
     public void removed() {
         super.removed();
+        // gift mode borrowed the store tab; the wardrobe reopens where you left it
+        if (giftTo != null) tab = tabBefore;
         images.releaseAll();
         worker.shutdown();
     }

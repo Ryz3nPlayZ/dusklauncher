@@ -67,6 +67,12 @@ pub struct FriendProfile {
     pub server: Option<String>,
     pub cape: Option<u32>,
     pub accessories: Vec<u32>,
+    /// everything they own, so a gift can skip it
+    #[serde(default)]
+    pub owned: Vec<u32>,
+    /// achievements they've claimed
+    #[serde(default)]
+    pub badges: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -309,6 +315,18 @@ pub async fn unblock_player(state: State<'_, AppState>, uuid: String) -> Result<
 #[tauri::command]
 pub async fn gift_cosmetic(state: State<'_, AppState>, uuid: String, id: u32) -> Result<Gifted, String> {
     call(&state, reqwest::Method::POST, "/v1/me/gift", Some(json!({ "to": uuid, "id": id }))).await
+}
+
+/// The quest boards, streak and achievements (shape: `Quests` in api.ts).
+#[tauri::command]
+pub async fn get_quests(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    call(&state, reqwest::Method::GET, "/v1/me/quests", None).await
+}
+
+/// Claim a quest by id, "streak", or "all": `{ paid, quests }`.
+#[tauri::command]
+pub async fn claim_quest(state: State<'_, AppState>, id: String) -> Result<serde_json::Value, String> {
+    call(&state, reqwest::Method::POST, "/v1/me/quests/claim", Some(json!({ "id": id }))).await
 }
 
 #[tauri::command]

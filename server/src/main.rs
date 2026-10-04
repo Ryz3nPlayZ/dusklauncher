@@ -39,6 +39,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+mod quests;
+
 const CATALOG_JSON: &str = include_str!("../catalog.json");
 const PRICE_ANIMATED: i64 = 750;
 const PRICE_STILL: i64 = 500;
@@ -212,6 +214,7 @@ fn open_db(path: &str) -> Connection {
     add_column(&db, "accounts", "friend_requests", "TEXT NOT NULL DEFAULT 'everyone'");
     add_column(&db, "messages", "kind", "TEXT NOT NULL DEFAULT 'text'");
     add_column(&db, "messages", "meta", "TEXT");
+    quests::migrate(&db);
     db
 }
 
@@ -1099,6 +1102,10 @@ struct FriendProfile {
     server: Option<String>,
     cape: Option<u32>,
     accessories: Vec<u32>,
+    /// everything they own, so a gift can skip it
+    owned: Vec<u32>,
+    /// achievements they've claimed (quests.rs)
+    badges: Vec<&'static str>,
 }
 
 /// Whether `to`'s privacy settings (and block list) let `from` send a friend
@@ -1153,6 +1160,8 @@ async fn friend_profile(
         .and_then(Value::as_array)
         .map(|a| a.iter().filter_map(Value::as_u64).filter_map(|n| u32::try_from(n).ok()).collect())
         .unwrap_or_default();
+    let owned = owned_ids(&db, &target)?;
+    let badges = quests::badges(&db, &target)?;
     Ok(Json(FriendProfile {
         uuid: target,
         username,
@@ -1162,6 +1171,8 @@ async fn friend_profile(
         server: p.server,
         cape,
         accessories,
+        owned,
+        badges,
     }))
 }
 
@@ -1197,6 +1208,7 @@ fn insert_message(
         "INSERT INTO messages (from_uuid, to_uuid, body, sent_at, kind, meta) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![from, to, body, t, kind, meta.map(Value::to_string)],
     )?;
+    quests::record_message(db, from, kind)?;
     Ok(MessageEntry {
         id: db.last_insert_rowid(),
         from_uuid: from.to_string(),
@@ -1850,6 +1862,9 @@ async fn main() {
         )
         .route("/v1/me/gift", post(gift))
         .route("/v1/me/outfits", get(list_outfits).post(save_outfit))
+        .route("/v1/me/quests", get(quests::get_quests))
+        .route("/v1/me/quests/claim", post(quests::claim))
+        .route("/v1/me/play", post(quests::play))
         .route("/v1/me/outfits/{id}", delete(delete_outfit))
         .route("/v1/blocks", get(list_blocks).post(block_player))
         .route("/v1/blocks/{uuid}", delete(unblock_player))

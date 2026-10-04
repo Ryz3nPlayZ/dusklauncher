@@ -149,6 +149,8 @@ pub fn run() {
             friends::block_player,
             friends::unblock_player,
             friends::gift_cosmetic,
+            friends::get_quests,
+            friends::claim_quest,
             friends::list_outfits,
             friends::save_outfit,
             friends::delete_outfit,

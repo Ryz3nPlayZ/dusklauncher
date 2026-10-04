@@ -211,6 +211,7 @@ export default function SocialPane({
   activity,
   prefs,
   onJoin,
+  onGift,
   isTauri,
 }: {
   account: Account | null;
@@ -222,6 +223,8 @@ export default function SocialPane({
   prefs: SocialPrefs;
   /** start the game straight onto a friend's server */
   onJoin: (server: string, version: string | null) => void;
+  /** open the store, buying for this friend */
+  onGift: (uuid: string, name: string) => void;
   isTauri: boolean;
 }) {
   // the browser preview has mocks for every call, so it walks as signed in
@@ -464,6 +467,10 @@ export default function SocialPane({
               onMessage={() => setView({ kind: 'chat', uuid: view.uuid })}
               gameRunning={gameRunning}
               onJoin={onJoin}
+              onGift={(name) => {
+                setOpen(false);
+                onGift(view.uuid, name);
+              }}
               onRemoved={(list, name) => {
                 setFriends(list);
                 setView({ kind: 'list' });
@@ -1359,6 +1366,7 @@ function ProfileView({
   onMessage,
   gameRunning,
   onJoin,
+  onGift,
   onRemoved,
   onBlocked,
 }: {
@@ -1370,16 +1378,15 @@ function ProfileView({
   onMessage: () => void;
   gameRunning: boolean;
   onJoin: (server: string, version: string | null) => void;
+  onGift: (name: string) => void;
   onRemoved: (friends: Friend[], name: string) => void;
   onBlocked: (name: string) => void;
 }) {
   const [profile, setProfile] = useState<FriendProfile | null>(null);
   const [catalog, setCatalog] = useState<CosmeticsCatalog | null>(null);
   const [confirming, setConfirming] = useState<'remove' | 'block' | null>(null);
-  const [gifting, setGifting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -1406,17 +1413,16 @@ function ProfileView({
   // the confirm dialog takes the first Escape; the pane's own handler (on
   // document, bubbling) would otherwise close everything at once
   useEffect(() => {
-    if (!confirming && !gifting) return;
+    if (!confirming) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.stopPropagation();
       if (busy) return;
       setConfirming(null);
-      setGifting(false);
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [confirming, gifting, busy]);
+  }, [confirming, busy]);
 
   const act = () => {
     const blocking = confirming === 'block';
@@ -1460,12 +1466,6 @@ function ProfileView({
             <span className="meta">{error}</span>
           </PxBox>
         )}
-        {note && (
-          <PxBox family="green" height="md" className="social__notice" role="status">
-            <span className="meta">{note}</span>
-          </PxBox>
-        )}
-
         <Row label="CAPE" hint={profile ? (capeName ?? 'None equipped') : 'Loading…'}>
           {null}
         </Row>
@@ -1475,8 +1475,13 @@ function ProfileView({
         >
           {null}
         </Row>
-        <Row label="SEND A GIFT" hint="Buy a store cosmetic with your coins and it lands in their wardrobe.">
-          <PxButton family="blue" height="md" onClick={() => setGifting(true)}>
+        {profile && profile.badges.length > 0 && (
+          <Row label="BADGES" hint={profile.badges.join(' · ')}>
+            {null}
+          </Row>
+        )}
+        <Row label="SEND A GIFT" hint="Opens the store for them: buy cosmetics with your coins and they land in their wardrobe.">
+          <PxButton family="blue" height="md" onClick={() => onGift(name)}>
             <TT size={16} tone="blue">
               GIFT
             </TT>
@@ -1525,107 +1530,7 @@ function ProfileView({
           document.body,
         )}
 
-      {gifting &&
-        createPortal(
-          <GiftPicker
-            uuid={uuid}
-            name={name}
-            onClose={() => setGifting(false)}
-            onSent={(item, coins) => {
-              setGifting(false);
-              setNote(`Sent ${item} to ${name}. ${coins} coins left.`);
-            }}
-          />,
-          document.body,
-        )}
     </>
   );
 }
 
-/** the store's cosmetics (capes first) with prices; the service refuses
-    anything they already own */
-function GiftPicker({
-  uuid,
-  name,
-  onClose,
-  onSent,
-}: {
-  uuid: string;
-  name: string;
-  onClose: () => void;
-  onSent: (item: string, coins: number) => void;
-}) {
-  const [items, setItems] = useState<StoreItem[] | null>(null);
-  const [coins, setCoins] = useState<number | null>(null);
-  const [busy, setBusy] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    api
-      .getStore()
-      .then((s) => {
-        setItems([...s.items].sort((a, b) => (a.kind === b.kind ? a.price - b.price : a.kind === 'cape' ? -1 : 1)));
-        setCoins(s.coins);
-        if (s.error) setError(s.error);
-      })
-      .catch((e) => {
-        setItems([]);
-        setError(errText(e));
-      });
-  }, []);
-
-  const send = (item: StoreItem) => {
-    setBusy(item.id);
-    setError(null);
-    api
-      .giftCosmetic(uuid, item.id)
-      .then((r) => onSent(item.name, r.coins))
-      .catch((e) => {
-        setError(errText(e));
-        setBusy(null);
-      });
-  };
-
-  return (
-    <div className="modal-scrim" onClick={() => busy === null && onClose()}>
-      <PxBox
-        family="panel"
-        className="px--window modal social__gifts"
-        role="dialog"
-        aria-label={`Gift ${name}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <TT size={22}>{`GIFT ${name.toUpperCase()}`}</TT>
-        <span className="meta">{coins === null ? 'Loading the store…' : `You have ${coins} coins.`}</span>
-        <div className="social__gift-list scroll">
-          {items?.map((item) => (
-            <div key={item.id} className="social__gift">
-              <span className="social__text">{item.name}</span>
-              <span className="meta">{item.kind === 'cape' ? 'Cape' : 'Accessory'}</span>
-              <PxButton
-                family="blue"
-                height="md"
-                disabled={busy !== null || (coins !== null && coins < item.price)}
-                onClick={() => send(item)}
-              >
-                <TT size={16} tone="blue">
-                  {busy === item.id ? 'SENDING…' : `${item.price} COINS`}
-                </TT>
-              </PxButton>
-            </div>
-          ))}
-        </div>
-        {error && (
-          <PxBox family="red" height="md" className="social__notice" role="alert">
-            <span className="meta">{error}</span>
-          </PxBox>
-        )}
-        <div className="modal__row modal__row--tall">
-          <PxButton family="grey" height="md" disabled={busy !== null} onClick={onClose}>
-            <TT size={20}>CANCEL</TT>
-          </PxButton>
-        </div>
-      </PxBox>
-    </div>
-  );
-}
