@@ -115,13 +115,6 @@ Movement and camera modules ported from permissively licensed mods:
      misrepresented as being the original software.
   3. This notice may not be removed or altered from any source distribution.
 
-- FreeLook — https://github.com/jmilthedude/FreeLook-MultiLoader
-  MIT, Copyright (c) 2025 (the licence names no holder; repository by
-  jmilthedude). Ported: the free camera rotation with its shoulder clamp,
-  the mouse redirection, the hold and toggle keys and the eased return
-  (modules/render/Freelook.java and mixin/freelook). Distributed under the
-  MIT licence quoted above for Shield Statuses.
-
 - AppleSkin — https://github.com/squeek502/AppleSkin
   The Unlicense (squeek502). Ported: the saturation and exhaustion HUD
   overlays, the hunger and health previews for held food, the food values
