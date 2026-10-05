@@ -57,6 +57,8 @@
     "NightVisionMixin",
     "ScreenEffectMixin",
     "TotemPopMixin",
+    "GlintShaderMixin",
+    "GlintColorMixin",
     "HitboxMixin",
     "HitboxRenderMixin",
     "StuckArrowMixin",

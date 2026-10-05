@@ -26,6 +26,8 @@ java/dev/dusk/client/mixin/KeyboardDebugMixin.java
 java/dev/dusk/client/mixin/NightVisionMixin.java
 java/dev/dusk/client/mixin/ScreenEffectMixin.java
 java/dev/dusk/client/mixin/TotemPopMixin.java
+java/dev/dusk/client/mixin/GlintShaderMixin.java
+java/dev/dusk/client/mixin/GlintColorMixin.java
 java/dev/dusk/client/mixin/TimeChangerMixin.java
 java/dev/dusk/client/mixin/WeatherAttributesMixin.java
 java/dev/dusk/client/mixin/WeatherFogMixin.java

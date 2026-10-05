@@ -72,6 +72,7 @@ import dev.dusk.client.modules.render.Hitbox;
 import dev.dusk.client.modules.render.ItemScale;
 import dev.dusk.client.modules.render.LowFire;
 import dev.dusk.client.modules.render.TotemPop;
+import dev.dusk.client.modules.render.GlintColor;
 import dev.dusk.client.modules.render.LowShield;
 import dev.dusk.client.modules.render.ShieldStatuses;
 import dev.dusk.client.modules.misc.Waypoints;
@@ -210,6 +211,7 @@ public class DuskClient implements ClientModInitializer {
             modules.register(new NoPumpkinBlur());
             modules.register(new LowFire());
             modules.register(new TotemPop());
+            modules.register(new GlintColor());
             modules.register(new Cooldowns());
             modules.register(new LowShield());
             modules.register(new NoNightVision());
