@@ -113,6 +113,80 @@ pub async fn delete_world(state: State<'_, AppState>, profile_id: String, name: 
     trash::delete(&dir).map_err(|e| format!("Couldn't move it to the trash: {e}"))
 }
 
+/// What a world's `level.dat` says about it, for its row in the WORLDS tab.
+#[derive(Serialize, Default, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LevelInfo {
+    /// the name the game lists it under (the folder can differ)
+    pub level_name: Option<String>,
+    /// "survival", "creative", "adventure" or "spectator"
+    pub game_mode: Option<&'static str>,
+    pub hardcore: bool,
+    pub cheats: bool,
+    /// the version it was last played in, e.g. "1.21.11"
+    pub version: Option<String>,
+    /// as text: JS numbers can't hold every seed
+    pub seed: Option<String>,
+}
+
+/// `level.dat` (gzipped NBT) → its `Data` fields. Default when unreadable.
+pub(crate) fn level_info(level_dat: &Path) -> LevelInfo {
+    let Some(bytes) = read_gz(level_dat) else { return LevelInfo::default() };
+    let mut info = parse_level(&bytes);
+    if info.seed.is_none() {
+        // 26.1+ moved the seed out to its own file
+        let settings = level_dat.with_file_name("data").join("minecraft").join("world_gen_settings.dat");
+        info.seed = read_gz(&settings)
+            .and_then(|b| crate::servers::read_nbt(&b))
+            .and_then(|r| r.get("data")?.get("seed")?.int())
+            .map(|s| s.to_string());
+    }
+    info
+}
+
+fn read_gz(path: &Path) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let file = std::fs::File::open(path).ok()?;
+    let mut bytes = Vec::new();
+    // these are a few KB; the cap guards against a corrupt one
+    flate2::read::GzDecoder::new(file).take(8 << 20).read_to_end(&mut bytes).ok()?;
+    Some(bytes)
+}
+
+fn parse_level(bytes: &[u8]) -> LevelInfo {
+    use crate::servers::Tag;
+    let root = crate::servers::read_nbt(bytes);
+    let Some(data) = root.as_ref().and_then(|r| r.get("Data")) else { return LevelInfo::default() };
+    let int = |key: &str| data.get(key).and_then(Tag::int);
+    LevelInfo {
+        level_name: data.get("LevelName").and_then(Tag::str).map(str::to_string).filter(|n| !n.is_empty()),
+        game_mode: int("GameType").and_then(|g| match g {
+            0 => Some("survival"),
+            1 => Some("creative"),
+            2 => Some("adventure"),
+            3 => Some("spectator"),
+            _ => None,
+        }),
+        // 26.1+ keeps it with the difficulty
+        hardcore: int("hardcore")
+            .or_else(|| data.get("difficulty_settings")?.get("hardcore")?.int())
+            == Some(1),
+        cheats: int("allowCommands") == Some(1),
+        version: data
+            .get("Version")
+            .and_then(|v| v.get("Name"))
+            .and_then(Tag::str)
+            .map(str::to_string),
+        // 1.16+ keeps it under WorldGenSettings; older worlds at the top
+        seed: data
+            .get("WorldGenSettings")
+            .and_then(|w| w.get("seed"))
+            .or_else(|| data.get("RandomSeed"))
+            .and_then(Tag::int)
+            .map(|s| s.to_string()),
+    }
+}
+
 /// What a zip or folder holds, world-wise: the path prefix of its shallowest
 /// `level.dat` ("" at the root, "Map/" one folder down). macOS's
 /// `__MACOSX/` shadow copies don't count.
@@ -346,6 +420,49 @@ mod tests {
         assert_eq!(world_name("", "2024-01-05_18-22-03_My World"), "My World");
         assert_eq!(world_name("", "Parkour: Map?"), "Parkour_ Map_");
         assert_eq!(world_name("", ".."), "World");
+    }
+
+    #[test]
+    fn level_dat_fields() {
+        // TAG_Compound "" { Data: { LevelName, GameType, hardcore, Version{Name}, WorldGenSettings{seed} } }
+        let mut b = vec![10, 0, 0, 10, 0, 4];
+        b.extend(b"Data");
+        let str_tag = |b: &mut Vec<u8>, k: &str, v: &str| {
+            b.push(8);
+            b.extend((k.len() as u16).to_be_bytes());
+            b.extend(k.as_bytes());
+            b.extend((v.len() as u16).to_be_bytes());
+            b.extend(v.as_bytes());
+        };
+        str_tag(&mut b, "LevelName", "My Base");
+        b.extend([3, 0, 8]);
+        b.extend(b"GameType");
+        b.extend(1i32.to_be_bytes());
+        b.extend([1, 0, 8]);
+        b.extend(b"hardcore");
+        b.push(1);
+        b.extend([10, 0, 7]);
+        b.extend(b"Version");
+        str_tag(&mut b, "Name", "1.21.11");
+        b.push(0);
+        b.extend([10, 0, 16]);
+        b.extend(b"WorldGenSettings");
+        b.extend([4, 0, 4]);
+        b.extend(b"seed");
+        b.extend((-4_172_144_997_902_289_642i64).to_be_bytes());
+        b.extend([0, 0, 0]);
+        assert_eq!(
+            parse_level(&b),
+            LevelInfo {
+                level_name: Some("My Base".into()),
+                game_mode: Some("creative"),
+                hardcore: true,
+                cheats: false,
+                version: Some("1.21.11".into()),
+                seed: Some("-4172144997902289642".into()),
+            }
+        );
+        assert_eq!(parse_level(b"junk"), LevelInfo::default());
     }
 
     #[test]

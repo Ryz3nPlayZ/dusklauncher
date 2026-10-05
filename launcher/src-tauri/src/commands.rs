@@ -370,6 +370,8 @@ pub struct WorldDto {
     pub size: u64,
     /// the world's `icon.png` (the game saves one on first exit), as a data URL
     pub icon: Option<String>,
+    #[serde(flatten)]
+    pub level: crate::worlds::LevelInfo,
 }
 
 fn millis(t: std::time::SystemTime) -> u64 {
@@ -429,7 +431,8 @@ pub fn list_worlds(state: State<AppState>, profile_id: String) -> Result<Vec<Wor
             .ok()
             .filter(|b| b.len() <= 256 * 1024)
             .map(|b| format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(b)));
-        out.push(WorldDto { name, modified: stamp, size: dir_size(&path), icon });
+        let level = crate::worlds::level_info(&path.join("level.dat"));
+        out.push(WorldDto { name, modified: stamp, size: dir_size(&path), icon, level });
     }
     out.sort_by_key(|w| std::cmp::Reverse(w.modified));
     Ok(out)

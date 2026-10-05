@@ -541,6 +541,15 @@ export interface World {
   size: number;
   /** the world's icon.png as a data URL, once the game has saved one */
   icon: string | null;
+  /** what its level.dat says; null / false when it couldn't be read */
+  levelName: string | null;
+  gameMode: 'survival' | 'creative' | 'adventure' | 'spectator' | null;
+  hardcore: boolean;
+  cheats: boolean;
+  /** the version it was last played in */
+  version: string | null;
+  /** as text: JS numbers can't hold every seed */
+  seed: string | null;
 }
 
 /** a Java install found on this machine (`list_javas`) */
@@ -569,6 +578,21 @@ export function javaFor(mc: string): number | null {
   }
   // year-numbered releases (26.1 on) moved to Java 25
   return /^\d{2}\.\d+(\.\d+)?$/.test(mc) ? 25 : null;
+}
+
+/** Is release `a` newer than release `b`? null when either isn't a plain
+ *  release number (snapshots, pre-releases). 26.1 > 1.21.11 falls out of
+ *  comparing the parts as numbers. */
+export function releaseNewer(a: string, b: string): boolean | null {
+  const parts = (v: string) => (/^\d+(\.\d+){1,2}$/.test(v) ? v.split('.').map(Number) : null);
+  const x = parts(a);
+  const y = parts(b);
+  if (!x || !y) return null;
+  for (let i = 0; i < 3; i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0);
+    if (d) return d > 0;
+  }
+  return false;
 }
 
 /** an entry of the instance's multiplayer list (`servers.dat`) */
@@ -1006,8 +1030,14 @@ const fixtures: Record<string, unknown> = {
     { name: 'old realm', address: 'gone.example.net', icon: null },
   ] satisfies SavedServer[],
   list_worlds: [
-    { name: 'New World', modified: Date.now() - 2 * HOUR, size: 184_320_000, icon: null },
-    { name: 'Skyblock', modified: Date.now() - 90 * HOUR, size: 41_900_000, icon: null },
+    {
+      name: 'New World', modified: Date.now() - 2 * HOUR, size: 184_320_000, icon: null, levelName: 'New World',
+      gameMode: 'survival', hardcore: true, cheats: false, version: '1.21.11', seed: '-4172144997902289642',
+    },
+    {
+      name: 'Skyblock', modified: Date.now() - 90 * HOUR, size: 41_900_000, icon: null, levelName: '§6Skyblock §7v2',
+      gameMode: 'creative', hardcore: false, cheats: true, version: '26.2', seed: '9154800003455089103',
+    },
   ] satisfies World[],
   search_projects: {
     hits: [

@@ -44,8 +44,10 @@ pub struct ServerStatus {
 // ---- servers.dat ----
 
 #[derive(Debug)]
-enum Tag {
+pub(crate) enum Tag {
     Byte(i8),
+    Int(i32),
+    Long(i64),
     Str(String),
     List(Vec<Tag>),
     Compound(Vec<(String, Tag)>),
@@ -53,18 +55,37 @@ enum Tag {
 }
 
 impl Tag {
-    fn get(&self, key: &str) -> Option<&Tag> {
+    pub(crate) fn get(&self, key: &str) -> Option<&Tag> {
         match self {
             Tag::Compound(fields) => fields.iter().find(|(k, _)| k == key).map(|(_, v)| v),
             _ => None,
         }
     }
-    fn str(&self) -> Option<&str> {
+    pub(crate) fn str(&self) -> Option<&str> {
         match self {
             Tag::Str(s) => Some(s),
             _ => None,
         }
     }
+    /// any whole-number tag, widened
+    pub(crate) fn int(&self) -> Option<i64> {
+        match self {
+            Tag::Byte(v) => Some(*v as i64),
+            Tag::Int(v) => Some(*v as i64),
+            Tag::Long(v) => Some(*v),
+            _ => None,
+        }
+    }
+}
+
+/// An uncompressed NBT file's root compound.
+pub(crate) fn read_nbt(bytes: &[u8]) -> Option<Tag> {
+    let mut r = Nbt { b: bytes, i: 0 };
+    if r.u8()? != 10 {
+        return None;
+    }
+    r.string()?;
+    r.tag(10, 0)
 }
 
 struct Nbt<'a> {
@@ -102,8 +123,10 @@ impl Nbt<'_> {
         Some(match kind {
             1 => Tag::Byte(self.u8()? as i8),
             2 => self.take(2).map(|_| Tag::Other)?,
-            3 | 5 => self.take(4).map(|_| Tag::Other)?,
-            4 | 6 => self.take(8).map(|_| Tag::Other)?,
+            3 => Tag::Int(self.i32()?),
+            5 => self.take(4).map(|_| Tag::Other)?,
+            4 => Tag::Long(i64::from_be_bytes(self.take(8)?.try_into().ok()?)),
+            6 => self.take(8).map(|_| Tag::Other)?,
             7 => {
                 let n = self.len()?;
                 self.take(n).map(|_| Tag::Other)?
@@ -174,14 +197,7 @@ fn modified_utf8(b: &[u8]) -> String {
 /// The visible entries of a `servers.dat`, in list order. Entries the game
 /// marks hidden (direct-connect history) are left out, like the game does.
 fn parse_servers(bytes: &[u8]) -> Vec<ServerDto> {
-    let mut r = Nbt { b: bytes, i: 0 };
-    let root = (|| {
-        if r.u8()? != 10 {
-            return None;
-        }
-        r.string()?;
-        r.tag(10, 0)
-    })();
+    let root = read_nbt(bytes);
     let Some(Tag::List(list)) = root.as_ref().and_then(|t| t.get("servers")) else {
         return Vec::new();
     };

@@ -21,6 +21,7 @@ import {
   type JavaInstall,
   type LatestLog,
   type ImportedWorlds,
+  releaseNewer,
   type LaunchTarget,
   type Profile,
   type ProfileFolder,
@@ -1044,6 +1045,9 @@ function ContentTab({
 }
 
 /* ── WORLDS: what's in saves/ ───────────────────────────────────────────── */
+/** a name without the game's § formatting codes (map makers colour theirs) */
+const plain = (name: string) => name.replace(/§./g, '').trim() || name;
+
 function WorldsTab({
   profile,
   busy,
@@ -1340,10 +1344,29 @@ function WorldsTab({
                 <PixelGlyph glyph="box" size={40} color="var(--text-3)" />
               )}
             </span>
-            <span className="editor__file">
-              <TT size={16}>{w.name}</TT>
+            <span
+              className="editor__file"
+              title={[
+                w.levelName && plain(w.levelName) !== w.name ? `Folder: saves/${w.name}` : '',
+                w.seed ? `Seed: ${w.seed}` : '',
+              ]
+                .filter(Boolean)
+                .join('\n')}
+            >
+              <TT size={16}>{plain(w.levelName ?? w.name)}</TT>
               <span className="meta">
-                {fmtBytes(w.size)} · played {ago(w.modified)}
+                {[
+                  w.hardcore ? 'Hardcore' : w.gameMode && w.gameMode[0].toUpperCase() + w.gameMode.slice(1),
+                  w.cheats ? 'cheats' : '',
+                  w.version,
+                  fmtBytes(w.size),
+                  `played ${ago(w.modified)}`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+                {w.version && releaseNewer(w.version, profile.gameVersion) && (
+                  <span className="worlds__newer"> · newer than this instance — back it up before playing</span>
+                )}
               </span>
             </span>
             <span className="editor__actions worlds__actions">

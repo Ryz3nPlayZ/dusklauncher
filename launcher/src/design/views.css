@@ -1222,6 +1222,10 @@
   color: var(--r-up);
 }
 /* the ADD SERVER dialog: the modal's own column, inside a form so Enter adds */
+/* the world was saved by a newer game than the instance runs */
+.worlds__newer {
+  color: var(--y-up);
+}
 .worlds__form {
   display: flex;
   flex-direction: column;
