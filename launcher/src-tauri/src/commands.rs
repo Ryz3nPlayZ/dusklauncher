@@ -439,7 +439,7 @@ pub fn show_in_folder(
     profile_id: String,
     subdir: String,
 ) -> Result<(), String> {
-    let allowed = ["", "mods", "resourcepacks", "shaderpacks", "saves", "logs", "screenshots"];
+    let allowed = ["", "mods", "resourcepacks", "shaderpacks", "saves", "logs", "screenshots", "backups"];
     if !allowed.contains(&subdir.as_str()) {
         return Err("unknown folder".to_string());
     }

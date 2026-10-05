@@ -596,7 +596,8 @@ export type ProfileFolder =
   | 'shaderpacks'
   | 'saves'
   | 'logs'
-  | 'screenshots';
+  | 'screenshots'
+  | 'backups';
 
 export interface AppInfo {
   launcherVersion: string;
@@ -994,6 +995,8 @@ const sideEffects = new Set([
   'delete_screenshot',
   'reveal_screenshot',
   'delete_recording',
+  'backup_world',
+  'delete_world',
   'reveal_recording',
   'send_screenshot',
   'notify',
@@ -1634,6 +1637,10 @@ export const api = {
   listServers: (profileId: string) => invoke<SavedServer[]>('list_servers', { profileId }),
   /** MOTD, players and ping, resolving SRV records like the game does */
   pingServer: (address: string) => invoke<ServerStatus>('ping_server', { address }),
+  /** zip a world into the instance's backups/ folder; resolves to the zip's name */
+  backupWorld: (profileId: string, name: string) => invoke<string>('backup_world', { profileId, name }),
+  /** move a world to the OS trash */
+  deleteWorld: (profileId: string, name: string) => invoke<void>('delete_world', { profileId, name }),
   listContent: (profileId: string, kind: ContentKind) =>
     invoke<ProfileMod[]>('list_profile_content', { profileId, kind }),
   /** which Modrinth projects the folder already holds, by file hash */

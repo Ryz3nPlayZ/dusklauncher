@@ -31,6 +31,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 trash = "5"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 hickory-resolver = "0.26.3"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [lib]
 name = "fasterlauncher_lib"

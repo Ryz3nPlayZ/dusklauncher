@@ -940,6 +940,33 @@ function WorldsTab({
   /* address → its ping; 'down' when it didn't answer, absent while pinging */
   const [status, setStatus] = useState<Record<string, ServerStatus | 'down'>>({});
   const [note, setNote] = useState<string | null>(null);
+  /* world being zipped right now */
+  const [backing, setBacking] = useState<string | null>(null);
+  const [trashing, setTrashing] = useState<World | null>(null);
+
+  const backup = async (w: World) => {
+    setBacking(w.name);
+    setNote(null);
+    try {
+      const zip = await api.backupWorld(profile.id, w.name);
+      setNote(`Backed up ${w.name} to backups/${zip}`);
+    } catch (e) {
+      setNote(String(e));
+    } finally {
+      setBacking(null);
+    }
+  };
+
+  const remove = async (w: World) => {
+    setTrashing(null);
+    try {
+      await api.deleteWorld(profile.id, w.name);
+      setWorlds((list) => (list ?? []).filter((x) => x.name !== w.name));
+      setNote(`${w.name} moved to the trash.`);
+    } catch (e) {
+      setNote(String(e));
+    }
+  };
 
   const ping = (list: SavedServer[]) => {
     setStatus({});
@@ -980,6 +1007,11 @@ function WorldsTab({
         {servers && servers.length > 0 && (
           <PxButton family="grey" height="sm" onClick={() => ping(servers)}>
             <TT size={16}>REFRESH</TT>
+          </PxButton>
+        )}
+        {worlds && worlds.length > 0 && (
+          <PxButton family="grey" height="sm" onClick={() => void api.openProfileFolder(profile.id, 'backups')}>
+            <TT size={16}>BACKUPS</TT>
           </PxButton>
         )}
         <span className="meta browse__count">
@@ -1085,6 +1117,26 @@ function WorldsTab({
             </span>
             <span className="editor__actions worlds__actions">
               <PxButton
+                family="grey"
+                height="sm"
+                disabled={busy || backing !== null}
+                title={busy ? 'Close the game first' : 'Zip it into the backups folder'}
+                onClick={() => void backup(w)}
+              >
+                <TT size={16}>{backing === w.name ? 'BACKING UP…' : 'BACKUP'}</TT>
+              </PxButton>
+              <PxButton
+                family="red"
+                height="sm"
+                disabled={busy || backing === w.name}
+                title={busy ? 'Close the game first' : 'Move it to the trash'}
+                onClick={() => setTrashing(w)}
+              >
+                <TT size={16} tone="red">
+                  DELETE
+                </TT>
+              </PxButton>
+              <PxButton
                 family="accent"
                 height="sm"
                 disabled={busy}
@@ -1099,6 +1151,29 @@ function WorldsTab({
           </div>
         ))}
       </div>
+      {trashing && (
+        <div className="modal-scrim" onClick={() => setTrashing(null)}>
+          <PxBox family="red" className="px--window modal" onClick={(e) => e.stopPropagation()}>
+            <TT size={22} tone="red">
+              DELETE WORLD?
+            </TT>
+            <span className="meta">
+              “{trashing.name}” ({fmtBytes(trashing.size)}) moves to the trash. Restore it from there if you change
+              your mind.
+            </span>
+            <div className="modal__row modal__row--tall">
+              <PxButton family="grey" height="md" onClick={() => setTrashing(null)}>
+                <TT size={20}>CANCEL</TT>
+              </PxButton>
+              <PxButton family="red" height="md" onClick={() => void remove(trashing)}>
+                <TT size={20} tone="red">
+                  DELETE
+                </TT>
+              </PxButton>
+            </div>
+          </PxBox>
+        </div>
+      )}
     </div>
   );
 }

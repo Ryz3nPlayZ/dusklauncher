@@ -17,6 +17,7 @@ mod servers;
 mod settings;
 mod skins;
 mod wallpapers;
+mod worlds;
 
 pub use appstate::AppState;
 
@@ -90,6 +91,8 @@ pub fn run() {
             screenshots::list_screenshots,
             servers::list_servers,
             servers::ping_server,
+            worlds::backup_world,
+            worlds::delete_world,
             screenshots::set_screenshot_favorite,
             screenshots::delete_screenshot,
             screenshots::reveal_screenshot,
