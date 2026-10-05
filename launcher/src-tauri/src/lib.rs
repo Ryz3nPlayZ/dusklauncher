@@ -11,6 +11,7 @@ mod friends;
 mod modpacks;
 mod mods;
 mod recordings;
+mod quickplay;
 mod release_art;
 mod screenshots;
 mod servers;
@@ -93,6 +94,7 @@ pub fn run() {
             servers::ping_server,
             worlds::backup_world,
             worlds::delete_world,
+            quickplay::recent_plays,
             screenshots::set_screenshot_favorite,
             screenshots::delete_screenshot,
             screenshots::reveal_screenshot,

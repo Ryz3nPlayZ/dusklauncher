@@ -3,7 +3,17 @@ import PlayerRender, { type Pose } from '../components/PlayerRender';
 import ListGlyph from '../components/px/ListGlyph';
 import PixelArrow from '../components/px/PixelArrow';
 import { PxBox, PxButton, TT } from '../components/px/Px';
-import { ago, loaderLabel, type Account, type GameState, type Profile, type Progress } from '../lib/api';
+import {
+  ago,
+  api,
+  loaderLabel,
+  type Account,
+  type GameState,
+  type LaunchTarget,
+  type Profile,
+  type Progress,
+  type RecentPlay,
+} from '../lib/api';
 
 export default function Home({
   account,
@@ -28,7 +38,7 @@ export default function Home({
   progress: Progress | null;
   game: GameState | null;
   error: string | null;
-  onLaunch: (id: string) => void;
+  onLaunch: (id: string, to?: LaunchTarget) => void;
   onSelect: (id: string) => void;
   onWardrobe: () => void;
   onManage: () => void;
@@ -39,6 +49,15 @@ export default function Home({
      the canvas box — drives the outline and gates the wardrobe click */
   const [hit, setHit] = useState(false);
   const consoleRef = useRef<HTMLDivElement>(null);
+  /* "jump back in": the places played last, fetched each time the popout opens */
+  const [recent, setRecent] = useState<RecentPlay[]>([]);
+  useEffect(() => {
+    if (!popout) return;
+    void api
+      .recentPlays(3)
+      .then(setRecent)
+      .catch(() => setRecent([]));
+  }, [popout]);
   // the popout is a light dropdown, not a modal: a click anywhere else or
   // Escape closes it
   useEffect(() => {
@@ -149,6 +168,40 @@ export default function Home({
         {popout && (
           <div className="win px--window home__popout" role="listbox" aria-label="Instances">
             <div className="home__popout-list scroll">
+              {recent.length > 0 && (
+                <TT size={14} tone="sub" className="home__popout-head">
+                  JUMP BACK IN
+                </TT>
+              )}
+              {recent.map((r) => (
+                <PxButton
+                  key={`${r.profileId}|${r.kind}|${r.id}`}
+                  family="grey"
+                  height="fill"
+                  className="home__popout-row"
+                  disabled={live !== null}
+                  title={live ? 'A game is already running' : r.kind === 'server' ? `Join ${r.id}` : `Open ${r.name}`}
+                  onClick={() => {
+                    setPopout(false);
+                    onLaunch(r.profileId, r.kind === 'server' ? { server: r.id } : { world: r.id });
+                  }}
+                >
+                  <span className="home__popout-name">
+                    <TT size={16}>{r.name}</TT>
+                    <span className="meta">
+                      {r.profileName} · {r.kind === 'server' ? r.id : 'singleplayer'} · {ago(r.lastPlayed)}
+                    </span>
+                  </span>
+                  <TT size={16} tone="accent">
+                    {r.kind === 'server' ? 'JOIN' : 'PLAY'}
+                  </TT>
+                </PxButton>
+              ))}
+              {recent.length > 0 && profiles.length > 0 && (
+                <TT size={14} tone="sub" className="home__popout-head">
+                  INSTANCES
+                </TT>
+              )}
               {profiles.map((p) => {
                 const current = p.id === selected?.id;
                 const active = p.id === live?.profileId;

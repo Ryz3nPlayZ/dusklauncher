@@ -572,6 +572,18 @@ export interface LaunchTarget {
   replay?: string;
 }
 
+/** a world or server played lately, from the game's own Quick Play log */
+export interface RecentPlay {
+  profileId: string;
+  profileName: string;
+  kind: 'world' | 'server';
+  /** the save's folder name, or the server address */
+  id: string;
+  name: string;
+  lastPlayed: number;
+  gamemode: string;
+}
+
 /** a clip or replay the Dusk client recorded (an `.mcpr`) */
 export interface Recording {
   path: string;
@@ -879,6 +891,35 @@ const fixtures: Record<string, unknown> = {
     page: 0,
     pageSize: 20,
   } satisfies ModpackSearch,
+  recent_plays: [
+    {
+      profileId: 'p-dusk',
+      profileName: 'DUSK 1.21.11',
+      kind: 'server',
+      id: 'mc.tryzwork.app',
+      name: 'zWork SMP',
+      lastPlayed: Date.now() - 2 * HOUR,
+      gamemode: 'survival',
+    },
+    {
+      profileId: 'p-dusk',
+      profileName: 'DUSK 1.21.11',
+      kind: 'world',
+      id: 'New World',
+      name: 'New World',
+      lastPlayed: Date.now() - 20 * HOUR,
+      gamemode: 'creative',
+    },
+    {
+      profileId: 'p-vanilla',
+      profileName: 'VANILLA 1.21',
+      kind: 'world',
+      id: 'Hardcore',
+      name: 'Hardcore run',
+      lastPlayed: Date.now() - 26 * HOUR,
+      gamemode: 'survival',
+    },
+  ] satisfies RecentPlay[],
   list_servers: [
     { name: 'zWork SMP', address: 'mc.tryzwork.app', icon: null },
     { name: 'zWork PVP', address: 'pvp.tryzwork.app', icon: null },
@@ -1637,6 +1678,8 @@ export const api = {
   listServers: (profileId: string) => invoke<SavedServer[]>('list_servers', { profileId }),
   /** MOTD, players and ping, resolving SRV records like the game does */
   pingServer: (address: string) => invoke<ServerStatus>('ping_server', { address }),
+  /** the worlds and servers played most recently, across every instance */
+  recentPlays: (limit?: number) => invoke<RecentPlay[]>('recent_plays', { limit }),
   /** zip a world into the instance's backups/ folder; resolves to the zip's name */
   backupWorld: (profileId: string, name: string) => invoke<string>('backup_world', { profileId, name }),
   /** move a world to the OS trash */

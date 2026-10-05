@@ -13,6 +13,10 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
+/// Where (relative to the game directory) 1.20+ writes its Quick Play log:
+/// a one-entry JSON list naming the world or server of the last session.
+pub const QUICK_PLAY_LOG: &str = "quickPlay/java/dusklauncher.json";
+
 /// Launch settings that come from the global launcher settings store.
 #[derive(Debug, Clone, Default)]
 pub struct LaunchEnv {
@@ -242,6 +246,10 @@ pub fn build_launch_spec(
         .as_ref()
         .is_some_and(|a| a.game.iter().any(|e| e.to_string().contains("quickPlayMultiplayer")));
     if quick_play {
+        // the game rewrites this with the world or server each session
+        // lands in; the launcher folds it into its "recent" list
+        features.insert("has_quick_plays_support".to_string(), true);
+        values.insert("quickPlayPath".into(), QUICK_PLAY_LOG.into());
         if let Some(server) = &profile.server {
             features.insert("is_quick_play_multiplayer".to_string(), true);
             values.insert("quickPlayMultiplayer".into(), server.clone());
@@ -743,7 +751,7 @@ mod tests {
         let at = spec.game_args.iter().position(|a| a == "--quickPlayMultiplayer").unwrap();
         assert_eq!(spec.game_args[at + 1], "play.example.net:25570");
         assert!(!spec.game_args.iter().any(|a| a == "--server" || a.contains("${")));
-        assert!(!spec.game_args.iter().any(|a| a == "--quickPlayPath" || a == "--quickPlaySingleplayer"));
+        assert!(!spec.game_args.iter().any(|a| a == "--quickPlaySingleplayer"));
 
         let spec = quick_play_spec(None, Some("New World"));
         let at = spec.game_args.iter().position(|a| a == "--quickPlaySingleplayer").unwrap();
@@ -751,7 +759,9 @@ mod tests {
         assert!(!spec.game_args.iter().any(|a| a == "--quickPlayMultiplayer"));
 
         let spec = quick_play_spec(None, None);
-        assert!(!spec.game_args.iter().any(|a| a.starts_with("--quickPlay")));
+        let at = spec.game_args.iter().position(|a| a == "--quickPlayPath").unwrap();
+        assert_eq!(spec.game_args[at + 1], QUICK_PLAY_LOG);
+        assert!(!spec.game_args.iter().any(|a| a.starts_with("--quickPlay") && a != "--quickPlayPath"));
     }
 
     #[test]

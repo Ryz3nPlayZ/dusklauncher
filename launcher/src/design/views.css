@@ -173,7 +173,7 @@
   bottom: calc(var(--h-xl) + var(--gap-sm));
   width: calc(598 * var(--u));
   max-width: 90vw;
-  max-height: calc(430 * var(--u));
+  max-height: calc(560 * var(--u));
   display: flex;
   flex-direction: column;
   z-index: var(--z-modal);
@@ -226,6 +226,11 @@
 .home__popout-name .is-live,
 .card__info .is-live {
   color: var(--r-co);
+}
+/* "JUMP BACK IN" / "INSTANCES" over their rows */
+.home__popout-head {
+  flex: none;
+  padding: calc(10 * var(--u)) calc(18 * var(--u)) calc(4 * var(--u));
 }
 .home__popout-empty {
   flex: none;
