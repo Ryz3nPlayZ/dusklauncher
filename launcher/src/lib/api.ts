@@ -626,6 +626,20 @@ export interface GameState {
   code: number | null;
 }
 
+/** why the game exited with an error (event `game-crash`), worked out
+ *  from its crash report and the end of its log */
+export interface CrashInfo {
+  profileId: string;
+  code: number;
+  title: string;
+  /** what to do about it, one item per entry */
+  advice: string[];
+  /** the crash report, relative to the instance folder (SHOW REPORT) */
+  report: string | null;
+  /** the report's head or the log's tail (COPY DETAILS) */
+  details: string;
+}
+
 /** one line of the running game's stdout/stderr (event `game-log`, batched) */
 export interface GameLogLine {
   line: string;
@@ -917,6 +931,7 @@ const fixtures: Record<string, unknown> = {
 /** Commands that change real state: refused outright in the browser. */
 const sideEffects = new Set([
   'install_and_launch',
+  'reveal_crash_report',
   'install_modpack',
   'install_modpack_version',
   'install_content_version_to_profile',
@@ -1608,6 +1623,8 @@ export const api = {
   /** moves it to the OS trash */
   deleteRecording: (path: string) => invoke<void>('delete_recording', { path }),
   revealRecording: (path: string) => invoke<void>('reveal_recording', { path }),
+  revealCrashReport: (profileId: string, report: string) =>
+    invoke<void>('reveal_crash_report', { profileId, report }),
   getAppInfo: () => invoke<AppInfo>('get_app_info'),
 
   listSkins: () => invoke<Skin[]>('list_skins'),

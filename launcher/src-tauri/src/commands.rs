@@ -670,6 +670,9 @@ pub async fn install_and_launch(
     seed_instance_config(&dirs.root);
     let spec = launch::build_launch_spec(&java_bin, &version, &profile, &dirs, &natives_dir, &session, &env);
     let mut child = launch::launch(&spec, &env).await.map_err(|e| e.to_string())?;
+    let started = std::time::SystemTime::now();
+    // the last lines of output, for explaining a crash
+    let tail = std::sync::Arc::new(std::sync::Mutex::new(std::collections::VecDeque::<String>::new()));
 
     // stream stdout/stderr in batches, supervise exit
     let mut stdout = child.stdout.take();
@@ -721,7 +724,8 @@ pub async fn install_and_launch(
     }
 
     let app3 = app.clone();
-    tokio::spawn(async move {
+    let tail2 = tail.clone();
+    let forwarder = tokio::spawn(async move {
         let mut lines: Vec<GameLogLine> = Vec::new();
         let mut last_flush = tokio::time::Instant::now();
         loop {
@@ -739,6 +743,13 @@ pub async fn install_and_launch(
                 Some(line) => {
                     if let Some(server) = presence_from_log(&line.line) {
                         set_activity_server(&app3, server);
+                    }
+                    {
+                        let mut tail = tail2.lock().unwrap();
+                        if tail.len() >= crate::crash::LOG_TAIL {
+                            tail.pop_front();
+                        }
+                        tail.push_back(line.line.clone());
                     }
                     lines.push(line);
                     if lines.len() >= 128 || last_flush.elapsed() >= Duration::from_millis(120) {
@@ -762,13 +773,14 @@ pub async fn install_and_launch(
         let pid2 = profile_id.clone();
         let env2 = env.clone();
         let root2 = dirs.root.clone();
+        let mods2 = dirs.mods.clone();
         let stop = std::sync::Arc::new(tokio::sync::Notify::new());
         *state.running_game.lock().await = Some(RunningGame { profile_id: profile_id.clone(), stop: stop.clone() });
         tokio::spawn(async move {
             let state = app3.state::<AppState>();
-            let status = tokio::select! {
-                s = child.wait() => s,
-                _ = stop.notified() => stop_child(&mut child).await,
+            let (status, stopped) = tokio::select! {
+                s = child.wait() => (s, false),
+                _ = stop.notified() => (stop_child(&mut child).await, true),
             };
             *state.running_game.lock().await = None;
             *state.activity.lock().unwrap() = None;
@@ -777,6 +789,17 @@ pub async fn install_and_launch(
             launch::run_post_exit(&env2);
             let code = status.ok().and_then(|s| s.code());
             emit_state(&app3, &pid2, "exited", code);
+            // an error exit the player didn't ask for: say why, once the
+            // last of the output has come through
+            if let Some(code) = code.filter(|c| *c != 0 && !stopped) {
+                let _ = tokio::time::timeout(Duration::from_secs(3), forwarder).await;
+                let log: Vec<String> = tail.lock().unwrap().iter().cloned().collect();
+                let (root, mods, pid) = (root2.clone(), mods2.clone(), pid2.clone());
+                let crash = tokio::task::spawn_blocking(move || crate::crash::analyze(&pid, &root, &mods, started, &log, code)).await;
+                if let Ok(crash) = crash {
+                    let _ = app3.emit("game-crash", crash);
+                }
+            }
             if let Some(snap) = settings_snapshot {
                 match crate::client_settings::collect_from_instance(&state.data_dir, &root2, &snap) {
                     Ok(true) => crate::client_settings::sync(&state).await,

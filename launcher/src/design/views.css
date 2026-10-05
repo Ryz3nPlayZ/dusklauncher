@@ -2459,3 +2459,27 @@
   min-width: calc(28 * var(--u));
   height: calc(28 * var(--u));
 }
+
+/* ── the crash dialog: what went wrong, then what to do ─────────────────── */
+.crash__title {
+  font-family: var(--font-body);
+  font-size: calc(22 * var(--t));
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+}
+.crash__advice {
+  margin: 0;
+  padding-left: calc(22 * var(--u));
+  display: flex;
+  flex-direction: column;
+  gap: calc(6 * var(--u));
+  max-height: 40vh;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+.crash__foot {
+  font-size: calc(15 * var(--t));
+  overflow-wrap: anywhere;
+}

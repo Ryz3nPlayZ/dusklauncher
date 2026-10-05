@@ -4,6 +4,7 @@ mod auth_store;
 mod client_settings;
 mod commands;
 mod cosmetics;
+mod crash;
 mod discord;
 mod dusk;
 mod friends;
@@ -51,6 +52,7 @@ pub fn run() {
             commands::duplicate_profile,
             commands::list_worlds,
             commands::show_in_folder,
+            crash::reveal_crash_report,
             commands::open_data_dir,
             modpacks::import_mrpack,
             modpacks::export_instance,

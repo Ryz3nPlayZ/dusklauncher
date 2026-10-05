@@ -10,6 +10,7 @@ import {
   isTauri,
   listen,
   type Account,
+  type CrashInfo,
   type GameActivity,
   type GameState,
   type Profile,
@@ -28,6 +29,7 @@ import ProfileView from './views/Profile';
 import SettingsView from './views/Settings';
 import SignInGate from './components/SignIn';
 import SocialPane from './components/SocialPane';
+import CrashDialog from './components/CrashDialog';
 
 /** The window is undecorated (tauri.conf.json), so the shell owns its chrome. */
 
@@ -49,6 +51,10 @@ export default function App() {
   /* where the running game is (server / singleplayer) — INVITE sends it */
   const [activity, setActivity] = useState<GameActivity | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /* the last game crash, until OK; the browser preview shows a sample with ?crash */
+  const [crash, setCrash] = useState<CrashInfo | null>(() =>
+    !isTauri && new URLSearchParams(window.location.search).has('crash') ? PREVIEW_CRASH : null,
+  );
   const updater = useUpdater();
   // mirrors `game` for the event handlers, which are registered once
   const gameRef = useRef<GameState | null>(null);
@@ -189,6 +195,7 @@ export default function App() {
         if (s.state !== 'starting') setProgress(null);
       }),
       listen<GameActivity | null>('game-activity', setActivity),
+      listen<CrashInfo>('game-crash', setCrash),
     ];
     return () => {
       void Promise.all(unlisten).then((fns) => fns.forEach((f) => f?.()));
@@ -359,6 +366,14 @@ export default function App() {
         )}
       </main>
 
+      {crash && (
+        <CrashDialog
+          crash={crash}
+          instance={profiles.find((p) => p.id === crash.profileId)?.name ?? null}
+          onClose={() => setCrash(null)}
+        />
+      )}
+
       {accountKnown && !canPlay && !gateDismissed && (
         <SignInGate onDone={refreshAccount} onLater={() => setGateDismissed(true)} />
       )}
@@ -389,3 +404,12 @@ export default function App() {
     </div>
   );
 }
+
+const PREVIEW_CRASH: CrashInfo = {
+  profileId: 'p-dusk',
+  code: 1,
+  title: "Some mods don't work together",
+  advice: ['Install fabric-api, any version.', "Replace 'Iris' (iris) 1.6.4 with any version that is compatible with 1.21.11."],
+  report: null,
+  details: 'Incompatible mods found!',
+};

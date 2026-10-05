@@ -749,6 +749,13 @@ const PERFORMANCE_MODS: &[(&str, &str)] = &[
     ("krypton", "krypton"),
 ];
 
+/// A jar's parsed fabric.mod.json, if it has one.
+pub(crate) fn fabric_meta(path: &std::path::Path) -> Option<serde_json::Value> {
+    let file = std::fs::File::open(path).ok()?;
+    let raw = read_zip_entry(&mut zip::ZipArchive::new(file).ok()?, "fabric.mod.json", 256 * 1024)?;
+    serde_json::from_slice(&raw).ok()
+}
+
 /// Mod ids (and what they `provides`) of every enabled Fabric jar in `dir`,
 /// read from each jar's fabric.mod.json, so a renamed jar still counts.
 fn fabric_mod_ids(dir: &std::path::Path) -> std::collections::HashSet<String> {
