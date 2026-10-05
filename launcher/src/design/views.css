@@ -1251,6 +1251,23 @@
   border: var(--px-black) dashed var(--accent-up);
   background: var(--listing-body);
 }
+/* a library the instance's mods need and mods/ doesn't have */
+.editor__dep {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: calc(16 * var(--u));
+  padding: calc(10 * var(--u)) calc(16 * var(--u));
+  border: var(--px-black) solid var(--y-up);
+  background: var(--listing-body);
+}
+.editor__dep-text {
+  flex: 1;
+  min-width: 0;
+}
+.editor__dep-warn {
+  color: var(--y-up);
+}
 /* the content filter: shorter than the browse search, same stack */
 .editor__search {
   flex: 0 1 calc(440 * var(--u));

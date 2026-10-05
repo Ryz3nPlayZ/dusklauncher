@@ -21,6 +21,7 @@ import {
   type JavaInstall,
   type LatestLog,
   type ImportedWorlds,
+  type MissingDep,
   releaseNewer,
   type LaunchTarget,
   type Profile,
@@ -746,6 +747,10 @@ function ContentTab({
   const [updating, setUpdating] = useState<Set<string>>(() => new Set());
   /* files are being dragged over the window */
   const [dropping, setDropping] = useState(false);
+  /* libraries the mods need that mods/ doesn't have (Fabric only) */
+  const [missing, setMissing] = useState<MissingDep[]>([]);
+  /* the project an INSTALL / TURN ON is running for */
+  const [fixing, setFixing] = useState<string | null>(null);
 
   const kind = content?.kind ?? null;
   const noun = content?.noun ?? 'files';
@@ -778,6 +783,14 @@ function ContentTab({
   };
 
   const reload = () => {
+    if (kindTab === 'ALL' || kindTab === 'MODS') {
+      void api
+        .missingDependencies(profile.id)
+        .then(setMissing)
+        .catch(() => setMissing([]));
+    } else {
+      setMissing([]);
+    }
     return Promise.all(
       targets.map(async (t) => {
         const files = await api.listContent(profile.id, t.kind);
@@ -877,6 +890,15 @@ function ContentTab({
 
   const vanilla = kindTab === 'MODS' && profile.loader === 'vanilla';
 
+  const fix = (d: MissingDep) => {
+    setFixing(d.project);
+    void act(() =>
+      d.disabledFile
+        ? api.setContentEnabled(profile.id, 'mod', d.disabledFile, true)
+        : api.installContent(profile.id, 'mod', d.project),
+    ).finally(() => setFixing(null));
+  };
+
   return (
     <div className="win__body editor__body">
       {/* 172:626 — the kind strip, with the actions pinned to its right */}
@@ -897,6 +919,33 @@ function ContentTab({
         </span>
       )}
       {note && <span className="meta">{note}</span>}
+      {missing.map((d) => {
+        const names =
+          d.neededBy.length > 4
+            ? `${d.neededBy.slice(0, 3).join(', ')} and ${d.neededBy.length - 3} more`
+            : d.neededBy.length > 1
+              ? `${d.neededBy.slice(0, -1).join(', ')} and ${d.neededBy[d.neededBy.length - 1]}`
+              : d.neededBy[0];
+        return (
+          <div key={d.project} className="editor__dep">
+            <span className="meta editor__dep-text">
+              <span className="editor__dep-warn">{`${d.label} is ${d.disabledFile ? 'turned off' : 'missing'}`}</span>
+              {` — ${names} ${d.neededBy.length > 1 ? 'need' : 'needs'} it, and the game won’t start without it.`}
+            </span>
+            <PxButton
+              family="accent"
+              height="sm"
+              disabled={fixing !== null}
+              title={d.disabledFile ? `Turn ${d.disabledFile} back on` : `Install ${d.label} from Modrinth`}
+              onClick={() => fix(d)}
+            >
+              <TT size={16} tone="accent">
+                {fixing === d.project ? 'WORKING…' : d.disabledFile ? 'TURN ON' : 'INSTALL'}
+              </TT>
+            </PxButton>
+          </div>
+        );
+      })}
 
       {rows && rows.length > 0 && (
         <div className="browse__toolbar">

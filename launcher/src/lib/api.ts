@@ -748,6 +748,19 @@ export interface GameLogLine {
 export interface GameLogBatch {
   lines: GameLogLine[];
 }
+/** a mod id the instance's Fabric mods depend on that nothing in mods/ provides */
+export interface MissingDep {
+  id: string;
+  /** what players call it, e.g. "Fabric API" */
+  label: string;
+  /** the Modrinth project to install it from */
+  project: string;
+  /** display names of the mods that need it */
+  neededBy: string[];
+  /** a disabled jar that provides it — turn it on instead of installing */
+  disabledFile: string | null;
+}
+
 /** worlds added to an instance's saves/ */
 export interface ImportedWorlds {
   /** the folder names they landed under */
@@ -989,6 +1002,9 @@ const fixtures: Record<string, unknown> = {
       gamemode: 'survival',
     },
   ] satisfies RecentPlay[],
+  missing_dependencies: [
+    { id: 'cloth-config2', label: 'Cloth Config API', project: 'cloth-config', neededBy: ['FastQuit', 'More Culling', 'Gamma Utils', 'Combat Hitboxes'], disabledFile: null },
+  ] satisfies MissingDep[],
   read_latest_log: {
     modified: Date.now() - 3 * 3600_000,
     lines: [
@@ -1840,6 +1856,8 @@ export const api = {
     invoke<ProfileMod[]>('import_local_content', { profileId, kind }),
   searchContent: (kind: ContentKind, query: string, gameVersion: string, loader: string, limit = 20) =>
     invoke<ModHit[]>('search_content', { kind, query, gameVersion, loader, limit }),
+  /** what the instance's Fabric mods need that mods/ doesn't have */
+  missingDependencies: (profileId: string) => invoke<MissingDep[]>('missing_dependencies', { profileId }),
   installContent: (profileId: string, kind: ContentKind, projectId: string) =>
     invoke<ProfileMod>('install_content_to_profile', { profileId, kind, projectId }),
   /** install the exact version the user picked on the project page */

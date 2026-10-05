@@ -8,6 +8,7 @@ mod crash;
 mod discord;
 mod dusk;
 mod friends;
+mod deps;
 mod javas;
 mod logs;
 mod modpacks;
@@ -93,6 +94,7 @@ pub fn run() {
             // screenshots
             screenshots::list_screenshots,
             javas::list_javas,
+            deps::missing_dependencies,
             logs::read_latest_log,
             logs::upload_log,
             servers::list_servers,
