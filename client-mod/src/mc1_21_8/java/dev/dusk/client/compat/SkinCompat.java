@@ -2,9 +2,11 @@ package dev.dusk.client.compat;
 
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
+import dev.dusk.client.account.SelfSkin;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.PlayerSkinWidget;
+import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.client.resources.PlayerSkin;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
@@ -26,12 +28,19 @@ public final class SkinCompat {
     public record Preview(String texture, boolean slim) {}
 
     @Nullable private static Supplier<PlayerSkin> lookup;
+    /** Steve/Alex for this account: the lookup's answer when the profile came without a skin. */
+    @Nullable private static PlayerSkin fallback;
     @Nullable private static Preview lastPreview;
     @Nullable private static PlayerSkin lastPreviewSkin;
 
     public static PlayerSkin current(Minecraft mc) {
-        if (lookup == null) lookup = mc.getSkinManager().lookupInsecure(mc.getGameProfile());
-        return lookup.get();
+        if (lookup == null) {
+            lookup = mc.getSkinManager().lookupInsecure(mc.getGameProfile());
+            fallback = DefaultPlayerSkin.get(mc.getGameProfile());
+        }
+        PlayerSkin skin = lookup.get();
+        if (skin.equals(fallback)) SelfSkin.defaultShown((url, slim) -> useUploaded(mc, url, slim));
+        return skin;
     }
 
     /**
@@ -46,6 +55,7 @@ public final class SkinCompat {
         GameProfile profile = new GameProfile(self.getId(), self.getName());
         profile.getProperties().put("textures", new Property("textures", packed));
         lookup = mc.getSkinManager().lookupInsecure(profile);
+        fallback = DefaultPlayerSkin.get(profile);
     }
 
     /** A drag-to-spin 3D model of {@code preview} (or of the account skin while it returns null). */
