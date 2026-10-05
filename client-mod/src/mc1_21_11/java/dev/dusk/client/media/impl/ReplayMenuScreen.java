@@ -26,6 +26,8 @@ public final class ReplayMenuScreen extends MenuScreen {
     private long dragTo = -1;
     /** Why EXPORT VIDEO didn't start, until the next click. */
     private @org.jetbrains.annotations.Nullable String notice;
+    /** News that isn't a failure (ffmpeg arrived), until the next click. */
+    private @org.jetbrains.annotations.Nullable String info;
 
     public ReplayMenuScreen() {
         super(Component.literal("Replay"), null);
@@ -60,6 +62,9 @@ public final class ReplayMenuScreen extends MenuScreen {
             return;
         }
         layout();
+        if (FfmpegFetcher.takeDone()) info = "ffmpeg is ready. Press EXPORT VIDEO.";
+        String fetchError = FfmpegFetcher.takeError();
+        if (fetchError != null) notice = fetchError;
         c.fill(0, 0, this.width, this.height, 0x4D000000);
         NavBar.window(c, px, py, pw, ph);
         if (VideoExporter.active()) {
@@ -129,7 +134,8 @@ public final class ReplayMenuScreen extends MenuScreen {
         boxButton(c, p.markOut() >= 0 ? "OUT " + Mcpr.duration(p.markOut()) : "MARK OUT", cols[2], y2, cols[3], mx, my,
                 Theme.Family.GREY, p.markOut() >= 0);
         boxButton(c, VideoExporter.FPS[fpsIndex] + " FPS", cols[4], y2, cols[5], mx, my, Theme.Family.GREY, false);
-        boxButton(c, "EXPORT VIDEO", cols[6], y2, cols[7], mx, my, Theme.Family.ACCENT, false);
+        boxButton(c, FfmpegFetcher.running() ? FfmpegFetcher.progressLabel() : "EXPORT VIDEO", cols[6], y2, cols[7], mx, my,
+                Theme.Family.ACCENT, false);
 
         // row 3: resume and exit
         int y3 = rowY(3), half = (barW - GAP) / 2;
@@ -137,7 +143,7 @@ public final class ReplayMenuScreen extends MenuScreen {
         boxButton(c, p.clip ? "BACK TO CLIPS" : "BACK TO REPLAYS", barX + half + GAP, y3, barW - half - GAP, mx, my,
                 Theme.Family.GREY, false);
 
-        String say = notice != null ? notice : VideoExporter.lastResult();
+        String say = notice != null ? notice : info != null ? info : VideoExporter.lastResult();
         int below = py + ph + 6;
         if (say != null) {
             c.text(Theme.ellipsize(c, say, this.width - 16), (this.width - Math.min(this.width - 16, c.textWidth(say))) / 2, below,
@@ -194,6 +200,7 @@ public final class ReplayMenuScreen extends MenuScreen {
         if (p == null) return false;
         layout();
         notice = null;
+        info = null;
         if (VideoExporter.active()) {
             int y0 = rowY(0), half = (barW - GAP) / 2;
             if (button != 0) return false;
@@ -218,7 +225,14 @@ public final class ReplayMenuScreen extends MenuScreen {
             return true;
         }
         if (Vanilla.inside(mx, my, cols[6], y2, cols[7], BTN_H)) {
-            notice = VideoExporter.start(p, VideoExporter.FPS[fpsIndex]);
+            if (FfmpegFetcher.running()) {
+                info = "Downloading ffmpeg for video export. It only happens once.";
+            } else if (VideoExporter.findFfmpeg() == null && FfmpegFetcher.available()) {
+                FfmpegFetcher.start();
+                info = "Downloading ffmpeg (" + FfmpegFetcher.sizeMb() + " MB) for video export. It only happens once.";
+            } else {
+                notice = VideoExporter.start(p, VideoExporter.FPS[fpsIndex]);
+            }
             return true;
         }
         if (Vanilla.inside(mx, my, barX, barY - 3, barW, BAR_H + 6)) {

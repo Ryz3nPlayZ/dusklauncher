@@ -64,6 +64,7 @@ public final class VideoExporter {
     private final long from, to;
     private final int fps;
     private final Path exe, out;
+    private final List<String> codec;
     private Stage stage = Stage.SEEKING;
     private long stageStart = Util.getMillis();
     private int settleFrames;
@@ -82,12 +83,13 @@ public final class VideoExporter {
     private final boolean savedVsync;
     private final InactivityFpsLimit savedInactivity;
 
-    private VideoExporter(ReplayPlayer replay, long from, long to, int fps, Path exe, Path out, Options o) {
+    private VideoExporter(ReplayPlayer replay, long from, long to, int fps, Path exe, List<String> codec, Path out, Options o) {
         this.replay = replay;
         this.from = from;
         this.to = to;
         this.fps = fps;
         this.exe = exe;
+        this.codec = codec;
         this.out = out;
         savedFpsLimit = o.framerateLimit().get();
         savedVsync = o.enableVsync().get();
@@ -109,6 +111,7 @@ public final class VideoExporter {
         if (exe == null) {
             return "Exporting needs ffmpeg. Install it (brew install ffmpeg, or winget install ffmpeg on Windows) and try again.";
         }
+        List<String> codec = codecArgs(exe);
         long from = p.markIn() >= 0 ? p.markIn() : p.clock();
         long to = p.markOut() > from ? p.markOut() : p.duration;
         if (to - from < 500) return "Nothing to export from here. Mark an in point (I) and an out point (O) first.";
@@ -124,7 +127,7 @@ public final class VideoExporter {
             return "Can't write to the videos folder: " + e.getMessage();
         }
         Minecraft mc = Minecraft.getInstance();
-        current = new VideoExporter(p, from, to, fps, exe, out, mc.options);
+        current = new VideoExporter(p, from, to, fps, exe, codec, out, mc.options);
         lastResult = null;
         LOG.info("Exporting {} {}..{} ms at {} fps to {}", p.title, from, to, fps, out);
         Compat.setScreen(mc, null);
@@ -133,7 +136,10 @@ public final class VideoExporter {
         return null;
     }
 
-    /** ffmpeg from {@code -Ddusk.ffmpeg}, PATH, or where Homebrew and the usual installers put it. */
+    /**
+     * ffmpeg from {@code -Ddusk.ffmpeg}, PATH, where Homebrew and the usual
+     * installers put it, or the copy {@link FfmpegFetcher} downloaded.
+     */
     static @Nullable Path findFfmpeg() {
         boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
         String name = windows ? "ffmpeg.exe" : "ffmpeg";
@@ -149,8 +155,47 @@ public final class VideoExporter {
             for (String d : dirs) if (!d.isBlank()) candidates.add(Path.of(d, name));
         } catch (InvalidPathException ignored) {
         }
+        Path fetched = FfmpegFetcher.target();
+        if (fetched != null) candidates.add(fetched);
         for (Path c : candidates) if (Files.isRegularFile(c) && Files.isExecutable(c)) return c;
         return null;
+    }
+
+    /** The encoder settings for each ffmpeg, worked out once. */
+    private static final java.util.Map<Path, List<String>> CODECS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * H.264 with x264 when this ffmpeg has it, else the system's own H.264
+     * encoder (VideoToolbox on macOS, Media Foundation on Windows), else
+     * OpenH264, else MPEG-4 Part 2, which every build has.
+     */
+    static List<String> codecArgs(Path exe) {
+        return CODECS.computeIfAbsent(exe, e -> {
+            String list = encoders(e);
+            if (list.contains(" libx264 ")) return List.of("-c:v", "libx264", "-preset", "veryfast", "-crf", "18");
+            if (list.contains(" h264_videotoolbox ")) return List.of("-c:v", "h264_videotoolbox", "-b:v", "16M");
+            if (list.contains(" h264_mf ")) return List.of("-c:v", "h264_mf", "-b:v", "16M");
+            if (list.contains(" libopenh264 ")) return List.of("-c:v", "libopenh264", "-b:v", "16M");
+            if (list.isEmpty()) return List.of("-c:v", "libx264", "-preset", "veryfast", "-crf", "18");
+            return List.of("-c:v", "mpeg4", "-q:v", "2");
+        });
+    }
+
+    private static String encoders(Path exe) {
+        try {
+            Process p = new ProcessBuilder(exe.toString(), "-hide_banner", "-encoders")
+                    .redirectErrorStream(true)
+                    .start();
+            byte[] out = p.getInputStream().readAllBytes();
+            if (!p.waitFor(5, TimeUnit.SECONDS)) p.destroyForcibly();
+            return new String(out, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            LOG.warn("Couldn't list {}'s encoders", exe, e);
+            return "";
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "";
+        }
     }
 
     // ---- the frame clock ----------------------------------------------------------
@@ -225,12 +270,12 @@ public final class VideoExporter {
     private Process launch(Minecraft mc) throws IOException {
         Path log = mc.gameDirectory.toPath().resolve("logs").resolve("dusk-ffmpeg.log");
         Files.createDirectories(log.getParent());
-        List<String> cmd = List.of(exe.toString(), "-y", "-hide_banner", "-loglevel", "warning",
+        List<String> cmd = new ArrayList<>(List.of(exe.toString(), "-y", "-hide_banner", "-loglevel", "warning",
                 "-f", "rawvideo", "-pix_fmt", "rgba", "-s", width + "x" + height, "-r", String.valueOf(fps), "-i", "-",
-                // x264 wants even sizes
-                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-                out.toString());
+                // H.264 wants even sizes
+                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2"));
+        cmd.addAll(codec);
+        cmd.addAll(List.of("-pix_fmt", "yuv420p", "-movflags", "+faststart", out.toString()));
         return new ProcessBuilder(cmd)
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                 .redirectError(log.toFile())

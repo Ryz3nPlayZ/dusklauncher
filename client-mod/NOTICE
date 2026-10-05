@@ -34,10 +34,17 @@ back sessions the way ReplayMod does:
   reads it, plus synthesized packets for the recording player's own
   entity), and playback through a serverless connection fed on the client
   thread, with backward seeks replaying from the start, and video export
-  (a fixed-step frame clock, each frame read back and piped to ffmpeg,
-  which the player installs themselves). Opening Dusk
+  (a fixed-step frame clock, each frame read back and piped to ffmpeg).
+  Opening Dusk
   files in ReplayMod itself is untested. No source files were copied;
   the rolling clip buffer, the replay filter and all UI are Dusk's own.
+
+ffmpeg is not bundled. When the player has none, EXPORT VIDEO downloads
+the static build the ffmpeg-static project publishes
+(https://github.com/eugeneware/ffmpeg-static, release b6.1.1), checks its
+SHA-256 and runs it as a separate program. FFmpeg — https://ffmpeg.org —
+is LGPL/GPL; those builds are GPL-3.0 and their source is linked from
+that release.
 
 Bundled cosmetics (src/main/resources/assets/duskclient/cosmetics) are
 community capes and one Cosmetica accessory ("Red Fire Arm", cosmetica
