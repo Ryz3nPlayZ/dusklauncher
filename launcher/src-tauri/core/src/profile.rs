@@ -91,6 +91,9 @@ pub struct Profile {
     /// unix millis of the last successful launch
     #[serde(default)]
     pub last_played: Option<u64>,
+    /// seconds the game has run for this instance, all launches together
+    #[serde(default)]
+    pub play_secs: u64,
     /// JVM heap for this instance in MB; None = the launcher-wide setting.
     /// Applied at launch in place of any -Xmx/-Xms in `jvm_args`.
     #[serde(default)]

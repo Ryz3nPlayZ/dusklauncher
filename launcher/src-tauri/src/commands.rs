@@ -23,6 +23,8 @@ pub struct ProfileDto {
     pub loader_version: Option<String>,
     pub created_at: u64,
     pub last_played: Option<u64>,
+    /// seconds played, all launches together
+    pub play_secs: u64,
     pub jvm_args: Vec<String>,
     pub resolution: (u32, u32),
     pub server: Option<String>,
@@ -44,6 +46,7 @@ pub fn dto(p: &Profile) -> ProfileDto {
         loader_version: p.loader_version.clone(),
         created_at: p.created_at,
         last_played: p.last_played,
+        play_secs: p.play_secs,
         jvm_args: p.jvm_args.clone(),
         resolution: p.resolution,
         server: p.server.clone(),
@@ -229,6 +232,7 @@ pub fn create_profile(
         server,
         created_at: now_millis(),
         last_played: None,
+        play_secs: 0,
         memory_mb: None,
         java_path: None,
     };
@@ -334,6 +338,7 @@ pub async fn duplicate_profile(state: State<'_, AppState>, id: String) -> Result
             name,
             created_at: now_millis(),
             last_played: None,
+            play_secs: 0,
             ..src
         };
         (from, copy)
@@ -810,6 +815,8 @@ pub async fn install_and_launch(
             let _ = app3.emit("game-activity", None::<crate::appstate::GameActivity>);
             crate::discord::refresh(&app3);
             launch::run_post_exit(&env2);
+            let played = started.elapsed().map(|d| d.as_secs()).unwrap_or(0);
+            let _ = state.patch_profile(&pid2, |p| p.play_secs += played);
             let code = status.ok().and_then(|s| s.code());
             emit_state(&app3, &pid2, "exited", code);
             // an error exit the player didn't ask for: say why, once the

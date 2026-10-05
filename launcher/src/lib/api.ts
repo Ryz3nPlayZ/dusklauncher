@@ -22,6 +22,8 @@ export interface Profile {
   loaderVersion: string | null;
   createdAt: number;
   lastPlayed: number | null;
+  /** seconds played, all launches together */
+  playSecs: number;
   jvmArgs: string[];
   resolution: [number, number];
   server: string | null;
@@ -714,6 +716,7 @@ const fixtures: Record<string, unknown> = {
       loaderVersion: '0.16.10',
       createdAt: Date.now() - 40 * HOUR,
       lastPlayed: Date.now() - 2 * HOUR,
+      playSecs: 41 * 3600 + 17 * 60,
       jvmArgs: [],
       resolution: [1280, 720],
       server: 'play.dusk.gg',
@@ -730,6 +733,7 @@ const fixtures: Record<string, unknown> = {
       loaderVersion: null,
       createdAt: Date.now() - 400 * HOUR,
       lastPlayed: Date.now() - 26 * HOUR,
+      playSecs: 35 * 60,
       jvmArgs: [],
       resolution: [1280, 720],
       server: null,
@@ -1829,6 +1833,14 @@ export function ago(ms: number | null): string {
   if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
   const d = Math.round(h / 24);
   return `${d} day${d === 1 ? '' : 's'} ago`;
+}
+
+/** total time played: "35 min", "3 h 12 min", "128 h" */
+export function playtime(secs: number): string {
+  const m = Math.floor(secs / 60);
+  if (m < 60) return `${Math.max(1, m)} min`;
+  const h = Math.floor(m / 60);
+  return h >= 100 || m % 60 === 0 ? `${h} h` : `${h} h ${m % 60} min`;
 }
 
 export function loaderLabel(p: Profile) {

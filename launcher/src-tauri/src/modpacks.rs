@@ -552,6 +552,7 @@ async fn install_mrpack_bytes(
         server: None,
         created_at: now_millis(),
         last_played: None,
+        play_secs: 0,
         memory_mb: None,
         java_path: None,
     };

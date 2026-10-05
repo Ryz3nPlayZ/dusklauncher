@@ -12,6 +12,7 @@ import {
   fmtBytes,
   isTauri,
   loaderLabel,
+  playtime,
   type ContentKind,
   type ContentUpdate,
   type GameState,
@@ -211,6 +212,11 @@ export default function InstanceEditor({
               profile.lastPlayed,
             )}`}
           </TT>
+          {profile.playSecs > 0 && (
+            <TT size={14} tone="plain" className="editor__meta">
+              {`${playtime(profile.playSecs)} played`}
+            </TT>
+          )}
         </div>
         <PxButton family="grey" height="md" className="browse__back" onClick={onBack}>
           <PixelGlyph glyph="left" size={22} color="var(--text-2)" />

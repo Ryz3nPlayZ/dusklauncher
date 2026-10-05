@@ -194,6 +194,8 @@ export default function App() {
       listen<GameState>('game-state', (s) => {
         setGame(s);
         if (s.state !== 'starting') setProgress(null);
+        // the session's playtime was just added to the instance
+        if (s.state === 'exited') void refreshProfiles();
       }),
       listen<GameActivity | null>('game-activity', setActivity),
       listen<CrashInfo>('game-crash', setCrash),
@@ -201,7 +203,7 @@ export default function App() {
     return () => {
       void Promise.all(unlisten).then((fns) => fns.forEach((f) => f?.()));
     };
-  }, []);
+  },[refreshProfiles]);
 
   const selected = useMemo(
     () => profiles.find((p) => p.id === settings?.selectedProfileId) ?? profiles[0] ?? null,

@@ -87,6 +87,7 @@ async fn boot_to_menu() {
         server: None,
         created_at: 0,
         last_played: None,
+        play_secs: 0,
     };
     let dirs = prof.dirs(&data_dir);
 

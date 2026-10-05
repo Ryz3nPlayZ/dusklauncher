@@ -451,6 +451,7 @@ mod tests {
             server: Some("play.example.net".into()),
             created_at: 0,
             last_played: None,
+            play_secs: 0,
             memory_mb: None,
             java_path: None,
         }
