@@ -69,3 +69,4 @@ java/dev/dusk/client/mixin/media/**
 # Scoreboard / boss bar / tab ping / block outline / background FPS tweaks
 # hook 1.21.11+ Gui and renderer methods.
 java/dev/dusk/client/mixin/tweaks/**
+java/dev/dusk/client/mixin/qol/ItemCooldownsMixin.java

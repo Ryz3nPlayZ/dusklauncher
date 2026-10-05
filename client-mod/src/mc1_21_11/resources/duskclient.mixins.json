@@ -24,6 +24,7 @@
     "toggle.KeepSprintMixin",
     "toggle.ToggleRestoreMixin",
     "qol.ConfirmDisconnectMixin",
+    "qol.ItemCooldownsMixin",
     "qol.PauseScreenAccessor",
     "keybinds.KeyBindsListMixin",
     "keybinds.KeyBindsScreenMixin",

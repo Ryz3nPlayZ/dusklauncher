@@ -73,6 +73,7 @@ final class ModuleIcons {
         m.put("light", Items.LANTERN);
         m.put("lowfire", Items.FLINT_AND_STEEL);
         m.put("totempop", Items.TOTEM_OF_UNDYING);
+        m.put("cooldowns", Items.ENDER_PEARL);
         m.put("lowshield", Items.SHIELD);
         m.put("memory", Items.COMPARATOR);
         m.put("motion_blur", Items.PHANTOM_MEMBRANE);

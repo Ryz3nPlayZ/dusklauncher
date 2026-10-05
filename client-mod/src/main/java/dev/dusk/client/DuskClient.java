@@ -14,6 +14,7 @@ import dev.dusk.client.module.ModuleManager;
 import dev.dusk.client.modules.hud.ArmorStatus;
 import dev.dusk.client.modules.hud.Biome;
 import dev.dusk.client.modules.hud.Clock;
+import dev.dusk.client.modules.hud.Cooldowns;
 import dev.dusk.client.modules.hud.ResourcePacks;
 import dev.dusk.client.modules.hud.Stopwatch;
 import dev.dusk.client.modules.hud.ComboDisplay;
@@ -209,6 +210,7 @@ public class DuskClient implements ClientModInitializer {
             modules.register(new NoPumpkinBlur());
             modules.register(new LowFire());
             modules.register(new TotemPop());
+            modules.register(new Cooldowns());
             modules.register(new LowShield());
             modules.register(new NoNightVision());
             modules.register(new RiptideShieldFix());
