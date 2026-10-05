@@ -7,11 +7,14 @@
  * because the download never passes through a browser and so never picks up
  * the quarantine / mark-of-the-web flag that triggers Gatekeeper/SmartScreen.
  *
+ * Linux installs made by scripts/install-linux.sh update by re-running the
+ * script (see src-tauri/src/selfinstall.rs).
+ *
  * In the browser preview there is no updater, so a fixture stands in and the
  * "install" is a visible fake so the button can be styled.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { isTauri } from './api';
+import { api, isTauri } from './api';
 
 export type UpdateStatus =
   | { kind: 'idle' }
@@ -66,6 +69,18 @@ export function useUpdater() {
     const update = updateRef.current;
     if (!update) return void check();
     const version = update.version;
+    // a Linux install from scripts/install-linux.sh has no AppImage for the
+    // plugin to swap; the script fetches the release and replaces itself
+    if (await api.scriptInstalled().catch(() => false)) {
+      setStatus({ kind: 'downloading', version, pct: null });
+      try {
+        await api.scriptUpdate();
+        setStatus({ kind: 'ready', version });
+      } catch (e) {
+        setStatus({ kind: 'error', message: String(e) });
+      }
+      return;
+    }
     let total: number | null = null;
     let got = 0;
     setStatus({ kind: 'downloading', version, pct: null });

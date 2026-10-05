@@ -16,7 +16,15 @@ brew install --cask ryz3nplayz/tap/dusklauncher
 
 The builds aren't Apple-notarized yet, so the cask strips the quarantine flag itself (Homebrew 7 dropped `--no-quarantine`) — it opens first try. Installed from the DMG instead? Do it by hand: `xattr -dr com.apple.quarantine /Applications/DuskLauncher.app`, or right-click → Open once. Either way the launcher updates itself from then on (`brew upgrade` skips it on purpose).
 
-**Windows** and **Linux**: grab the installer / AppImage from the [latest release](https://github.com/ryz3nplayz/dusklauncher/releases/latest).
+**Linux** (x86_64): one command, no sudo, installs into your home folder and uses your system's WebKitGTK 4.1 (the AppImage's bundled copy shows a grey window on newer Mesa, e.g. Arch / Hyprland):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Ryz3nPlayZ/dusklauncher/main/launcher/scripts/install-linux.sh | sh
+```
+
+It adds an app-menu entry and a `dusklauncher` command, and the launcher's UPDATE button re-runs it. `… | sh -s -- --uninstall` removes it (instances and settings stay). The AppImage and .deb are still on the [latest release](https://github.com/ryz3nplayz/dusklauncher/releases/latest).
+
+**Windows**: grab the installer from the [latest release](https://github.com/ryz3nplayz/dusklauncher/releases/latest).
 
 ## Layout
 

@@ -1889,6 +1889,10 @@ export const api = {
     invoke<ModHit[]>('search_content', { kind, query, gameVersion, loader, limit }),
   /** what the instance's Fabric mods need that mods/ doesn't have */
   modProblems: (profileId: string) => invoke<ModProblems>('mod_problems', { profileId }),
+  /** Linux: installed by scripts/install-linux.sh, so UPDATE re-runs the script */
+  scriptInstalled: () => invoke<boolean>('script_installed'),
+  /** re-run the install script, replacing this install with the latest release */
+  scriptUpdate: () => invoke<void>('script_update'),
   installContent: (profileId: string, kind: ContentKind, projectId: string) =>
     invoke<ProfileMod>('install_content_to_profile', { profileId, kind, projectId }),
   /** install the exact version the user picked on the project page */

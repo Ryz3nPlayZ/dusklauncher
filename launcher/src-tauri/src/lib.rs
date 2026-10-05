@@ -17,6 +17,7 @@ mod recordings;
 mod quickplay;
 mod release_art;
 mod screenshots;
+mod selfinstall;
 mod servers;
 mod settings;
 mod skins;
@@ -95,6 +96,8 @@ pub fn run() {
             screenshots::list_screenshots,
             javas::list_javas,
             deps::mod_problems,
+            selfinstall::script_installed,
+            selfinstall::script_update,
             logs::read_latest_log,
             logs::upload_log,
             servers::list_servers,
