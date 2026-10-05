@@ -761,6 +761,25 @@ export interface MissingDep {
   disabledFile: string | null;
 }
 
+/** a library the mods need, present in a version they don't take */
+export interface Mismatch {
+  /** the jar that has it ("Fabric API"), "X (inside Y)" for a bundled one, or "Minecraft" */
+  name: string;
+  version: string;
+  /** its file in mods/ — null for Minecraft itself */
+  file: string | null;
+  neededBy: { name: string; file: string; wants: string }[];
+}
+/** what would stop an instance's Fabric mods from loading */
+export interface ModProblems {
+  missing: MissingDep[];
+  mismatched: Mismatch[];
+  /** the same mod in mods/ more than once: keep the newest, the rest go off */
+  duplicates: { name: string; keep: string; keepVersion: string; extra: string[] }[];
+  /** a mod whose `breaks` names another one present */
+  clashes: { name: string; file: string; other: string; otherVersion: string; otherFile: string }[];
+}
+
 /** worlds added to an instance's saves/ */
 export interface ImportedWorlds {
   /** the folder names they landed under */
@@ -1002,9 +1021,21 @@ const fixtures: Record<string, unknown> = {
       gamemode: 'survival',
     },
   ] satisfies RecentPlay[],
-  missing_dependencies: [
-    { id: 'cloth-config2', label: 'Cloth Config API', project: 'cloth-config', neededBy: ['FastQuit', 'More Culling', 'Gamma Utils', 'Combat Hitboxes'], disabledFile: null },
-  ] satisfies MissingDep[],
+  mod_problems: {
+    missing: [
+      { id: 'cloth-config2', label: 'Cloth Config API', project: 'cloth-config', neededBy: ['FastQuit', 'More Culling', 'Gamma Utils', 'Combat Hitboxes'], disabledFile: null },
+    ],
+    mismatched: [
+      {
+        name: 'Fabric API',
+        version: '0.116.0+1.21.11',
+        file: 'fabric-api-0.116.0+1.21.11.jar',
+        neededBy: [{ name: 'Sodium Extra', file: 'sodium-extra.jar', wants: '>=0.120.0' }],
+      },
+    ],
+    duplicates: [{ name: 'Lithium', keep: 'lithium-fabric-0.15.1+mc1.21.11.jar', keepVersion: '0.15.1+mc1.21.11', extra: ['lithium-fabric-0.15.0+mc1.21.11.jar'] }],
+    clashes: [{ name: 'Sodium', file: 'sodium-fabric-0.6.13+mc1.21.11.jar', other: 'Iris', otherVersion: '1.8.0+1.21.11', otherFile: 'iris-fabric-1.8.0+mc1.21.11.jar' }],
+  } satisfies ModProblems,
   read_latest_log: {
     modified: Date.now() - 3 * 3600_000,
     lines: [
@@ -1857,7 +1888,7 @@ export const api = {
   searchContent: (kind: ContentKind, query: string, gameVersion: string, loader: string, limit = 20) =>
     invoke<ModHit[]>('search_content', { kind, query, gameVersion, loader, limit }),
   /** what the instance's Fabric mods need that mods/ doesn't have */
-  missingDependencies: (profileId: string) => invoke<MissingDep[]>('missing_dependencies', { profileId }),
+  modProblems: (profileId: string) => invoke<ModProblems>('mod_problems', { profileId }),
   installContent: (profileId: string, kind: ContentKind, projectId: string) =>
     invoke<ProfileMod>('install_content_to_profile', { profileId, kind, projectId }),
   /** install the exact version the user picked on the project page */

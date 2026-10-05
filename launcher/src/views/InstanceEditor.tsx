@@ -21,7 +21,7 @@ import {
   type JavaInstall,
   type LatestLog,
   type ImportedWorlds,
-  type MissingDep,
+  type ModProblems,
   releaseNewer,
   type LaunchTarget,
   type Profile,
@@ -747,9 +747,10 @@ function ContentTab({
   const [updating, setUpdating] = useState<Set<string>>(() => new Set());
   /* files are being dragged over the window */
   const [dropping, setDropping] = useState(false);
-  /* libraries the mods need that mods/ doesn't have (Fabric only) */
-  const [missing, setMissing] = useState<MissingDep[]>([]);
-  /* the project an INSTALL / TURN ON is running for */
+  /* what would stop the mods loading: missing or wrong-version libraries,
+     a mod twice, mods that break each other (Fabric only) */
+  const [problems, setProblems] = useState<ModProblems | null>(null);
+  /* the problem row whose fix is running */
   const [fixing, setFixing] = useState<string | null>(null);
 
   const kind = content?.kind ?? null;
@@ -785,11 +786,11 @@ function ContentTab({
   const reload = () => {
     if (kindTab === 'ALL' || kindTab === 'MODS') {
       void api
-        .missingDependencies(profile.id)
-        .then(setMissing)
-        .catch(() => setMissing([]));
+        .modProblems(profile.id)
+        .then(setProblems)
+        .catch(() => setProblems(null));
     } else {
-      setMissing([]);
+      setProblems(null);
     }
     return Promise.all(
       targets.map(async (t) => {
@@ -890,14 +891,65 @@ function ContentTab({
 
   const vanilla = kindTab === 'MODS' && profile.loader === 'vanilla';
 
-  const fix = (d: MissingDep) => {
-    setFixing(d.project);
-    void act(() =>
-      d.disabledFile
-        ? api.setContentEnabled(profile.id, 'mod', d.disabledFile, true)
-        : api.installContent(profile.id, 'mod', d.project),
-    ).finally(() => setFixing(null));
+  const fix = (key: string, fn: () => Promise<unknown>) => {
+    setFixing(key);
+    void act(fn).finally(() => setFixing(null));
   };
+  const turnOff = (files: string[]) => async () => {
+    for (const f of files) await api.setContentEnabled(profile.id, 'mod', f, false);
+  };
+  const and = (names: string[]) =>
+    names.length > 4
+      ? `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`
+      : names.length > 1
+        ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+        : names[0];
+
+  /* each problem as a row: the warning, the rest of the sentence, and the fix when there's one */
+  type ProblemRow = { key: string; warn: string; text: string; fix?: { label: string; title: string; run: () => Promise<unknown> } };
+  const problemRows: ProblemRow[] = problems
+    ? [
+        ...problems.missing.map((d) => ({
+          key: `missing/${d.project}`,
+          warn: `${d.label} is ${d.disabledFile ? 'turned off' : 'missing'}`,
+          text: ` — ${and(d.neededBy)} ${d.neededBy.length > 1 ? 'need' : 'needs'} it, and the game won’t start without it.`,
+          fix: d.disabledFile
+            ? { label: 'TURN ON', title: `Turn ${d.disabledFile} back on`, run: () => api.setContentEnabled(profile.id, 'mod', d.disabledFile!, true) }
+            : { label: 'INSTALL', title: `Install ${d.label} from Modrinth`, run: () => api.installContent(profile.id, 'mod', d.project) },
+        })),
+        ...problems.mismatched.map((m): ProblemRow => {
+          const files = m.neededBy.map((n) => n.file);
+          if (m.file === null) {
+            return {
+              key: `mc/${m.version}`,
+              warn: `${and(m.neededBy.map((n) => n.name))} ${m.neededBy.length > 1 ? 'are' : 'is'} for another Minecraft`,
+              text: ` — this instance runs ${m.version} (${m.neededBy.map((n) => `${n.name}: ${n.wants}`).join(', ')}). Turn ${m.neededBy.length > 1 ? 'them' : 'it'} off or get a ${m.version} build.`,
+              fix: { label: 'TURN OFF', title: `Turn off ${files.join(', ')}`, run: turnOff(files) },
+            };
+          }
+          const key = `mod/${m.file}`;
+          const u = updates?.get(key);
+          return {
+            key: `wrong/${m.file}`,
+            warn: `${m.name} ${m.version} is the wrong version`,
+            text: ` — ${m.neededBy.map((n) => `${n.name} needs ${n.wants}`).join(', ')}.${u ? '' : ' Get one that fits from its VERSIONS.'}`,
+            fix: u ? { label: 'UPDATE', title: `Update ${m.file} to ${u.versionNumber}`, run: () => update([[key, 'mod', u]]) } : undefined,
+          };
+        }),
+        ...problems.duplicates.map((d) => ({
+          key: `twice/${d.keep}`,
+          warn: `${d.name} is in mods/ ${d.extra.length > 1 ? `${d.extra.length + 1} times` : 'twice'}`,
+          text: ` — the game won’t start with more than one. Keeps ${d.keepVersion || d.keep} and turns off ${d.extra.join(', ')}.`,
+          fix: { label: 'TURN OFF OLD', title: `Turn off ${d.extra.join(', ')}`, run: turnOff(d.extra) },
+        })),
+        ...problems.clashes.map((c) => ({
+          key: `breaks/${c.file}/${c.otherFile}`,
+          warn: `${c.name} doesn’t work with ${c.other} ${c.otherVersion}`,
+          text: ` — ${c.name} says so itself, and the game won’t start with both on. Update ${c.other} or turn one off.`,
+          fix: { label: 'TURN OFF', title: `Turn off ${c.otherFile} (${c.other})`, run: turnOff([c.otherFile]) },
+        })),
+      ]
+    : [];
 
   return (
     <div className="win__body editor__body">
@@ -919,33 +971,25 @@ function ContentTab({
         </span>
       )}
       {note && <span className="meta">{note}</span>}
-      {missing.map((d) => {
-        const names =
-          d.neededBy.length > 4
-            ? `${d.neededBy.slice(0, 3).join(', ')} and ${d.neededBy.length - 3} more`
-            : d.neededBy.length > 1
-              ? `${d.neededBy.slice(0, -1).join(', ')} and ${d.neededBy[d.neededBy.length - 1]}`
-              : d.neededBy[0];
-        return (
-          <div key={d.project} className="editor__dep">
-            <span className="meta editor__dep-text">
-              <span className="editor__dep-warn">{`${d.label} is ${d.disabledFile ? 'turned off' : 'missing'}`}</span>
-              {` — ${names} ${d.neededBy.length > 1 ? 'need' : 'needs'} it, and the game won’t start without it.`}
-            </span>
-            <PxButton
-              family="accent"
-              height="sm"
-              disabled={fixing !== null}
-              title={d.disabledFile ? `Turn ${d.disabledFile} back on` : `Install ${d.label} from Modrinth`}
-              onClick={() => fix(d)}
-            >
-              <TT size={16} tone="accent">
-                {fixing === d.project ? 'WORKING…' : d.disabledFile ? 'TURN ON' : 'INSTALL'}
-              </TT>
-            </PxButton>
-          </div>
-        );
-      })}
+      {problemRows.length > 0 && (
+        <div className="editor__deps">
+          {problemRows.map((p) => (
+            <div key={p.key} className="editor__dep">
+              <span className="meta editor__dep-text">
+                <span className="editor__dep-warn">{p.warn}</span>
+                {p.text}
+              </span>
+              {p.fix && (
+                <PxButton family="accent" height="sm" disabled={fixing !== null} title={p.fix.title} onClick={() => fix(p.key, p.fix!.run)}>
+                  <TT size={16} tone="accent">
+                    {fixing === p.key ? 'WORKING…' : p.fix.label}
+                  </TT>
+                </PxButton>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {rows && rows.length > 0 && (
         <div className="browse__toolbar">

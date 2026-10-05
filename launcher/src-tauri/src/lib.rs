@@ -94,7 +94,7 @@ pub fn run() {
             // screenshots
             screenshots::list_screenshots,
             javas::list_javas,
-            deps::missing_dependencies,
+            deps::mod_problems,
             logs::read_latest_log,
             logs::upload_log,
             servers::list_servers,

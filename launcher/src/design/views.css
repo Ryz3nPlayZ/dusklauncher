@@ -1252,6 +1252,15 @@
   background: var(--listing-body);
 }
 /* a library the instance's mods need and mods/ doesn't have */
+/* the problem rows stack above the list but never crowd it out */
+.editor__deps {
+  flex: none;
+  max-height: 34%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(8 * var(--u));
+}
 .editor__dep {
   flex: none;
   display: flex;
