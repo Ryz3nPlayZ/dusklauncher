@@ -13,6 +13,7 @@ import {
   type CrashInfo,
   type GameActivity,
   type GameState,
+  type LaunchTarget,
   type Profile,
   type Progress,
   type Settings,
@@ -219,10 +220,12 @@ export default function App() {
     [settings, saveSettings],
   );
 
-  /* `server`: straight onto that multiplayer server (a friend's JOIN);
+  /* `server`: straight onto that multiplayer server (a friend's JOIN, the
+     WORLDS tab); `world`: into that singleplayer save (the WORLDS tab);
      `replay`: straight into that clip or replay (WATCH on the media page) */
   const launch = useCallback(
-    async (id: string, server?: string, replay?: string) => {
+    async (id: string, to?: LaunchTarget) => {
+      const { server, world, replay } = to ?? {};
       if (!canPlay) {
         setGateDismissed(false);
         return;
@@ -233,7 +236,13 @@ export default function App() {
       try {
         // resolves once the process has spawned — from here on the game is
         // running whatever order the events landed in
-        await (replay ? api.watchRecording(id, replay) : server ? api.joinServer(id, server) : api.launch(id));
+        await (replay
+          ? api.watchRecording(id, replay)
+          : server
+            ? api.joinServer(id, server)
+            : world
+              ? api.playWorld(id, world)
+              : api.launch(id));
         setProgress(null);
         setGame({ profileId: id, state: 'running', code: null });
         void refreshProfiles();
@@ -264,7 +273,7 @@ export default function App() {
         return;
       }
       setRoute('home');
-      void launch(target.id, server);
+      void launch(target.id, { server });
     },
     [profiles, selected, launch],
   );
@@ -329,7 +338,7 @@ export default function App() {
             onStop={() => void stop()}
             onWatch={(id, path) => {
               setRoute('home');
-              void launch(id, undefined, path);
+              void launch(id, { replay: path });
             }}
             clock24h={settings?.clock24h ?? false}
           />

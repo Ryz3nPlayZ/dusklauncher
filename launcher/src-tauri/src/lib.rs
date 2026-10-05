@@ -13,6 +13,7 @@ mod mods;
 mod recordings;
 mod release_art;
 mod screenshots;
+mod servers;
 mod settings;
 mod skins;
 mod wallpapers;
@@ -87,6 +88,8 @@ pub fn run() {
             commands::notify,
             // screenshots
             screenshots::list_screenshots,
+            servers::list_servers,
+            servers::ping_server,
             screenshots::set_screenshot_favorite,
             screenshots::delete_screenshot,
             screenshots::reveal_screenshot,

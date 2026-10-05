@@ -26,6 +26,8 @@ pub struct LaunchEnv {
     pub post_exit_hook: Option<String>,
     /// working directory for hooks
     pub hook_cwd: Option<PathBuf>,
+    /// a `saves/` folder name: open that world straight from the launcher
+    pub world: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -232,6 +234,22 @@ pub fn build_launch_spec(
     features.insert("is_demo_user".to_string(), false);
     features.insert("has_custom_resolution".to_string(), true);
     features.insert("has_quick_plays_support".to_string(), false);
+    // 1.20 swapped `--server`/`--port` for Quick Play and the game silently
+    // ignores the old options, so versions that list the Quick Play entries
+    // join (or open a world) through those
+    let quick_play = version
+        .arguments
+        .as_ref()
+        .is_some_and(|a| a.game.iter().any(|e| e.to_string().contains("quickPlayMultiplayer")));
+    if quick_play {
+        if let Some(server) = &profile.server {
+            features.insert("is_quick_play_multiplayer".to_string(), true);
+            values.insert("quickPlayMultiplayer".into(), server.clone());
+        } else if let Some(world) = &env.world {
+            features.insert("is_quick_play_singleplayer".to_string(), true);
+            values.insert("quickPlaySingleplayer".into(), world.clone());
+        }
+    }
 
     let empty = Vec::new();
     let (jvm_entries, game_entries) = match &version.arguments {
@@ -271,9 +289,16 @@ pub fn build_launch_spec(
         game_args.push("--height".into());
         game_args.push(profile.resolution.1.to_string());
     }
-    if let Some(server) = &profile.server {
-        game_args.push("--server".into());
-        game_args.push(server.clone());
+    if !quick_play {
+        if let Some(server) = &profile.server {
+            let (host, port) = split_server(server);
+            game_args.push("--server".into());
+            game_args.push(host.to_string());
+            if let Some(port) = port {
+                game_args.push("--port".into());
+                game_args.push(port.to_string());
+            }
+        }
     }
 
     LaunchSpec {
@@ -283,6 +308,23 @@ pub fn build_launch_spec(
         game_args,
         cwd: dirs.root.clone(),
         env: env.env_vars.clone(),
+    }
+}
+
+/// `host:port` → (host, port) for the pre-1.20 `--server`/`--port` pair.
+/// A bare IPv6 address has colons but no port; `[v6]:port` does.
+fn split_server(addr: &str) -> (&str, Option<u16>) {
+    if let Some(rest) = addr.strip_prefix('[') {
+        if let Some((host, tail)) = rest.split_once(']') {
+            return (host, tail.strip_prefix(':').and_then(|p| p.parse().ok()));
+        }
+    }
+    match addr.rsplit_once(':') {
+        Some((host, port)) if !host.contains(':') => match port.parse() {
+            Ok(p) => (host, Some(p)),
+            Err(_) => (addr, None),
+        },
+        _ => (addr, None),
     }
 }
 
@@ -658,5 +700,65 @@ mod tests {
             &LaunchEnv::default(),
         );
         assert!(!spec.jvm_args.iter().any(|a| a == "-XX:+UseZGC"));
+    }
+
+    fn quick_play_spec(server: Option<&str>, world: Option<&str>) -> LaunchSpec {
+        // the real 1.20+ entries: each Quick Play target behind its own feature
+        let json = r#"{
+            "id": "1.21.11", "type": "release", "mainClass": "net.minecraft.client.main.Main",
+            "arguments": {
+                "jvm": [],
+                "game": ["--username", "${auth_player_name}",
+                    {"rules": [{"action": "allow", "features": {"has_quick_plays_support": true}}],
+                     "value": ["--quickPlayPath", "${quickPlayPath}"]},
+                    {"rules": [{"action": "allow", "features": {"is_quick_play_singleplayer": true}}],
+                     "value": ["--quickPlaySingleplayer", "${quickPlaySingleplayer}"]},
+                    {"rules": [{"action": "allow", "features": {"is_quick_play_multiplayer": true}}],
+                     "value": ["--quickPlayMultiplayer", "${quickPlayMultiplayer}"]}]
+            },
+            "libraries": [],
+            "downloads": {"client": null}
+        }"#;
+        let version: meta::VersionJson = serde_json::from_str(json).unwrap();
+        let mut profile = test_profile();
+        profile.server = server.map(str::to_string);
+        let dirs = profile.dirs(Path::new("/data"));
+        let session = Session {
+            access_token: String::new(),
+            expires_at: 0,
+            uuid: "u".into(),
+            username: "Player".into(),
+            xuid: String::new(),
+            refresh_token: String::new(),
+            skin_url: String::new(),
+            skin_variant: String::new(),
+        };
+        let env = LaunchEnv { world: world.map(str::to_string), ..LaunchEnv::default() };
+        build_launch_spec(Path::new("/java"), &version, &profile, &dirs, Path::new("/natives"), &session, &env)
+    }
+
+    #[test]
+    fn modern_versions_join_through_quick_play() {
+        let spec = quick_play_spec(Some("play.example.net:25570"), None);
+        let at = spec.game_args.iter().position(|a| a == "--quickPlayMultiplayer").unwrap();
+        assert_eq!(spec.game_args[at + 1], "play.example.net:25570");
+        assert!(!spec.game_args.iter().any(|a| a == "--server" || a.contains("${")));
+        assert!(!spec.game_args.iter().any(|a| a == "--quickPlayPath" || a == "--quickPlaySingleplayer"));
+
+        let spec = quick_play_spec(None, Some("New World"));
+        let at = spec.game_args.iter().position(|a| a == "--quickPlaySingleplayer").unwrap();
+        assert_eq!(spec.game_args[at + 1], "New World");
+        assert!(!spec.game_args.iter().any(|a| a == "--quickPlayMultiplayer"));
+
+        let spec = quick_play_spec(None, None);
+        assert!(!spec.game_args.iter().any(|a| a.starts_with("--quickPlay")));
+    }
+
+    #[test]
+    fn old_versions_split_the_port_off() {
+        assert_eq!(split_server("mc.example.net:25570"), ("mc.example.net", Some(25570)));
+        assert_eq!(split_server("mc.example.net"), ("mc.example.net", None));
+        assert_eq!(split_server("[::1]:25566"), ("::1", Some(25566)));
+        assert_eq!(split_server("::1"), ("::1", None));
     }
 }

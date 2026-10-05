@@ -537,6 +537,39 @@ export interface World {
   name: string;
   modified: number;
   size: number;
+  /** the world's icon.png as a data URL, once the game has saved one */
+  icon: string | null;
+}
+
+/** an entry of the instance's multiplayer list (`servers.dat`) */
+export interface SavedServer {
+  name: string;
+  address: string;
+  /** the icon the game cached at its last ping (data URL) */
+  icon: string | null;
+}
+
+/** one run of MOTD text; `color` is `#rrggbb`, null for the default grey */
+export interface MotdPart {
+  text: string;
+  color: string | null;
+}
+
+/** a server list ping: what the game's multiplayer screen shows */
+export interface ServerStatus {
+  motd: MotdPart[];
+  online: number;
+  max: number;
+  version: string;
+  pingMs: number;
+  icon: string | null;
+}
+
+/** where a launch goes once the game is up: a server, a world, a recording */
+export interface LaunchTarget {
+  server?: string;
+  world?: string;
+  replay?: string;
 }
 
 /** a clip or replay the Dusk client recorded (an `.mcpr`) */
@@ -845,9 +878,14 @@ const fixtures: Record<string, unknown> = {
     page: 0,
     pageSize: 20,
   } satisfies ModpackSearch,
+  list_servers: [
+    { name: 'zWork SMP', address: 'mc.tryzwork.app', icon: null },
+    { name: 'zWork PVP', address: 'pvp.tryzwork.app', icon: null },
+    { name: 'old realm', address: 'gone.example.net', icon: null },
+  ] satisfies SavedServer[],
   list_worlds: [
-    { name: 'New World', modified: Date.now() - 2 * HOUR, size: 184_320_000 },
-    { name: 'Skyblock', modified: Date.now() - 90 * HOUR, size: 41_900_000 },
+    { name: 'New World', modified: Date.now() - 2 * HOUR, size: 184_320_000, icon: null },
+    { name: 'Skyblock', modified: Date.now() - 90 * HOUR, size: 41_900_000, icon: null },
   ] satisfies World[],
   search_projects: {
     hits: [
@@ -1201,6 +1239,32 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     return (await previewStore()) as T;
   }
   if (cmd === 'export_cosmetic_texture') return null as T;
+  if (cmd === 'ping_server') {
+    await new Promise((r) => setTimeout(r, 400));
+    const address = String(args?.address);
+    if (address.startsWith('gone.')) throw new Error("Can't reach the server");
+    const pvp = address.startsWith('pvp.');
+    const word = (t: string, from: number[], to: number[]) =>
+      [...t].map((ch, i) => {
+        const k = t.length > 1 ? i / (t.length - 1) : 0;
+        const c = from.map((f, j) => Math.round(f + (to[j] - f) * k));
+        return { text: ch, color: '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('') };
+      });
+    return {
+      motd: [
+        { text: '» ', color: '#555555' },
+        ...word(pvp ? 'zWork PVP' : 'zWork SMP', [255, 61, 61], [255, 193, 74]),
+        { text: ' «', color: '#555555' },
+        { text: '\n', color: null },
+        ...word(pvp ? 'Practice • Duels • Climb the ranks' : 'Economy • Shops • TPA • RTP', [255, 138, 138], [255, 210, 122]),
+      ],
+      online: pvp ? 3 : 12,
+      max: pvp ? 100 : 20,
+      version: 'Velocity 1.7.2-26.3',
+      pingMs: pvp ? 18 : 15,
+      icon: null,
+    } satisfies ServerStatus as T;
+  }
   if (cmd === 'set_loadout') {
     previewLoadout = structuredClone(args?.loadout as Loadout);
     return structuredClone(previewLoadout) as T;
@@ -1508,6 +1572,9 @@ export const api = {
   /** launch straight onto a server (a friend's, an invite) without saving it on the instance */
   joinServer: (profileId: string, server: string) =>
     invoke<void>('install_and_launch', { profileId, joinServer: server }),
+  /** launch straight into one of the instance's singleplayer worlds */
+  playWorld: (profileId: string, world: string) =>
+    invoke<void>('install_and_launch', { profileId, openWorld: world }),
   /** launch the instance that recorded it, straight into this clip or replay */
   watchRecording: (profileId: string, path: string) =>
     invoke<void>('install_and_launch', { profileId, watchReplay: path }),
@@ -1563,6 +1630,10 @@ export const api = {
 
   // ── what an instance holds ──
   listWorlds: (profileId: string) => invoke<World[]>('list_worlds', { profileId }),
+  /** the instance's multiplayer list, in the game's order */
+  listServers: (profileId: string) => invoke<SavedServer[]>('list_servers', { profileId }),
+  /** MOTD, players and ping, resolving SRV records like the game does */
+  pingServer: (address: string) => invoke<ServerStatus>('ping_server', { address }),
   listContent: (profileId: string, kind: ContentKind) =>
     invoke<ProfileMod[]>('list_profile_content', { profileId, kind }),
   /** which Modrinth projects the folder already holds, by file hash */

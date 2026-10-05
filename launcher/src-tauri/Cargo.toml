@@ -30,6 +30,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # screenshots are deleted to the OS trash, never for good
 trash = "5"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+hickory-resolver = "0.26.3"
 
 [lib]
 name = "fasterlauncher_lib"

@@ -16,9 +16,12 @@ import {
   type ContentUpdate,
   type GameState,
   type InstalledProject,
+  type LaunchTarget,
   type Profile,
   type ProfileFolder,
   type ProfileMod,
+  type SavedServer,
+  type ServerStatus,
   type Version,
   type World,
 } from '../lib/api';
@@ -82,7 +85,7 @@ export default function InstanceEditor({
   profile: Profile;
   game: GameState | null;
   onBack: () => void;
-  onLaunch: (id: string) => void;
+  onLaunch: (id: string, to?: LaunchTarget) => void;
   onStop: () => void;
   onRefresh: () => Promise<void> | void;
   onDelete: (p: Profile) => void;
@@ -268,7 +271,9 @@ export default function InstanceEditor({
         {tab === 'SETTINGS' && (
           <SettingsTab profile={profile} onSaved={onRefresh} onDelete={() => onDelete(profile)} />
         )}
-        {tab === 'WORLDS' && <WorldsTab profile={profile} />}
+        {tab === 'WORLDS' && (
+          <WorldsTab profile={profile} busy={live !== null} onLaunch={(to) => onLaunch(profile.id, to)} />
+        )}
         {tab === 'LOG' && <LogTab profile={profile} game={mine ? live : null} onStop={onStop} />}
       </div>
     </div>
@@ -920,14 +925,43 @@ function ContentTab({
 }
 
 /* ── WORLDS: what's in saves/ ───────────────────────────────────────────── */
-function WorldsTab({ profile }: { profile: Profile }) {
+function WorldsTab({
+  profile,
+  busy,
+  onLaunch,
+}: {
+  profile: Profile;
+  /** a game is starting or running: JOIN / PLAY wait for it */
+  busy: boolean;
+  onLaunch: (to: LaunchTarget) => void;
+}) {
   const [worlds, setWorlds] = useState<World[] | null>(null);
+  const [servers, setServers] = useState<SavedServer[] | null>(null);
+  /* address → its ping; 'down' when it didn't answer, absent while pinging */
+  const [status, setStatus] = useState<Record<string, ServerStatus | 'down'>>({});
   const [note, setNote] = useState<string | null>(null);
+
+  const ping = (list: SavedServer[]) => {
+    setStatus({});
+    for (const sv of list) {
+      void api
+        .pingServer(sv.address)
+        .then((st) => setStatus((m) => ({ ...m, [sv.address]: st })))
+        .catch(() => setStatus((m) => ({ ...m, [sv.address]: 'down' })));
+    }
+  };
 
   useEffect(() => {
     void api
       .listWorlds(profile.id)
       .then(setWorlds)
+      .catch((e) => setNote(String(e)));
+    void api
+      .listServers(profile.id)
+      .then((list) => {
+        setServers(list);
+        ping(list);
+      })
       .catch((e) => setNote(String(e)));
   }, [profile.id]);
 
@@ -943,31 +977,135 @@ function WorldsTab({ profile }: { profile: Profile }) {
             OPEN SAVES FOLDER
           </TT>
         </PxButton>
-        <span className="meta browse__count">{worlds ? `${worlds.length} WORLDS` : '…'}</span>
+        {servers && servers.length > 0 && (
+          <PxButton family="grey" height="sm" onClick={() => ping(servers)}>
+            <TT size={16}>REFRESH</TT>
+          </PxButton>
+        )}
+        <span className="meta browse__count">
+          {worlds && servers ? `${servers.length} SERVERS · ${worlds.length} WORLDS` : '…'}
+        </span>
       </div>
       {note && <span className="meta">{note}</span>}
       <div className="editor__list scroll">
-        {worlds && worlds.length === 0 && (
+        {servers && servers.length > 0 && (
+          <TT size={14} tone="sub" className="worlds__head">
+            SERVERS
+          </TT>
+        )}
+        {servers?.map((sv) => {
+          const st = status[sv.address];
+          const up = st && st !== 'down' ? st : null;
+          const icon = up?.icon ?? sv.icon;
+          return (
+            <div key={`${sv.name}|${sv.address}`} className="editor__row">
+              <span className="editor__row-icon">
+                {icon ? (
+                  <img src={icon} alt="" draggable={false} />
+                ) : (
+                  <PixelGlyph glyph="box" size={40} color="var(--text-3)" />
+                )}
+              </span>
+              <span className="editor__file">
+                <TT size={16}>{sv.name}</TT>
+                {up && up.motd.length > 0 ? (
+                  <span className="meta worlds__motd">
+                    {up.motd.map((m, i) => (
+                      <span key={i} style={m.color ? { color: m.color } : undefined}>
+                        {m.text}
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  <span className="meta editor__filename">{sv.address}</span>
+                )}
+              </span>
+              <span className="editor__kind">
+                {st === undefined ? (
+                  <span className="meta">pinging…</span>
+                ) : up ? (
+                  <>
+                    <TT size={14} tone="sub">{`${up.online}/${up.max} ONLINE`}</TT>
+                    <span className="meta" title={up.version}>
+                      <span style={{ color: pingColor(up.pingMs) }}>{up.pingMs} ms</span>
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <TT size={14} tone="red">
+                      OFFLINE
+                    </TT>
+                    <span className="meta">can't reach it</span>
+                  </>
+                )}
+              </span>
+              <span className="editor__actions worlds__actions">
+                <PxButton
+                  family="accent"
+                  height="sm"
+                  disabled={busy}
+                  title={busy ? 'A game is already running' : `Join ${sv.address}`}
+                  onClick={() => onLaunch({ server: sv.address })}
+                >
+                  <TT size={16} tone="accent">
+                    JOIN
+                  </TT>
+                </PxButton>
+              </span>
+            </div>
+          );
+        })}
+        {worlds && worlds.length > 0 && (
+          <TT size={14} tone="sub" className="worlds__head">
+            WORLDS
+          </TT>
+        )}
+        {worlds && worlds.length === 0 && servers?.length === 0 && (
           <PxBox family="panel" className="empty">
             <TT size={20} tone="dim">
               NO WORLDS YET
             </TT>
-            <span className="meta">Worlds you create in this instance show up here.</span>
+            <span className="meta">Worlds and servers you add in this instance show up here.</span>
           </PxBox>
         )}
         {worlds?.map((w) => (
           <div key={w.name} className="editor__row">
+            <span className="editor__row-icon">
+              {w.icon ? (
+                <img src={w.icon} alt="" draggable={false} />
+              ) : (
+                <PixelGlyph glyph="box" size={40} color="var(--text-3)" />
+              )}
+            </span>
             <span className="editor__file">
               <TT size={16}>{w.name}</TT>
               <span className="meta">
                 {fmtBytes(w.size)} · played {ago(w.modified)}
               </span>
             </span>
+            <span className="editor__actions worlds__actions">
+              <PxButton
+                family="accent"
+                height="sm"
+                disabled={busy}
+                title={busy ? 'A game is already running' : `Open ${w.name}`}
+                onClick={() => onLaunch({ world: w.name })}
+              >
+                <TT size={16} tone="accent">
+                  PLAY
+                </TT>
+              </PxButton>
+            </span>
           </div>
         ))}
       </div>
     </div>
   );
+}
+
+/** the game's own ping bars: green under 150 ms, yellow under 300, red above */
+function pingColor(ms: number) {
+  return ms < 150 ? 'var(--g-up)' : ms < 300 ? 'var(--y-up)' : 'var(--r-up)';
 }
 
 /* ── LOG: the game's console, live while it runs ───────────────────────────

@@ -19,6 +19,7 @@ import {
   isTauri,
   loaderLabel,
   type GameState,
+  type LaunchTarget,
   type Profile,
   type ReleaseArt,
   type Version,
@@ -42,7 +43,7 @@ export default function Instances({
   selected: Profile | null;
   game: GameState | null;
   onRefresh: () => Promise<void> | void;
-  onLaunch: (id: string) => void;
+  onLaunch: (id: string, to?: LaunchTarget) => void;
   onSelect: (id: string) => void;
   onStop: () => void;
   /** WATCH on the media page: launch that instance straight into the recording */
@@ -145,9 +146,9 @@ export default function Instances({
           profile={editing}
           game={game}
           onBack={() => setEditingId(null)}
-          onLaunch={(id) => {
+          onLaunch={(id, to) => {
             onSelect(id);
-            onLaunch(id);
+            onLaunch(id, to);
           }}
           onStop={onStop}
           onRefresh={onRefresh}

@@ -1187,6 +1187,21 @@
   justify-content: flex-end;
   gap: calc(14 * var(--u));
 }
+/* WORLDS tab: servers (MOTD, players, ping, JOIN) above the saves (PLAY) */
+.worlds__head {
+  flex: none;
+  margin-top: calc(6 * var(--u));
+}
+.worlds__motd {
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+  color: #aaaaaa;
+}
+.worlds__actions {
+  width: auto;
+}
 /* files dragged over the window: the list becomes the drop target */
 .editor__drop {
   position: sticky;

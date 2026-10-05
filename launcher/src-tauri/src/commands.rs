@@ -363,6 +363,8 @@ pub struct WorldDto {
     pub name: String,
     pub modified: u64,
     pub size: u64,
+    /// the world's `icon.png` (the game saves one on first exit), as a data URL
+    pub icon: Option<String>,
 }
 
 fn millis(t: std::time::SystemTime) -> u64 {
@@ -417,7 +419,12 @@ pub fn list_worlds(state: State<AppState>, profile_id: String) -> Result<Vec<Wor
             .or_else(|_| entry.metadata().and_then(|m| m.modified()))
             .map(millis)
             .unwrap_or(0);
-        out.push(WorldDto { name, modified: stamp, size: dir_size(&path) });
+        use base64::Engine;
+        let icon = std::fs::read(path.join("icon.png"))
+            .ok()
+            .filter(|b| b.len() <= 256 * 1024)
+            .map(|b| format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(b)));
+        out.push(WorldDto { name, modified: stamp, size: dir_size(&path), icon });
     }
     out.sort_by_key(|w| std::cmp::Reverse(w.modified));
     Ok(out)
@@ -504,6 +511,7 @@ pub async fn install_and_launch(
     profile_id: String,
     join_server: Option<String>,
     watch_replay: Option<String>,
+    open_world: Option<String>,
 ) -> Result<(), String> {
     // Only one install+spawn at a time; the guard is held until the child spawns.
     let _launch_guard = state
@@ -527,7 +535,7 @@ pub async fn install_and_launch(
     // server (`--server`), without touching the saved instance
     let profile = match join_server.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         Some(addr) => {
-            if addr.len() > 64 || !addr.chars().all(|c| c.is_ascii_alphanumeric() || ".-_:[]".contains(c)) {
+            if !crate::servers::valid_address(addr) {
                 return Err("That server address doesn't look right.".into());
             }
             let mut p = profile;
@@ -535,6 +543,20 @@ pub async fn install_and_launch(
             p
         }
         None => profile,
+    };
+    // PLAY on a world in the WORLDS tab: this launch opens that save
+    // (Quick Play) instead of joining the instance's auto-join server
+    let (profile, world) = match open_world.as_deref() {
+        Some(name) => {
+            let saves = profile.dirs(&state.data_dir).root.join("saves");
+            if name.is_empty() || name.contains(['/', '\\']) || name == "." || name == ".." || !saves.join(name).join("level.dat").is_file() {
+                return Err("That world isn't in this instance.".into());
+            }
+            let mut p = profile;
+            p.server = None;
+            (p, Some(name.to_string()))
+        }
+        None => (profile, None),
     };
     // WATCH on the media page: this launch opens that recording as soon as
     // the title screen is up. Only a clip or replay this instance recorded.
@@ -583,6 +605,7 @@ pub async fn install_and_launch(
             wrapper_hook: Some(settings.wrapper_hook.clone()).filter(|s| !s.trim().is_empty()),
             post_exit_hook: Some(settings.post_exit_hook.clone()).filter(|s| !s.trim().is_empty()),
             hook_cwd: Some(dirs.root.clone()),
+            world,
         }
     };
 
