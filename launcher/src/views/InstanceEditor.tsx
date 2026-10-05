@@ -20,6 +20,7 @@ import {
   type InstalledProject,
   type JavaInstall,
   type LatestLog,
+  type ImportedWorlds,
   type LaunchTarget,
   type Profile,
   type ProfileFolder,
@@ -811,10 +812,11 @@ function ContentTab({
           void act(async () => {
             const r = await api.importContentPaths(profile.id, p.paths);
             const added = r.added.length === 1 ? `Added ${r.added[0].filename}` : `Added ${r.added.length} files`;
+            const worlds = r.worlds.length ? `added ${r.worlds.join(', ')} to WORLDS` : '';
             const skipped = r.skipped.length
-              ? `skipped ${r.skipped.join(', ')} — only .jar mods and .zip packs go here`
+              ? `skipped ${r.skipped.join(', ')} — only .jar mods, .zip packs and worlds go here`
               : '';
-            setNote([r.added.length ? added : '', skipped].filter(Boolean).join(' · ') || null);
+            setNote([r.added.length ? added : '', worlds, skipped].filter(Boolean).join(' · ') || null);
           });
         }
       })
@@ -1063,6 +1065,47 @@ function WorldsTab({
   /* the ADD SERVER form, open when set */
   const [adding, setAdding] = useState<{ name: string; address: string } | null>(null);
   const [dropping, setDropping] = useState<SavedServer | null>(null);
+  /* files dragged over the window */
+  const [dragOver, setDragOver] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  const imported = async (run: () => Promise<ImportedWorlds>) => {
+    setNote(null);
+    setImporting(true);
+    try {
+      const r = await run();
+      const added = r.added.length ? `Added ${r.added.join(', ')}` : '';
+      const skipped = r.skipped.length ? `no world in ${r.skipped.join(', ')}` : '';
+      setNote([added, skipped].filter(Boolean).join(' · ') || null);
+      if (r.added.length) setWorlds(await api.listWorlds(profile.id));
+    } catch (e) {
+      setNote(String(e));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  /* drop world zips or folders anywhere on the window */
+  useEffect(() => {
+    if (!isTauri) return;
+    let off: (() => void) | undefined;
+    let gone = false;
+    void getCurrentWebview()
+      .onDragDropEvent(({ payload: p }) => {
+        if (p.type === 'enter' || p.type === 'over') setDragOver(true);
+        else if (p.type === 'leave') setDragOver(false);
+        else {
+          setDragOver(false);
+          void imported(() => api.importWorldPaths(profile.id, p.paths));
+        }
+      })
+      .then((u) => (gone ? u() : (off = u)));
+    return () => {
+      gone = true;
+      off?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.id]);
 
   const backup = async (w: World) => {
     setBacking(w.name);
@@ -1162,6 +1205,17 @@ function WorldsTab({
         >
           <TT size={16}>ADD SERVER</TT>
         </PxButton>
+        {isTauri && (
+          <PxButton
+            family="grey"
+            height="sm"
+            disabled={importing}
+            title="Add a world from a .zip — a backup or a downloaded map. Folders can be dropped here too."
+            onClick={() => void imported(() => api.importWorld(profile.id))}
+          >
+            <TT size={16}>{importing ? 'IMPORTING…' : 'IMPORT WORLD'}</TT>
+          </PxButton>
+        )}
         {servers && servers.length > 0 && (
           <PxButton family="grey" height="sm" onClick={() => ping(servers)}>
             <TT size={16}>REFRESH</TT>
@@ -1178,6 +1232,14 @@ function WorldsTab({
       </div>
       {note && <span className="meta">{note}</span>}
       <div className="editor__list scroll">
+        {dragOver && (
+          <div className="editor__drop">
+            <TT size={20} tone="accent">
+              {`DROP TO ADD TO ${profile.name.toUpperCase()}`}
+            </TT>
+            <span className="meta">world .zip files and world folders</span>
+          </div>
+        )}
         {servers && servers.length > 0 && (
           <TT size={14} tone="sub" className="worlds__head">
             SERVERS

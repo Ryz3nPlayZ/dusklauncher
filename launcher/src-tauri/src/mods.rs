@@ -487,6 +487,9 @@ fn infer_kind(path: &std::path::Path) -> Option<&'static str> {
         "jar" => Some("mod"),
         "zip" => {
             let zip = zip::ZipArchive::new(std::fs::File::open(path).ok()?).ok()?;
+            if crate::worlds::zip_holds_world(&zip) {
+                return Some("world");
+            }
             let shaders = zip.file_names().any(|n| n.starts_with("shaders/"));
             Some(if shaders { "shader" } else { "resourcepack" })
         }
@@ -530,23 +533,33 @@ pub async fn import_local_content(
 #[serde(rename_all = "camelCase")]
 pub struct DroppedDto {
     pub added: Vec<ProfileModDto>,
-    /// names of dropped files that aren't mods or packs
+    /// worlds among the drop, by the folder name they landed under
+    pub worlds: Vec<String>,
+    /// names of dropped files that aren't mods, packs or worlds
     pub skipped: Vec<String>,
 }
 
 /// Files dropped onto an instance: each goes to the folder its contents say
 /// it belongs in; anything else is skipped and named back.
 #[tauri::command]
-pub fn import_content_paths(
-    state: State<AppState>,
+pub async fn import_content_paths(
+    state: State<'_, AppState>,
     profile_id: String,
     paths: Vec<String>,
 ) -> Result<DroppedDto, String> {
-    let mut out = DroppedDto { added: Vec::new(), skipped: Vec::new() };
+    let mut out = DroppedDto { added: Vec::new(), worlds: Vec::new(), skipped: Vec::new() };
     for p in paths {
         let path = PathBuf::from(&p);
         let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(p);
-        match infer_kind(&path).filter(|_| path.is_file()) {
+        let kind = if path.is_dir() { Some("world") } else { infer_kind(&path).filter(|_| path.is_file()) };
+        match kind {
+            Some("world") => {
+                let saves = crate::servers::profile_root(&state, &profile_id)?.join("saves");
+                match crate::worlds::import_into(&saves, &path)? {
+                    Some(world) => out.worlds.push(world),
+                    None => out.skipped.push(name),
+                }
+            }
             Some(kind) => out.added.push(copy_in(&state, &profile_id, kind, &path)?),
             None => out.skipped.push(name),
         }

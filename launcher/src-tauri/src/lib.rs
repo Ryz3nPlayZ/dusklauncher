@@ -101,6 +101,8 @@ pub fn run() {
             servers::remove_server,
             worlds::backup_world,
             worlds::delete_world,
+            worlds::import_world,
+            worlds::import_world_paths,
             quickplay::recent_plays,
             screenshots::set_screenshot_favorite,
             screenshots::delete_screenshot,

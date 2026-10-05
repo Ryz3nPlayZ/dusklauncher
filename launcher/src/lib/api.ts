@@ -724,6 +724,13 @@ export interface GameLogLine {
 export interface GameLogBatch {
   lines: GameLogLine[];
 }
+/** worlds added to an instance's saves/ */
+export interface ImportedWorlds {
+  /** the folder names they landed under */
+  added: string[];
+  /** file names that held no world */
+  skipped: string[];
+}
 /** the instance's logs/latest.log, for when the launcher didn't watch the run */
 export interface LatestLog {
   lines: GameLogLine[];
@@ -1100,6 +1107,8 @@ const sideEffects = new Set([
   'open_data_dir',
   'import_local_content',
   'import_content_paths',
+  'import_world',
+  'import_world_paths',
   'install_content_to_profile',
   'import_mrpack',
   'export_instance',
@@ -1786,7 +1795,15 @@ export const api = {
     invoke<void>('remove_profile_content', { profileId, kind, filename }),
   /** files dropped on an instance: each lands in the folder it belongs in */
   importContentPaths: (profileId: string, paths: string[]) =>
-    invoke<{ added: ProfileMod[]; skipped: string[] }>('import_content_paths', { profileId, paths }),
+    invoke<{ added: ProfileMod[]; worlds: string[]; skipped: string[] }>('import_content_paths', {
+      profileId,
+      paths,
+    }),
+  /** pick world zips → saves/; resolves to the names they landed under */
+  importWorld: (profileId: string) => invoke<ImportedWorlds>('import_world', { profileId }),
+  /** dropped world zips / folders → saves/ */
+  importWorldPaths: (profileId: string, paths: string[]) =>
+    invoke<ImportedWorlds>('import_world_paths', { profileId, paths }),
   /** native file picker (several at once) → copies .jar mods / .zip packs
    *  into the kind's folder; empty if cancelled */
   importLocalContent: (profileId: string, kind: ContentKind) =>
