@@ -31,7 +31,7 @@ fn world_dir(state: &AppState, profile_id: &str, name: &str) -> Result<(PathBuf,
 
 /// A world can't be zipped or trashed while its instance is open: the game
 /// holds `session.lock` and rewrites region files under us.
-async fn ensure_closed(state: &AppState, profile_id: &str) -> Result<(), String> {
+pub(crate) async fn ensure_closed(state: &AppState, profile_id: &str) -> Result<(), String> {
     if state.running_game.lock().await.as_ref().is_some_and(|g| g.profile_id == profile_id) {
         return Err("Close the game first.".into());
     }

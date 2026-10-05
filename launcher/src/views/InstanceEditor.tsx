@@ -949,6 +949,9 @@ function WorldsTab({
   /* world being zipped right now */
   const [backing, setBacking] = useState<string | null>(null);
   const [trashing, setTrashing] = useState<World | null>(null);
+  /* the ADD SERVER form, open when set */
+  const [adding, setAdding] = useState<{ name: string; address: string } | null>(null);
+  const [dropping, setDropping] = useState<SavedServer | null>(null);
 
   const backup = async (w: World) => {
     setBacking(w.name);
@@ -969,6 +972,35 @@ function WorldsTab({
       await api.deleteWorld(profile.id, w.name);
       setWorlds((list) => (list ?? []).filter((x) => x.name !== w.name));
       setNote(`${w.name} moved to the trash.`);
+    } catch (e) {
+      setNote(String(e));
+    }
+  };
+
+  const addServer = async (name: string, address: string) => {
+    setNote(null);
+    try {
+      const list = await api.addServer(profile.id, name, address);
+      setAdding(null);
+      setServers(list);
+      const added = list[list.length - 1];
+      if (added) {
+        void api
+          .pingServer(added.address)
+          .then((st) => setStatus((m) => ({ ...m, [added.address]: st })))
+          .catch(() => setStatus((m) => ({ ...m, [added.address]: 'down' })));
+      }
+    } catch (e) {
+      setAdding(null);
+      setNote(String(e));
+    }
+  };
+
+  const dropServer = async (sv: SavedServer) => {
+    setDropping(null);
+    try {
+      setServers(await api.removeServer(profile.id, sv.name, sv.address));
+      setNote(`${sv.name} removed from the server list.`);
     } catch (e) {
       setNote(String(e));
     }
@@ -1009,6 +1041,15 @@ function WorldsTab({
           <TT size={16} tone="blue">
             OPEN SAVES FOLDER
           </TT>
+        </PxButton>
+        <PxButton
+          family="grey"
+          height="sm"
+          disabled={busy}
+          title={busy ? 'Close the game first' : 'Add a server to this instance’s list'}
+          onClick={() => setAdding({ name: '', address: '' })}
+        >
+          <TT size={16}>ADD SERVER</TT>
         </PxButton>
         {servers && servers.length > 0 && (
           <PxButton family="grey" height="sm" onClick={() => ping(servers)}>
@@ -1078,6 +1119,17 @@ function WorldsTab({
                 )}
               </span>
               <span className="editor__actions worlds__actions">
+                <PxButton
+                  family="red"
+                  height="sm"
+                  disabled={busy}
+                  title={busy ? 'Close the game first' : 'Take it off the list'}
+                  onClick={() => setDropping(sv)}
+                >
+                  <TT size={16} tone="red">
+                    REMOVE
+                  </TT>
+                </PxButton>
                 <PxButton
                   family="accent"
                   height="sm"
@@ -1157,6 +1209,87 @@ function WorldsTab({
           </div>
         ))}
       </div>
+      {adding && (
+        <div className="modal-scrim" onClick={() => setAdding(null)}>
+          <PxBox family="red" className="px--window modal" onClick={(e) => e.stopPropagation()}>
+            <form
+              className="worlds__form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void addServer(adding.name, adding.address);
+              }}
+            >
+              <TT size={22}>ADD SERVER</TT>
+              <div className="modal__row">
+                <span className="modal__label">
+                  <TT size={16} tone="sub">
+                    NAME
+                  </TT>
+                </span>
+                <PxBox family="panel" height="md">
+                  <input
+                    className="input"
+                    value={adding.name}
+                    placeholder="Minecraft Server"
+                    maxLength={64}
+                    onChange={(e) => setAdding({ ...adding, name: e.target.value })}
+                  />
+                </PxBox>
+              </div>
+              <div className="modal__row">
+                <span className="modal__label">
+                  <TT size={16} tone="sub">
+                    ADDRESS
+                  </TT>
+                </span>
+                <PxBox family="panel" height="md">
+                  <input
+                    className="input"
+                    value={adding.address}
+                    placeholder="play.example.net"
+                    autoFocus
+                    spellCheck={false}
+                    onChange={(e) => setAdding({ ...adding, address: e.target.value })}
+                  />
+                </PxBox>
+              </div>
+              <div className="modal__row modal__row--tall">
+                <PxButton family="grey" height="md" type="button" onClick={() => setAdding(null)}>
+                  <TT size={20}>CANCEL</TT>
+                </PxButton>
+                <PxButton family="accent" height="md" type="submit" disabled={adding.address.trim() === ''}>
+                  <TT size={20} tone="accent">
+                    ADD
+                  </TT>
+                </PxButton>
+              </div>
+            </form>
+          </PxBox>
+        </div>
+      )}
+      {dropping && (
+        <div className="modal-scrim" onClick={() => setDropping(null)}>
+          <PxBox family="red" className="px--window modal" onClick={(e) => e.stopPropagation()}>
+            <TT size={22} tone="red">
+              REMOVE SERVER?
+            </TT>
+            <span className="meta">
+              “{dropping.name}” ({dropping.address}) comes off this instance’s server list. The previous list stays
+              in servers.dat_old.
+            </span>
+            <div className="modal__row modal__row--tall">
+              <PxButton family="grey" height="md" onClick={() => setDropping(null)}>
+                <TT size={20}>CANCEL</TT>
+              </PxButton>
+              <PxButton family="red" height="md" onClick={() => void dropServer(dropping)}>
+                <TT size={20} tone="red">
+                  REMOVE
+                </TT>
+              </PxButton>
+            </div>
+          </PxBox>
+        </div>
+      )}
       {trashing && (
         <div className="modal-scrim" onClick={() => setTrashing(null)}>
           <PxBox family="red" className="px--window modal" onClick={(e) => e.stopPropagation()}>

@@ -93,8 +93,7 @@ impl Nbt<'_> {
     }
     fn string(&mut self) -> Option<String> {
         let n = self.u16()? as usize;
-        // modified UTF-8; plain UTF-8 for everything but NUL and astral chars
-        Some(String::from_utf8_lossy(self.take(n)?).into_owned())
+        Some(modified_utf8(self.take(n)?))
     }
     fn tag(&mut self, kind: u8, depth: u32) -> Option<Tag> {
         if depth > 64 {
@@ -144,6 +143,34 @@ impl Nbt<'_> {
     }
 }
 
+/// Java's modified UTF-8: plain UTF-8 except NUL (`C0 80`) and astral chars
+/// (a surrogate pair, three bytes each half).
+fn modified_utf8(b: &[u8]) -> String {
+    if let Ok(s) = std::str::from_utf8(b) {
+        return s.to_string();
+    }
+    let mut units = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let c = b[i] as u16;
+        let cont = |j: usize| b.get(j).filter(|x| *x & 0xC0 == 0x80).map(|x| (*x & 0x3F) as u16);
+        if c < 0x80 {
+            units.push(c);
+            i += 1;
+        } else if let (0xC0..=0xDF, Some(c1)) = (c, cont(i + 1)) {
+            units.push((c & 0x1F) << 6 | c1);
+            i += 2;
+        } else if let (0xE0..=0xEF, Some(c1), Some(c2)) = (c, cont(i + 1), cont(i + 2)) {
+            units.push((c & 0x0F) << 12 | c1 << 6 | c2);
+            i += 3;
+        } else {
+            units.push(0xFFFD);
+            i += 1;
+        }
+    }
+    String::from_utf16_lossy(&units)
+}
+
 /// The visible entries of a `servers.dat`, in list order. Entries the game
 /// marks hidden (direct-connect history) are left out, like the game does.
 fn parse_servers(bytes: &[u8]) -> Vec<ServerDto> {
@@ -178,17 +205,191 @@ fn parse_servers(bytes: &[u8]) -> Vec<ServerDto> {
         .collect()
 }
 
+fn profile_root(state: &AppState, profile_id: &str) -> Result<std::path::PathBuf, String> {
+    let store = state.profiles.lock().unwrap();
+    let profile = store.profiles.iter().find(|p| p.id == profile_id).ok_or("profile not found")?;
+    Ok(profile.dirs(&state.data_dir).root)
+}
+
 #[tauri::command]
 pub fn list_servers(state: State<AppState>, profile_id: String) -> Result<Vec<ServerDto>, String> {
-    let root = {
-        let store = state.profiles.lock().unwrap();
-        let profile = store.profiles.iter().find(|p| p.id == profile_id).ok_or("profile not found")?;
-        profile.dirs(&state.data_dir).root
-    };
+    let root = profile_root(&state, &profile_id)?;
     match std::fs::read(root.join("servers.dat")) {
         Ok(bytes) => Ok(parse_servers(&bytes)),
         Err(_) => Ok(Vec::new()),
     }
+}
+
+// ---- editing servers.dat ----
+//
+// Edits keep every byte the launcher doesn't touch: the root's other fields
+// and each untouched entry (its cached icon, resource-pack choice, …) are
+// copied through as they were read.
+
+/// `servers.dat` cut into the root's other fields and each entry's compound
+/// payload, both raw.
+#[derive(Debug, Default)]
+struct RawServers {
+    other: Vec<u8>,
+    entries: Vec<Vec<u8>>,
+}
+
+fn split_raw(bytes: &[u8]) -> Option<RawServers> {
+    let mut r = Nbt { b: bytes, i: 0 };
+    if r.u8()? != 10 {
+        return None;
+    }
+    r.string()?;
+    let mut out = RawServers::default();
+    loop {
+        let start = r.i;
+        let k = r.u8()?;
+        if k == 0 {
+            return Some(out);
+        }
+        let name = r.string()?;
+        if name == "servers" && k == 9 {
+            let elem = r.u8()?;
+            let n = r.len()?;
+            if n > 0 && elem != 10 {
+                return None;
+            }
+            for _ in 0..n {
+                let s = r.i;
+                r.tag(10, 1)?;
+                out.entries.push(bytes[s..r.i].to_vec());
+            }
+        } else {
+            r.tag(k, 1)?;
+            out.other.extend_from_slice(&bytes[start..r.i]);
+        }
+    }
+}
+
+/// Java's modified UTF-8, the string encoding NBT uses.
+fn put_str(out: &mut Vec<u8>, s: &str) {
+    let mut b = Vec::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\0' => b.extend_from_slice(&[0xC0, 0x80]),
+            c if (c as u32) > 0xFFFF => {
+                let mut units = [0u16; 2];
+                for u in c.encode_utf16(&mut units) {
+                    let u = *u as u32;
+                    b.extend_from_slice(&[0xE0 | (u >> 12) as u8, 0x80 | ((u >> 6) & 0x3F) as u8, 0x80 | (u & 0x3F) as u8]);
+                }
+            }
+            c => b.extend_from_slice(c.encode_utf8(&mut [0; 4]).as_bytes()),
+        }
+    }
+    out.extend_from_slice(&(b.len().min(u16::MAX as usize) as u16).to_be_bytes());
+    out.extend_from_slice(&b[..b.len().min(u16::MAX as usize)]);
+}
+
+fn join_raw(raw: &RawServers) -> Vec<u8> {
+    let mut out = vec![10];
+    put_str(&mut out, "");
+    out.extend_from_slice(&raw.other);
+    out.push(9);
+    put_str(&mut out, "servers");
+    out.push(10);
+    out.extend_from_slice(&(raw.entries.len() as i32).to_be_bytes());
+    for e in &raw.entries {
+        out.extend_from_slice(e);
+    }
+    out.push(0);
+    out
+}
+
+/// A new entry the way the game's Add Server screen saves one.
+fn new_entry(name: &str, address: &str) -> Vec<u8> {
+    let mut out = vec![8];
+    put_str(&mut out, "name");
+    put_str(&mut out, name);
+    out.push(8);
+    put_str(&mut out, "ip");
+    put_str(&mut out, address);
+    out.push(0);
+    out
+}
+
+/// Whether a raw entry is the visible server `name` at `address`.
+fn is_entry(raw: &[u8], name: &str, address: &str) -> bool {
+    let Some(tag) = (Nbt { b: raw, i: 0 }).tag(10, 1) else {
+        return false;
+    };
+    !matches!(tag.get("hidden"), Some(Tag::Byte(1)))
+        && tag.get("ip").and_then(Tag::str).map(str::trim) == Some(address)
+        && tag.get("name").and_then(Tag::str).unwrap_or("Minecraft Server") == name
+}
+
+/// Read, change and save the list the way the game does (the old file is
+/// kept as `servers.dat_old`), then return the new visible list.
+async fn edit_servers(
+    state: &AppState,
+    profile_id: &str,
+    change: impl FnOnce(&mut RawServers) -> Result<(), String>,
+) -> Result<Vec<ServerDto>, String> {
+    let root = profile_root(state, profile_id)?;
+    crate::worlds::ensure_closed(state, profile_id).await?;
+    let path = root.join("servers.dat");
+    let mut raw = match std::fs::read(&path) {
+        Ok(bytes) => split_raw(&bytes).ok_or("The server list is damaged; edit it in the game.")?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => RawServers::default(),
+        Err(e) => return Err(e.to_string()),
+    };
+    change(&mut raw)?;
+    let bytes = join_raw(&raw);
+    let tmp = root.join("servers.dat.tmp");
+    std::fs::write(&tmp, &bytes).map_err(|e| format!("Couldn't save the server list: {e}"))?;
+    if path.exists() {
+        let _ = std::fs::copy(&path, root.join("servers.dat_old"));
+    }
+    std::fs::rename(&tmp, &path).map_err(|e| format!("Couldn't save the server list: {e}"))?;
+    Ok(parse_servers(&bytes))
+}
+
+/// Add a server to the end of the instance's multiplayer list.
+#[tauri::command]
+pub async fn add_server(
+    state: State<'_, AppState>,
+    profile_id: String,
+    name: String,
+    address: String,
+) -> Result<Vec<ServerDto>, String> {
+    let address = address.trim().to_string();
+    if !valid_address(&address) {
+        return Err("That server address doesn't look right.".into());
+    }
+    let name = match name.trim() {
+        "" => "Minecraft Server".to_string(),
+        n => n.chars().take(64).collect(),
+    };
+    edit_servers(&state, &profile_id, |raw| {
+        raw.entries.push(new_entry(&name, &address));
+        Ok(())
+    })
+    .await
+}
+
+/// Take a server off the instance's multiplayer list.
+#[tauri::command]
+pub async fn remove_server(
+    state: State<'_, AppState>,
+    profile_id: String,
+    name: String,
+    address: String,
+) -> Result<Vec<ServerDto>, String> {
+    edit_servers(&state, &profile_id, |raw| {
+        let i = raw
+            .entries
+            .iter()
+            .position(|e| is_entry(e, &name, &address))
+            .ok_or("That server isn't on the list any more.")?;
+        raw.entries.remove(i);
+        Ok(())
+    })
+    .await
 }
 
 // ---- status ping ----
@@ -568,6 +769,50 @@ mod tests {
         // truncated or empty files read as no servers, not a crash
         assert!(parse_servers(&b[..b.len() / 2]).is_empty());
         assert!(parse_servers(&[]).is_empty());
+    }
+
+    #[test]
+    fn edits_keep_what_they_dont_touch() {
+        let mut b = vec![10];
+        nbt_str(&mut b, "");
+        // a root field the launcher knows nothing about
+        b.push(3);
+        nbt_str(&mut b, "extra");
+        b.extend_from_slice(&7i32.to_be_bytes());
+        b.push(9);
+        nbt_str(&mut b, "servers");
+        b.push(10);
+        b.extend_from_slice(&2i32.to_be_bytes());
+        entry(&mut b, "smp", "mc.example.net", false);
+        entry(&mut b, "direct", "10.0.0.2", true);
+        b.push(0);
+
+        let mut raw = split_raw(&b).unwrap();
+        assert_eq!(raw.entries.len(), 2);
+        // nothing changed → the same bytes
+        assert_eq!(join_raw(&raw), b);
+
+        raw.entries.push(new_entry("Café \0 🎮", "pvp.example.net:25566"));
+        let list = parse_servers(&join_raw(&raw));
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[1].address, "pvp.example.net:25566");
+        // NUL and astral chars go out as modified UTF-8
+        let tail = &raw.entries[2];
+        assert!(tail.windows(2).any(|w| w == [0xC0, 0x80]));
+        assert!(!tail.windows(4).any(|w| w == "🎮".as_bytes()));
+
+        // the hidden direct-connect entry never matches a visible row
+        assert!(!is_entry(&raw.entries[1], "direct", "10.0.0.2"));
+        let i = raw.entries.iter().position(|e| is_entry(e, "smp", "mc.example.net")).unwrap();
+        raw.entries.remove(i);
+        let out = join_raw(&raw);
+        assert!(out.windows(5).any(|w| w == b"extra"));
+        assert_eq!(parse_servers(&out)[0].name, "Café \0 🎮");
+
+        // a missing file starts an empty list
+        let fresh = join_raw(&RawServers::default());
+        assert!(parse_servers(&fresh).is_empty());
+        assert_eq!(split_raw(&fresh).unwrap().entries.len(), 0);
     }
 
     #[test]

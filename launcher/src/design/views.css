@@ -1207,6 +1207,17 @@
 .worlds__actions {
   width: auto;
 }
+/* the ADD SERVER dialog: the modal's own column, inside a form so Enter adds */
+.worlds__form {
+  display: flex;
+  flex-direction: column;
+  gap: calc(18 * var(--u));
+}
+.worlds__form .modal__label {
+  flex: none;
+  min-width: calc(190 * var(--u));
+  white-space: nowrap;
+}
 /* files dragged over the window: the list becomes the drop target */
 .editor__drop {
   position: sticky;

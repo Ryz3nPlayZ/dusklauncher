@@ -92,6 +92,8 @@ pub fn run() {
             screenshots::list_screenshots,
             servers::list_servers,
             servers::ping_server,
+            servers::add_server,
+            servers::remove_server,
             worlds::backup_world,
             worlds::delete_world,
             quickplay::recent_plays,

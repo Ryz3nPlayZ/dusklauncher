@@ -1015,6 +1015,8 @@ const fixtures: Record<string, unknown> = {
 /** Commands that change real state: refused outright in the browser. */
 const sideEffects = new Set([
   'install_and_launch',
+  'add_server',
+  'remove_server',
   'reveal_crash_report',
   'install_modpack',
   'install_modpack_version',
@@ -1680,6 +1682,11 @@ export const api = {
   listWorlds: (profileId: string) => invoke<World[]>('list_worlds', { profileId }),
   /** the instance's multiplayer list, in the game's order */
   listServers: (profileId: string) => invoke<SavedServer[]>('list_servers', { profileId }),
+  /** Resolves to the new list. Waits for the instance's game to close. */
+  addServer: (profileId: string, name: string, address: string) =>
+    invoke<SavedServer[]>('add_server', { profileId, name, address }),
+  removeServer: (profileId: string, name: string, address: string) =>
+    invoke<SavedServer[]>('remove_server', { profileId, name, address }),
   /** MOTD, players and ping, resolving SRV records like the game does */
   pingServer: (address: string) => invoke<ServerStatus>('ping_server', { address }),
   /** the worlds and servers played most recently, across every instance */
