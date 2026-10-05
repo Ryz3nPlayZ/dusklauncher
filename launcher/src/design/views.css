@@ -1207,6 +1207,20 @@
 .worlds__actions {
   width: auto;
 }
+/* the JAVA picker: a wider dialog around a short scrolling list */
+.modal.javas {
+  width: calc(1700 * var(--u));
+}
+.javas__list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(8 * var(--u));
+  max-height: calc(620 * var(--u));
+  overflow-y: auto;
+}
+.javas__old {
+  color: var(--r-up);
+}
 /* the ADD SERVER dialog: the modal's own column, inside a form so Enter adds */
 .worlds__form {
   display: flex;

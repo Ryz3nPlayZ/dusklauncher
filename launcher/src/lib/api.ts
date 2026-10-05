@@ -543,6 +543,34 @@ export interface World {
   icon: string | null;
 }
 
+/** a Java install found on this machine (`list_javas`) */
+export interface JavaInstall {
+  /** the java executable */
+  path: string;
+  /** as its `release` file gives it, e.g. "21.0.2" or "1.8.0_392" */
+  version: string;
+  major: number;
+  vendor: string | null;
+  /** one of the runtimes the launcher downloads by itself */
+  bundled: boolean;
+}
+
+/** The Java major a Minecraft version asks for, when its id says
+ * (Mojang's `javaVersion.majorVersion`); null for snapshots. */
+export function javaFor(mc: string): number | null {
+  const old = /^1\.(\d+)(?:\.(\d+))?$/.exec(mc);
+  if (old) {
+    const minor = Number(old[1]);
+    const patch = Number(old[2] ?? 0);
+    if (minor > 20 || (minor === 20 && patch >= 5)) return 21;
+    if (minor >= 18) return 17;
+    if (minor === 17) return 16;
+    return 8;
+  }
+  // year-numbered releases (26.1 on) moved to Java 25
+  return /^\d{2}\.\d+(\.\d+)?$/.test(mc) ? 25 : null;
+}
+
 /** an entry of the instance's multiplayer list (`servers.dat`) */
 export interface SavedServer {
   name: string;
@@ -924,6 +952,29 @@ const fixtures: Record<string, unknown> = {
       gamemode: 'survival',
     },
   ] satisfies RecentPlay[],
+  list_javas: [
+    {
+      path: '/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home/bin/java',
+      version: '25.0.4',
+      major: 25,
+      vendor: 'Homebrew',
+      bundled: false,
+    },
+    {
+      path: '/Users/you/Library/Application Support/FasterLauncher/runtimes/java-runtime-delta/jre.bundle/Contents/Home/bin/java',
+      version: '21.0.7',
+      major: 21,
+      vendor: null,
+      bundled: true,
+    },
+    {
+      path: '/Library/Java/JavaVirtualMachines/zulu-17.jdk/Contents/Home/bin/java',
+      version: '17.0.14',
+      major: 17,
+      vendor: 'Azul Systems, Inc.',
+      bundled: false,
+    },
+  ] satisfies JavaInstall[],
   list_servers: [
     { name: 'zWork SMP', address: 'mc.tryzwork.app', icon: null },
     { name: 'zWork PVP', address: 'pvp.tryzwork.app', icon: null },
@@ -1681,6 +1732,7 @@ export const api = {
   // ── what an instance holds ──
   listWorlds: (profileId: string) => invoke<World[]>('list_worlds', { profileId }),
   /** the instance's multiplayer list, in the game's order */
+  listJavas: () => invoke<JavaInstall[]>('list_javas'),
   listServers: (profileId: string) => invoke<SavedServer[]>('list_servers', { profileId }),
   /** Resolves to the new list. Waits for the instance's game to close. */
   addServer: (profileId: string, name: string, address: string) =>

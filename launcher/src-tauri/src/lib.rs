@@ -8,6 +8,7 @@ mod crash;
 mod discord;
 mod dusk;
 mod friends;
+mod javas;
 mod modpacks;
 mod mods;
 mod recordings;
@@ -90,6 +91,7 @@ pub fn run() {
             commands::notify,
             // screenshots
             screenshots::list_screenshots,
+            javas::list_javas,
             servers::list_servers,
             servers::ping_server,
             servers::add_server,

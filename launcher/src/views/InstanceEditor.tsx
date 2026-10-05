@@ -11,12 +11,14 @@ import {
   api,
   fmtBytes,
   isTauri,
+  javaFor,
   loaderLabel,
   playtime,
   type ContentKind,
   type ContentUpdate,
   type GameState,
   type InstalledProject,
+  type JavaInstall,
   type LaunchTarget,
   type Profile,
   type ProfileFolder,
@@ -328,6 +330,8 @@ function SettingsTab({
   const [jvm, setJvm] = useState(jvmText(profile));
   const [memory, setMemory] = useState(profile.memoryMb ? String(profile.memoryMb) : '');
   const [javaPath, setJavaPath] = useState(profile.javaPath ?? '');
+  /* the JAVA picker: open when set, the installs once they're found */
+  const [javas, setJavas] = useState<JavaInstall[] | 'open' | null>(null);
   const [server, setServer] = useState(profile.server ?? '');
   const [versions, setVersions] = useState<Version[]>([]);
   const [busy, setBusy] = useState(false);
@@ -517,6 +521,20 @@ function SettingsTab({
             onChange={(e) => setJavaPath(e.target.value)}
           />
         </PxBox>
+        <PxButton
+          family="grey"
+          height="md"
+          title="Pick from the Java installs on this computer"
+          onClick={() => {
+            setJavas('open');
+            void api
+              .listJavas()
+              .then(setJavas)
+              .catch(() => setJavas([]));
+          }}
+        >
+          <TT size={16}>PICK</TT>
+        </PxButton>
       </Row>
       <Row
         label="TUNING"
@@ -598,6 +616,98 @@ function SettingsTab({
           </PxButton>
         </div>
       </div>
+      {javas && (
+        <JavaPicker
+          javas={javas === 'open' ? null : javas}
+          need={javaFor(version.trim())}
+          gameVersion={version.trim()}
+          current={javaPath.trim()}
+          onPick={(path) => {
+            setJavaPath(path);
+            setJavas(null);
+          }}
+          onClose={() => setJavas(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The JAVA row's picker: AUTOMATIC, then every install found on this
+ * computer, newest first. */
+function JavaPicker({
+  javas,
+  need,
+  gameVersion,
+  current,
+  onPick,
+  onClose,
+}: {
+  /** null while the scan runs */
+  javas: JavaInstall[] | null;
+  /** the major this instance's version asks for, if known */
+  need: number | null;
+  gameVersion: string;
+  current: string;
+  onPick: (path: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <PxBox family="red" className="px--window modal javas" onClick={(e) => e.stopPropagation()}>
+        <TT size={22}>PICK JAVA</TT>
+        <span className="meta">
+          {need ? `Minecraft ${gameVersion} runs on Java ${need}.` : 'Pick the Java this instance runs on.'}
+        </span>
+        <div className="javas__list scroll">
+          <div className="editor__row">
+            <span className="editor__file">
+              <TT size={16}>AUTOMATIC</TT>
+              <span className="meta">The launcher downloads and uses the Java the version asks for.</span>
+            </span>
+            <span className="editor__actions">
+              <PxButton family={current === '' ? 'accent' : 'grey'} height="sm" onClick={() => onPick('')}>
+                <TT size={16} tone={current === '' ? 'accent' : 'plain'}>
+                  {current === '' ? 'IN USE' : 'USE'}
+                </TT>
+              </PxButton>
+            </span>
+          </div>
+          {javas === null && <span className="meta">Looking for Java…</span>}
+          {javas?.length === 0 && <span className="meta">No other Java found on this computer.</span>}
+          {javas?.map((j) => {
+            const using = current === j.path;
+            const old = need !== null && j.major < need;
+            return (
+              <div key={j.path} className="editor__row">
+                <span className="editor__file">
+                  <TT size={16}>{`JAVA ${j.major}`}</TT>
+                  <span className="meta">
+                    {[j.version, j.bundled ? "the launcher's own" : j.vendor].filter(Boolean).join(' · ')}
+                    {old && <span className="javas__old"> · too old for {gameVersion}</span>}
+                  </span>
+                  <span className="meta editor__filename" title={j.path}>
+                    {j.path}
+                  </span>
+                </span>
+                <span className="editor__actions">
+                  <PxButton family={using ? 'accent' : 'grey'} height="sm" onClick={() => onPick(j.path)}>
+                    <TT size={16} tone={using ? 'accent' : 'plain'}>
+                      {using ? 'IN USE' : 'USE'}
+                    </TT>
+                  </PxButton>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="modal__row modal__row--tall">
+          <span className="modal__spacer" />
+          <PxButton family="grey" height="md" onClick={onClose}>
+            <TT size={20}>CLOSE</TT>
+          </PxButton>
+        </div>
+      </PxBox>
     </div>
   );
 }
