@@ -19,6 +19,7 @@ import {
   type GameState,
   type InstalledProject,
   type JavaInstall,
+  type LatestLog,
   type LaunchTarget,
   type Profile,
   type ProfileFolder,
@@ -1445,10 +1446,53 @@ function LogTab({
   game: GameState | null;
   onStop: () => void;
 }) {
-  const lines = useGameLog(profile.id);
+  const live = useGameLog(profile.id);
+  /* latest.log, shown when this launcher didn't watch the last run */
+  const [disk, setDisk] = useState<LatestLog | null>(null);
+  const [filter, setFilter] = useState('');
+  const [errorsOnly, setErrorsOnly] = useState(false);
   const [follow, setFollow] = useState(true);
   const [note, setNote] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<'ask' | 'busy' | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+
+  const fromDisk = live.length === 0 && !game && disk !== null && disk.lines.length > 0;
+  const all = fromDisk ? disk.lines : live;
+  const needle = filter.trim().toLowerCase();
+  const lines = useMemo(
+    () =>
+      needle || errorsOnly
+        ? all.filter(
+            (l) => (!errorsOnly || l.stream === 'err') && (!needle || l.line.toLowerCase().includes(needle)),
+          )
+        : all,
+    [all, needle, errorsOnly],
+  );
+
+  useEffect(() => {
+    if (live.length > 0 || game) return;
+    void api
+      .readLatestLog(profile.id)
+      .then(setDisk)
+      .catch(() => setDisk(null));
+  }, [profile.id, live.length, game]);
+
+  const share = async () => {
+    setSharing('busy');
+    try {
+      const url = await api.uploadLog(all.map((l) => l.line).join('\n'));
+      try {
+        await navigator.clipboard.writeText(url);
+        setNote(`Link copied: ${url}`);
+      } catch {
+        setNote(url);
+      }
+    } catch (e) {
+      setNote(String(e));
+    } finally {
+      setSharing(null);
+    }
+  };
 
   // stick to the bottom while following; scrolling up pauses that
   useEffect(() => {
@@ -1461,7 +1505,7 @@ function LogTab({
     setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 8);
   };
 
-  const errors = useMemo(() => lines.filter((l) => l.stream === 'err').length, [lines]);
+  const errors = useMemo(() => all.filter((l) => l.stream === 'err').length, [all]);
 
   const copy = async () => {
     try {
@@ -1478,9 +1522,11 @@ function LogTab({
       : game.state === 'stopping'
         ? 'STOPPING…'
         : 'STARTING…'
-    : lines.length
-      ? 'LAST RUN'
-      : 'NOT RUNNING';
+    : fromDisk
+      ? `LATEST.LOG · ${ago(disk.modified).toUpperCase()}`
+      : all.length
+        ? 'LAST RUN'
+        : 'NOT RUNNING';
 
   return (
     <div className="win__body editor__body">
@@ -1492,12 +1538,43 @@ function LogTab({
             </TT>
           </PxButton>
         )}
+        <PxBox family="panel" height="sm" className="search editor__search">
+          <PixelGlyph glyph="search" size={20} color="var(--text-3)" />
+          <input
+            className="input editor__search-input"
+            placeholder="Filter lines…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+        </PxBox>
+        <PxButton
+          family={errorsOnly ? 'red' : 'grey'}
+          height="sm"
+          disabled={errors === 0 && !errorsOnly}
+          title="Only the errors and their stack traces"
+          onClick={() => setErrorsOnly((v) => !v)}
+        >
+          <TT size={16} tone={errorsOnly ? 'red' : 'plain'}>
+            ERRORS
+          </TT>
+        </PxButton>
         <PxButton family="grey" height="sm" disabled={lines.length === 0} onClick={() => void copy()}>
-          <TT size={16}>COPY LOG</TT>
+          <TT size={16}>COPY</TT>
         </PxButton>
-        <PxButton family="grey" height="sm" disabled={lines.length === 0} onClick={clearGameLog}>
-          <TT size={16}>CLEAR</TT>
+        <PxButton
+          family="grey"
+          height="sm"
+          disabled={all.length === 0 || sharing !== null}
+          title="Put the log on mclo.gs and copy the link"
+          onClick={() => setSharing('ask')}
+        >
+          <TT size={16}>{sharing === 'busy' ? 'SHARING…' : 'SHARE'}</TT>
         </PxButton>
+        {!fromDisk && (
+          <PxButton family="grey" height="sm" disabled={live.length === 0} onClick={clearGameLog}>
+            <TT size={16}>CLEAR</TT>
+          </PxButton>
+        )}
         <PxButton
           family="grey"
           height="sm"
@@ -1508,7 +1585,10 @@ function LogTab({
           <TT size={16}>LOGS FOLDER</TT>
         </PxButton>
         <span className="meta browse__count">
-          {note ?? `${status} · ${lines.length} LINES${errors ? ` · ${errors} ERR` : ''}`}
+          {note ??
+            `${status} · ${lines.length === all.length ? '' : `${lines.length}/`}${all.length} LINES${
+              errors ? ` · ${errors} ERR` : ''
+            }`}
         </span>
       </div>
 
@@ -1516,9 +1596,11 @@ function LogTab({
         <div ref={bodyRef} className="editor__log-body scroll" onScroll={onScroll}>
           {lines.length === 0 ? (
             <span className="meta">
-              {game
-                ? 'Waiting for the game to say something…'
-                : 'Nothing yet — PLAY NOW and the console shows up here. Older runs are in the logs folder.'}
+              {all.length > 0
+                ? 'No lines match.'
+                : game
+                  ? 'Waiting for the game to say something…'
+                  : 'Nothing yet — PLAY NOW and the console shows up here. Older runs are in the logs folder.'}
             </span>
           ) : (
             lines.map((l, i) => (
@@ -1536,6 +1618,27 @@ function LogTab({
           </button>
         )}
       </PxBox>
+      {sharing === 'ask' && (
+        <div className="modal-scrim" onClick={() => setSharing(null)}>
+          <PxBox family="red" className="px--window modal" onClick={(e) => e.stopPropagation()}>
+            <TT size={22}>SHARE LOG?</TT>
+            <span className="meta">
+              The log goes up on mclo.gs, where anyone with the link can read it — handy for asking for help.
+              Sign-in tokens and your home folder are taken out first.
+            </span>
+            <div className="modal__row modal__row--tall">
+              <PxButton family="grey" height="md" onClick={() => setSharing(null)}>
+                <TT size={20}>CANCEL</TT>
+              </PxButton>
+              <PxButton family="accent" height="md" onClick={() => void share()}>
+                <TT size={20} tone="accent">
+                  SHARE
+                </TT>
+              </PxButton>
+            </div>
+          </PxBox>
+        </div>
+      )}
     </div>
   );
 }

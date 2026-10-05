@@ -9,6 +9,7 @@ mod discord;
 mod dusk;
 mod friends;
 mod javas;
+mod logs;
 mod modpacks;
 mod mods;
 mod recordings;
@@ -92,6 +93,8 @@ pub fn run() {
             // screenshots
             screenshots::list_screenshots,
             javas::list_javas,
+            logs::read_latest_log,
+            logs::upload_log,
             servers::list_servers,
             servers::ping_server,
             servers::add_server,

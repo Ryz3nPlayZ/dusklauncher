@@ -205,7 +205,7 @@ fn parse_servers(bytes: &[u8]) -> Vec<ServerDto> {
         .collect()
 }
 
-fn profile_root(state: &AppState, profile_id: &str) -> Result<std::path::PathBuf, String> {
+pub(crate) fn profile_root(state: &AppState, profile_id: &str) -> Result<std::path::PathBuf, String> {
     let store = state.profiles.lock().unwrap();
     let profile = store.profiles.iter().find(|p| p.id == profile_id).ok_or("profile not found")?;
     Ok(profile.dirs(&state.data_dir).root)

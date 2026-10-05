@@ -724,6 +724,12 @@ export interface GameLogLine {
 export interface GameLogBatch {
   lines: GameLogLine[];
 }
+/** the instance's logs/latest.log, for when the launcher didn't watch the run */
+export interface LatestLog {
+  lines: GameLogLine[];
+  /** unix millis the game last wrote it */
+  modified: number;
+}
 
 // ── browser fixtures ───────────────────────────────────────────────────────
 
@@ -952,6 +958,18 @@ const fixtures: Record<string, unknown> = {
       gamemode: 'survival',
     },
   ] satisfies RecentPlay[],
+  read_latest_log: {
+    modified: Date.now() - 3 * 3600_000,
+    lines: [
+      { line: '[18:02:11] [main/INFO]: Loading Minecraft 1.21.11 with Fabric Loader 0.17.2', stream: 'out' },
+      { line: '[18:02:14] [Render thread/INFO]: Setting user: Steve', stream: 'out' },
+      { line: '[18:02:20] [Render thread/ERROR]: Failed to load texture: dusk:textures/gui/x.png', stream: 'err' },
+      { line: 'java.io.FileNotFoundException: dusk:textures/gui/x.png', stream: 'err' },
+      { line: '\tat net.minecraft.class_3300.method_14486(class_3300.java:42)', stream: 'err' },
+      { line: '[18:02:21] [Render thread/INFO]: Created: 1024x1024x4 minecraft:textures/atlas/blocks.png-atlas', stream: 'out' },
+      { line: '[18:40:02] [Render thread/INFO]: Stopping!', stream: 'out' },
+    ],
+  },
   list_javas: [
     {
       path: '/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home/bin/java',
@@ -1066,6 +1084,7 @@ const fixtures: Record<string, unknown> = {
 /** Commands that change real state: refused outright in the browser. */
 const sideEffects = new Set([
   'install_and_launch',
+  'upload_log',
   'add_server',
   'remove_server',
   'reveal_crash_report',
@@ -1732,6 +1751,9 @@ export const api = {
   // ── what an instance holds ──
   listWorlds: (profileId: string) => invoke<World[]>('list_worlds', { profileId }),
   /** the instance's multiplayer list, in the game's order */
+  readLatestLog: (profileId: string) => invoke<LatestLog | null>('read_latest_log', { profileId }),
+  /** Puts the log on mclo.gs (tokens and the home folder taken out); resolves to its link. */
+  uploadLog: (text: string) => invoke<string>('upload_log', { text }),
   listJavas: () => invoke<JavaInstall[]>('list_javas'),
   listServers: (profileId: string) => invoke<SavedServer[]>('list_servers', { profileId }),
   /** Resolves to the new list. Waits for the instance's game to close. */
