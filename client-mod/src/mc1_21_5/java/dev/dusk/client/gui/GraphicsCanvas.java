@@ -7,8 +7,10 @@ import com.mojang.math.Axis;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 
 /** {@link Canvas} over GuiGraphics (1.21.4–1.21.5: PoseStack pose). */
@@ -132,5 +134,10 @@ public record GraphicsCanvas(GuiGraphics g, Font font) implements Canvas {
     @Override
     public void endLayer() {
         g.pose().popPose();
+    }
+
+    @Override
+    public void entity(LivingEntity e, int x0, int y0, int x1, int y1, int size, float mouseX, float mouseY) {
+        InventoryScreen.renderEntityInInventoryFollowsMouse(g, x0, y0, x1, y1, size, 0.0625f, mouseX, mouseY, e);
     }
 }

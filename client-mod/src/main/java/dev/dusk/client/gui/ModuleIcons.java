@@ -47,7 +47,9 @@ final class ModuleIcons {
         m.put("combo", Items.IRON_SWORD);
         m.put("compactchat", Items.WRITABLE_BOOK);
         m.put("compass", Items.COMPASS);
+        m.put("minimap", Items.FILLED_MAP);
         m.put("confirmdisconnect", Items.BARRIER);
+        m.put("statistics", Items.KNOWLEDGE_BOOK);
         m.put("coords", Items.MAP);
         m.put("cps", Items.STONE_BUTTON);
         m.put("crosshair", Items.TARGET);

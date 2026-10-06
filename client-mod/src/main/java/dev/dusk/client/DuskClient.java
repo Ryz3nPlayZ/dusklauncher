@@ -40,6 +40,7 @@ import dev.dusk.client.modules.render.BossBarTweaks;
 import dev.dusk.client.modules.render.ScoreboardTweaks;
 import dev.dusk.client.modules.render.TabPing;
 import dev.dusk.client.modules.hud.Memory;
+import dev.dusk.client.modules.hud.Minimap;
 import dev.dusk.client.modules.hud.NetherCoordinates;
 import dev.dusk.client.modules.hud.Ping;
 import dev.dusk.client.modules.hud.PitchDisplay;
@@ -60,6 +61,7 @@ import dev.dusk.client.modules.misc.AutoReconnect;
 import dev.dusk.client.modules.misc.ChatHistory;
 import dev.dusk.client.modules.misc.ChatMacros;
 import dev.dusk.client.modules.misc.ConfirmDisconnect;
+import dev.dusk.client.modules.misc.Statistics;
 import dev.dusk.client.modules.misc.GameModeSwitcher;
 import dev.dusk.client.modules.misc.TntCountdown;
 import dev.dusk.client.modules.render.CustomCrosshair;
@@ -103,6 +105,7 @@ import dev.dusk.client.modules.toggle.ToggleSprint;
 import dev.dusk.client.server.ServerApi;
 import dev.dusk.client.social.SocialNotifier;
 import dev.dusk.client.gui.QuestsScreen;
+import dev.dusk.client.gui.DuskStatsScreen;
 import dev.dusk.client.gui.SocialScreen;
 import dev.dusk.client.compat.ScreenWidgets;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -173,6 +176,7 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new Coordinates());
         modules.register(new NetherCoordinates());
         modules.register(new Compass());
+        modules.register(new Minimap());
         modules.register(new PitchDisplay());
         modules.register(new Speed());
         modules.register(new Biome());
@@ -252,6 +256,7 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new CompactChat()); // Compact Chat
         modules.register(new ChatTimestamps()); // Plague's Chat Timestamps
         modules.register(new ConfirmDisconnect());
+        modules.register(new Statistics());
         modules.register(new ChatHistory());
         ChatMacros chatMacros = new ChatMacros();
         modules.register(chatMacros);
@@ -284,11 +289,19 @@ public class DuskClient implements ClientModInitializer {
         MediaBackend.init();
         SocialNotifier.start();
         ScreenEvents.AFTER_INIT.register((client, screen, w, h) -> {
-            if (screen instanceof PauseScreen) addFriendsButton(screen);
+            if (screen instanceof PauseScreen) {
+                addFriendsButton(screen);
+                replaceStatsButton(screen);
+            }
         });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             LoadoutWatcher.tick();
+            // vanilla's Statistics screen reached some other way than the pause menu
+            if (Statistics.on() && Compat.currentScreen(client) instanceof Screen stats
+                    && stats.getClass() == net.minecraft.client.gui.screens.achievement.StatsScreen.class) {
+                DuskStatsScreen.show(DuskStatsScreen.parentOf(stats));
+            }
             SocialNotifier.tick(client);
             while (settingsKey.consumeClick()) {
                 Screen current = Compat.currentScreen(client);
@@ -319,6 +332,22 @@ public class DuskClient implements ClientModInitializer {
             modules.tick();
         });
         LOGGER.info("DuskClient initialized with {} modules", modules.all().size());
+    }
+
+    /** The pause menu's Statistics button opens {@link DuskStatsScreen} while {@link Statistics} is on. */
+    private static void replaceStatsButton(Screen screen) {
+        if (!Statistics.on()) return;
+        var widgets = ScreenWidgets.of(screen);
+        Component label = Component.translatable("gui.stats");
+        for (int i = 0; i < widgets.size(); i++) {
+            AbstractWidget b = widgets.get(i);
+            if (!(b instanceof Button) || !label.equals(b.getMessage())) continue;
+            Button mine = Button.builder(b.getMessage(), x -> DuskStatsScreen.show(screen))
+                    .bounds(b.getX(), b.getY(), b.getWidth(), b.getHeight()).build();
+            mine.active = b.active;
+            widgets.set(i, mine);
+            return;
+        }
     }
 
     /** Friends & Chat and Quests under the pause menu's buttons (none when the menu is hidden, F3+Esc). */

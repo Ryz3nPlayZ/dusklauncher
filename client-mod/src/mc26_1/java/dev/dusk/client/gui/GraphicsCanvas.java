@@ -6,8 +6,10 @@ import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 
 /** {@link Canvas} over GuiGraphicsExtractor (26.1). */
@@ -125,5 +127,10 @@ public record GraphicsCanvas(GuiGraphicsExtractor g, Font font) implements Canva
     @Override
     public void beginLayer() {
         g.nextStratum();
+    }
+
+    @Override
+    public void entity(LivingEntity e, int x0, int y0, int x1, int y1, int size, float mouseX, float mouseY) {
+        InventoryScreen.extractEntityInInventoryFollowsMouse(g, x0, y0, x1, y1, size, 0.0625f, mouseX, mouseY, e);
     }
 }

@@ -3,6 +3,7 @@ package dev.dusk.client.gui;
 import net.minecraft.core.Holder;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -95,4 +96,11 @@ public interface Canvas {
     default void beginLayer() {}
 
     default void endLayer() {}
+
+    /**
+     * A mob drawn like the inventory's player model, inside the box
+     * x0,y0 to x1,y1 at {@code size} pixels per block, looking toward the
+     * mouse.
+     */
+    default void entity(LivingEntity e, int x0, int y0, int x1, int y1, int size, float mouseX, float mouseY) {}
 }
