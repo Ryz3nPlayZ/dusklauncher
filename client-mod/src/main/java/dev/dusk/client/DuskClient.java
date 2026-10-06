@@ -1,5 +1,6 @@
 package dev.dusk.client;
 
+import dev.dusk.client.compat.ChatCompat;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.cosmetics.CosmeticsManager;
@@ -54,6 +55,8 @@ import dev.dusk.client.modules.hud.Speed;
 import dev.dusk.client.modules.hud.SprintStatus;
 import dev.dusk.client.modules.hud.Tps;
 import dev.dusk.client.modules.hud.Weather;
+import dev.dusk.client.modules.misc.ChatHeads;
+import dev.dusk.client.modules.misc.ChatMentions;
 import dev.dusk.client.modules.misc.ChatTimestamps;
 import dev.dusk.client.modules.misc.CompactChat;
 import dev.dusk.client.modules.misc.BoatMap;
@@ -255,6 +258,8 @@ public class DuskClient implements ClientModInitializer {
         if (!fabric.isModLoaded("waveycapes")) modules.register(new CapePhysics());
         modules.register(new CompactChat()); // Compact Chat
         modules.register(new ChatTimestamps()); // Plague's Chat Timestamps
+        modules.register(new ChatMentions());
+        if (ChatCompat.HEADS && !fabric.isModLoaded("chat_heads")) modules.register(new ChatHeads());
         modules.register(new ConfirmDisconnect());
         modules.register(new Statistics());
         modules.register(new ChatHistory());

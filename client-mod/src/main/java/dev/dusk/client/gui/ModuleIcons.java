@@ -26,6 +26,8 @@ final class ModuleIcons {
         m.put("boatmap", Items.OAK_BOAT);
         m.put("capephysics", Items.FEATHER);
         m.put("chattimestamps", Items.PAPER);
+        m.put("chatmentions", Items.BELL);
+        m.put("chatheads", Items.PLAYER_HEAD);
         m.put("chatmacros", Items.WRITABLE_BOOK);
         m.put("clock", Items.CLOCK);
         m.put("stopwatch", Items.REPEATER);

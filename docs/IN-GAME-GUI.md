@@ -54,6 +54,11 @@ from the layers beneath it. Written against what's already in the tree; every
     every player's shield green/red by raised/disabled state.
   - **Compact Chat**, **Chat Timestamps** (MIT), and the **Combo Counter**
     from Eymistaken's HUD (MIT).
+  - **Chat Heads** (MPL, behaviour only; 1.21.9+, not registered when Chat
+    Heads is installed): the sender's face as a glyph in front of their
+    lines, the sender being the first of a line's opening words that is a
+    player's name. **Chat Mentions**: your name and your own words coloured,
+    with a ping, except in your own messages.
   - **Confirm Disconnect** (LGPL, behaviour only): asks before leaving.
   - **Fullbright**: Gamma Utils' gamma controls (LGPL, behaviour only). G
     toggles 1500 %, arrow keys step 10 % within −750…1500 %, an action-bar

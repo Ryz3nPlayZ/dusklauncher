@@ -1,5 +1,7 @@
 package dev.dusk.client.mixin.chat;
 
+import dev.dusk.client.modules.misc.ChatHeads;
+import dev.dusk.client.modules.misc.ChatMentions;
 import dev.dusk.client.modules.misc.ChatTimestamps;
 import dev.dusk.client.modules.misc.CompactChat;
 import net.minecraft.client.Minecraft;
@@ -17,8 +19,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.List;
 
 /**
- * Chat hooks for {@link CompactChat} (Compact Chat's ChatHudMixin, applied as
- * late as it is there) and {@link ChatTimestamps} (Plague's MixinChatComponent).
+ * Chat hooks for {@link ChatMentions}, {@link CompactChat} (Compact Chat's
+ * ChatHudMixin, applied as late as it is there), {@link ChatHeads} and
+ * {@link ChatTimestamps} (Plague's MixinChatComponent).
  */
 @Mixin(value = ChatComponent.class, priority = Integer.MAX_VALUE)
 public abstract class ChatStackMixin {
@@ -31,7 +34,7 @@ public abstract class ChatStackMixin {
 
     @ModifyVariable(method = ADD, at = @At("HEAD"), argsOnly = true)
     private Component duskclient$compact(Component content) {
-        return CompactChat.compact(content, allMessages, GuiMessage::content, this::refreshTrimmedMessages);
+        return CompactChat.compact(ChatMentions.mention(content), allMessages, GuiMessage::content, this::refreshTrimmedMessages);
     }
 
     @Inject(method = "clearMessages", at = @At("HEAD"))
@@ -41,7 +44,7 @@ public abstract class ChatStackMixin {
 
     @ModifyVariable(method = "addMessageToDisplayQueue", at = @At("HEAD"), argsOnly = true)
     private GuiMessage duskclient$timestamp(GuiMessage message) {
-        Component content = ChatTimestamps.decorate(message.content(), Minecraft.getInstance().gui.hud.getGuiTicks() - message.addedTime());
+        Component content = ChatTimestamps.decorate(ChatHeads.decorate(message.content()), Minecraft.getInstance().gui.hud.getGuiTicks() - message.addedTime());
         if (content == message.content()) return message;
         return new GuiMessage(message.addedTime(), content, message.signature(), message.source(), message.tag());
     }
