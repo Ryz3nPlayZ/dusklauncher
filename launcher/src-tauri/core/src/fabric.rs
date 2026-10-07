@@ -12,7 +12,8 @@ pub const FABRIC_META_PROFILE_URL: &str =
     "https://meta.fabricmc.net/v2/versions/loader";
 
 /// Fetch the Fabric profile JSON for a game version. `loader_version` of
-/// `None` or `Some("latest")` resolves to the latest stable loader.
+/// `None` or `Some("latest")` resolves to the newest stable loader for that
+/// game version (meta answers a literal `latest` with 400 Bad Request).
 pub async fn fetch_fabric_profile(
     client: &reqwest::Client,
     game_version: &str,
@@ -20,11 +21,55 @@ pub async fn fetch_fabric_profile(
 ) -> Result<Value> {
     let loader = match loader_version {
         Some(v) if !v.is_empty() && v != "latest" => v.to_string(),
-        _ => "latest".to_string(),
+        _ => loader_for_game(client, game_version).await?,
     };
     let url = format!("{FABRIC_META_PROFILE_URL}/{game_version}/{loader}/profile/json");
     let text = client.get(&url).send().await?.error_for_status()?.text().await?;
     Ok(serde_json::from_str(&text)?)
+}
+
+/// The newest stable loader meta lists for `game_version` (the newest of any
+/// kind when none is marked stable).
+async fn loader_for_game(client: &reqwest::Client, game_version: &str) -> Result<String> {
+    let url = format!("{FABRIC_META_PROFILE_URL}/{game_version}");
+    let entries: Vec<Value> = client.get(&url).send().await?.error_for_status()?.json().await?;
+    pick_loader(&entries)
+        .ok_or_else(|| crate::Error::Other(format!("Fabric has no loader for Minecraft {game_version}")))
+}
+
+/// Meta lists loaders newest first.
+fn pick_loader(entries: &[Value]) -> Option<String> {
+    let loaders: Vec<&Value> = entries.iter().filter_map(|e| e.get("loader")).collect();
+    loaders
+        .iter()
+        .find(|l| l.get("stable").and_then(Value::as_bool).unwrap_or(false))
+        .or_else(|| loaders.first())
+        .and_then(|l| l.get("version"))
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+}
+
+/// A Fabric profile an earlier launch saved for `game_version` (the pinned
+/// loader's when there is one), so an instance still starts while meta is
+/// unreachable.
+fn saved_profile(versions_dir: &Path, game_version: &str, loader_version: Option<&str>) -> Option<meta::VersionJson> {
+    let pinned = loader_version.filter(|v| !v.is_empty() && *v != "latest");
+    let suffix = format!("-{game_version}.json");
+    let mut found: Vec<(std::time::SystemTime, std::path::PathBuf)> = std::fs::read_dir(versions_dir)
+        .ok()?
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            let loader = name.strip_prefix("fabric-loader-")?.strip_suffix(&suffix)?.to_owned();
+            if pinned.is_some_and(|p| p != loader) {
+                return None;
+            }
+            Some((e.metadata().and_then(|m| m.modified()).ok()?, e.path()))
+        })
+        .collect();
+    found.sort();
+    let (_, path) = found.pop()?;
+    serde_json::from_slice(&std::fs::read(path).ok()?).ok()
 }
 
 /// Install a fabric profile into a profiles' versions dir.
@@ -41,7 +86,10 @@ pub async fn install_fabric(
     versions_dir: &Path,
     vanilla: &meta::VersionJson,
 ) -> Result<meta::VersionJson> {
-    let profile = fetch_fabric_profile(client, game_version, loader_version).await?;
+    let profile = match fetch_fabric_profile(client, game_version, loader_version).await {
+        Ok(p) => p,
+        Err(e) => return saved_profile(versions_dir, game_version, loader_version).ok_or(e),
+    };
     tokio::fs::create_dir_all(versions_dir).await?;
     let merged = merge_with_vanilla(profile, vanilla);
     let path = versions_dir.join(format!("{}.json", merged.id));
@@ -110,6 +158,35 @@ pub async fn latest_loader_version(client: &reqwest::Client) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn picks_newest_stable_loader() {
+        let entries = serde_json::json!([
+            {"loader": {"version": "0.20.0-beta.1", "stable": false}},
+            {"loader": {"version": "0.19.5", "stable": true}},
+            {"loader": {"version": "0.19.4", "stable": true}}
+        ]);
+        assert_eq!(pick_loader(entries.as_array().unwrap()).as_deref(), Some("0.19.5"));
+        let unstable = serde_json::json!([{"loader": {"version": "0.1.0", "stable": false}}]);
+        assert_eq!(pick_loader(unstable.as_array().unwrap()).as_deref(), Some("0.1.0"));
+        assert_eq!(pick_loader(&[]), None);
+    }
+
+    #[test]
+    fn falls_back_to_saved_profile() {
+        let dir = std::env::temp_dir().join(format!("dusk-fabric-saved-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut v = vanilla();
+        v.id = "fabric-loader-0.19.5-26.2".into();
+        std::fs::write(dir.join("fabric-loader-0.19.5-26.2.json"), serde_json::to_vec(&v).unwrap()).unwrap();
+        std::fs::write(dir.join("26.2.json"), b"{}").unwrap();
+
+        assert_eq!(saved_profile(&dir, "26.2", None).map(|v| v.id).as_deref(), Some("fabric-loader-0.19.5-26.2"));
+        assert_eq!(saved_profile(&dir, "26.2", Some("latest")).map(|v| v.id).as_deref(), Some("fabric-loader-0.19.5-26.2"));
+        assert!(saved_profile(&dir, "26.2", Some("0.18.0")).is_none());
+        assert!(saved_profile(&dir, "1.21.11", None).is_none());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     fn vanilla() -> meta::VersionJson {
         let json = r#"{
