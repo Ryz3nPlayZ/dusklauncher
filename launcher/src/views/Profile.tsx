@@ -61,7 +61,9 @@ export default function Profile({
             <span className="meta">
               {account?.authenticated
                 ? `Microsoft account · ${account.uuid}`
-                : 'Sign in with Microsoft to launch owned copies of the game and apply skins.'}
+                : account?.offline
+                  ? `Offline account · ${account.uuid} · friends, quests, the store and your skin work on Dusk. Sign in with Microsoft to play online servers.`
+                  : 'Sign in with Microsoft to launch owned copies of the game and apply skins.'}
             </span>
           </div>
           <div className="account__actions">

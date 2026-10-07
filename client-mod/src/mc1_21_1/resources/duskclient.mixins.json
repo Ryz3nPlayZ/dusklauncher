@@ -28,6 +28,7 @@
     "FullbrightMixin",
     "MotionBlurMixin",
     "cosmetics.AbstractClientPlayerMixin",
+    "cosmetics.PlayerInfoSkinMixin",
     "cosmetics.UpsideDownMixin",
     "cosmetics.PlayerRendererMixin",
     "cosmetics.CapeLayerMixin",

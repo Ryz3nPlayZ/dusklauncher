@@ -32,6 +32,7 @@
     "PostChainAccessor",
     "PostPassAccessor",
     "cosmetics.AbstractClientPlayerMixin",
+    "cosmetics.PlayerInfoSkinMixin",
     "cosmetics.PlayerRenderStateMixin",
     "cosmetics.PlayerRendererMixin",
     "cosmetics.CapeLayerMixin",

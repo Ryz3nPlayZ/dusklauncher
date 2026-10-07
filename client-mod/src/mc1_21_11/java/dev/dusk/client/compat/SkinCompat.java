@@ -4,7 +4,9 @@ import com.google.common.collect.ImmutableMultimap;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 import com.mojang.authlib.properties.PropertyMap;
+import dev.dusk.client.account.DuskAccount;
 import dev.dusk.client.account.SelfSkin;
+import dev.dusk.client.cosmetics.DuskSkins;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.PlayerSkinWidget;
@@ -43,6 +45,7 @@ public final class SkinCompat {
             fallback = DefaultPlayerSkin.get(mc.getGameProfile());
         }
         PlayerSkin skin = lookup.get();
+        if (DuskAccount.offline()) return dusk(mc.getGameProfile(), skin);
         if (skin.equals(fallback)) SelfSkin.defaultShown((url, slim) -> useUploaded(mc, url, slim));
         return skin;
     }
@@ -60,6 +63,18 @@ public final class SkinCompat {
                 new PropertyMap(ImmutableMultimap.of("textures", new Property("textures", packed))));
         lookup = mc.getSkinManager().createLookup(profile, false);
         fallback = DefaultPlayerSkin.get(profile);
+    }
+
+    /**
+     * A cracked player's Dusk skin in place of {@code original}: only for a
+     * profile that came without Mojang textures, once the skin has loaded.
+     */
+    public static PlayerSkin dusk(GameProfile profile, PlayerSkin original) {
+        if (profile.properties().containsKey("textures")) return original;
+        DuskSkins.Skin d = DuskSkins.get(profile.name());
+        if (d == null) return original;
+        return d.wrap(original, o -> new PlayerSkin(new Tex(d.texture().current()), o.cape(), o.elytra(),
+                d.slim() ? PlayerModelType.SLIM : PlayerModelType.WIDE, false));
     }
 
     /** A drag-to-spin 3D model of {@code preview} (or of the account skin while it returns null). */

@@ -13,6 +13,8 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -24,7 +26,20 @@ public final class Http {
     public static final String USER_AGENT = "Dusk-Client/" + FabricLoader.getInstance().getModContainer("duskclient")
             .map(m -> m.getMetadata().getVersion().getFriendlyString()).orElse("dev") + " (dusk launcher)";
 
-    public record Response(int code, byte[] body) {
+    public record Response(int code, byte[] body, Map<String, List<String>> headers) {
+        public Response(int code, byte[] body) {
+            this(code, body, Map.of());
+        }
+
+        /** The first value of a response header, any case; null when absent. */
+        @Nullable
+        public String header(String name) {
+            for (Map.Entry<String, List<String>> e : headers.entrySet()) {
+                if (e.getKey() != null && e.getKey().equalsIgnoreCase(name) && !e.getValue().isEmpty()) return e.getValue().get(0);
+            }
+            return null;
+        }
+
         public boolean ok() {
             return code / 100 == 2;
         }
@@ -112,7 +127,7 @@ public final class Http {
             InputStream in = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
             byte[] bytes = in == null ? new byte[0] : in.readAllBytes();
             if (in != null) in.close();
-            return new Response(code, bytes);
+            return new Response(code, bytes, conn.getHeaderFields());
         } finally {
             conn.disconnect();
         }

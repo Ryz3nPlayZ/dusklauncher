@@ -7,6 +7,10 @@
 //! No password, no extra account — owning the Minecraft account is the
 //! identity. The token is cached in `<data>/dusk-session.json` and
 //! re-issued transparently on a 401 or when the signed-in account changes.
+//!
+//! Offline play (cracked) has no Mojang session; it signs in with the
+//! offline name and a random key kept in `<data>/dusk-device.key`, which
+//! holds that name on Dusk for this device.
 
 use crate::appstate::AppState;
 use crate::cosmetics::{self, Inventory, Loadout};
@@ -69,9 +73,45 @@ struct AuthResponse {
     username: String,
 }
 
+fn device_key_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("dusk-device.key")
+}
+
+/// This device's offline key, made on first use.
+fn device_key(data_dir: &Path) -> Result<String, String> {
+    if let Ok(k) = std::fs::read_to_string(device_key_path(data_dir)) {
+        let k = k.trim();
+        if k.len() >= 32 && k.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Ok(k.to_string());
+        }
+    }
+    let k = hex::encode(rand::random::<[u8; 32]>());
+    std::fs::write(device_key_path(data_dir), &k).map_err(|e| format!("couldn't save the Dusk device key: {e}"))?;
+    Ok(k)
+}
+
+/// Sign in the offline-play identity: its name, held by this device's key.
+async fn sign_in_offline(state: &AppState, username: &str) -> Result<StoredToken, String> {
+    let key = device_key(&state.data_dir)?;
+    let resp = state
+        .client
+        .post(format!("{}/v1/auth/offline", api_base()))
+        .json(&json!({ "username": username, "key": key }))
+        .send()
+        .await
+        .map_err(|e| format!("Dusk service unreachable: {e}"))?;
+    let auth: AuthResponse = parse(resp).await?;
+    let stored = StoredToken { token: auth.token, uuid: auth.uuid, username: auth.username };
+    save_token(&state.data_dir, &stored);
+    Ok(stored)
+}
+
 /// Prove ownership of the Minecraft account to the service and cache the
-/// token it hands back.
+/// token it hands back. Offline play signs in with its name instead.
 async fn sign_in(state: &AppState) -> Result<StoredToken, String> {
+    if let Some(offline) = crate::commands::offline_session(state) {
+        return sign_in_offline(state, &offline.username).await;
+    }
     let session = crate::commands::ensure_play_session(state).await?;
     if session.access_token.is_empty() {
         return Err("Sign in with Microsoft to use the Dusk store.".into());
@@ -109,7 +149,9 @@ async fn sign_in(state: &AppState) -> Result<StoredToken, String> {
 
 /// A token for the account that is signed in right now.
 async fn token(state: &AppState) -> Result<StoredToken, String> {
-    let current = crate::auth_store::load_session(&state.data_dir).map(|s| undashed(&s.uuid));
+    let current = crate::auth_store::load_session(&state.data_dir)
+        .or_else(|| crate::commands::offline_session(state))
+        .map(|s| undashed(&s.uuid));
     if let Some(t) = load_token(&state.data_dir) {
         if current.as_deref() == Some(undashed(&t.uuid).as_str()) {
             return Ok(t);
@@ -206,6 +248,9 @@ pub struct Me {
     pub owned: Vec<u32>,
     #[serde(default)]
     pub loadout: Loadout,
+    /// a cracked account
+    #[serde(default)]
+    pub offline: bool,
 }
 
 /// Everything the store page needs in one round trip. `coins`/`owned` come

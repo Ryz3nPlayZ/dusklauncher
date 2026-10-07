@@ -440,6 +440,29 @@ pub async fn get_public_skin(state: State<'_, AppState>, uuid: String) -> Result
         return Ok(Some(png_data_url(bytes)));
     }
 
+    // a version-3 uuid is an offline player: Mojang has no skin for it, the
+    // Dusk service may (one it uploaded there)
+    if undashed.as_bytes()[12] == b'3' {
+        let resp = state
+            .client
+            .get(format!("{}/v1/skins/{undashed}", crate::dusk::api_base()))
+            .send()
+            .await
+            .map_err(|e| e.to_string());
+        let resp = match resp {
+            Ok(r) => r,
+            Err(e) => return cached.map(|b| Some(png_data_url(&b))).ok_or(e),
+        };
+        if !resp.status().is_success() {
+            let _ = std::fs::remove_file(&png_path);
+            return Ok(None);
+        }
+        let png = resp.bytes().await.map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
+        std::fs::write(&png_path, &png).map_err(|e| e.to_string())?;
+        std::fs::write(&url_path, "dusk").map_err(|e| e.to_string())?;
+        return Ok(Some(png_data_url(&png)));
+    }
     let skin_url = match public_skin_url(&state.client, &undashed).await {
         Ok(Some(url)) => url,
         Ok(None) => return Ok(None),

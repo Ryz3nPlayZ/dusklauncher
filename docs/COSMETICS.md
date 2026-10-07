@@ -140,6 +140,12 @@ Every cosmetics mod reads its *own* backend; none of them exposes a write API. S
 
 Reading: a MinecraftCapes user is always visible to Dusk users; a Dusk user is visible to MinecraftCapes/Cosmetica users only by re-uploading their cape there; two Dusk users see each other's Dusk cosmetics only after phase 3 ships. Nothing short of a server can make the Dusk→Dusk cell a guarantee, and nothing at all can make the Dusk→other-mod cells one.
 
+### 3.2 Cracked (offline) accounts
+
+An offline account signs in with `POST /v1/auth/offline {username, key}`. The key is a random per-device secret in `<data>/dusk-device.key`, which the launcher and the mod share. The first claim of a name holds it for that key. Names held by a Microsoft account on Dusk win. The account's uuid is the offline-mode one (`OfflinePlayer:<name>`), so loadouts match the uuid offline servers give the player. Friends, quests, outfits and the store work as for Microsoft accounts. Referral codes don't.
+
+Skins work like PineconeMC's skin server: by name, Dusk only. `PUT /v1/me/skin?model=slim|classic` (a 64×64 or 64×32 PNG, offline accounts only) stores it, and `GET /v1/skins/{name or uuid}` serves it with `X-Skin-Model`. In game, `PlayerInfoSkinMixin` → `SkinCompat.dusk` swaps the skin of any profile without Mojang textures for its Dusk skin once `DuskSkins` has loaded it. It is cached for five minutes and covers the world, the tab list and chat heads. Legacy 64×32 skins are converted with `SkinLibrary.modernize`.
+
 ---
 
 ## 4. Client-mod (`dev.fasterlauncher.client.cosmetics`)

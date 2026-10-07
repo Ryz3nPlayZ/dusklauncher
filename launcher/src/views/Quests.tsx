@@ -18,7 +18,7 @@ export default function Quests({
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   // the browser preview has no account but mocks the board
-  const signedIn = !isTauri || !!account?.authenticated;
+  const signedIn = !isTauri || !!account?.authenticated || !!account?.offline;
 
   const take = useCallback(
     (b: Board) => {

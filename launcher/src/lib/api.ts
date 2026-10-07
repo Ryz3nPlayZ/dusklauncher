@@ -201,6 +201,8 @@ export interface Friend {
   lastSeen: number;
   /** messages from them not yet fetched */
   unread: number;
+  /** a cracked (offline) account */
+  offline?: boolean;
 }
 
 /** the heartbeat's answer (POST /v1/me/presence) — what the status pill badges */
@@ -242,6 +244,8 @@ export interface FriendProfile {
   owned: number[];
   /** achievements they've claimed */
   badges: string[];
+  /** a cracked (offline) account */
+  offline?: boolean;
 }
 
 /** a quest, daily or weekly, or an achievement (GET /v1/me/quests) */

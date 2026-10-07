@@ -10,6 +10,7 @@ import dev.dusk.client.account.SkinLibrary;
 import dev.dusk.client.compat.SkinCompat;
 import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.cosmetics.CapeRegistry;
+import dev.dusk.client.cosmetics.DuskSkins;
 import dev.dusk.client.gui.widget.TextFieldWidget;
 import dev.dusk.client.social.Social;
 import net.minecraft.client.Minecraft;
@@ -87,6 +88,8 @@ public class WardrobeScreen extends PanelScreen {
     private List<SkinLibrary.Entry> skins = List.of();
     @Nullable private MojangProfile.Profile profile;
     @Nullable private String profileError;
+    /** A cracked launch: no Mojang profile, the skin is kept on Dusk. */
+    private final boolean offline = DuskAccount.offline();
     @Nullable private Set<Integer> owned;
     @Nullable private String picked; // library skin in the preview; null: the account's own
     /** Arm model per library skin, read off its PNG (see {@link SkinLibrary#slim}). */
@@ -154,14 +157,16 @@ public class WardrobeScreen extends PanelScreen {
                 // start on the skin that is on, like the launcher
                 if (picked == null) list.stream().filter(SkinLibrary.Entry::selected).findFirst().ifPresent(e -> picked = e.name());
             });
-            try {
-                MojangProfile.Profile p = MojangProfile.fetch();
-                post(() -> {
-                    profile = p;
-                    profileError = null;
-                });
-            } catch (IOException e) {
-                post(() -> profileError = e.getMessage());
+            if (!offline) {
+                try {
+                    MojangProfile.Profile p = MojangProfile.fetch();
+                    post(() -> {
+                        profile = p;
+                        profileError = null;
+                    });
+                } catch (IOException e) {
+                    post(() -> profileError = e.getMessage());
+                }
             }
             Set<Integer> have;
             try {
@@ -252,6 +257,13 @@ public class WardrobeScreen extends PanelScreen {
             byte[] png = SkinLibrary.read(name);
             boolean variant = SkinLibrary.slim(png);
             SkinLibrary.select(name);
+            if (offline) {
+                Http.Response r = DuskAccount.raw("PUT", "/v1/me/skin?model=" + (variant ? "slim" : "classic"), "image/png", png);
+                if (!r.ok()) throw new IOException(r.error("Dusk service"));
+                DuskSkins.refresh(Minecraft.getInstance().getUser().getName());
+                post(() -> skins = skins.stream().map(e -> new SkinLibrary.Entry(e.name(), e.addedAt(), e.name().equals(name))).toList());
+                return "Skin saved on Dusk. Other Dusk players see it within a few minutes.";
+            }
             MojangProfile.Profile after = MojangProfile.uploadSkin(png, variant);
             MojangProfile.Skin s = after.activeSkin();
             post(() -> {
@@ -632,7 +644,9 @@ public class WardrobeScreen extends PanelScreen {
     /** What the gallery says under the tiles: progress, errors, the launcher's hints. */
     private String note() {
         if (!status.isEmpty()) return status;
+        if (tab == 0 && offline) return "Offline account: your skin is kept on Dusk, so Dusk players see it.";
         if (tab == 0) return profile == null && profileError != null ? profileError : "";
+        if (tab == 1 && mojangCapes && offline) return "Minecraft capes need a Microsoft account.";
         if (tab == 1 && mojangCapes) {
             if (profile == null) return profileError != null ? profileError : "Loading your Minecraft capes...";
             if (profile.capes().isEmpty()) return "This account has no Minecraft capes.";
@@ -885,7 +899,7 @@ public class WardrobeScreen extends PanelScreen {
 
     private boolean canApply() {
         if (busy) return false;
-        return tab == 0 ? picked != null && !applied() && profile != null : lookDirty();
+        return tab == 0 ? picked != null && !applied() && (profile != null || offline) : lookDirty();
     }
 
     private static boolean in(int[] b, double mx, double my) {

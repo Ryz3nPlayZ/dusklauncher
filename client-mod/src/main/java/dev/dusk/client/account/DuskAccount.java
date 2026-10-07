@@ -26,7 +26,8 @@ import java.util.Set;
  * dusk.rs does): sign-in by joining a random server id at Mojang's session
  * server, reading what the account owns and publishing the loadout. Shares
  * the launcher's token cache and loadout file in its data directory.
- * Blocking; worker threads only.
+ * Offline play (no Mojang session) signs in with its name and the
+ * launcher's device key instead. Blocking; worker threads only.
  */
 public final class DuskAccount {
     private static final String MOJANG_JOIN = "https://sessionserver.mojang.com/session/minecraft/join";
@@ -93,6 +94,11 @@ public final class DuskAccount {
         return saved;
     }
 
+    /** Whether this game can sign in to Dusk: a Microsoft session, or offline play from the launcher. */
+    public static boolean canSignIn() {
+        return !offline() || dataDir() != null;
+    }
+
     /** An authenticated JSON call to the Dusk service (friends, messages, outfits...). */
     public static JsonElement api(String method, String path, @Nullable JsonElement body) throws IOException {
         return call(method, path, body);
@@ -149,10 +155,16 @@ public final class DuskAccount {
         return signIn();
     }
 
+    /** Playing without a Microsoft account (a cracked/offline launch). */
+    public static boolean offline() {
+        String access = Minecraft.getInstance().getUser().getAccessToken();
+        return access == null || access.length() < 20;
+    }
+
     private static String signIn() throws IOException {
         Minecraft mc = Minecraft.getInstance();
+        if (offline()) return signInOffline(mc);
         String access = mc.getUser().getAccessToken();
-        if (access == null || access.length() < 20) throw new IOException("Not signed in with a Microsoft account");
         byte[] raw = new byte[20];
         new SecureRandom().nextBytes(raw);
         String serverId = HexFormat.of().formatHex(raw);
@@ -174,6 +186,36 @@ public final class DuskAccount {
                 Files.write(dir.resolve("dusk-session.json"), t.toString().getBytes(StandardCharsets.UTF_8));
             } catch (IOException ignored) {
             }
+        }
+        return cached = t.get("token").getAsString();
+    }
+
+    /** Offline play: the name, held on Dusk by the key the launcher keeps for this device. */
+    private static String signInOffline(Minecraft mc) throws IOException {
+        Path dir = dataDir();
+        if (dir == null) throw new IOException("Not signed in with a Microsoft account");
+        Path keyFile = dir.resolve("dusk-device.key");
+        String key;
+        try {
+            key = Files.readString(keyFile).trim();
+        } catch (IOException e) {
+            key = "";
+        }
+        if (key.length() < 32 || !key.chars().allMatch(c -> Character.digit(c, 16) >= 0)) {
+            byte[] raw = new byte[32];
+            new SecureRandom().nextBytes(raw);
+            key = HexFormat.of().formatHex(raw);
+            Files.writeString(keyFile, key);
+        }
+        JsonObject auth = new JsonObject();
+        auth.addProperty("username", mc.getUser().getName());
+        auth.addProperty("key", key);
+        Http.Response r = Http.json("POST", DuskProvider.apiBase() + "/v1/auth/offline", null, auth);
+        if (!r.ok()) throw new IOException(r.error("Dusk service"));
+        JsonObject t = obj(r.json());
+        try {
+            Files.write(dir.resolve("dusk-session.json"), t.toString().getBytes(StandardCharsets.UTF_8));
+        } catch (IOException ignored) {
         }
         return cached = t.get("token").getAsString();
     }

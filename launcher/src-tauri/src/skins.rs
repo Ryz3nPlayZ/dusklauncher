@@ -2,7 +2,9 @@
 //! skins.json. Import validates 64x64 / 64x32 (legacy) skins. Applying a skin
 //! to the signed-in Mojang account goes through `api.minecraftservices.com`
 //! (`upload_skin`); the account's active skin is cached under `<data>/cache/`
-//! for the Home avatar.
+//! for the Home avatar. Offline play has no Mojang account, so its skin
+//! lives on the Dusk service instead (`/v1/me/skin`), where Dusk clients
+//! look it up by name.
 
 use crate::appstate::AppState;
 use serde::{Deserialize, Serialize};
@@ -179,6 +181,12 @@ pub async fn upload_skin(
     }
     let png = std::fs::read(skins_dir(&state).join(format!("{name}.png")))
         .map_err(|e| format!("skin \"{name}\" not readable: {e}"))?;
+    if crate::commands::offline_session(&state).is_some() {
+        let path = format!("/v1/me/skin?model={variant}");
+        let resp = crate::dusk::send(&state, reqwest::Method::PUT, &path, Some(crate::dusk::Body::Raw(png, "image/png"))).await?;
+        crate::dusk::parse::<serde_json::Value>(resp).await?;
+        return Ok(());
+    }
     let mut session = crate::auth_store::load_session(&state.data_dir)
         .ok_or_else(|| "sign in with Microsoft before uploading a skin".to_string())?;
     fasterlauncher_core::auth::upload_skin(&state.client, &session, png, &variant)
@@ -202,6 +210,13 @@ pub async fn upload_skin(
 /// Reset the account's skin to the default (unapply any custom skin).
 #[tauri::command]
 pub async fn reset_skin(state: State<'_, AppState>) -> Result<(), String> {
+    if crate::commands::offline_session(&state).is_some() {
+        let resp = crate::dusk::send(&state, reqwest::Method::DELETE, "/v1/me/skin", None).await?;
+        if !resp.status().is_success() {
+            return Err(format!("Dusk service returned HTTP {}", resp.status().as_u16()));
+        }
+        return Ok(());
+    }
     let mut session = crate::auth_store::load_session(&state.data_dir)
         .ok_or_else(|| "sign in with Microsoft first".to_string())?;
     fasterlauncher_core::auth::reset_skin(&state.client, &session)
@@ -219,6 +234,9 @@ pub async fn reset_skin(state: State<'_, AppState>) -> Result<(), String> {
 /// (and never needs CORS headers to exist).
 #[tauri::command]
 pub async fn get_account_skin(state: State<'_, AppState>) -> Result<Option<String>, String> {
+    if let Some(offline) = crate::commands::offline_session(&state) {
+        return Ok(offline_skin(&state, &offline.username).await);
+    }
     let Some(session) = crate::auth_store::load_session(&state.data_dir) else {
         return Ok(None);
     };
@@ -244,6 +262,23 @@ pub async fn get_account_skin(state: State<'_, AppState>) -> Result<Option<Strin
         }
     }
     Ok(Some(account_skin_data_url(&state, &skin_url).await?))
+}
+
+/// The offline identity's skin on the Dusk service, as a data URL; None
+/// when it has none or the service can't be reached.
+async fn offline_skin(state: &AppState, username: &str) -> Option<String> {
+    use base64::Engine;
+    let resp = state
+        .client
+        .get(format!("{}/v1/skins/{username}", crate::dusk::api_base()))
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let png = resp.bytes().await.ok()?;
+    Some(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))
 }
 
 /// One Mojang cape the account owns (Migrator, Pan, …), with its texture.

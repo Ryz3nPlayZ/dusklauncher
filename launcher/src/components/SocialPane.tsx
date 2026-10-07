@@ -228,7 +228,7 @@ export default function SocialPane({
   isTauri: boolean;
 }) {
   // the browser preview has mocks for every call, so it walks as signed in
-  const signedIn = !isTauri || !!account?.authenticated;
+  const signedIn = !isTauri || !!account?.authenticated || !!account?.offline;
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<View>({ kind: 'list' });
   const [summary, setSummary] = useState<SocialSummary | null>(null);
@@ -795,7 +795,7 @@ function FriendsList({
             uuid={f.uuid}
             name={f.username}
             online={f.online}
-            meta={status.text}
+            meta={f.offline ? `${status.text} · CRACKED` : status.text}
             metaOnline={status.online}
             dim={!f.online}
             onClick={() => onOpen(f)}
@@ -1475,6 +1475,11 @@ function ProfileView({
         >
           {null}
         </Row>
+        {profile?.offline && (
+          <Row label="ACCOUNT" hint="Cracked: no Microsoft account behind this name, so only Dusk vouches for it.">
+            {null}
+          </Row>
+        )}
         {profile && profile.badges.length > 0 && (
           <Row label="BADGES" hint={profile.badges.join(' · ')}>
             {null}

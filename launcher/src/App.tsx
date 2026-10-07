@@ -90,7 +90,7 @@ export default function App() {
 
   /* the QUESTS badge: rewards waiting to be claimed, rechecked every few
      minutes and whenever the page changes (the Quests view keeps it live) */
-  const signedIn = !isTauri || !!account?.authenticated;
+  const signedIn = !isTauri || !!account?.authenticated || !!account?.offline;
   useEffect(() => {
     if (!signedIn) {
       setClaimable(0);

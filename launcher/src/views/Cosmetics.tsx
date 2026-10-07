@@ -485,6 +485,8 @@ export default function Cosmetics({
                         ? 'This skin is already applied'
                         : account?.authenticated
                         ? 'Apply to your Minecraft account'
+                        : account?.offline
+                        ? 'Apply on Dusk: other Dusk players see it on you'
                         : 'Stores the choice locally; applying to the account needs a Microsoft sign-in'
                     }
                     onClick={async () => {
@@ -492,7 +494,7 @@ export default function Cosmetics({
                       setNote(null);
                       try {
                         await api.selectSkin(picked);
-                        if (account?.authenticated) await api.uploadSkin(picked, pickedModel);
+                        if (account?.authenticated || account?.offline) await api.uploadSkin(picked, pickedModel);
                         await load();
                         await onSkinChange();
                       } catch (e) {
@@ -561,7 +563,9 @@ export default function Cosmetics({
                   {(note || !account?.authenticated) && (
                     <span className="meta wardrobe__note">
                       {note ??
-                        (isTauri
+                        (account?.offline
+                          ? 'Cracked account: your skin is kept on Dusk, so Dusk players see it on you in singleplayer, LAN and offline-mode servers.'
+                          : isTauri
                           ? 'Sign in with Microsoft to apply a skin to your account — the wardrobe still stores it locally.'
                           : 'Browser preview: skins live in the desktop app.')}
                     </span>

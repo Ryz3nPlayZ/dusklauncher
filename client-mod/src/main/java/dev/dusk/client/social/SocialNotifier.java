@@ -1,5 +1,6 @@
 package dev.dusk.client.social;
 
+import dev.dusk.client.account.DuskAccount;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.gui.Canvas;
@@ -116,9 +117,7 @@ public final class SocialNotifier {
 
     private static void play() {
         if (!inWorld) return;
-        Minecraft mc = Minecraft.getInstance();
-        String access = mc.getUser().getAccessToken();
-        if (access == null || access.length() < 20) return;
+        if (!DuskAccount.canSignIn()) return;
         try {
             boolean active = System.currentTimeMillis() - lastInput < IDLE_MS;
             readied(Social.play(active, server));
@@ -176,9 +175,7 @@ public final class SocialNotifier {
 
     private static void poll() {
         if (System.currentTimeMillis() < skipUntil) return;
-        Minecraft mc = Minecraft.getInstance();
-        String access = mc.getUser().getAccessToken();
-        if (access == null || access.length() < 20) return; // offline account: no Dusk sign-in
+        if (!DuskAccount.canSignIn()) return;
         try {
             List<Social.Friend> friends = Social.friends();
             Social.Requests reqs = Social.requests();

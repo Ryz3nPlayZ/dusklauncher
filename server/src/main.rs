@@ -19,6 +19,11 @@
 //!   (`POST /v1/me/launched`), so a sign-in alone earns nothing. Every coin
 //!   movement lands in `ledger`.
 //!
+//! * **cracked players** — an offline account has no Mojang session to
+//!   check, so its name is held by the first device that claims it (a
+//!   random key the launcher keeps); see [`offline_sign_in`]. It gets the
+//!   same features, plus a skin hosted here that Dusk clients draw on it.
+//!
 //! Config is all env: `DUSK_DB` (sqlite path), `DUSK_BIND` (host:port),
 //! `DUSK_CODES` (extra `code:coins,...` on top of the built-in ones),
 //! `DUSK_DEV_AUTH=1` (enables `/v1/auth/dev`, never in production).
@@ -86,6 +91,8 @@ const IMAGE_DAILY_MAX: i64 = 30;
 const IMAGE_TTL: i64 = 90 * 24 * 3600;
 /// The synced client settings blob (HUD layout, module options, menu prefs).
 const SETTINGS_MAX_BYTES: usize = 64 * 1024;
+/// A skin upload: a vanilla 64x64 (or legacy 64x32) PNG is a few KB.
+const SKIN_MAX_BYTES: usize = 32 * 1024;
 
 // ── catalog ────────────────────────────────────────────────────────────────
 
@@ -201,7 +208,10 @@ fn open_db(path: &str) -> Connection {
            bytes BLOB NOT NULL, created_at INTEGER NOT NULL);
          CREATE INDEX IF NOT EXISTS images_by_owner ON images (owner, created_at);
          CREATE TABLE IF NOT EXISTS client_settings (
-           uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), json TEXT NOT NULL, updated_at INTEGER NOT NULL);",
+           uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), json TEXT NOT NULL, updated_at INTEGER NOT NULL);
+         CREATE TABLE IF NOT EXISTS skins (
+           uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), png BLOB NOT NULL, slim INTEGER NOT NULL,
+           hash TEXT NOT NULL, updated_at INTEGER NOT NULL);",
     )
     .expect("schema");
     add_column(&db, "accounts", "launches", "INTEGER NOT NULL DEFAULT 0");
@@ -212,6 +222,9 @@ fn open_db(path: &str) -> Connection {
     add_column(&db, "accounts", "hidden_since", "INTEGER");
     add_column(&db, "accounts", "share_activity", "INTEGER NOT NULL DEFAULT 1");
     add_column(&db, "accounts", "friend_requests", "TEXT NOT NULL DEFAULT 'everyone'");
+    // offline (cracked) accounts: 1, and the hash of the key that holds the name
+    add_column(&db, "accounts", "offline", "INTEGER NOT NULL DEFAULT 0");
+    add_column(&db, "accounts", "device_key", "TEXT");
     add_column(&db, "messages", "kind", "TEXT NOT NULL DEFAULT 'text'");
     add_column(&db, "messages", "meta", "TEXT");
     quests::migrate(&db);
@@ -382,6 +395,202 @@ async fn auth_dev(State(app): State<Shared>, Json(body): Json<DevAuth>) -> ApiRe
     Ok(Json(AuthOk { token, uuid, username: body.username }))
 }
 
+// ── offline (cracked) accounts ─────────────────────────────────────────────
+
+/// A name as vanilla allows it: 3–16 of `A-Z a-z 0-9 _`.
+fn valid_name(name: &str) -> bool {
+    (3..=16).contains(&name.len()) && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// The uuid an offline-mode server gives `name` (Java's
+/// `UUID.nameUUIDFromBytes("OfflinePlayer:" + name)`), so the account is the
+/// same player the game and other Dusk clients see.
+fn offline_uuid(name: &str) -> String {
+    use md5::{Digest as _, Md5};
+    let mut b: [u8; 16] = Md5::digest(format!("OfflinePlayer:{name}").as_bytes()).into();
+    b[6] = (b[6] & 0x0f) | 0x30; // version 3
+    b[8] = (b[8] & 0x3f) | 0x80; // IETF variant
+    dashed_uuid(&hex::encode(b)).expect("32 hex digits")
+}
+
+fn is_offline(db: &Connection, uuid: &str) -> Result<bool, rusqlite::Error> {
+    Ok(db
+        .query_row("SELECT offline FROM accounts WHERE uuid = ?1", params![uuid], |r| r.get::<_, i64>(0))
+        .optional()?
+        .is_some_and(|o| o != 0))
+}
+
+#[derive(Deserialize)]
+struct OfflineAuth {
+    username: String,
+    /// the device's secret: random, kept by the launcher, sent on every sign-in
+    key: String,
+}
+
+/// Sign in an offline account. There's no Mojang session to check, so the
+/// first device to claim a name holds it: later sign-ins must bring the
+/// same key. A name a Minecraft (premium) account uses on Dusk can't be
+/// claimed, and names are unique whatever their case.
+fn offline_sign_in(db: &Connection, name: &str, key: &str) -> Result<AuthOk, ApiError> {
+    if !valid_name(name) {
+        return Err(bad("Offline names are 3–16 letters, digits or _."));
+    }
+    if !(32..=128).contains(&key.len()) || !key.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(bad("bad device key"));
+    }
+    let taken = || ApiError(StatusCode::CONFLICT, format!("{name} is taken on Dusk — pick another offline name."));
+    let premium: bool = db
+        .query_row("SELECT 1 FROM accounts WHERE offline = 0 AND username = ?1 COLLATE NOCASE", params![name], |_| Ok(true))
+        .optional()?
+        .unwrap_or(false);
+    if premium {
+        return Err(taken());
+    }
+    let uuid = offline_uuid(name);
+    let other_case: bool = db
+        .query_row(
+            "SELECT 1 FROM accounts WHERE offline = 1 AND username = ?1 COLLATE NOCASE AND uuid != ?2",
+            params![name, uuid],
+            |_| Ok(true),
+        )
+        .optional()?
+        .unwrap_or(false);
+    if other_case {
+        return Err(taken());
+    }
+    let hash = token_hash(key);
+    let held: Option<Option<String>> = db
+        .query_row("SELECT device_key FROM accounts WHERE uuid = ?1", params![uuid], |r| r.get(0))
+        .optional()?;
+    match held {
+        Some(Some(k)) if k == hash => {}
+        Some(_) => return Err(taken()),
+        None => {
+            let t = now();
+            db.execute(
+                "INSERT INTO accounts (uuid, username, coins, created_at, last_seen, offline, device_key)
+                 VALUES (?1, ?2, 0, ?3, ?3, 1, ?4)",
+                params![uuid, name, t, hash],
+            )?;
+            tracing::info!("offline account claimed: {name} ({uuid})");
+        }
+    }
+    let token = issue_token(db, &uuid, name)?;
+    Ok(AuthOk { token, uuid, username: name.to_string() })
+}
+
+async fn auth_offline(State(app): State<Shared>, Json(body): Json<OfflineAuth>) -> ApiResult<AuthOk> {
+    let db = app.db.lock().unwrap();
+    Ok(Json(offline_sign_in(&db, body.username.trim(), body.key.trim())?))
+}
+
+// ── skins (offline accounts) ───────────────────────────────────────────────
+
+/// Width and height of a PNG, from its header.
+fn png_size(png: &[u8]) -> Option<(u32, u32)> {
+    if png.len() < 24 || &png[..8] != b"\x89PNG\r\n\x1a\n" || &png[12..16] != b"IHDR" {
+        return None;
+    }
+    let be = |i: usize| u32::from_be_bytes([png[i], png[i + 1], png[i + 2], png[i + 3]]);
+    Some((be(16), be(20)))
+}
+
+#[derive(Deserialize)]
+struct SkinQuery {
+    #[serde(default)]
+    model: Option<String>,
+}
+
+#[derive(Serialize)]
+struct SkinInfo {
+    model: &'static str,
+    hash: String,
+}
+
+/// An offline account's skin, which Dusk clients draw on it wherever its
+/// profile carries none (offline-mode servers, LAN, singleplayer).
+/// Minecraft accounts change theirs at Mojang instead.
+async fn put_skin(
+    State(app): State<Shared>,
+    headers: HeaderMap,
+    Query(q): Query<SkinQuery>,
+    body: axum::body::Bytes,
+) -> ApiResult<SkinInfo> {
+    let uuid = authed(&app, &headers)?;
+    let slim = match q.model.as_deref().unwrap_or("classic") {
+        "slim" => true,
+        "classic" => false,
+        _ => return Err(bad("model is slim or classic")),
+    };
+    if body.len() > SKIN_MAX_BYTES || !matches!(png_size(&body), Some((64, 64)) | Some((64, 32))) {
+        return Err(bad("A skin is a 64×64 (or 64×32) PNG."));
+    }
+    let db = app.db.lock().unwrap();
+    if !is_offline(&db, &uuid)? {
+        return Err(ApiError(StatusCode::FORBIDDEN, "Minecraft accounts change their skin at Mojang.".into()));
+    }
+    let hash = hex::encode(Sha256::digest(&body));
+    db.execute(
+        "INSERT INTO skins (uuid, png, slim, hash, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(uuid) DO UPDATE SET png = excluded.png, slim = excluded.slim, hash = excluded.hash,
+           updated_at = excluded.updated_at",
+        params![uuid, body.as_ref(), slim as i64, hash, now()],
+    )?;
+    Ok(Json(SkinInfo { model: if slim { "slim" } else { "classic" }, hash }))
+}
+
+async fn delete_skin(State(app): State<Shared>, headers: HeaderMap) -> Result<StatusCode, ApiError> {
+    let uuid = authed(&app, &headers)?;
+    app.db.lock().unwrap().execute("DELETE FROM skins WHERE uuid = ?1", params![uuid])?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// The skin by player name, the way Ely.by's skin system answers it: the
+/// PNG, with its model in `X-Skin-Model`. Only offline accounts have one,
+/// and none while a Minecraft account on Dusk uses the same name. A uuid
+/// works too (the launcher's friend list knows those, not names).
+fn skin_by_name(db: &Connection, name: &str) -> Result<Option<(Vec<u8>, bool, String)>, rusqlite::Error> {
+    if let Some(uuid) = dashed_uuid(name) {
+        let username: Option<String> = db
+            .query_row("SELECT username FROM accounts WHERE uuid = ?1 AND offline = 1", params![uuid], |r| r.get(0))
+            .optional()?;
+        return match username {
+            Some(n) => skin_by_name(db, &n),
+            None => Ok(None),
+        };
+    }
+    if !valid_name(name) {
+        return Ok(None);
+    }
+    db.query_row(
+        "SELECT s.png, s.slim, s.hash FROM skins s JOIN accounts a ON a.uuid = s.uuid
+         WHERE a.offline = 1 AND a.username = ?1 COLLATE NOCASE
+           AND NOT EXISTS (SELECT 1 FROM accounts p WHERE p.offline = 0 AND p.username = ?1 COLLATE NOCASE)",
+        params![name],
+        |r| Ok((r.get(0)?, r.get::<_, i64>(1)? != 0, r.get(2)?)),
+    )
+    .optional()
+}
+
+async fn get_skin(State(app): State<Shared>, Path(name): Path<String>) -> Result<Response, ApiError> {
+    let name = name.trim_end_matches(".png");
+    let found = skin_by_name(&app.db.lock().unwrap(), name)?;
+    let Some((png, slim, hash)) = found else {
+        return Ok((StatusCode::NOT_FOUND, [(header::CACHE_CONTROL, "public, max-age=60")], Json(json!({ "error": "no skin" })))
+            .into_response());
+    };
+    Ok((
+        [
+            (header::CONTENT_TYPE, "image/png".to_string()),
+            (header::CACHE_CONTROL, "public, max-age=60".to_string()),
+            (header::ETAG, format!("\"{hash}\"")),
+            (header::HeaderName::from_static("x-skin-model"), if slim { "slim" } else { "classic" }.to_string()),
+        ],
+        png,
+    )
+        .into_response())
+}
+
 // ── account ────────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]
@@ -391,14 +600,18 @@ struct Me {
     coins: i64,
     owned: Vec<u32>,
     loadout: Map<String, Value>,
+    /// a cracked account (no Microsoft sign-in behind it)
+    offline: bool,
 }
 
 fn read_me(db: &Connection, uuid: &str) -> Result<Me, ApiError> {
-    let (username, coins): (String, i64) = db
-        .query_row("SELECT username, coins FROM accounts WHERE uuid = ?1", params![uuid], |r| Ok((r.get(0)?, r.get(1)?)))
+    let (username, coins, offline): (String, i64, bool) = db
+        .query_row("SELECT username, coins, offline FROM accounts WHERE uuid = ?1", params![uuid], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get::<_, i64>(2)? != 0))
+        })
         .optional()?
         .ok_or_else(unauthorized)?;
-    Ok(Me { uuid: uuid.to_string(), username, coins, owned: owned_ids(db, uuid)?, loadout: read_loadout(db, uuid)? })
+    Ok(Me { uuid: uuid.to_string(), username, coins, owned: owned_ids(db, uuid)?, loadout: read_loadout(db, uuid)?, offline })
 }
 
 fn owned_ids(db: &Connection, uuid: &str) -> Result<Vec<u32>, rusqlite::Error> {
@@ -602,7 +815,8 @@ fn settle_referral(db: &Connection, referee: &str) -> Result<i64, rusqlite::Erro
         |r| r.get(0),
     )?;
     grant(db, referee, REFEREE_REWARD, &format!("referred-by:{referrer}"))?;
-    if paid < MAX_PAID_REFERRALS {
+    // a cracked account is free to make, so inviting doesn't pay it
+    if paid < MAX_PAID_REFERRALS && !is_offline(db, &referrer)? {
         grant(db, &referrer, REFERRER_REWARD, &format!("referral:{referee}"))?;
     }
     db.execute("UPDATE referrals SET paid_at = ?1 WHERE referee = ?2", params![now(), referee])?;
@@ -631,8 +845,10 @@ struct Referral {
 
 fn read_referral(db: &Connection, uuid: &str) -> Result<Referral, ApiError> {
     let code = referral_code(db, uuid)?;
-    let (created_at, coins): (i64, i64) = db
-        .query_row("SELECT created_at, coins FROM accounts WHERE uuid = ?1", params![uuid], |r| Ok((r.get(0)?, r.get(1)?)))
+    let (created_at, coins, offline): (i64, i64, bool) = db
+        .query_row("SELECT created_at, coins, offline FROM accounts WHERE uuid = ?1", params![uuid], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get::<_, i64>(2)? != 0))
+        })
         .optional()?
         .ok_or_else(unauthorized)?;
     let mine: Option<(String, bool)> = db
@@ -650,7 +866,7 @@ fn read_referral(db: &Connection, uuid: &str) -> Result<Referral, ApiError> {
     )?;
     Ok(Referral {
         code,
-        can_claim: mine.is_none() && now() - created_at <= REFERRAL_WINDOW.as_secs() as i64,
+        can_claim: !offline && mine.is_none() && now() - created_at <= REFERRAL_WINDOW.as_secs() as i64,
         referral_paid: mine.as_ref().is_some_and(|m| m.1),
         referred_by: mine.map(|m| m.0),
         invited,
@@ -696,6 +912,9 @@ async fn claim_referral(
     let status = read_referral(&tx, &uuid)?;
     if status.referred_by.is_some() {
         return Err(ApiError(StatusCode::CONFLICT, "you already entered a referral code".into()));
+    }
+    if is_offline(&tx, &uuid)? {
+        return Err(ApiError(StatusCode::FORBIDDEN, "Referral codes need a Microsoft account.".into()));
     }
     if !status.can_claim {
         return Err(ApiError(StatusCode::FORBIDDEN, "referral codes are for new accounts only".into()));
@@ -773,6 +992,8 @@ struct FriendEntry {
     last_seen: i64,
     /// Messages from them this account hasn't fetched yet.
     unread: i64,
+    /// a cracked account
+    offline: bool,
 }
 
 /// What a friend is allowed to see of an account's presence, after its
@@ -803,7 +1024,8 @@ fn read_friends(db: &Connection, uuid: &str) -> Result<Vec<FriendEntry>, ApiErro
     let mut st = db.prepare(
         "SELECT acc.uuid, acc.username, acc.last_seen, acc.playing, acc.server, acc.hidden_since, acc.share_activity,
                 (SELECT COUNT(*) FROM messages m WHERE m.from_uuid = acc.uuid AND m.to_uuid = ?1
-                   AND m.id > COALESCE((SELECT last_read_id FROM message_reads WHERE reader = ?1 AND other = acc.uuid), 0))
+                   AND m.id > COALESCE((SELECT last_read_id FROM message_reads WHERE reader = ?1 AND other = acc.uuid), 0)),
+                acc.offline
          FROM friendships f JOIN accounts acc ON acc.uuid = CASE WHEN f.a = ?1 THEN f.b ELSE f.a END
          WHERE f.a = ?1 OR f.b = ?1",
     )?;
@@ -818,6 +1040,7 @@ fn read_friends(db: &Connection, uuid: &str) -> Result<Vec<FriendEntry>, ApiErro
                 server: p.server,
                 last_seen: p.last_seen,
                 unread: r.get(7)?,
+                offline: r.get::<_, i64>(8)? != 0,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -985,7 +1208,7 @@ fn resolve_account(db: &Connection, body: &FriendRequestBody) -> Result<String, 
         // so a name can briefly match two rows — the most recently seen wins
         return db
             .query_row(
-                "SELECT uuid FROM accounts WHERE username = ?1 COLLATE NOCASE ORDER BY last_seen DESC LIMIT 1",
+                "SELECT uuid FROM accounts WHERE username = ?1 COLLATE NOCASE ORDER BY offline, last_seen DESC LIMIT 1",
                 params![name],
                 |r| r.get(0),
             )
@@ -1106,6 +1329,8 @@ struct FriendProfile {
     owned: Vec<u32>,
     /// achievements they've claimed (quests.rs)
     badges: Vec<&'static str>,
+    /// a cracked account
+    offline: bool,
 }
 
 /// Whether `to`'s privacy settings (and block list) let `from` send a friend
@@ -1142,13 +1367,13 @@ async fn friend_profile(
     if target != uuid && !are_friends(&db, &uuid, &target)? {
         return Err(not_friends());
     }
-    let (username, p): (String, Presence) = db
+    let (username, p, offline): (String, Presence, bool) = db
         .query_row(
-            "SELECT username, last_seen, hidden_since, share_activity, playing, server FROM accounts WHERE uuid = ?1",
+            "SELECT username, last_seen, hidden_since, share_activity, playing, server, offline FROM accounts WHERE uuid = ?1",
             params![target],
             |r| {
                 let p = visible_presence(r.get(1)?, r.get(2)?, r.get::<_, i64>(3)? != 0, r.get(4)?, r.get(5)?);
-                Ok((r.get(0)?, p))
+                Ok((r.get(0)?, p, r.get::<_, i64>(6)? != 0))
             },
         )
         .optional()?
@@ -1173,6 +1398,7 @@ async fn friend_profile(
         accessories,
         owned,
         badges,
+        offline,
     }))
 }
 
@@ -1838,6 +2064,12 @@ async fn main() {
         .route("/v1/catalog", get(catalog))
         .route("/v1/auth/minecraft", post(auth_minecraft))
         .route("/v1/auth/dev", post(auth_dev))
+        .route("/v1/auth/offline", post(auth_offline))
+        .route(
+            "/v1/me/skin",
+            put(put_skin).delete(delete_skin).layer(axum::extract::DefaultBodyLimit::max(SKIN_MAX_BYTES + 1024)),
+        )
+        .route("/v1/skins/{name}", get(get_skin))
         .route("/v1/me", get(me))
         .route("/v1/me/redeem", post(redeem))
         .route("/v1/me/buy", post(buy))
@@ -1957,6 +2189,64 @@ mod tests {
         let b = read_referral(&db, B).unwrap();
         assert_eq!(b.referred_by.as_deref(), Some("Inviter"));
         assert!(b.referral_paid && !b.can_claim);
+    }
+
+    #[test]
+    fn offline_uuid_matches_java() {
+        assert_eq!(offline_uuid("Notch"), "b50ad385-829d-3141-a216-7e7d7539ba7f");
+    }
+
+    #[test]
+    fn offline_names_are_held_by_their_key() {
+        let db = open_db(":memory:");
+        let key = "ab".repeat(32);
+        let first = offline_sign_in(&db, "Steve_1", &key).unwrap();
+        assert_eq!(first.uuid, offline_uuid("Steve_1"));
+        assert!(is_offline(&db, &first.uuid).unwrap());
+        assert!(offline_sign_in(&db, "Steve_1", &key).is_ok(), "same device signs in again");
+        assert!(offline_sign_in(&db, "Steve_1", &"cd".repeat(32)).is_err(), "another device can't");
+        assert!(offline_sign_in(&db, "steve_1", &"cd".repeat(32)).is_err(), "nor the name in another case");
+        assert!(offline_sign_in(&db, "no", &key).is_err());
+        assert!(offline_sign_in(&db, "bad name", &key).is_err());
+        assert!(offline_sign_in(&db, "Other", "short").is_err());
+
+        issue_token(&db, A, "Premium").unwrap();
+        assert!(offline_sign_in(&db, "premium", &key).is_err(), "a Minecraft account's name");
+        assert!(!read_referral(&db, &first.uuid).unwrap().can_claim);
+        assert!(read_me(&db, &first.uuid).unwrap().offline);
+    }
+
+    #[test]
+    fn skins_are_found_by_name() {
+        let db = open_db(":memory:");
+        let me = offline_sign_in(&db, "Alex", &"ab".repeat(32)).unwrap();
+        let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+        png.extend_from_slice(&64u32.to_be_bytes());
+        png.extend_from_slice(&64u32.to_be_bytes());
+        assert_eq!(png_size(&png), Some((64, 64)));
+        assert_eq!(png_size(b"GIF89a"), None);
+        db.execute(
+            "INSERT INTO skins (uuid, png, slim, hash, updated_at) VALUES (?1, ?2, 1, 'h', 0)",
+            params![me.uuid, png],
+        )
+        .unwrap();
+        let (got, slim, _) = skin_by_name(&db, "alex").unwrap().unwrap();
+        assert_eq!((got, slim), (png.clone(), true));
+        assert!(skin_by_name(&db, &me.uuid).unwrap().is_some(), "by uuid too");
+        // a Minecraft account by that name outranks it
+        issue_token(&db, A, "Alex").unwrap();
+        assert!(skin_by_name(&db, "Alex").unwrap().is_none());
+    }
+
+    #[test]
+    fn offline_referrers_are_not_paid() {
+        let db = open_db(":memory:");
+        let inviter = offline_sign_in(&db, "Cracked", &"ab".repeat(32)).unwrap().uuid;
+        issue_token(&db, B, "Friend").unwrap();
+        db.execute("INSERT INTO referrals (referee, referrer, claimed_at) VALUES (?1, ?2, ?3)", params![B, inviter, now()]).unwrap();
+        db.execute("UPDATE accounts SET launches = 1 WHERE uuid = ?1", params![B]).unwrap();
+        assert_eq!(settle_referral(&db, B).unwrap(), REFEREE_REWARD);
+        assert_eq!(coins(&db, &inviter), 0);
     }
 
     #[test]
