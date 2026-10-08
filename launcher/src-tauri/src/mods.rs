@@ -188,13 +188,13 @@ fn toml_string(text: &str, key: &str) -> Option<String> {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_profile_mods(state: State<AppState>, profile_id: String) -> Result<Vec<ProfileModDto>, String> {
     list_profile_content(state, profile_id, "mod".into())
 }
 
 /// Installed content of one kind for a profile (mods, resource packs, shaders).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_profile_content(
     state: State<AppState>,
     profile_id: String,
@@ -395,7 +395,7 @@ pub async fn update_profile_content(
     Ok(dto_for(&off, added.filename, false))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remove_profile_mod(
     state: State<AppState>,
     profile_id: String,
@@ -404,7 +404,7 @@ pub fn remove_profile_mod(
     remove_profile_content(state, profile_id, filename, "mod".into())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remove_profile_content(
     state: State<AppState>,
     profile_id: String,
@@ -984,7 +984,7 @@ async fn install_version_file(
 /// anyway (see `install_and_launch`); this exists for users who want a
 /// visible copy they can disable from the mods list — a copy in `mods/`
 /// takes precedence over the forced one so the jar is never loaded twice.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn install_bundled_client_mod(
     app: AppHandle,
     state: State<AppState>,

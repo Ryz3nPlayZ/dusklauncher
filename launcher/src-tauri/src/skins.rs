@@ -54,7 +54,7 @@ fn png_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
     Some((w, h))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_skins(state: State<AppState>) -> Vec<SkinDto> {
     load_index(&state).skins
 }
@@ -130,7 +130,7 @@ pub fn rename_skin(state: State<AppState>, old_name: String, new_name: String) -
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_skin(state: State<AppState>, name: String) -> Result<(), String> {    let mut index = load_index(&state);
     let was_selected = index.skins.iter().any(|s| s.name == name && s.selected);
     index.skins.retain(|s| s.name != name);

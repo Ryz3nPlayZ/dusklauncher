@@ -74,7 +74,7 @@ fn locate(state: &AppState, path: &str) -> Result<(PathBuf, String), String> {
     Ok((path, key))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_screenshots(state: State<AppState>) -> Vec<Screenshot> {
     let profiles: Vec<_> = state.profiles.lock().unwrap().profiles.clone();
     let favs = load_favorites(&state.data_dir);
@@ -126,7 +126,7 @@ pub fn set_screenshot_favorite(state: State<AppState>, path: String, favorite: b
 }
 
 /// Move a screenshot to the OS trash (recoverable), never a hard delete.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_screenshot(state: State<AppState>, path: String) -> Result<(), String> {
     let (path, key) = locate(&state, &path)?;
     trash::delete(&path).map_err(|e| format!("Couldn't move it to the trash: {e}"))?;

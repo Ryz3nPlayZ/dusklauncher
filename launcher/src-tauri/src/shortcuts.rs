@@ -58,7 +58,7 @@ pub fn second_start(app: &AppHandle, argv: Vec<String>) {
 
 /// DESKTOP SHORTCUT in the instance editor: puts a shortcut on the desktop that
 /// starts this instance. Returns where it went.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_shortcut(state: State<AppState>, profile_id: String) -> Result<String, String> {
     let name = state
         .profiles

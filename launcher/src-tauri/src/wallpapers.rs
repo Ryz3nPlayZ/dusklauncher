@@ -46,7 +46,7 @@ fn default_pick_dir() -> Option<PathBuf> {
     dir.is_dir().then_some(dir)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_wallpapers(state: State<AppState>) -> Vec<WallpaperDto> {
     let dir = wallpapers_dir(&state);
     let mut out: Vec<WallpaperDto> = std::fs::read_dir(&dir)
@@ -115,7 +115,7 @@ pub async fn import_wallpaper(
     }))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remove_wallpaper(state: State<AppState>, name: String) -> Result<(), String> {
     if name.contains(['/', '\\']) || name.split('.').count() < 2 || name.starts_with('.') {
         return Err("not a wallpaper file name".into());

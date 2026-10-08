@@ -403,7 +403,7 @@ pub struct WorldDto {
 /// natives and the offline-launch record, so the next launch hashes every
 /// library and asset again, re-fetches anything damaged and re-extracts the
 /// natives. Worlds, mods and settings aren't touched.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn repair_profile(state: State<AppState>, id: String) -> Result<(), String> {
     let profile = state
         .profiles
@@ -454,7 +454,7 @@ fn dir_size(dir: &std::path::Path) -> u64 {
     total
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_worlds(state: State<AppState>, profile_id: String) -> Result<Vec<WorldDto>, String> {
     let store = state.profiles.lock().unwrap();
     let profile = store

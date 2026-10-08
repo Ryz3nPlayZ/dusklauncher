@@ -110,7 +110,10 @@ fn add_tree(
 pub async fn delete_world(state: State<'_, AppState>, profile_id: String, name: String) -> Result<(), String> {
     let (_, dir) = world_dir(&state, &profile_id, &name)?;
     ensure_closed(&state, &profile_id).await?;
-    trash::delete(&dir).map_err(|e| format!("Couldn't move it to the trash: {e}"))
+    tokio::task::spawn_blocking(move || trash::delete(&dir))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("Couldn't move it to the trash: {e}"))
 }
 
 /// What a world's `level.dat` says about it, for its row in the WORLDS tab.

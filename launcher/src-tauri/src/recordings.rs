@@ -136,7 +136,7 @@ pub async fn recording_thumb(state: State<'_, AppState>, path: String) -> Result
 }
 
 /// Move a recording to the OS trash (recoverable), never a hard delete.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_recording(state: State<AppState>, path: String) -> Result<(), String> {
     let path = resolve(&state, &path)?;
     trash::delete(&path).map_err(|e| format!("Couldn't move it to the trash: {e}"))

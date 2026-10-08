@@ -221,7 +221,7 @@ fn read_jar_entry(jar: &Path, name: &str) -> Result<Vec<u8>, String> {
 
 /// The catalog inside the bundled jar. An empty catalog (not an error) when
 /// no jar is packaged, so the wardrobe can say so instead of breaking.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_cosmetics(app: AppHandle, state: State<AppState>) -> Result<Catalog, String> {
     let Some(jar) = any_bundled_client_mod_jar(&app, &state.data_dir) else {
         return Ok(Catalog::default());
@@ -232,7 +232,7 @@ pub fn list_cosmetics(app: AppHandle, state: State<AppState>) -> Result<Catalog,
 
 /// A cosmetic texture out of the jar as a PNG data URL. `kind` is `cape` or
 /// `ears` (both under `capes/<id>/`) or `accessory` (`accessories/<id>/texture.png`).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_cosmetic_texture(
     app: AppHandle,
     state: State<AppState>,
@@ -255,7 +255,7 @@ pub fn read_cosmetic_texture(
 
 /// An accessory's Blockbench model JSON out of the jar, for the wardrobe
 /// preview (the mod bakes the very same file in-game).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_cosmetic_model(app: AppHandle, state: State<AppState>, id: u32) -> Result<Value, String> {
     let jar = any_bundled_client_mod_jar(&app, &state.data_dir)
         .ok_or("Bundled client mod is not packaged in this build yet.")?;
