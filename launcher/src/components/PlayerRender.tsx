@@ -259,6 +259,7 @@ export default function PlayerRender({
           let i = 0;
           timers.push(
             window.setInterval(() => {
+              if (pausedRef.current || document.hidden) return;
               i = (i + 1) % textures.length;
               material.map = textures[i];
               material.needsUpdate = true;
@@ -333,7 +334,8 @@ export default function PlayerRender({
         still();
         if (frames.length > 1) {
           timer = window.setInterval(() => {
-            if (viewer.disposed) return;
+            // paused, a new frame would only be uploaded and never drawn
+            if (viewer.disposed || pausedRef.current || document.hidden) return;
             i = (i + 1) % frames.length;
             viewer.loadCape(frames[i], { backEquipment });
           }, Math.max(20, capeFrameMs));

@@ -27,9 +27,9 @@ export function useLogin(onDone: () => Promise<void> | void) {
   const [auth, setAuth] = useState<AuthEvent | null>(null);
 
   useEffect(() => {
-    let off: (() => void) | undefined;
-    void listen<AuthEvent>('auth-state', (p) => setAuth(p)).then((f) => (off = f));
-    return () => off?.();
+    // unlisten through the promise, so a close before it resolves still lets go
+    const off = listen<AuthEvent>('auth-state', (p) => setAuth(p));
+    return () => void off.then((f) => f());
   }, []);
 
   /* the login in flight, so a switch can cancel it and wait for the backend
