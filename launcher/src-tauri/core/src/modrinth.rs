@@ -442,7 +442,8 @@ pub struct MrpackFile {
     #[serde(default)]
     pub env: Option<serde_json::Value>,
     pub downloads: Vec<String>,
-    #[serde(default)]
+    /// 0 when a pack leaves it out
+    #[serde(default, rename = "fileSize")]
     pub file_size: u64,
 }
 
@@ -601,7 +602,8 @@ pub fn index_downloads(index: &MrpackIndex, profile_root: &Path) -> Vec<Download
             url: f.downloads.first().cloned().unwrap_or_default(),
             dest: profile_root.join(&f.path),
             sha1: f.hashes.get("sha1").cloned(),
-            size: Some(f.file_size),
+            // a size of 0 is a pack that didn't say, not an empty file
+            size: (f.file_size > 0).then_some(f.file_size),
         })
         .filter(|d| !d.url.is_empty())
         .collect()
@@ -702,6 +704,15 @@ mod tests {
         let index = parse_mrpack_index(&mrpack(&index_with(&files), &[])).unwrap();
         let paths: Vec<_> = index.files.iter().map(|f| f.path.as_str()).collect();
         assert_eq!(paths, ["mods/a.jar", "mods/opt.jar"]);
+
+        // the format's camelCase fileSize is what a file already there is
+        // checked against; a pack without one checks the hash alone
+        let sized = r#"{"path":"mods/a.jar","hashes":{"sha1":"ab"},"downloads":["https://cdn.modrinth.com/x"],"fileSize":1234}"#;
+        let index = parse_mrpack_index(&mrpack(&index_with(&[sized, &file("mods/b.jar", "")].join(",")), &[])).unwrap();
+        let downloads = index_downloads(&index, Path::new("/i"));
+        assert_eq!(downloads[0].size, Some(1234));
+        assert_eq!(downloads[1].size, None);
+        assert!(serde_json::to_string(&index.files[0]).unwrap().contains(r#""fileSize":1234"#));
     }
 
     #[test]
