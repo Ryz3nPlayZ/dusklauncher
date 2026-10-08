@@ -78,6 +78,7 @@ pub fn run() {
             crash::reveal_crash_report,
             commands::open_data_dir,
             modpacks::import_mrpack,
+            modpacks::update_modpack,
             modpacks::export_instance,
             modpacks::install_bundled_pack,
             // versions

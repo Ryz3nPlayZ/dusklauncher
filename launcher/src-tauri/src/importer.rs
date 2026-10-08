@@ -8,7 +8,7 @@
 
 use crate::appstate::AppState;
 use crate::commands::{dto, ProfileDto};
-use fasterlauncher_core::profile::Loader;
+use fasterlauncher_core::profile::{Loader, PackLink};
 use serde::Serialize;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -36,6 +36,9 @@ pub struct ExternalInstanceDto {
     /// the other launcher's picture for it, when it has its own
     #[serde(skip)]
     pub icon: Option<PathBuf>,
+    /// the Modrinth pack it was installed from, so it can change version here
+    #[serde(skip)]
+    pub pack: Option<PackLink>,
 }
 
 /// Every instance the other launchers on this machine have.
@@ -86,6 +89,18 @@ pub async fn import_external_instance(state: State<'_, AppState>, path: String) 
     let mut profile = crate::commands::new_profile(&state, name, game_version, Loader::parse(&ext.loader), None);
     profile.loader_version = ext.loader_version.clone().filter(|_| profile.loader != Loader::Vanilla);
     profile.group = ext.group.as_deref().map(|g| g.trim().chars().take(32).collect::<String>()).filter(|g| !g.is_empty());
+    // the files list is left empty: an update reads it off the installed
+    // version's pack. The version number shows; Modrinth has it when the
+    // other launcher didn't keep it
+    profile.pack = match ext.pack.clone() {
+        Some(mut link) if link.version_number.is_empty() => {
+            if let Ok(v) = fasterlauncher_core::modrinth::version(&state.client, &link.version_id).await {
+                link.version_number = v.version_number;
+            }
+            Some(link)
+        }
+        link => link,
+    };
     let to = profile.dirs(&state.data_dir).root;
     let from = PathBuf::from(&ext.path);
     let dest = to.clone();
@@ -174,6 +189,7 @@ fn entry(source: &str, name: String, game_dir: &Path, version: (Option<String>, 
         blocked,
         group: None,
         icon: None,
+        pack: None,
     }
 }
 
@@ -201,9 +217,24 @@ fn scan_prism(root: &Path) -> Vec<ExternalInstanceDto> {
         e.icon = ini_value(&cfg, "iconKey")
             .filter(|k| !k.contains(['/', '\\']) && k != "..")
             .and_then(|k| ["png", "jpg", "jpeg", "gif", "webp"].iter().map(|x| root.join("icons").join(format!("{k}.{x}"))).find(|p| p.is_file()));
+        e.pack = prism_pack(&cfg);
         out.push(e);
     }
     out
+}
+
+/// A Prism instance installed from a Modrinth pack names it in instance.cfg
+/// (ManagedPack, ManagedPackType, ManagedPackID, ManagedPackVersionID).
+fn prism_pack(cfg: &str) -> Option<PackLink> {
+    if ini_value(cfg, "ManagedPack").as_deref() != Some("true") || ini_value(cfg, "ManagedPackType").as_deref() != Some("modrinth") {
+        return None;
+    }
+    Some(PackLink {
+        project_id: ini_value(cfg, "ManagedPackID").filter(|v| !v.is_empty())?,
+        version_id: ini_value(cfg, "ManagedPackVersionID").filter(|v| !v.is_empty())?,
+        version_number: ini_value(cfg, "ManagedPackVersionName").unwrap_or_default(),
+        files: Vec::new(),
+    })
 }
 
 /// instgroups.json: `{"groups": {"<group>": {"instances": ["<folder>", …]}}}`,
@@ -319,6 +350,8 @@ fn scan_modrinth(root: &Path) -> Vec<ExternalInstanceDto> {
         })
         .collect();
     let icons = extra("SELECT path, icon_path FROM profiles");
+    let projects = extra("SELECT path, linked_project_id FROM profiles");
+    let versions = extra("SELECT path, linked_version_id FROM profiles");
     rows.into_iter()
         .filter_map(|(path, name, game, loader, loader_version)| {
             let dir = root.join("profiles").join(&path);
@@ -327,6 +360,15 @@ fn scan_modrinth(root: &Path) -> Vec<ExternalInstanceDto> {
                 let mut e = entry("Modrinth App", name, &dir, (Some(game), loader, loader_version.filter(|v| !v.is_empty())));
                 e.group = groups.get(&path).cloned();
                 e.icon = icons.get(&path).map(PathBuf::from).filter(|p| p.is_file());
+                e.pack = match (projects.get(&path), versions.get(&path)) {
+                    (Some(project), Some(version)) if !project.is_empty() && !version.is_empty() => Some(PackLink {
+                        project_id: project.clone(),
+                        version_id: version.clone(),
+                        version_number: String::new(),
+                        files: Vec::new(),
+                    }),
+                    _ => None,
+                };
                 e
             })
         })
@@ -461,6 +503,16 @@ fn copy_entry(from: &Path, to: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_prism_modrinth_pack_keeps_its_link() {
+        let cfg = "[General]\nManagedPack=true\nManagedPackID=1KVo5zza\nManagedPackName=Fabulously Optimized\nManagedPackType=modrinth\nManagedPackVersionID=abc123\nManagedPackVersionName=6.4.0\nname=FO\n";
+        let link = prism_pack(cfg).unwrap();
+        assert_eq!((link.project_id.as_str(), link.version_id.as_str(), link.version_number.as_str()), ("1KVo5zza", "abc123", "6.4.0"));
+        assert!(prism_pack(&cfg.replace("=modrinth", "=flame")).is_none());
+        assert!(prism_pack(&cfg.replace("ManagedPack=true", "ManagedPack=false")).is_none());
+        assert!(prism_pack("name=plain\n").is_none());
+    }
 
     #[test]
     fn reads_version_ids() {

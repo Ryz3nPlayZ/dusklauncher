@@ -480,6 +480,7 @@ mod tests {
             java_path: None,
             group: None,
             icon: None,
+            pack: None,
         }
     }
 

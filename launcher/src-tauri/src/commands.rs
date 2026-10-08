@@ -38,6 +38,16 @@ pub struct ProfileDto {
     pub group: Option<String>,
     /// absolute path of the instance's own picture; null = the stock banner
     pub icon: Option<String>,
+    /// the Modrinth pack it was installed from; null = not from one
+    pub pack: Option<PackDto>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PackDto {
+    pub project_id: String,
+    pub version_id: String,
+    pub version_number: String,
 }
 
 pub fn dto(p: &Profile, data_dir: &std::path::Path) -> ProfileDto {
@@ -59,6 +69,11 @@ pub fn dto(p: &Profile, data_dir: &std::path::Path) -> ProfileDto {
         java_path: p.java_path.clone(),
         group: p.group.clone(),
         icon: crate::icons::icon_path(p, data_dir).map(|f| f.display().to_string()),
+        pack: p.pack.as_ref().map(|l| PackDto {
+            project_id: l.project_id.clone(),
+            version_id: l.version_id.clone(),
+            version_number: l.version_number.clone(),
+        }),
     }
 }
 
@@ -253,6 +268,7 @@ pub(crate) fn new_profile(state: &AppState, name: String, game_version: String, 
         java_path: None,
         group: None,
         icon: None,
+        pack: None,
     }
 }
 

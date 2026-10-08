@@ -535,8 +535,24 @@ pub fn parse_mrpack_index(bytes: &[u8]) -> Result<MrpackIndex> {
     Ok(index)
 }
 
+/// The paths an .mrpack's `overrides/` and `client-overrides/` hold,
+/// relative and `/`-separated, without writing anything.
+pub fn override_paths(bytes: &[u8]) -> Vec<String> {
+    let Ok(zip) = zip::ZipArchive::new(std::io::Cursor::new(bytes)) else { return Vec::new() };
+    let mut out: Vec<String> = Vec::new();
+    for name in zip.file_names() {
+        let rel = name.strip_prefix("overrides/").or_else(|| name.strip_prefix("client-overrides/"));
+        if let Some(rel) = rel.filter(|r| !r.is_empty() && !r.ends_with('/') && inside(r)) {
+            if !out.iter().any(|o| o == rel) {
+                out.push(rel.to_string());
+            }
+        }
+    }
+    out
+}
+
 /// A plain relative path: no root, drive, `..` or `.` anywhere in it.
-fn inside(path: &str) -> bool {
+pub fn inside(path: &str) -> bool {
     !path.is_empty()
         && !path.contains('\\')
         && Path::new(path).components().all(|c| matches!(c, std::path::Component::Normal(_)))
@@ -699,6 +715,7 @@ mod tests {
         assert_eq!(written, ["config/a.txt"]);
         assert_eq!(std::fs::read_to_string(root.join("config/a.txt")).unwrap(), "client");
         assert!(!root.join("options.txt").exists());
+        assert_eq!(override_paths(&pack), ["config/a.txt", "options.txt"]);
         let _ = std::fs::remove_dir_all(&root);
     }
 

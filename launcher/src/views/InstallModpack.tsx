@@ -29,6 +29,8 @@ export default function InstallModpack({
   action = 'INSTALL',
   defaultName = target.title.toUpperCase(),
   note,
+  installed,
+  busyLabel = 'INSTALLING…',
 }: {
   target: InstallTarget;
   onClose: () => void;
@@ -43,6 +45,10 @@ export default function InstallModpack({
   /** one line under the name field — what else the instance ships with;
    *  a function sees the picked version */
   note?: string | ((chosen: ProjectVersion | null) => string);
+  /** CHANGE PACK VERSION: the version the instance has now — marked in the
+   *  list and not offered — and the name field is the instance's, fixed */
+  installed?: string;
+  busyLabel?: string;
 }) {
   const [name, setName] = useState(defaultName);
   const [versions, setVersions] = useState<ProjectVersion[] | null>(null);
@@ -62,13 +68,13 @@ export default function InstallModpack({
            the newest version, unfiltered */
         const pre = target.versionId ? list.find((v) => v.id === target.versionId) : undefined;
         if (pre) setGameFilter(pre.gameVersions[0] ?? '');
-        setPicked((cur) => cur ?? list[0]?.id ?? null);
+        setPicked((cur) => cur ?? list.find((v) => v.id !== installed)?.id ?? null);
       })
       .catch((e) => !cancelled && setErr(String(e)));
     return () => {
       cancelled = true;
     };
-  }, [target.id, target.versionId]);
+  }, [target.id, target.versionId, installed]);
 
   const gameOptions = useMemo(() => {
     const seen: string[] = [];
@@ -120,15 +126,19 @@ export default function InstallModpack({
             <TT size={13} tone="dim">
               INSTANCE NAME
             </TT>
-            <PxBox family="panel" height="md">
-              <input
-                className="input"
-                value={name}
-                placeholder={defaultName}
-                disabled={busy}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </PxBox>
+            {installed ? (
+              <TT size={20}>{defaultName}</TT>
+            ) : (
+              <PxBox family="panel" height="md">
+                <input
+                  className="input"
+                  value={name}
+                  placeholder={defaultName}
+                  disabled={busy}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </PxBox>
+            )}
             {note && <span className="meta install__note">{typeof note === 'function' ? note(chosen) : note}</span>}
           </span>
         </div>
@@ -147,7 +157,7 @@ export default function InstallModpack({
                 const g = e.target.value;
                 setGameFilter(g);
                 /* keep the pick visible: the newest version for that game */
-                const first = (versions ?? []).find((v) => !g || v.gameVersions.includes(g));
+                const first = (versions ?? []).find((v) => v.id !== installed && (!g || v.gameVersions.includes(g)));
                 if (!chosen || (g && !chosen.gameVersions.includes(g))) setPicked(first?.id ?? null);
               }}
             >
@@ -190,6 +200,11 @@ export default function InstallModpack({
                   <span className="browse__name">
                     <TT size={16}>{v.name || v.versionNumber}</TT>
                     {v.name && v.name !== v.versionNumber && <span className="meta">{v.versionNumber}</span>}
+                    {v.id === installed && (
+                      <TT size={11} tone="green">
+                        INSTALLED
+                      </TT>
+                    )}
                   </span>
                   <span className="meta">
                     {[
@@ -231,11 +246,11 @@ export default function InstallModpack({
             family="moss"
             height="md"
             className="install__btn"
-            disabled={busy || !chosen || !name.trim()}
+            disabled={busy || !chosen || !name.trim() || chosen.id === installed}
             onClick={() => void run()}
           >
             <TT size={20} tone="moss">
-              {busy ? 'INSTALLING…' : action}
+              {busy ? busyLabel : action}
             </TT>
           </PxButton>
         </div>

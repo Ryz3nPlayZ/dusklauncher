@@ -37,6 +37,15 @@ export interface Profile {
   group: string | null;
   /** absolute path of the instance's own picture; null = the stock banner */
   icon: string | null;
+  /** the Modrinth pack it was installed from; null = not from one */
+  pack: PackLink | null;
+}
+
+/** mirrors commands.rs PackDto */
+export interface PackLink {
+  projectId: string;
+  versionId: string;
+  versionNumber: string;
 }
 
 /** mirrors commands.rs ProfilePatch — every field optional, only set ones apply */
@@ -876,6 +885,7 @@ const fixtures: Record<string, unknown> = {
       javaPath: null,
       group: null,
       icon: null,
+      pack: { projectId: 'm-fabu', versionId: 'v-3', versionNumber: '7.1.3' },
     },
     {
       id: 'p-vanilla',
@@ -895,6 +905,7 @@ const fixtures: Record<string, unknown> = {
       javaPath: null,
       group: null,
       icon: null,
+      pack: null,
     },
   ] satisfies Profile[],
   get_current_account: null,
@@ -1613,6 +1624,15 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     w.levelName = name;
     return undefined as T;
   }
+  if (cmd === 'update_modpack') {
+    const p = (fixtures.list_profiles as Profile[]).find((x) => x.id === args?.profileId);
+    if (!p?.pack) throw new Error("This instance didn't come from a Modrinth pack.");
+    const v = (fixtures.list_modpack_versions as ProjectVersion[]).find((x) => x.id === args?.versionId);
+    if (!v) throw new Error('version not found');
+    p.gameVersion = v.gameVersions[0] ?? p.gameVersion;
+    p.pack = { ...p.pack, versionId: v.id, versionNumber: v.versionNumber };
+    return structuredClone(p) as T;
+  }
   if (cmd === 'set_profile_icon' || cmd === 'clear_profile_icon') {
     const p = (fixtures.list_profiles as Profile[]).find((x) => x.id === args?.profileId);
     if (!p) throw new Error('profile not found');
@@ -1977,6 +1997,8 @@ export const api = {
   installPerformanceMods: (profileId: string) => invoke<number>('install_performance_mods', { profileId }),
   /** native picker → installs a .mrpack as a new instance (null if cancelled) */
   importMrpack: () => invoke<Profile | null>('import_mrpack'),
+  /** move a pack instance to another of its pack's versions */
+  updateModpack: (profileId: string, versionId: string) => invoke<Profile>('update_modpack', { profileId, versionId }),
   /** instances Prism, CurseForge, the Modrinth App and Mojang's launcher have here */
   scanExternalInstances: () => invoke<ExternalInstance[]>('scan_external_instances'),
   /** copy one of those in as a new instance (mods, config, worlds, packs, options) */

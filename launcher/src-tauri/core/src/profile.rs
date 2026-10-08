@@ -109,6 +109,22 @@ pub struct Profile {
     /// None = the stock banner
     #[serde(default)]
     pub icon: Option<String>,
+    /// the Modrinth pack it was installed from, so it can move to another of
+    /// the pack's versions; None = not from a pack Modrinth knows
+    #[serde(default)]
+    pub pack: Option<PackLink>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PackLink {
+    pub project_id: String,
+    pub version_id: String,
+    pub version_number: String,
+    /// what the pack put in the instance — its files and overrides, relative
+    /// and `/`-separated — so a version change takes out what it no longer
+    /// ships and nothing the player added
+    #[serde(default)]
+    pub files: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

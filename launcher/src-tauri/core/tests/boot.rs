@@ -84,6 +84,7 @@ async fn boot_to_menu() {
         java_path: None,
         group: None,
         icon: None,
+        pack: None,
         resolution: (1280, 720),
         mod_filenames: vec![],
         server: None,

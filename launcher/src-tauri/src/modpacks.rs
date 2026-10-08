@@ -3,7 +3,7 @@
 use crate::appstate::AppState;
 use crate::commands::{dto, ProfileDto};
 use fasterlauncher_core::modrinth as mr;
-use fasterlauncher_core::profile::{default_jvm_args, Loader, Profile};
+use fasterlauncher_core::profile::{default_jvm_args, Loader, PackLink, Profile};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -364,19 +364,8 @@ async fn install_version_inner(
     let bytes = mr::download_mrpack(&state.client, version)
         .await
         .map_err(|e| e.to_string())?;
-
-    // required dependency mods (fabric-api and friends)
-    let mut dep_versions = Vec::new();
-    for dep in &version.dependencies {
-        if dep.dependency_type == "required" {
-            if let Some(vid) = &dep.version_id {
-                if let Ok(v) = mr::version(&state.client, vid).await {
-                    dep_versions.push(v);
-                }
-            }
-        }
-    }
-    let installed = install_mrpack_bytes(app, state.clone(), &bytes, &dep_versions, name, dusk).await?;
+    let dep_versions = required_deps(&state, version).await;
+    let installed = install_mrpack_bytes(app, state.clone(), &bytes, &dep_versions, name, dusk, link_to(version)).await?;
     // the pack's Modrinth icon becomes the instance's picture
     let icon = match mr::project(&state.client, &version.project_id).await {
         Ok(project) => project.icon_url,
@@ -388,8 +377,37 @@ async fn install_version_inner(
     Ok(store.profiles.iter().find(|p| p.id == installed.id).map(|p| dto(p, &state.data_dir)).unwrap_or(installed))
 }
 
+/// The mods a pack version names as required dependencies (fabric-api and
+/// friends) — rare, as packs list their mods in the index.
+async fn required_deps(state: &AppState, version: &mr::Version) -> Vec<mr::Version> {
+    let mut out = Vec::new();
+    for dep in &version.dependencies {
+        if dep.dependency_type == "required" {
+            if let Some(vid) = &dep.version_id {
+                if let Ok(v) = mr::version(&state.client, vid).await {
+                    out.push(v);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// What an instance installed from `version` remembers of it; the files are
+/// filled in once they're in place.
+fn link_to(version: &mr::Version) -> Option<PackLink> {
+    (!version.project_id.is_empty()).then(|| PackLink {
+        project_id: version.project_id.clone(),
+        version_id: version.id.clone(),
+        version_number: version.version_number.clone(),
+        files: Vec::new(),
+    })
+}
+
 /// Import a modpack from a local `.mrpack` (native picker). Same install as
-/// a Modrinth pack — only the bytes come from disk instead of the API.
+/// a Modrinth pack — only the bytes come from disk instead of the API. A
+/// file Modrinth recognises (one downloaded from it) links the instance to
+/// its pack, so it can update like one installed here.
 /// Resolves `None` when the picker is cancelled.
 #[tauri::command]
 pub async fn import_mrpack(
@@ -404,7 +422,12 @@ pub async fn import_mrpack(
     let Some(file) = picked else { return Ok(None) };
     let path = file.into_path().map_err(|e| e.to_string())?;
     let bytes = tokio::fs::read(&path).await.map_err(|e| format!("could not read {}: {e}", path.display()))?;
-    install_mrpack_bytes(app, state, &bytes, &[], None, false).await.map(Some)
+    let sha1 = fasterlauncher_core::download::sha1_hex(&bytes);
+    let link = match mr::version_files(&state.client, std::slice::from_ref(&sha1)).await {
+        Ok(found) => found.get(&sha1).and_then(link_to),
+        Err(_) => None,
+    };
+    install_mrpack_bytes(app, state, &bytes, &[], None, false, link).await.map(Some)
 }
 
 /// Where a pack shipped inside the app bundle lives
@@ -436,7 +459,7 @@ pub async fn install_bundled_pack(
     let path = bundled_pack_path(&app, &state.data_dir, &pack)
         .ok_or_else(|| format!("bundled pack \"{pack}\" is not packaged in this build"))?;
     let bytes = tokio::fs::read(&path).await.map_err(|e| e.to_string())?;
-    install_mrpack_bytes(app, state, &bytes, &[], None, pack == "dusk-essentials").await
+    install_mrpack_bytes(app, state, &bytes, &[], None, pack == "dusk-essentials", None).await
 }
 
 /// Video settings the launcher's own instance starts with, tuned like a
@@ -497,6 +520,7 @@ async fn install_mrpack_bytes(
     dep_versions: &[mr::Version],
     name: Option<String>,
     dusk: bool,
+    link: Option<PackLink>,
 ) -> Result<ProfileDto, String> {
     let index = mr::parse_mrpack_index(bytes).map_err(|e| e.to_string())?;
 
@@ -504,16 +528,7 @@ async fn install_mrpack_bytes(
         .minecraft_version()
         .cloned()
         .ok_or("modpack does not declare a minecraft version")?;
-    let (loader, loader_version) = match index.loader() {
-        Some(("fabric", v)) => (Loader::Fabric, Some(v.clone())),
-        Some(("neoforge", v)) => (Loader::NeoForge, Some(v.clone())),
-        // a Forge/Quilt pack's mods would sit in mods/ and never load
-        Some((other, _)) => {
-            let name = if other == "forge" { "Forge" } else { "Quilt" };
-            return Err(format!("This modpack needs {name}, which Dusk can't run yet (Fabric and NeoForge only)."));
-        }
-        None => (Loader::Vanilla, None),
-    };
+    let (loader, loader_version) = pack_loader(&index)?;
 
     // unique name from what the user typed, else the pack title
     let base_name = name
@@ -566,6 +581,7 @@ async fn install_mrpack_bytes(
         java_path: None,
         group: None,
         icon: None,
+        pack: None,
     };
     let dirs = profile.dirs(&state.data_dir);
     {
@@ -577,10 +593,14 @@ async fn install_mrpack_bytes(
     // overrides (configs, shaderpacks, resourcepacks — and, for a pack
     // exported from here or Prism, the mods themselves)
     std::fs::create_dir_all(&dirs.root).map_err(|e| e.to_string())?;
-    {
+    let overrides = {
         let (pack, root) = (bytes.to_vec(), dirs.root.clone());
-        let _ = tokio::task::spawn_blocking(move || mr::extract_overrides(&pack, &root, |_| true)).await;
-    }
+        tokio::task::spawn_blocking(move || mr::extract_overrides(&pack, &root, |_| true))
+            .await
+            .ok()
+            .and_then(Result::ok)
+            .unwrap_or_default()
+    };
     if dusk {
         seed_dusk_defaults(&dirs.root);
     }
@@ -594,6 +614,7 @@ async fn install_mrpack_bytes(
                 }
             }
         }
+        p.pack = link.map(|l| PackLink { files: pack_files(&index, dep_versions, overrides), ..l });
     });
 
     let mut downloads = mr::index_downloads(&index, &dirs.root);
@@ -620,6 +641,160 @@ async fn install_mrpack_bytes(
 
     let stored = state.patch_profile(&profile.id, |_| {}).unwrap_or(profile);
     Ok(dto(&stored, &state.data_dir))
+}
+
+/// The loader a pack runs on, or why Dusk can't run it.
+fn pack_loader(index: &mr::MrpackIndex) -> Result<(Loader, Option<String>), String> {
+    match index.loader() {
+        Some(("fabric", v)) => Ok((Loader::Fabric, Some(v.clone()))),
+        Some(("neoforge", v)) => Ok((Loader::NeoForge, Some(v.clone()))),
+        // a Forge/Quilt pack's mods would sit in mods/ and never load
+        Some((other, _)) => {
+            let name = if other == "forge" { "Forge" } else { "Quilt" };
+            Err(format!("This modpack needs {name}, which Dusk can't run yet (Fabric and NeoForge only)."))
+        }
+        None => Ok((Loader::Vanilla, None)),
+    }
+}
+
+/// Everything a pack version put in the instance: its index files, its
+/// dependency mods and the overrides it wrote.
+fn pack_files(index: &mr::MrpackIndex, deps: &[mr::Version], overrides: Vec<String>) -> Vec<String> {
+    let mut files: Vec<String> = index.files.iter().map(|f| f.path.clone()).collect();
+    for v in deps {
+        if let Some(f) = v.files.iter().find(|f| f.primary).or_else(|| v.files.first()) {
+            files.push(format!("mods/{}", f.filename));
+        }
+    }
+    for o in overrides {
+        if !files.contains(&o) {
+            files.push(o);
+        }
+    }
+    files
+}
+
+/// Files a version change never overwrites or removes, even when the pack
+/// ships them: the player's own settings and server list.
+const PLAYER_FILES: &[&str] = &["options.txt", "servers.dat", "servers.dat_old"];
+
+/// What a version change does on disk: out with the files the old version
+/// shipped and the new one doesn't, then the new overrides — over the old
+/// version's own files, never over one the player made or turned off.
+/// Returns the overrides written.
+fn swap_pack_files(root: &Path, old: &[String], new: &[String], bytes: &[u8]) -> Vec<String> {
+    for rel in old {
+        if new.contains(rel) || PLAYER_FILES.contains(&rel.as_str()) || !mr::inside(rel) {
+            continue;
+        }
+        let _ = std::fs::remove_file(root.join(rel));
+        let _ = std::fs::remove_file(root.join(format!("{rel}.disabled")));
+    }
+    mr::extract_overrides(bytes, root, |rel| {
+        !PLAYER_FILES.contains(&rel)
+            && !root.join(format!("{rel}.disabled")).exists()
+            && (old.iter().any(|o| o == rel) || !root.join(rel).exists())
+    })
+    .unwrap_or_default()
+}
+
+/// Move an instance installed from a Modrinth pack to another of the pack's
+/// versions, like the Modrinth App's and CurseForge's pack updates: the
+/// game, loader and pack files follow the version; worlds, settings, and
+/// mods and files the player added stay. A pack mod the player turned off
+/// stays off when the new version keeps it.
+#[tauri::command]
+pub async fn update_modpack(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    profile_id: String,
+    version_id: String,
+) -> Result<ProfileDto, String> {
+    crate::worlds::ensure_closed(&state, &profile_id).await?;
+    let (link, root) = {
+        let store = state.profiles.lock().unwrap();
+        let p = store.profiles.iter().find(|p| p.id == profile_id).ok_or("profile not found")?;
+        let link = p.pack.clone().ok_or("This instance didn't come from a Modrinth pack.")?;
+        (link, p.dirs(&state.data_dir).root)
+    };
+    let version = mr::version(&state.client, &version_id).await.map_err(|e| e.to_string())?;
+    if version.project_id != link.project_id {
+        return Err("That version belongs to another pack.".into());
+    }
+    let bytes = mr::download_mrpack(&state.client, &version).await.map_err(|e| e.to_string())?;
+    let index = mr::parse_mrpack_index(&bytes).map_err(|e| e.to_string())?;
+    let mc_version = index.minecraft_version().cloned().ok_or("modpack does not declare a minecraft version")?;
+    let (loader, loader_version) = pack_loader(&index)?;
+    let deps = required_deps(&state, &version).await;
+
+    // what the installed version shipped; a link without the list (one
+    // brought over from another launcher) reads it off that version's pack
+    let old = if link.files.is_empty() {
+        let old_pack = match mr::version(&state.client, &link.version_id).await {
+            Ok(v) => mr::download_mrpack(&state.client, &v).await.ok(),
+            Err(_) => None,
+        };
+        old_pack
+            .and_then(|b| Some(pack_files(&mr::parse_mrpack_index(&b).ok()?, &[], mr::override_paths(&b))))
+            .unwrap_or_default()
+    } else {
+        link.files.clone()
+    };
+    let new_listed = pack_files(&index, &deps, Vec::new());
+
+    let overrides = {
+        let (root, old, new, bytes) = (root.clone(), old.clone(), new_listed.clone(), bytes.clone());
+        tokio::task::spawn_blocking(move || swap_pack_files(&root, &old, &new, &bytes))
+            .await
+            .map_err(|e| e.to_string())?
+    };
+
+    // the new version's files; one the player turned off stays off
+    let mut downloads = mr::index_downloads(&index, &root);
+    downloads.extend(mr::dependency_downloads(&deps, &root));
+    downloads.retain(|d| !Path::new(&format!("{}.disabled", d.dest.display())).exists());
+    let total = downloads.len() as u64;
+    let (app2, id2) = (app.clone(), profile_id.clone());
+    mr::download_files(&state.client, downloads, move |done, _| {
+        let _ = app2.emit(
+            "launch-progress",
+            crate::commands::ProgressPayload {
+                profile_id: id2.clone(),
+                stage: "mods".into(),
+                done,
+                total,
+                done_bytes: 0,
+                total_bytes: 0,
+            },
+        );
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let mods = root.join("mods");
+    let updated = state
+        .patch_profile(&profile_id, |p| {
+            p.game_version = mc_version;
+            p.loader = loader;
+            p.loader_version = loader_version;
+            p.mod_filenames = std::fs::read_dir(&mods)
+                .map(|rd| {
+                    rd.flatten()
+                        .map(|e| e.file_name().to_string_lossy().into_owned())
+                        .filter(|n| n.ends_with(".jar"))
+                        .collect()
+                })
+                .unwrap_or_default();
+            p.pack = Some(PackLink {
+                project_id: version.project_id.clone(),
+                version_id: version.id.clone(),
+                version_number: version.version_number.clone(),
+                files: pack_files(&index, &deps, overrides),
+            });
+        })
+        .ok_or("profile not found")?;
+    tracing::info!(profile = %profile_id, version = %version.version_number, "modpack version changed");
+    Ok(dto(&updated, &state.data_dir))
 }
 
 // ── export ─────────────────────────────────────────────────────────────────
@@ -750,6 +925,58 @@ fn now_millis() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_version_change_swaps_the_packs_files_and_leaves_the_players() {
+        let root = std::env::temp_dir().join(format!("dusk-swap-{}", now_millis()));
+        let write = |rel: &str, text: &str| {
+            let f = root.join(rel);
+            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+            std::fs::write(f, text).unwrap();
+        };
+        // what version 1 put there, and what the player did since
+        write("mods/old.jar", "old");
+        write("mods/kept.jar", "kept");
+        write("mods/gone.jar.disabled", "turned off, then dropped by the pack");
+        write("config/pack.toml", "v1");
+        write("config/theirs.toml", "player's");
+        write("options.txt", "player's options");
+        write("mods/mine.jar", "player's mod");
+        write("config/extra.toml.disabled", "player turned this off");
+        let old: Vec<String> = ["mods/old.jar", "mods/kept.jar", "mods/gone.jar", "config/pack.toml", "options.txt"]
+            .map(String::from)
+            .to_vec();
+
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        for (name, text) in [
+            ("overrides/config/pack.toml", "v2"),
+            ("overrides/config/theirs.toml", "pack's"),
+            ("overrides/config/new.toml", "new"),
+            ("overrides/config/extra.toml", "pack's extra"),
+            ("overrides/options.txt", "pack's options"),
+        ] {
+            zip.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+            zip.write_all(text.as_bytes()).unwrap();
+        }
+        let bytes = zip.finish().unwrap().into_inner();
+        let new: Vec<String> = ["mods/kept.jar"].map(String::from).to_vec();
+
+        let written = swap_pack_files(&root, &old, &new, &bytes);
+        let read = |rel: &str| std::fs::read_to_string(root.join(rel)).ok();
+        // dropped by the new version, on or off
+        assert!(read("mods/old.jar").is_none() && read("mods/gone.jar.disabled").is_none());
+        assert_eq!(read("mods/kept.jar").as_deref(), Some("kept"));
+        // the pack's own file follows it; a new one arrives
+        assert_eq!(read("config/pack.toml").as_deref(), Some("v2"));
+        assert_eq!(read("config/new.toml").as_deref(), Some("new"));
+        // the player's stay as they were
+        assert_eq!(read("config/theirs.toml").as_deref(), Some("player's"));
+        assert_eq!(read("options.txt").as_deref(), Some("player's options"));
+        assert_eq!(read("mods/mine.jar").as_deref(), Some("player's mod"));
+        assert!(read("config/extra.toml").is_none());
+        written.iter().for_each(|w| assert!(["config/pack.toml", "config/new.toml"].contains(&w.as_str()), "{w}"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn dusk_defaults_merge_into_the_packs_config_and_keep_player_options() {

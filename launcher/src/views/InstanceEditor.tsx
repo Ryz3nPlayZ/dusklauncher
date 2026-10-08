@@ -6,6 +6,7 @@ import { NavCell, PxBox, PxButton, TT } from '../components/px/Px';
 import InstanceArt from '../components/InstanceArt';
 import BrowseProjects from './Browse';
 import Project from './Project';
+import InstallModpack from './InstallModpack';
 import {
   ago,
   api,
@@ -358,10 +359,26 @@ function SettingsTab({
   const [versions, setVersions] = useState<Version[]>([]);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  /* CHANGE VERSION… on a pack instance: the pack's name and icon, once read */
+  const [packInfo, setPackInfo] = useState<{ title: string; iconUrl: string | null } | null>(null);
+  const [changing, setChanging] = useState(false);
 
   useEffect(() => {
     void api.listVersions().then(setVersions).catch(() => setVersions([]));
   }, []);
+
+  useEffect(() => {
+    setPackInfo(null);
+    if (!profile.pack) return;
+    let cancelled = false;
+    api
+      .getProject(profile.pack.projectId)
+      .then((d) => !cancelled && setPackInfo({ title: d.title, iconUrl: d.iconUrl }))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [profile.pack?.projectId]);
 
   // the form is a copy of the profile; a save or an outside refresh resets it
   useEffect(() => {
@@ -516,6 +533,34 @@ function SettingsTab({
           </datalist>
         </PxBox>
       </Row>
+      {profile.pack && (
+        <Row
+          label="MODPACK"
+          hint={`${packInfo?.title ?? 'A Modrinth pack'}, version ${profile.pack.versionNumber || 'unknown'}. Changing it swaps the pack's files; your worlds, settings and the mods you added stay.`}
+        >
+          <PxButton family="grey" height="md" disabled={busy} onClick={() => setChanging(true)}>
+            <TT size={16}>CHANGE VERSION…</TT>
+          </PxButton>
+        </Row>
+      )}
+      {changing && profile.pack && (
+        <InstallModpack
+          target={{ id: profile.pack.projectId, title: packInfo?.title ?? profile.name, iconUrl: packInfo?.iconUrl ?? null }}
+          heading="CHANGE PACK VERSION"
+          action="UPDATE"
+          busyLabel="UPDATING…"
+          defaultName={profile.name}
+          installed={profile.pack.versionId}
+          note="The pack's files are swapped; your worlds, settings and the mods you added stay."
+          onClose={() => setChanging(false)}
+          onInstall={async (versionId) => {
+            await api.updateModpack(profile.id, versionId);
+            await onSaved();
+            setChanging(false);
+            setNote('Pack version changed.');
+          }}
+        />
+      )}
       <Row label="PICTURE" hint="Shown on the instance's card. A PNG, JPEG, GIF or WebP, up to 8 MB.">
         <PxButton family="grey" height="md" disabled={busy} onClick={() => void picture(false)}>
           <TT size={16}>CHOOSE…</TT>
