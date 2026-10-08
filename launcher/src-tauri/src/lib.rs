@@ -123,6 +123,7 @@ pub fn run() {
             servers::ping_server,
             servers::add_server,
             servers::remove_server,
+            servers::edit_server,
             worlds::backup_world,
             worlds::delete_world,
             worlds::rename_world,

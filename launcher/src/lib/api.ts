@@ -1274,6 +1274,7 @@ const sideEffects = new Set([
   'upload_log',
   'add_server',
   'remove_server',
+  'edit_server',
   'reveal_crash_report',
   'install_modpack',
   'install_modpack_version',
@@ -2050,6 +2051,9 @@ export const api = {
     invoke<SavedServer[]>('add_server', { profileId, name, address }),
   removeServer: (profileId: string, name: string, address: string) =>
     invoke<SavedServer[]>('remove_server', { profileId, name, address }),
+  /** Renames the saved `name`/`address` row in place; its icon and other settings stay. */
+  editServer: (profileId: string, name: string, address: string, newName: string, newAddress: string) =>
+    invoke<SavedServer[]>('edit_server', { profileId, name, address, newName, newAddress }),
   /** MOTD, players and ping, resolving SRV records like the game does */
   pingServer: (address: string) => invoke<ServerStatus>('ping_server', { address }),
   /** the worlds and servers played most recently, across every instance */

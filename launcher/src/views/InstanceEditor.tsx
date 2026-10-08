@@ -1342,7 +1342,8 @@ function WorldsTab({
   /* the RENAME dialog, open when set */
   const [renaming, setRenaming] = useState<{ world: World; name: string } | null>(null);
   /* the ADD SERVER form, open when set */
-  const [adding, setAdding] = useState<{ name: string; address: string } | null>(null);
+  /** the ADD SERVER form, or EDIT SERVER when `editing` is the row being changed */
+  const [adding, setAdding] = useState<{ name: string; address: string; editing?: SavedServer } | null>(null);
   const [dropping, setDropping] = useState<SavedServer | null>(null);
   /* files dragged over the window */
   const [dragOver, setDragOver] = useState(false);
@@ -1439,6 +1440,25 @@ function WorldsTab({
           .pingServer(added.address)
           .then((st) => setStatus((m) => ({ ...m, [added.address]: st })))
           .catch(() => setStatus((m) => ({ ...m, [added.address]: 'down' })));
+      }
+    } catch (e) {
+      setAdding(null);
+      setNote(String(e));
+    }
+  };
+
+  const editServer = async (sv: SavedServer, name: string, address: string) => {
+    setNote(null);
+    try {
+      const list = await api.editServer(profile.id, sv.name, sv.address, name, address);
+      setAdding(null);
+      setServers(list);
+      const to = address.trim();
+      if (to !== sv.address) {
+        void api
+          .pingServer(to)
+          .then((st) => setStatus((m) => ({ ...m, [to]: st })))
+          .catch(() => setStatus((m) => ({ ...m, [to]: 'down' })));
       }
     } catch (e) {
       setAdding(null);
@@ -1588,6 +1608,15 @@ function WorldsTab({
                 )}
               </span>
               <span className="editor__actions worlds__actions">
+                <PxButton
+                  family="grey"
+                  height="sm"
+                  disabled={busy}
+                  title={busy ? 'Close the game first' : 'Change its name or address'}
+                  onClick={() => setAdding({ name: sv.name, address: sv.address, editing: sv })}
+                >
+                  <TT size={16}>EDIT</TT>
+                </PxButton>
                 <PxButton
                   family="red"
                   height="sm"
@@ -1780,10 +1809,11 @@ function WorldsTab({
               className="worlds__form"
               onSubmit={(e) => {
                 e.preventDefault();
-                void addServer(adding.name, adding.address);
+                if (adding.editing) void editServer(adding.editing, adding.name, adding.address);
+                else void addServer(adding.name, adding.address);
               }}
             >
-              <TT size={22}>ADD SERVER</TT>
+              <TT size={22}>{adding.editing ? 'EDIT SERVER' : 'ADD SERVER'}</TT>
               <div className="modal__row">
                 <span className="modal__label">
                   <TT size={16} tone="sub">
@@ -1823,7 +1853,7 @@ function WorldsTab({
                 </PxButton>
                 <PxButton family="accent" height="md" type="submit" disabled={adding.address.trim() === ''}>
                   <TT size={20} tone="accent">
-                    ADD
+                    {adding.editing ? 'SAVE' : 'ADD'}
                   </TT>
                 </PxButton>
               </div>

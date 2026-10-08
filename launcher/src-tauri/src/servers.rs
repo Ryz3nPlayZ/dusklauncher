@@ -329,6 +329,28 @@ fn new_entry(name: &str, address: &str) -> Vec<u8> {
     out
 }
 
+/// `raw` with its `name` and `ip` replaced and every other field (the cached
+/// icon, the resource-pack choice, …) copied through, the way the game's Edit
+/// Server screen saves.
+fn retag_entry(raw: &[u8], name: &str, address: &str) -> Option<Vec<u8>> {
+    let mut out = new_entry(name, address);
+    out.pop();
+    let mut r = Nbt { b: raw, i: 0 };
+    loop {
+        let start = r.i;
+        let k = r.u8()?;
+        if k == 0 {
+            out.push(0);
+            return Some(out);
+        }
+        let key = r.string()?;
+        r.tag(k, 1)?;
+        if key != "name" && key != "ip" {
+            out.extend_from_slice(&raw[start..r.i]);
+        }
+    }
+}
+
 /// Whether a raw entry is the visible server `name` at `address`.
 fn is_entry(raw: &[u8], name: &str, address: &str) -> bool {
     let Some(tag) = (Nbt { b: raw, i: 0 }).tag(10, 1) else {
@@ -383,6 +405,36 @@ pub async fn add_server(
     };
     edit_servers(&state, &profile_id, |raw| {
         raw.entries.push(new_entry(&name, &address));
+        Ok(())
+    })
+    .await
+}
+
+/// Rename a saved server or change its address, keeping its place in the list.
+#[tauri::command]
+pub async fn edit_server(
+    state: State<'_, AppState>,
+    profile_id: String,
+    name: String,
+    address: String,
+    new_name: String,
+    new_address: String,
+) -> Result<Vec<ServerDto>, String> {
+    let new_address = new_address.trim().to_string();
+    if !valid_address(&new_address) {
+        return Err("That server address doesn't look right.".into());
+    }
+    let new_name = match new_name.trim() {
+        "" => "Minecraft Server".to_string(),
+        n => n.chars().take(64).collect(),
+    };
+    edit_servers(&state, &profile_id, |raw| {
+        let entry = raw
+            .entries
+            .iter_mut()
+            .find(|e| is_entry(e, &name, &address))
+            .ok_or("That server isn't on the list any more.")?;
+        *entry = retag_entry(entry, &new_name, &new_address).ok_or("The server list is damaged; edit it in the game.")?;
         Ok(())
     })
     .await
@@ -765,6 +817,10 @@ mod tests {
         out.push(0);
     }
 
+    fn read_nbt_compound(raw: &[u8]) -> Tag {
+        (Nbt { b: raw, i: 0 }).tag(10, 1).unwrap()
+    }
+
     #[test]
     fn reads_servers_dat() {
         let mut b = vec![10];
@@ -824,6 +880,15 @@ mod tests {
         let out = join_raw(&raw);
         assert!(out.windows(5).any(|w| w == b"extra"));
         assert_eq!(parse_servers(&out)[0].name, "Café \0 🎮");
+
+        // an edit renames in place and keeps the entry's other fields
+        raw.entries[0] = retag_entry(&raw.entries[0], "lan", "192.168.1.9").unwrap();
+        assert!(matches!(read_nbt_compound(&raw.entries[0]).get("hidden"), Some(Tag::Byte(1))));
+        raw.entries[1] = retag_entry(&raw.entries[1], "Renamed", "renamed.example.net").unwrap();
+        let list = parse_servers(&join_raw(&raw));
+        assert_eq!(list.len(), 1);
+        assert_eq!((list[0].name.as_str(), list[0].address.as_str()), ("Renamed", "renamed.example.net"));
+        assert!(is_entry(&raw.entries[1], "Renamed", "renamed.example.net"));
 
         // a missing file starts an empty list
         let fresh = join_raw(&RawServers::default());
