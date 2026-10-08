@@ -592,9 +592,10 @@ pub fn extract_overrides(bytes: &[u8], profile_root: &Path, may_write: impl Fn(&
             if let Some(parent) = out.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            let mut buf = Vec::with_capacity(entry.size() as usize);
-            std::io::Read::read_to_end(&mut entry, &mut buf)?;
-            std::fs::write(&out, &buf)?;
+            // streamed: an entry's declared size isn't worth trusting
+            let mut file = std::io::BufWriter::new(std::fs::File::create(&out)?);
+            std::io::copy(&mut entry, &mut file)?;
+            std::io::Write::flush(&mut file)?;
             if !written.iter().any(|w| w == rel) {
                 written.push(rel.to_string());
             }
@@ -779,7 +780,7 @@ mod tests {
             let client = reqwest::Client::new();
             // an old Fabric Sodium for 1.21.1 (mc1.21-0.5.11)
             let old = "d67e66ea4bb2409997b636dae4203d33764cdcc8".to_string();
-            let found = super::version_files_update(&client, &[old.clone()], &["fabric"], "1.21.1")
+            let found = super::version_files_update(&client, std::slice::from_ref(&old), &["fabric"], "1.21.1")
                 .await
                 .expect("update lookup");
             let v = found.get(&old).expect("Modrinth knows the hash");

@@ -141,7 +141,7 @@ pub async fn list_logs(state: State<'_, AppState>, profile_id: String) -> Result
                 }
             }
         }
-        out.sort_by(|a, b| b.modified.cmp(&a.modified));
+        out.sort_by_key(|f| std::cmp::Reverse(f.modified));
         out.truncate(300);
         out
     })

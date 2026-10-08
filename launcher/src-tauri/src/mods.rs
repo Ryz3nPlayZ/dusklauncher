@@ -752,7 +752,7 @@ const FABRIC_API: (&str, &str) = ("P7dR8mSH", "fabric-api");
 /// The performance set the Dusk instance ships, as (Modrinth project, mod id):
 /// renderer, game logic, memory, GUI batching, entity culling, misc
 /// rendering fast paths and networking.
-const PERFORMANCE_MODS: &[(&'static str, &'static str)] = &[
+const PERFORMANCE_MODS: &[(&str, &str)] = &[
     ("sodium", "sodium"),
     ("lithium", "lithium"),
     ("ferrite-core", "ferritecore"),

@@ -591,6 +591,39 @@ async fn install_mrpack_bytes(
         state.save_profiles(&store);
     }
 
+    let filled = fill_pack_instance(&app, &state, &profile, bytes, &index, dep_versions, dusk, link).await;
+    if let Err(e) = filled {
+        // half a pack is no instance: take it back out rather than leave one
+        // that's missing mods with nothing saying so
+        {
+            let mut store = state.profiles.lock().unwrap();
+            store.profiles.retain(|p| p.id != profile.id);
+            state.save_profiles(&store);
+        }
+        let root = dirs.root.clone();
+        let _ = tokio::task::spawn_blocking(move || std::fs::remove_dir_all(root)).await;
+        return Err(e);
+    }
+    tracing::info!(pack = %name, "modpack installed");
+
+    let stored = state.patch_profile(&profile.id, |_| {}).unwrap_or(profile);
+    Ok(dto(&stored, &state.data_dir))
+}
+
+/// Put a just-added pack instance's files in place: its overrides, then
+/// everything its index (and `dep_versions`) downloads.
+#[allow(clippy::too_many_arguments)]
+async fn fill_pack_instance(
+    app: &AppHandle,
+    state: &AppState,
+    profile: &Profile,
+    bytes: &[u8],
+    index: &mr::MrpackIndex,
+    dep_versions: &[mr::Version],
+    dusk: bool,
+    link: Option<PackLink>,
+) -> Result<(), String> {
+    let dirs = profile.dirs(&state.data_dir);
     // overrides (configs, shaderpacks, resourcepacks — and, for a pack
     // exported from here or Prism, the mods themselves)
     std::fs::create_dir_all(&dirs.root).map_err(|e| e.to_string())?;
@@ -598,9 +631,8 @@ async fn install_mrpack_bytes(
         let (pack, root) = (bytes.to_vec(), dirs.root.clone());
         tokio::task::spawn_blocking(move || mr::extract_overrides(&pack, &root, |_| true))
             .await
-            .ok()
-            .and_then(Result::ok)
-            .unwrap_or_default()
+            .map_err(|e| e.to_string())?
+            .map_err(|e| format!("Couldn't unpack the modpack's files: {e}"))?
     };
     if dusk {
         seed_dusk_defaults(&dirs.root);
@@ -615,15 +647,15 @@ async fn install_mrpack_bytes(
                 }
             }
         }
-        p.pack = link.map(|l| PackLink { files: pack_files(&index, dep_versions, overrides), ..l });
+        p.pack = link.map(|l| PackLink { files: pack_files(index, dep_versions, overrides), ..l });
     });
 
-    let mut downloads = mr::index_downloads(&index, &dirs.root);
+    let mut downloads = mr::index_downloads(index, &dirs.root);
     downloads.extend(mr::dependency_downloads(dep_versions, &dirs.root));
     let total = downloads.len() as u64;
     let profile_id = profile.id.clone();
     let app2 = app.clone();
-    let downloaded = mr::download_files(&state.client, downloads, move |done, _| {
+    mr::download_files(&state.client, downloads, move |done, _| {
         let _ = app2.emit(
             "launch-progress",
             crate::commands::ProgressPayload {
@@ -638,10 +670,7 @@ async fn install_mrpack_bytes(
     })
     .await
     .map_err(|e| e.to_string())?;
-    tracing::info!(pack = %name, files = downloaded, "modpack installed");
-
-    let stored = state.patch_profile(&profile.id, |_| {}).unwrap_or(profile);
-    Ok(dto(&stored, &state.data_dir))
+    Ok(())
 }
 
 /// The loader a pack runs on, or why Dusk can't run it.
