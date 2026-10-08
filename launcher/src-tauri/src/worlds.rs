@@ -163,26 +163,65 @@ fn read_gz(path: &Path) -> Option<Vec<u8>> {
 pub async fn rename_world(state: State<'_, AppState>, profile_id: String, name: String, level_name: String) -> Result<(), String> {
     let (_, dir) = world_dir(&state, &profile_id, &name)?;
     ensure_closed(&state, &profile_id).await?;
-    // NUL and characters past U+FFFF are written differently in Java's
-    // modified UTF-8; leave them out so plain UTF-8 is exactly right
-    let level_name: String = level_name.trim().chars().filter(|c| *c != '\0' && (*c as u32) <= 0xFFFF).take(100).collect();
-    if level_name.is_empty() {
+    let level_name = clean_level_name(&level_name)?;
+    tokio::task::spawn_blocking(move || write_level_name(&dir, &level_name))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// COPY on a world, like Prism's: a duplicate listed as `level_name`, in a
+/// folder named after it. Resolves to the new folder's name.
+#[tauri::command]
+pub async fn duplicate_world(state: State<'_, AppState>, profile_id: String, name: String, level_name: String) -> Result<String, String> {
+    let (root, dir) = world_dir(&state, &profile_id, &name)?;
+    ensure_closed(&state, &profile_id).await?;
+    let level_name = clean_level_name(&level_name)?;
+    let saves = root.join("saves");
+    let folder = tokio::task::spawn_blocking(move || duplicate_into(&dir, &saves, &level_name))
+        .await
+        .map_err(|e| e.to_string())??;
+    tracing::info!(from = %name, to = %folder, "world copied");
+    Ok(folder)
+}
+
+fn duplicate_into(src: &Path, saves: &Path, level_name: &str) -> Result<String, String> {
+    let folder = free_name(saves, &clean_name(level_name));
+    // dot-named while it fills, so the world list never shows half a copy
+    let tmp = saves.join(format!(".importing-{folder}"));
+    let result = copy_tree(src, &tmp)
+        .map_err(|e| format!("Couldn't copy the world: {e}"))
+        .and_then(|()| write_level_name(&tmp, level_name))
+        .and_then(|()| std::fs::rename(&tmp, saves.join(&folder)).map_err(|e| format!("Couldn't copy the world: {e}")));
+    if result.is_err() {
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+    result.map(|()| folder)
+}
+
+/// A name for `Data.LevelName`: trimmed, at most 100 characters, and never
+/// empty. NUL and characters past U+FFFF are written differently in Java's
+/// modified UTF-8; they're left out so plain UTF-8 is exactly right.
+fn clean_level_name(raw: &str) -> Result<String, String> {
+    let name: String = raw.trim().chars().filter(|c| *c != '\0' && (*c as u32) <= 0xFFFF).take(100).collect();
+    if name.is_empty() {
         return Err("The name can't be empty.".into());
     }
-    tokio::task::spawn_blocking(move || {
-        let path = dir.join("level.dat");
-        let bytes = read_gz(&path).ok_or("Couldn't read the world's level.dat.")?;
-        let renamed = set_level_name(&bytes, &level_name).ok_or("The world's level.dat has no name to change.")?;
-        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-        gz.write_all(&renamed).map_err(|e| e.to_string())?;
-        let out = gz.finish().map_err(|e| e.to_string())?;
-        let tmp = dir.join("level.dat_new");
-        std::fs::write(&tmp, out).map_err(|e| e.to_string())?;
-        let _ = std::fs::copy(&path, dir.join("level.dat_old"));
-        std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    Ok(name)
+}
+
+/// Set the world in `dir`'s `Data.LevelName`, keeping the old `level.dat`
+/// as `level.dat_old` the way the game does on save.
+fn write_level_name(dir: &Path, level_name: &str) -> Result<(), String> {
+    let path = dir.join("level.dat");
+    let bytes = read_gz(&path).ok_or("Couldn't read the world's level.dat.")?;
+    let renamed = set_level_name(&bytes, level_name).ok_or("The world's level.dat has no name to change.")?;
+    let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    gz.write_all(&renamed).map_err(|e| e.to_string())?;
+    let out = gz.finish().map_err(|e| e.to_string())?;
+    let tmp = dir.join("level.dat_new");
+    std::fs::write(&tmp, out).map_err(|e| e.to_string())?;
+    let _ = std::fs::copy(&path, dir.join("level.dat_old"));
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
 }
 
 /// `bytes` (uncompressed level.dat) with `Data.LevelName` swapped for
@@ -742,6 +781,41 @@ mod tests {
         let mut names: Vec<String> = (0..zip.len()).map(|i| zip.by_index(i).unwrap().name().to_string()).collect();
         names.sort();
         assert_eq!(names, ["My World/level.dat", "My World/region/", "My World/region/r.0.0.mca"]);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn a_copy_gets_its_own_folder_and_name() {
+        let tmp = std::env::temp_dir().join(format!("dusk-copy-{}", std::process::id()));
+        let saves = tmp.join("saves");
+        let world = saves.join("My World");
+        std::fs::create_dir_all(world.join("region")).unwrap();
+        // { "": { Data: { LevelName: "My World" } } }
+        let mut nbt = vec![10, 0, 0, 10, 0, 4];
+        nbt.extend_from_slice(b"Data");
+        nbt.extend_from_slice(&[8, 0, 9]);
+        nbt.extend_from_slice(b"LevelName");
+        nbt.extend_from_slice(&[0, 8]);
+        nbt.extend_from_slice(b"My World");
+        nbt.extend_from_slice(&[0, 0]);
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gz.write_all(&nbt).unwrap();
+        std::fs::write(world.join("level.dat"), gz.finish().unwrap()).unwrap();
+        std::fs::write(world.join("session.lock"), b"x").unwrap();
+        std::fs::write(world.join("region").join("r.0.0.mca"), b"chunks").unwrap();
+        std::fs::create_dir_all(saves.join("Copy: 1")).unwrap();
+
+        let folder = duplicate_into(&world, &saves, "Copy: 1").unwrap();
+        assert_eq!(folder, "Copy_ 1");
+        let copy = saves.join(&folder);
+        assert_eq!(level_info(&copy.join("level.dat")).level_name.as_deref(), Some("Copy: 1"));
+        assert_eq!(std::fs::read(copy.join("region").join("r.0.0.mca")).unwrap(), b"chunks");
+        assert!(!copy.join("session.lock").exists());
+        // the original is untouched, and nothing is left half-made
+        assert_eq!(level_info(&world.join("level.dat")).level_name.as_deref(), Some("My World"));
+        assert!(!saves.join(".importing-Copy_ 1").exists());
+        assert_eq!(duplicate_into(&world, &saves, "Copy: 1").unwrap(), "Copy_ 1 (1)");
+        assert!(clean_level_name("  \0 ").is_err());
         let _ = std::fs::remove_dir_all(&tmp);
     }
 

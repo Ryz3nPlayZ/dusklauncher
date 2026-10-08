@@ -127,6 +127,7 @@ pub fn run() {
             worlds::backup_world,
             worlds::delete_world,
             worlds::rename_world,
+            worlds::duplicate_world,
             worlds::import_world,
             worlds::import_world_paths,
             worlds::list_datapacks,

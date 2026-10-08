@@ -1640,6 +1640,18 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     w.levelName = name;
     return undefined as T;
   }
+  if (cmd === 'duplicate_world') {
+    const list = fixtures.list_worlds as World[];
+    const w = list.find((x) => x.name === args?.name);
+    if (!w) throw new Error('world not found');
+    const levelName = String(args?.levelName ?? '').trim();
+    if (!levelName) throw new Error("The name can't be empty.");
+    const base = levelName.replace(/[<>:"/\\|?*]/g, '_');
+    let name = base;
+    for (let n = 1; list.some((x) => x.name === name); n++) name = `${base} (${n})`;
+    list.push({ ...w, name, levelName });
+    return name as T;
+  }
   if (cmd === 'update_modpack') {
     const p = (fixtures.list_profiles as Profile[]).find((x) => x.id === args?.profileId);
     if (!p?.pack) throw new Error("This instance didn't come from a Modrinth pack.");
@@ -2037,6 +2049,9 @@ export const api = {
   /** the name the game lists the world under; its folder keeps its name */
   renameWorld: (profileId: string, name: string, levelName: string) =>
     invoke<void>('rename_world', { profileId, name, levelName }),
+  /** A copy listed as `levelName`, in a folder named after it; resolves to that folder's name. */
+  duplicateWorld: (profileId: string, name: string, levelName: string) =>
+    invoke<string>('duplicate_world', { profileId, name, levelName }),
   /** the instance's multiplayer list, in the game's order */
   readLatestLog: (profileId: string) => invoke<LatestLog | null>('read_latest_log', { profileId }),
   /** older logs and crash reports, newest first */

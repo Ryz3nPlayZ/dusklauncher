@@ -510,10 +510,11 @@ pub fn list_worlds(state: State<AppState>, profile_id: String) -> Result<Vec<Wor
     let Ok(rd) = std::fs::read_dir(&saves) else { return Ok(out) };
     for entry in rd.flatten() {
         let path = entry.path();
-        if !path.is_dir() || !path.join("level.dat").exists() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        // dot folders are imports and copies still being written
+        if name.starts_with('.') || !path.is_dir() || !path.join("level.dat").exists() {
             continue;
         }
-        let name = entry.file_name().to_string_lossy().to_string();
         let stamp = std::fs::metadata(path.join("level.dat"))
             .and_then(|m| m.modified())
             .or_else(|_| entry.metadata().and_then(|m| m.modified()))

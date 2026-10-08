@@ -1340,7 +1340,8 @@ function WorldsTab({
   const [backing, setBacking] = useState<string | null>(null);
   const [trashing, setTrashing] = useState<World | null>(null);
   /* the RENAME dialog, open when set */
-  const [renaming, setRenaming] = useState<{ world: World; name: string } | null>(null);
+  /** the RENAME WORLD form, or COPY WORLD when `copy` is set */
+  const [renaming, setRenaming] = useState<{ world: World; name: string; copy?: boolean } | null>(null);
   /* the ADD SERVER form, open when set */
   /** the ADD SERVER form, or EDIT SERVER when `editing` is the row being changed */
   const [adding, setAdding] = useState<{ name: string; address: string; editing?: SavedServer } | null>(null);
@@ -1422,6 +1423,19 @@ function WorldsTab({
       await api.renameWorld(profile.id, w.name, levelName);
       setRenaming(null);
       setWorlds(await api.listWorlds(profile.id));
+    } catch (e) {
+      setNote(String(e));
+      setRenaming(null);
+    }
+  };
+
+  const duplicate = async (w: World, levelName: string) => {
+    setNote(null);
+    try {
+      const folder = await api.duplicateWorld(profile.id, w.name, levelName);
+      setRenaming(null);
+      setWorlds(await api.listWorlds(profile.id));
+      setNote(`Copied to saves/${folder}.`);
     } catch (e) {
       setNote(String(e));
       setRenaming(null);
@@ -1711,6 +1725,15 @@ function WorldsTab({
               <PxButton
                 family="grey"
                 height="sm"
+                disabled={busy}
+                title={busy ? 'Close the game first' : 'Make a copy of it under a new name'}
+                onClick={() => setRenaming({ world: w, name: `${plain(w.levelName ?? w.name)} (copy)`, copy: true })}
+              >
+                <TT size={16}>COPY</TT>
+              </PxButton>
+              <PxButton
+                family="grey"
+                height="sm"
                 title="The world's datapacks: add, turn off or remove them"
                 onClick={() => setPacksOf(w)}
               >
@@ -1764,12 +1787,15 @@ function WorldsTab({
               className="worlds__form"
               onSubmit={(e) => {
                 e.preventDefault();
-                void rename(renaming.world, renaming.name);
+                if (renaming.copy) void duplicate(renaming.world, renaming.name);
+                else void rename(renaming.world, renaming.name);
               }}
             >
-              <TT size={22}>RENAME WORLD</TT>
+              <TT size={22}>{renaming.copy ? 'COPY WORLD' : 'RENAME WORLD'}</TT>
               <span className="meta">
-                The name it&apos;s listed under in the game. Its folder stays saves/{renaming.world.name}.
+                {renaming.copy
+                  ? 'The name the copy is listed under in the game; its folder is named after it.'
+                  : `The name it's listed under in the game. Its folder stays saves/${renaming.world.name}.`}
               </span>
               <div className="modal__row">
                 <span className="modal__label">
@@ -1794,7 +1820,7 @@ function WorldsTab({
                 </PxButton>
                 <PxButton family="accent" height="md" type="submit" disabled={renaming.name.trim() === ''}>
                   <TT size={20} tone="accent">
-                    RENAME
+                    {renaming.copy ? 'COPY' : 'RENAME'}
                   </TT>
                 </PxButton>
               </div>
