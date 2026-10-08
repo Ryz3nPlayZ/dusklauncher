@@ -842,6 +842,31 @@ pub async fn export_instance(
     let Some(file) = picked else { return Ok(None) };
     let out_path = file.into_path().map_err(|e| e.to_string())?;
 
+    let (index, embedded) = pack_index(&state, &profile).await?;
+    let index_json = serde_json::to_string_pretty(&index).map_err(|e| e.to_string())?;
+    let n_linked = index.files.len();
+    let n_embedded = embedded.len();
+    tokio::task::spawn_blocking(move || {
+        let written = std::fs::File::create(&out_path)
+            .map_err(|e| e.to_string())
+            .and_then(|f| write_mrpack(std::io::BufWriter::new(f), &index_json, &embedded))
+            .and_then(|mut w| w.flush().map_err(|e| e.to_string()));
+        if written.is_err() {
+            // half a zip is no pack
+            let _ = std::fs::remove_file(&out_path);
+        }
+        written
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    tracing::info!(pack = %profile.name, linked = n_linked, embedded = n_embedded, "instance exported");
+    Ok(Some(format!("{n_linked} linked from Modrinth, {n_embedded} included")))
+}
+
+/// An instance as a pack: its version and loader, the mods and packs
+/// Modrinth hosts linked by hash, and the rest of [`export_files`] to embed.
+/// Offline, or with Modrinth down, everything is embedded.
+async fn pack_index(state: &AppState, profile: &Profile) -> Result<(mr::MrpackIndex, Vec<(String, PathBuf)>), String> {
     let mut dependencies = std::collections::HashMap::new();
     dependencies.insert("minecraft".to_string(), profile.game_version.clone());
     let loader_key = match profile.loader {
@@ -870,16 +895,14 @@ pub async fn export_instance(
     .await
     .map_err(|e| e.to_string())?;
     let hashes: Vec<String> = hashed.iter().map(|(_, h)| h.clone()).collect();
-    // offline, or Modrinth down: everything is embedded, which still works
     let found = match mr::version_files(&state.client, &hashes).await {
         Ok(found) => found,
         Err(e) => {
-            tracing::warn!(error = %e, "couldn't look the export's files up on Modrinth; embedding them");
+            tracing::warn!(error = %e, "couldn't look the pack's files up on Modrinth; embedding them");
             Default::default()
         }
     };
     let (linked, embedded) = split_export(files, &hashed, &found);
-
     let index = mr::MrpackIndex {
         format_version: 1,
         game: "minecraft".into(),
@@ -888,21 +911,85 @@ pub async fn export_instance(
         files: linked,
         dependencies,
     };
+    Ok((index, embedded))
+}
+
+/// What a shared instance carries besides its links: the configs and the
+/// server list. Mods and packs Modrinth doesn't host stay home (they aren't
+/// ours to hand on, and a code holds 4 MB), and so does options.txt —
+/// render distance and keybinds are the player's, not the pack's.
+fn shareable(rel: &str) -> bool {
+    !(rel == "options.txt" || ["mods/", "resourcepacks/", "shaderpacks/"].iter().any(|d| rel.starts_with(d)))
+}
+
+/// The most a share code holds (the Dusk service refuses more).
+const SHARE_MAX_BYTES: usize = 4 * 1024 * 1024;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedInstance {
+    pub code: String,
+    /// mods and packs the friend gets from Modrinth
+    pub linked: usize,
+    /// ones Modrinth doesn't host, which they'll have to get themselves
+    pub left_out: Vec<String>,
+}
+
+/// Share an instance with a code: its version, loader, the mods and packs
+/// Modrinth hosts and its configs go up to the Dusk service as a small pack,
+/// and anyone signed in can install it from the code for 30 days.
+#[tauri::command]
+pub async fn share_instance(state: State<'_, AppState>, profile_id: String) -> Result<SharedInstance, String> {
+    let profile = {
+        let store = state.profiles.lock().unwrap();
+        store.profiles.iter().find(|p| p.id == profile_id).cloned().ok_or("profile not found")?
+    };
+    let (index, embedded) = pack_index(&state, &profile).await?;
+    let (embedded, left): (Vec<_>, Vec<_>) = embedded.into_iter().partition(|(rel, _)| shareable(rel));
+    let left_out: Vec<String> = left
+        .into_iter()
+        .filter(|(rel, _)| rel != "options.txt" && !rel.ends_with(".disabled"))
+        .map(|(rel, _)| rel.rsplit('/').next().unwrap_or(&rel).to_string())
+        .collect();
     let index_json = serde_json::to_string_pretty(&index).map_err(|e| e.to_string())?;
-    let n_linked = index.files.len();
-    let n_embedded = embedded.len();
-    tokio::task::spawn_blocking(move || {
-        let written = write_mrpack(&out_path, &index_json, &embedded);
-        if written.is_err() {
-            // half a zip is no pack
-            let _ = std::fs::remove_file(&out_path);
-        }
-        written
+    let linked = index.files.len();
+    let bytes = tokio::task::spawn_blocking(move || {
+        write_mrpack(std::io::Cursor::new(Vec::new()), &index_json, &embedded).map(std::io::Cursor::into_inner)
     })
     .await
     .map_err(|e| e.to_string())??;
-    tracing::info!(pack = %profile.name, linked = n_linked, embedded = n_embedded, "instance exported");
-    Ok(Some(format!("{n_linked} linked from Modrinth, {n_embedded} included")))
+    if bytes.len() > SHARE_MAX_BYTES {
+        return Err(format!(
+            "This instance's configs come to {:.1} MB and a code holds 4 MB — export it as a .mrpack instead.",
+            bytes.len() as f64 / 1_048_576.0
+        ));
+    }
+    #[derive(Deserialize)]
+    struct Shared {
+        code: String,
+    }
+    let resp = crate::dusk::send(&state, reqwest::Method::POST, "/v1/packs", Some(crate::dusk::Body::Raw(bytes, "application/zip")))
+        .await?;
+    let Shared { code } = crate::dusk::parse(resp).await?;
+    tracing::info!(pack = %profile.name, linked, left_out = left_out.len(), "instance shared");
+    // read out as two halves: ABCD-EFGH
+    let code = if code.len() == 8 { format!("{}-{}", &code[..4], &code[4..]) } else { code };
+    Ok(SharedInstance { code, linked, left_out })
+}
+
+/// Install an instance a friend shared, from its code.
+#[tauri::command]
+pub async fn import_shared_instance(app: AppHandle, state: State<'_, AppState>, code: String) -> Result<ProfileDto, String> {
+    let code: String = code.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    if code.is_empty() {
+        return Err("Type the code your friend sent.".into());
+    }
+    let resp = crate::dusk::send(&state, reqwest::Method::GET, &format!("/v1/packs/{code}"), None).await?;
+    if !resp.status().is_success() {
+        return Err(crate::dusk::parse::<serde_json::Value>(resp).await.unwrap_err());
+    }
+    let bytes = resp.bytes().await.map_err(|e| format!("Couldn't download the instance: {e}"))?;
+    install_mrpack_bytes(app, state, &bytes, &[], None, false, None).await
 }
 
 /// Never worth shipping: the OS's folder litter.
@@ -990,9 +1077,8 @@ fn split_export(
 
 /// Write the pack: the index, then each embedded file under `overrides/`,
 /// streamed rather than read whole.
-fn write_mrpack(out: &Path, index_json: &str, embedded: &[(String, PathBuf)]) -> Result<(), String> {
-    let file = std::fs::File::create(out).map_err(|e| e.to_string())?;
-    let mut zip = zip::ZipWriter::new(std::io::BufWriter::new(file));
+fn write_mrpack<W: Write + std::io::Seek>(out: W, index_json: &str, embedded: &[(String, PathBuf)]) -> Result<W, String> {
+    let mut zip = zip::ZipWriter::new(out);
     let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     zip.start_file("modrinth.index.json", opts).map_err(|e| e.to_string())?;
     zip.write_all(index_json.as_bytes()).map_err(|e| e.to_string())?;
@@ -1002,8 +1088,7 @@ fn write_mrpack(out: &Path, index_json: &str, embedded: &[(String, PathBuf)]) ->
         zip.start_file(format!("overrides/{rel}"), opts.large_file(big)).map_err(|e| e.to_string())?;
         std::io::copy(&mut src, &mut zip).map_err(|e| format!("{rel}: {e}"))?;
     }
-    zip.finish().map_err(|e| e.to_string())?;
-    Ok(())
+    zip.finish().map_err(|e| e.to_string())
 }
 
 fn now_millis() -> u64 {
@@ -1081,12 +1166,19 @@ mod tests {
         );
 
         let out = root.join("out.mrpack");
-        write_mrpack(&out, "{}", &embedded).unwrap();
+        write_mrpack(std::fs::File::create(&out).unwrap(), "{}", &embedded).unwrap();
         let mut zip = zip::ZipArchive::new(std::fs::File::open(&out).unwrap()).unwrap();
         assert_eq!(zip.len(), 6);
         let mut body = String::new();
         std::io::Read::read_to_string(&mut zip.by_name("overrides/options.txt").unwrap(), &mut body).unwrap();
         assert_eq!(body, "fov:1");
+
+        // a share code carries the configs; the mods and packs Modrinth
+        // doesn't host and the player's own options stay home
+        let shared: Vec<&str> = embedded_rels.iter().copied().filter(|r| shareable(r)).collect();
+        assert_eq!(shared, ["config/sodium-options.json"]);
+        let bytes = write_mrpack(std::io::Cursor::new(Vec::new()), "{}", &[]).unwrap().into_inner();
+        assert!(bytes.starts_with(b"PK\x03\x04"), "the service checks for a zip");
         let _ = std::fs::remove_dir_all(&root);
     }
 

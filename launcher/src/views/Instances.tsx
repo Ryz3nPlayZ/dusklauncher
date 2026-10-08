@@ -753,6 +753,18 @@ function ImportExternal({
     }
   };
 
+  const [code, setCode] = useState('');
+  const importCode = async () => {
+    setBusy('code');
+    setErr(null);
+    try {
+      onCreated(await api.importSharedInstance(code));
+    } catch (e) {
+      setErr(String(e));
+      setBusy(null);
+    }
+  };
+
   const bring = async (e: ExternalInstance) => {
     setBusy(e.path);
     setErr(null);
@@ -809,6 +821,26 @@ function ImportExternal({
               </div>
             ))
           )}
+        </div>
+
+        <div className="modal__row">
+          <PxBox family="panel" height="md" className="extimport__code">
+            <input
+              className="input"
+              placeholder="A friend's share code, like K7QM-4XWP"
+              value={code}
+              maxLength={12}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && code.trim() && busy === null) void importCode();
+              }}
+            />
+          </PxBox>
+          <PxButton family="green" height="md" disabled={!code.trim() || busy !== null} onClick={() => void importCode()}>
+            <TT size={16} tone={code.trim() ? 'green' : 'dim'}>
+              {busy === 'code' ? 'INSTALLING…' : 'INSTALL'}
+            </TT>
+          </PxButton>
         </div>
 
         {err && <span className="meta">{err}</span>}

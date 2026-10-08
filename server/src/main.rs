@@ -89,6 +89,11 @@ const OUTFIT_NAME_MAX: usize = 32;
 const IMAGE_MAX_BYTES: usize = 8 * 1024 * 1024;
 const IMAGE_DAILY_MAX: i64 = 30;
 const IMAGE_TTL: i64 = 90 * 24 * 3600;
+/// Shared instances: a small .mrpack (Modrinth links plus configs), how many
+/// one account shares a day, and how long a code works.
+const PACK_MAX_BYTES: usize = 4 * 1024 * 1024;
+const PACK_DAILY_MAX: i64 = 20;
+const PACK_TTL: i64 = 30 * 24 * 3600;
 /// The synced client settings blob (HUD layout, module options, menu prefs).
 const SETTINGS_MAX_BYTES: usize = 64 * 1024;
 /// A skin upload: a vanilla 64x64 (or legacy 64x32) PNG is a few KB.
@@ -211,7 +216,11 @@ fn open_db(path: &str) -> Connection {
            uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), json TEXT NOT NULL, updated_at INTEGER NOT NULL);
          CREATE TABLE IF NOT EXISTS skins (
            uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), png BLOB NOT NULL, slim INTEGER NOT NULL,
-           hash TEXT NOT NULL, updated_at INTEGER NOT NULL);",
+           hash TEXT NOT NULL, updated_at INTEGER NOT NULL);
+         CREATE TABLE IF NOT EXISTS shared_packs (
+           code TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES accounts(uuid),
+           bytes BLOB NOT NULL, created_at INTEGER NOT NULL);
+         CREATE INDEX IF NOT EXISTS shared_packs_by_owner ON shared_packs (owner, created_at);",
     )
     .expect("schema");
     add_column(&db, "accounts", "launches", "INTEGER NOT NULL DEFAULT 0");
@@ -1980,6 +1989,80 @@ async fn get_image(State(app): State<Shared>, headers: HeaderMap, Path(id): Path
     Ok(([(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, "private, max-age=86400".into())], bytes).into_response())
 }
 
+// ── shared instances ───────────────────────────────────────────────────────
+
+/// A code as typed: any case, with or without the dash or spaces.
+fn pack_code(raw: &str) -> Option<String> {
+    let code: String = raw.chars().filter(|c| !matches!(c, '-' | ' ')).collect::<String>().to_ascii_uppercase();
+    (code.len() == CODE_LEN && code.bytes().all(|b| CODE_ALPHABET.contains(&b))).then_some(code)
+}
+
+/// Keep a shared instance under a new code, dropping expired ones.
+fn store_pack(db: &Connection, uuid: &str, bytes: &[u8]) -> Result<String, ApiError> {
+    if bytes.len() > PACK_MAX_BYTES {
+        return Err(bad("A shared instance is limited to 4 MB of configs."));
+    }
+    // a zip: the launcher reads the rest when it installs it
+    if !bytes.starts_with(b"PK\x03\x04") {
+        return Err(bad("That isn't a modpack."));
+    }
+    let t = now();
+    db.execute("DELETE FROM shared_packs WHERE created_at < ?1", params![t - PACK_TTL])?;
+    let today: i64 = db.query_row(
+        "SELECT COUNT(*) FROM shared_packs WHERE owner = ?1 AND created_at > ?2",
+        params![uuid, t - 24 * 3600],
+        |r| r.get(0),
+    )?;
+    if today >= PACK_DAILY_MAX {
+        return Err(ApiError(StatusCode::TOO_MANY_REQUESTS, "You've shared a lot of instances today — try again tomorrow.".into()));
+    }
+    let mut rng = rand::thread_rng();
+    loop {
+        let code: String = (0..CODE_LEN)
+            .map(|_| CODE_ALPHABET[(rng.next_u32() as usize) % CODE_ALPHABET.len()] as char)
+            .collect();
+        if db.execute(
+            "INSERT OR IGNORE INTO shared_packs (code, owner, bytes, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params![code, uuid, bytes, t],
+        )? == 1
+        {
+            return Ok(code);
+        }
+    }
+}
+
+fn load_pack(db: &Connection, raw: &str) -> Result<Vec<u8>, ApiError> {
+    let gone = || ApiError(StatusCode::NOT_FOUND, "No instance has that code — it may have expired (codes last 30 days).".into());
+    let code = pack_code(raw).ok_or_else(gone)?;
+    db.query_row(
+        "SELECT bytes FROM shared_packs WHERE code = ?1 AND created_at >= ?2",
+        params![code, now() - PACK_TTL],
+        |r| r.get(0),
+    )
+    .optional()?
+    .ok_or_else(gone)
+}
+
+#[derive(Serialize)]
+struct SharedPack {
+    code: String,
+}
+
+/// Share an instance: the .mrpack is the body, a code comes back.
+async fn share_pack(State(app): State<Shared>, headers: HeaderMap, body: axum::body::Bytes) -> ApiResult<SharedPack> {
+    let uuid = authed(&app, &headers)?;
+    let db = app.db.lock().unwrap();
+    Ok(Json(SharedPack { code: store_pack(&db, &uuid, &body)? }))
+}
+
+/// A shared instance's .mrpack, for anyone signed in to Dusk with its code.
+async fn get_pack(State(app): State<Shared>, headers: HeaderMap, Path(code): Path<String>) -> Result<Response, ApiError> {
+    authed(&app, &headers)?;
+    let db = app.db.lock().unwrap();
+    let bytes = load_pack(&db, &code)?;
+    Ok(([(header::CONTENT_TYPE, "application/x-modrinth-modpack+zip")], bytes).into_response())
+}
+
 // ── public ─────────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]
@@ -2106,6 +2189,11 @@ async fn main() {
             post(upload_image).layer(axum::extract::DefaultBodyLimit::max(IMAGE_MAX_BYTES + 1024)),
         )
         .route("/v1/images/{id}", get(get_image))
+        .route(
+            "/v1/packs",
+            post(share_pack).layer(axum::extract::DefaultBodyLimit::max(PACK_MAX_BYTES + 1024)),
+        )
+        .route("/v1/packs/{code}", get(get_pack))
         .layer(axum::extract::DefaultBodyLimit::max(16 * 1024))
         .with_state(app);
 
@@ -2512,6 +2600,23 @@ mod tests {
         assert_eq!(got.updated_at, 5);
         assert_eq!(got.settings.unwrap()["hud"]["fps"]["enabled"], true);
         assert!(read_client_settings(&db, B).unwrap().settings.is_none(), "per account");
+    }
+
+    #[test]
+    fn a_shared_instance_comes_back_by_its_code_however_its_typed() {
+        let db = three();
+        let pack = b"PK\x03\x04 the rest".to_vec();
+        let code = store_pack(&db, A, &pack).unwrap();
+        assert_eq!(code.len(), CODE_LEN);
+        assert_eq!(load_pack(&db, &code).unwrap(), pack);
+        let typed = format!("{}-{}", &code[..4], &code[4..]).to_lowercase();
+        assert_eq!(load_pack(&db, &typed).unwrap(), pack);
+        assert_eq!(load_pack(&db, "AAAA-AAAA").unwrap_err().0, StatusCode::NOT_FOUND);
+        assert_eq!(load_pack(&db, "../../x").unwrap_err().0, StatusCode::NOT_FOUND);
+        assert!(store_pack(&db, A, b"not a zip").is_err());
+        // expired codes stop working
+        db.execute("UPDATE shared_packs SET created_at = 0", []).unwrap();
+        assert_eq!(load_pack(&db, &code).unwrap_err().0, StatusCode::NOT_FOUND);
     }
 
     #[test]

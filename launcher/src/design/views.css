@@ -589,6 +589,15 @@
   flex: none;
   padding: 0 calc(24 * var(--u));
 }
+/* a friend's share code: the box takes the row, INSTALL its own width */
+.extimport__code {
+  flex: 1;
+  min-width: 0;
+}
+.extimport__code + .px {
+  flex: none;
+  padding: 0 calc(24 * var(--u));
+}
 
 /* ── the version cards: NEW INSTANCE's first screen ────────────────────────
    One row of square cards, each wearing Mojang's art for that update, its

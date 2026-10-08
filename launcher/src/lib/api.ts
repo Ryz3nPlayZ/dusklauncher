@@ -14,6 +14,14 @@ export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in
 
 // ── DTOs (mirror src-tauri/src/commands.rs) ───────────────────────────────
 
+/** What SHARE got back: the code, how many mods and packs the friend gets
+ *  from Modrinth, and the files Modrinth doesn't host that stayed home. */
+export interface SharedInstance {
+  code: string;
+  linked: number;
+  leftOut: string[];
+}
+
 export interface Profile {
   id: string;
   name: string;
@@ -903,6 +911,7 @@ const shot = (w: number, h: number, fill: string, label: string) =>
   )}`;
 
 const fixtures: Record<string, unknown> = {
+  share_instance: { code: 'K7QM-4XWP', linked: 31, leftOut: ['homemade.jar'] } satisfies SharedInstance,
   list_profiles: [
     {
       id: 'p-dusk',
@@ -1334,6 +1343,7 @@ const sideEffects = new Set([
   'add_datapack_paths',
   'install_content_to_profile',
   'import_mrpack',
+  'import_shared_instance',
   'export_instance',
   'copy_instance_settings',
   'install_bundled_pack',
@@ -2082,6 +2092,11 @@ export const api = {
    *  summary ("30 linked from Modrinth, 12 included"), or null if cancelled */
   exportInstance: (profileId: string) =>
     invoke<string | null>('export_instance', { profileId }),
+  /** upload the instance as a small pack and get a code a friend can install
+   *  it from (30 days): its version, loader, Modrinth's mods and packs, configs */
+  shareInstance: (profileId: string) => invoke<SharedInstance>('share_instance', { profileId }),
+  /** install an instance a friend shared, from its code */
+  importSharedInstance: (code: string) => invoke<Profile>('import_shared_instance', { code }),
   /** bring another instance's options and keybinds and/or the servers on its
    *  list this one lacks; resolves to what happened */
   copyInstanceSettings: (profileId: string, fromId: string, options: boolean, servers: boolean) =>

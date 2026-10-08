@@ -82,6 +82,8 @@ pub fn run() {
             modpacks::import_mrpack,
             modpacks::update_modpack,
             modpacks::export_instance,
+            modpacks::share_instance,
+            modpacks::import_shared_instance,
             modpacks::install_bundled_pack,
             // versions
             commands::list_versions,

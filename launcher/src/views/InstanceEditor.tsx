@@ -584,6 +584,26 @@ function SettingsTab({
     }
   };
 
+  const sharePack = async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = await api.shareInstance(profile.id);
+      try {
+        await navigator.clipboard.writeText(r.code);
+      } catch {
+        /* no clipboard: the code is in the note */
+      }
+      // the friend gets the version, the Modrinth mods and packs, and the configs
+      const left = r.leftOut.length ? ` Not on Modrinth, send yourself: ${r.leftOut.join(', ')}.` : '';
+      setNote(`Code ${r.code}, copied. Friends enter it in NEW INSTANCE → IMPORT for 30 days.${left}`);
+    } catch (e) {
+      setNote(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const releases = versions.filter((v) => v.type === 'release').slice(0, 60);
 
   return (
@@ -877,6 +897,15 @@ function SettingsTab({
             <TT size={16} tone={isTauri ? 'plain' : 'dim'}>
               EXPORT
             </TT>
+          </PxButton>
+          <PxButton
+            family="grey"
+            height="md"
+            disabled={busy}
+            title="A code a friend types to get this instance: its version, mods, packs and configs"
+            onClick={() => void sharePack()}
+          >
+            <TT size={16}>SHARE</TT>
           </PxButton>
           <PxButton
             family="grey"
