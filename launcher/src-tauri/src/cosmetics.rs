@@ -327,9 +327,9 @@ fn validate_loadout(loadout: &Loadout) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-pub fn get_loadout(state: State<AppState>) -> Loadout {
-    load_loadout(&state.data_dir)
+#[tauri::command(async)]
+pub fn get_loadout(state: State<'_, AppState>) -> Result<Loadout, String> {
+    Ok(load_loadout(&state.data_dir))
 }
 
 /// Replace the loadout wholesale (the UI sends the full object; a slot that

@@ -220,9 +220,11 @@ impl ProgressEmitter {
 
 // ── profiles ───────────────────────────────────────────────────────────────
 
-#[tauri::command]
-pub fn list_profiles(state: State<AppState>) -> Vec<ProfileDto> {
-    state.profiles.lock().unwrap().profiles.iter().map(|p| dto(p, &state.data_dir)).collect()
+/// Off the window's thread: each instance's picture is a file check.
+#[tauri::command(async)]
+pub fn list_profiles(state: State<'_, AppState>) -> Result<Vec<ProfileDto>, String> {
+    let profiles = state.profiles.lock().unwrap().profiles.clone();
+    Ok(profiles.iter().map(|p| dto(p, &state.data_dir)).collect())
 }
 
 #[tauri::command(async)]
