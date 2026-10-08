@@ -1333,7 +1333,6 @@ const sideEffects = new Set([
   'begin_reconsent_login',
   'upload_skin',
   'import_skin',
-  'reset_skin',
   'show_in_folder',
   'open_data_dir',
   'import_local_content',
@@ -2243,7 +2242,6 @@ export const api = {
   importSkin: () => invoke<Skin | null>('import_skin'),
   deleteSkin: (name: string) => invoke<void>('delete_skin', { name }),
   renameSkin: (oldName: string, newName: string) => invoke<void>('rename_skin', { oldName, newName }),
-  resetSkin: () => invoke<void>('reset_skin'),
   selectSkin: (name: string) => invoke<void>('set_selected_skin', { name }),
   uploadSkin: (name: string, variant: SkinModel) =>
     invoke<void>('upload_skin', { name, variant }),

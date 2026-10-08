@@ -188,11 +188,6 @@ fn toml_string(text: &str, key: &str) -> Option<String> {
     })
 }
 
-#[tauri::command(async)]
-pub fn list_profile_mods(state: State<AppState>, profile_id: String) -> Result<Vec<ProfileModDto>, String> {
-    list_profile_content(state, profile_id, "mod".into())
-}
-
 /// Installed content of one kind for a profile (mods, resource packs, shaders).
 #[tauri::command(async)]
 pub fn list_profile_content(
@@ -396,15 +391,6 @@ pub async fn update_profile_content(
 }
 
 #[tauri::command(async)]
-pub fn remove_profile_mod(
-    state: State<AppState>,
-    profile_id: String,
-    filename: String,
-) -> Result<(), String> {
-    remove_profile_content(state, profile_id, filename, "mod".into())
-}
-
-#[tauri::command(async)]
 pub fn remove_profile_content(
     state: State<AppState>,
     profile_id: String,
@@ -422,16 +408,6 @@ pub fn remove_profile_content(
         });
     }
     Ok(())
-}
-
-#[tauri::command(async)]
-pub fn set_mod_enabled(
-    state: State<'_, AppState>,
-    profile_id: String,
-    filename: String,
-    enabled: bool,
-) -> Result<ProfileModDto, String> {
-    set_content_enabled(state, profile_id, filename, enabled, "mod".into())
 }
 
 #[tauri::command(async)]
@@ -567,17 +543,6 @@ pub async fn import_content_paths(
     Ok(out)
 }
 
-#[tauri::command]
-pub async fn search_mods(
-    state: State<'_, AppState>,
-    query: String,
-    game_version: String,
-    loader: String,
-    limit: u32,
-) -> Result<Vec<ModHitDto>, String> {
-    search_content(state, query, game_version, loader, limit, "mod".into()).await
-}
-
 /// Modrinth search for any installable kind (mod | resourcepack | shader),
 /// pre-filtered to the profile's game version (and loader, for mods).
 #[tauri::command]
@@ -620,18 +585,6 @@ pub async fn search_content(
             loaders: h.loaders,
         })
         .collect())
-}
-
-/// Install the newest release of a Modrinth project into a profile's mods.
-/// Emits `launch-progress` with stage `mods`.
-#[tauri::command]
-pub async fn install_mod_to_profile(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    profile_id: String,
-    project_id: String,
-) -> Result<ProfileModDto, String> {
-    install_content_to_profile(app, state, profile_id, project_id, "mod".into()).await
 }
 
 /// Install any kind (mod | resourcepack | shader) into the right directory.
@@ -977,39 +930,6 @@ pub(crate) async fn install_version_file(
         }
     });
     Ok(dto_for(&dest, filename, true))
-}
-
-/// Copy the bundled DuskClient mod (the build for the profile's game line)
-/// into its `mods/`. Fabric instances get the mod force-loaded at launch
-/// anyway (see `install_and_launch`); this exists for users who want a
-/// visible copy they can disable from the mods list — a copy in `mods/`
-/// takes precedence over the forced one so the jar is never loaded twice.
-#[tauri::command(async)]
-pub fn install_bundled_client_mod(
-    app: AppHandle,
-    state: State<AppState>,
-    profile_id: String,
-) -> Result<Option<ProfileModDto>, String> {
-    let (profile, mods) = profile_and_mods(&state, &profile_id)?;
-    let Some(filename) = crate::cosmetics::client_mod_jar_for(&profile.game_version) else {
-        return Err(format!(
-            "DuskClient is built for {} — not for {}.",
-            crate::cosmetics::CLIENT_MOD_GAME_VERSIONS,
-            profile.game_version
-        ));
-    };
-    let Some(src) = crate::cosmetics::bundled_client_mod_jar(&app, &state.data_dir, filename) else {
-        return Err("Bundled client mod is not packaged in this build yet.".into());
-    };
-    let filename = filename.to_string();
-    std::fs::create_dir_all(&mods).map_err(|e| e.to_string())?;
-    std::fs::copy(&src, mods.join(&filename)).map_err(|e| e.to_string())?;
-    let _ = state.patch_profile(&profile_id, |p| {
-        if !p.mod_filenames.contains(&filename) {
-            p.mod_filenames.push(filename.clone());
-        }
-    });
-    Ok(Some(dto_for(&mods.join(&filename), filename, true)))
 }
 
 #[cfg(test)]
