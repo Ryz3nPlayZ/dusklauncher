@@ -417,6 +417,19 @@ function SettingsTab({
     }
   };
 
+  const repair = async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      await api.repairProfile(profile.id);
+      setNote('Every game file gets checked again on the next launch.');
+    } catch (e) {
+      setNote(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const exportPack = async () => {
     setBusy(true);
     setNote(null);
@@ -598,6 +611,15 @@ function SettingsTab({
             <TT size={16} tone={isTauri ? 'plain' : 'dim'}>
               EXPORT
             </TT>
+          </PxButton>
+          <PxButton
+            family="grey"
+            height="md"
+            disabled={busy}
+            title="Check every game file on the next launch and replace damaged ones"
+            onClick={() => void repair()}
+          >
+            <TT size={16}>REPAIR</TT>
           </PxButton>
           <PxButton
             family="grey"

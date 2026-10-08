@@ -582,13 +582,15 @@ pub async fn download_files(
 ) -> Result<u64> {
     let total = downloads.len() as u64;
     let mut done = 0u64;
-    // report in chunks to avoid unbounded closure state
-    let chunk = 24;
-    for group in downloads.chunks(chunk) {
-        download::download_all(client, group.to_vec(), 8, |_| {}).await?;
-        done += group.len() as u64;
-        on_progress(done, total);
-    }
+    // one pool for the whole pack: chunking it made each batch wait on its
+    // slowest file before the next started
+    download::download_all(client, downloads, 10, |ev| {
+        if let download::ProgressEvent::FileDone { .. } = ev {
+            done += 1;
+            on_progress(done, total);
+        }
+    })
+    .await?;
     Ok(total)
 }
 

@@ -374,6 +374,33 @@ pub struct WorldDto {
     pub level: crate::worlds::LevelInfo,
 }
 
+/// REPAIR: forget which game files were verified and drop the extracted
+/// natives and the offline-launch record, so the next launch hashes every
+/// library and asset again, re-fetches anything damaged and re-extracts the
+/// natives. Worlds, mods and settings aren't touched.
+#[tauri::command]
+pub fn repair_profile(state: State<AppState>, id: String) -> Result<(), String> {
+    let profile = state
+        .profiles
+        .lock()
+        .unwrap()
+        .profiles
+        .iter()
+        .find(|p| p.id == id)
+        .cloned()
+        .ok_or("profile not found")?;
+    let dirs = profile.dirs(&state.data_dir);
+    let _ = std::fs::remove_file(dirs.libraries.join(VERIFIED_CACHE_FILE));
+    let _ = std::fs::remove_file(dirs.assets.join(VERIFIED_CACHE_FILE));
+    let _ = std::fs::remove_file(dirs.root.join(LAST_INSTALL_FILE));
+    for entry in std::fs::read_dir(&dirs.versions).into_iter().flatten().flatten() {
+        if entry.file_name().to_string_lossy().ends_with("-natives") && entry.path().is_dir() {
+            std::fs::remove_dir_all(entry.path()).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
 fn millis(t: std::time::SystemTime) -> u64 {
     t.duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
@@ -642,8 +669,15 @@ pub async fn install_and_launch(
     // mod twice. The mod reads other players' loadouts from the Dusk service.
     // DuskClient needs Fabric API; fetch it if missing, and if that can't
     // happen (offline, no copy) leave DuskClient out so the game still starts.
-    let fabric_api_ok =
-        profile.loader != Loader::Fabric || crate::mods::ensure_fabric_api(&app, &state, &profile, &dirs.mods).await;
+    if profile.loader == Loader::Fabric {
+        crate::cosmetics::refresh_client_mod_copy(&app, &state.data_dir, &dirs.mods, &profile.game_version);
+    }
+    // Only when DuskClient goes in: an instance that doesn't get it keeps
+    // exactly the mods its owner chose.
+    let injects_client = profile.loader == Loader::Fabric
+        && !crate::cosmetics::client_mod_in_mods(&dirs.mods)
+        && crate::cosmetics::client_mod_jar_for(&profile.game_version).is_some();
+    let fabric_api_ok = !injects_client || crate::mods::ensure_fabric_api(&app, &profile, &dirs.mods).await;
     let profile = {
         let mut p = profile;
         p.jvm_args.retain(|a| {
@@ -1037,6 +1071,11 @@ fn load_last_install(
     (last.key == install_key(profile) && jar.exists() && last.natives.exists()).then_some((last.version, last.natives))
 }
 
+/// Where the shared libraries and assets folders remember which files were
+/// already checked against their sha1 (see `download::VerifiedCache`).
+/// REPAIR deletes it, so the next launch hashes everything again.
+pub(crate) const VERIFIED_CACHE_FILE: &str = ".dusk-verified.json";
+
 type InstallResult = Result<
     (
         fasterlauncher_core::meta::VersionJson,
@@ -1125,7 +1164,8 @@ async fn install_profile(
     )));
     let emitter2 = emitter.clone();
     let sizes2 = sizes.clone();
-    download::download_all(client, libs, 12, move |ev| {
+    let lib_cache = Arc::new(download::VerifiedCache::load(dirs.libraries.join(VERIFIED_CACHE_FILE)));
+    let libs_done = download::download_all_cached(client, libs, 12, Some(lib_cache.clone()), move |ev| {
         if let download::ProgressEvent::FileDone { url } = ev {
             emitter2
                 .lock()
@@ -1133,8 +1173,9 @@ async fn install_profile(
                 .bump(sizes2.get(&url).copied().unwrap_or(0));
         }
     })
-    .await
-    .map_err(|e| e.to_string())?;
+    .await;
+    lib_cache.save();
+    libs_done.map_err(|e| e.to_string())?;
     emitter.lock().unwrap().flush(true);
 
     // Client jar
@@ -1145,17 +1186,21 @@ async fn install_profile(
         .ok_or("no client jar in version json")?;
     let client_jar_path = dirs.versions.join(format!("{}.jar", effective_version.id));
     let mut prog = ProgressEmitter::new(app.clone(), &profile.id, "client", 1, client_art.size);
-    download::download_one(
+    let client_done = download::download_all_cached(
         client,
-        &download::Download {
+        vec![download::Download {
             url: client_art.url,
             dest: client_jar_path,
             sha1: Some(client_art.sha1),
             size: Some(client_art.size),
-        },
+        }],
+        1,
+        Some(lib_cache.clone()),
+        |_| {},
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await;
+    lib_cache.save();
+    client_done.map_err(|e| e.to_string())?;
     prog.bump(0);
     prog.flush(true);
 
@@ -1163,19 +1208,29 @@ async fn install_profile(
     if let Some(idx) = &effective_version.asset_index {
         tokio::fs::create_dir_all(dirs.assets.join("indexes")).await.map_err(|e| e.to_string())?;
         let index_path = dirs.assets.join("indexes").join(format!("{}.json", idx.id));
-        let index_text = client
-            .get(&idx.url)
-            .send()
+        // the saved index when it's still the one the version names; a
+        // stale one is replaced, or the game would look up assets by it
+        let saved = tokio::fs::read_to_string(&index_path)
             .await
-            .map_err(|e| e.to_string())?
-            .error_for_status()
-            .map_err(|e| e.to_string())?
-            .text()
-            .await
-            .map_err(|e| e.to_string())?;
-        if !index_path.exists() {
-            tokio::fs::write(&index_path, &index_text).await.map_err(|e| e.to_string())?;
-        }
+            .ok()
+            .filter(|text| download::sha1_hex(text.as_bytes()) == idx.sha1);
+        let index_text = match saved {
+            Some(text) => text,
+            None => {
+                let text = client
+                    .get(&idx.url)
+                    .send()
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .error_for_status()
+                    .map_err(|e| e.to_string())?
+                    .text()
+                    .await
+                    .map_err(|e| e.to_string())?;
+                tokio::fs::write(&index_path, &text).await.map_err(|e| e.to_string())?;
+                text
+            }
+        };
         let index: serde_json::Value = serde_json::from_str(&index_text).map_err(|e| e.to_string())?;
         let objects = index
             .get("objects")
@@ -1207,7 +1262,8 @@ async fn install_profile(
         )));
         let emitter2 = emitter.clone();
         let sizes2 = sizes.clone();
-        download::download_all(client, asset_downloads, 16, move |ev| {
+        let asset_cache = Arc::new(download::VerifiedCache::load(dirs.assets.join(VERIFIED_CACHE_FILE)));
+        let assets_done = download::download_all_cached(client, asset_downloads, 16, Some(asset_cache.clone()), move |ev| {
             if let download::ProgressEvent::FileDone { url } = ev {
                 emitter2
                     .lock()
@@ -1215,8 +1271,9 @@ async fn install_profile(
                     .bump(sizes2.get(&url).copied().unwrap_or(0));
             }
         })
-        .await
-        .map_err(|e| e.to_string())?;
+        .await;
+        asset_cache.save();
+        assets_done.map_err(|e| e.to_string())?;
         emitter.lock().unwrap().flush(true);
     }
 

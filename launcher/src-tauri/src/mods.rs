@@ -10,7 +10,7 @@ use fasterlauncher_core::modrinth as mr;
 use fasterlauncher_core::profile::Profile;
 use serde::Serialize;
 use std::path::PathBuf;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 #[derive(Serialize)]
@@ -752,7 +752,7 @@ const FABRIC_API: (&str, &str) = ("P7dR8mSH", "fabric-api");
 /// The performance set the Dusk instance ships, as (Modrinth project, mod id):
 /// renderer, game logic, memory, GUI batching, entity culling, misc
 /// rendering fast paths and networking.
-const PERFORMANCE_MODS: &[(&str, &str)] = &[
+const PERFORMANCE_MODS: &[(&'static str, &'static str)] = &[
     ("sodium", "sodium"),
     ("lithium", "lithium"),
     ("ferrite-core", "ferritecore"),
@@ -801,30 +801,41 @@ fn fabric_mod_ids(dir: &std::path::Path) -> std::collections::HashSet<String> {
 
 /// Install each `(project, mod id)` whose mod isn't already in the profile's
 /// mods/, as the newest version for the instance. Ones Modrinth has no build
-/// of for this version are skipped. Returns how many were added.
+/// of for this version are skipped. Returns the required dependencies of
+/// every mod added, one list each.
 async fn install_missing(
     app: &AppHandle,
-    state: &State<'_, AppState>,
     profile: &Profile,
     dir: &std::path::Path,
-    wanted: &[(&str, &str)],
-) -> usize {
-    let held = fabric_mod_ids(dir);
-    let mut added = 0;
-    for (project, id) in wanted {
-        if held.contains(*id) {
+    wanted: &[(&'static str, &'static str)],
+) -> Vec<Vec<mr::VersionDependency>> {
+    let held = {
+        let dir = dir.to_path_buf();
+        tokio::task::spawn_blocking(move || fabric_mod_ids(&dir)).await.unwrap_or_default()
+    };
+    // a handful at a time: each is a version lookup and a download, and
+    // one after another made a fresh Dusk instance wait on sixteen round trips
+    let limit = std::sync::Arc::new(tokio::sync::Semaphore::new(6));
+    let mut jobs = tokio::task::JoinSet::new();
+    for (project, id) in wanted.iter().copied() {
+        if held.contains(id) {
             continue;
         }
-        let Ok(ver) =
-            mr::project_version_for_loader(&state.client, project, &profile.game_version, Some("fabric")).await
-        else {
-            continue;
-        };
-        if install_version_file(app.clone(), state.clone(), profile.id.clone(), "mod", dir.to_path_buf(), ver)
-            .await
-            .is_ok()
-        {
-            added += 1;
+        let (app, limit, dir) = (app.clone(), limit.clone(), dir.to_path_buf());
+        let (profile_id, game_version) = (profile.id.clone(), profile.game_version.clone());
+        jobs.spawn(async move {
+            let _permit = limit.acquire_owned().await.ok()?;
+            let state = app.state::<AppState>();
+            let ver = mr::project_version_for_loader(&state.client, project, &game_version, Some("fabric")).await.ok()?;
+            let deps = ver.dependencies.clone();
+            install_version_file(app.clone(), state, profile_id, "mod", dir, ver).await.ok()?;
+            Some(deps)
+        });
+    }
+    let mut added = Vec::new();
+    while let Some(done) = jobs.join_next().await {
+        if let Ok(Some(deps)) = done {
+            added.push(deps);
         }
     }
     added
@@ -833,12 +844,15 @@ async fn install_missing(
 /// Make sure a Fabric profile has Fabric API before launch. Returns whether
 /// it's there afterwards: offline with no copy, it isn't, and the caller
 /// leaves DuskClient out rather than have the loader refuse to start.
-pub async fn ensure_fabric_api(app: &AppHandle, state: &State<'_, AppState>, profile: &Profile, dir: &std::path::Path) -> bool {
-    if fabric_mod_ids(dir).contains(FABRIC_API.1) {
+pub async fn ensure_fabric_api(app: &AppHandle, profile: &Profile, dir: &std::path::Path) -> bool {
+    let has_it = |dir: std::path::PathBuf| async move {
+        tokio::task::spawn_blocking(move || fabric_mod_ids(&dir).contains(FABRIC_API.1)).await.unwrap_or(false)
+    };
+    if has_it(dir.to_path_buf()).await {
         return true;
     }
-    install_missing(app, state, profile, dir, &[FABRIC_API]).await;
-    fabric_mod_ids(dir).contains(FABRIC_API.1)
+    install_missing(app, profile, dir, &[FABRIC_API]).await;
+    has_it(dir.to_path_buf()).await
 }
 
 /// Dusk Essentials — what every Dusk profile is built from (docs/MODPACK.md):
@@ -880,26 +894,9 @@ pub async fn install_dusk_essentials(
         return Err("Dusk Essentials is for Fabric instances.".into());
     }
     let held = fabric_mod_ids(&dir);
-    let mut added = 0;
-    let mut deps = Vec::new();
-    for (project, id) in DUSK_ESSENTIALS {
-        if held.contains(*id) {
-            continue;
-        }
-        let Ok(ver) =
-            mr::project_version_for_loader(&state.client, project, &profile.game_version, Some("fabric")).await
-        else {
-            continue;
-        };
-        let next = ver.dependencies.clone();
-        if install_version_file(app.clone(), state.clone(), profile.id.clone(), "mod", dir.clone(), ver)
-            .await
-            .is_ok()
-        {
-            added += 1;
-            deps.extend(next);
-        }
-    }
+    let added = install_missing(&app, &profile, &dir, DUSK_ESSENTIALS).await;
+    let deps: Vec<_> = added.iter().flatten().cloned().collect();
+    let added = added.len();
     // nothing resolved on a fresh instance: Modrinth is unreachable, and the
     // first-run seed falls back to the bundled pack on this error
     if added == 0 && held.is_empty() {
@@ -926,7 +923,10 @@ pub async fn install_performance_mods(
     }
     let mut wanted = vec![FABRIC_API];
     wanted.extend_from_slice(PERFORMANCE_MODS);
-    Ok(install_missing(&app, &state, &profile, &dir, &wanted).await)
+    let added = install_missing(&app, &profile, &dir, &wanted).await;
+    let deps = added.iter().flatten().cloned().collect();
+    install_required_deps(&app, &state, &profile, &dir, deps).await;
+    Ok(added.len())
 }
 
 /// Download a version's primary file into `dir` and register it.

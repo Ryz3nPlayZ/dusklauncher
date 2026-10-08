@@ -57,6 +57,7 @@ pub fn run() {
             commands::update_profile,
             commands::delete_profile,
             commands::duplicate_profile,
+            commands::repair_profile,
             commands::list_worlds,
             commands::show_in_folder,
             crash::reveal_crash_report,

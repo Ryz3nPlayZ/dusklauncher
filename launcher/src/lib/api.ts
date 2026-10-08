@@ -1548,6 +1548,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     if (patch.javaPath !== undefined) p.javaPath = patch.javaPath.trim() || null;
     return structuredClone(p) as T;
   }
+  if (cmd === 'repair_profile') return undefined as T;
   if (cmd === 'duplicate_profile') {
     const list = fixtures.list_profiles as Profile[];
     const src = list.find((x) => x.id === args?.id);
@@ -1778,6 +1779,7 @@ export const api = {
   deleteProfile: (id: string) => invoke<void>('delete_profile', { id }),
   /** a new instance with this one's settings and folder (not its logs or screenshots) */
   duplicateProfile: (id: string) => invoke<Profile>('duplicate_profile', { id }),
+  repairProfile: (id: string) => invoke<void>('repair_profile', { id }),
   launch: (profileId: string) => invoke<void>('install_and_launch', { profileId }),
   /** launch straight onto a server (a friend's, an invite) without saving it on the instance */
   joinServer: (profileId: string, server: string) =>

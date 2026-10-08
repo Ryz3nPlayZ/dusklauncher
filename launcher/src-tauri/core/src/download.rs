@@ -29,6 +29,74 @@ pub async fn download_all(
     client: &reqwest::Client,
     downloads: Vec<Download>,
     concurrency: usize,
+    on_progress: impl FnMut(ProgressEvent),
+) -> Result<usize> {
+    download_all_cached(client, downloads, concurrency, None, on_progress).await
+}
+
+/// Files already checked against their sha1, keyed by path, with the size
+/// and modification time they had then. A launch re-checks thousands of
+/// assets and libraries; hashing every one of them each time costs seconds
+/// of disk and CPU for files that haven't changed since they were verified.
+/// A file whose size or mtime moved is hashed again.
+pub struct VerifiedCache {
+    path: PathBuf,
+    entries: std::sync::Mutex<std::collections::HashMap<String, (u64, u128)>>,
+    dirty: std::sync::atomic::AtomicBool,
+}
+
+impl VerifiedCache {
+    /// Load the cache kept at `path` (empty when missing or unreadable).
+    pub fn load(path: PathBuf) -> Self {
+        let entries = std::fs::read(&path)
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default();
+        Self { path, entries: std::sync::Mutex::new(entries), dirty: false.into() }
+    }
+
+    /// Write the cache back if anything was added.
+    pub fn save(&self) {
+        if !self.dirty.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+        let json = serde_json::to_vec(&*self.entries.lock().unwrap());
+        if let (Ok(json), Some(parent)) = (json, self.path.parent()) {
+            let _ = std::fs::create_dir_all(parent);
+            let tmp = self.path.with_extension("tmp");
+            if std::fs::write(&tmp, json).is_ok() {
+                let _ = std::fs::rename(&tmp, &self.path);
+            }
+        }
+    }
+
+    fn stamp(meta: &std::fs::Metadata) -> Option<(u64, u128)> {
+        let mtime = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
+        Some((meta.len(), mtime))
+    }
+
+    fn key(dl: &Download) -> String {
+        format!("{}|{}", dl.dest.display(), dl.sha1.as_deref().unwrap_or(""))
+    }
+
+    fn holds(&self, dl: &Download, meta: &std::fs::Metadata) -> bool {
+        Self::stamp(meta).is_some_and(|s| self.entries.lock().unwrap().get(&Self::key(dl)) == Some(&s))
+    }
+
+    fn record(&self, dl: &Download) {
+        let Some(stamp) = std::fs::metadata(&dl.dest).ok().as_ref().and_then(Self::stamp) else { return };
+        self.entries.lock().unwrap().insert(Self::key(dl), stamp);
+        self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// [`download_all`], skipping the hash of files `cache` already verified
+/// (and recording the ones it checks or fetches). The caller saves it.
+pub async fn download_all_cached(
+    client: &reqwest::Client,
+    downloads: Vec<Download>,
+    concurrency: usize,
+    cache: Option<Arc<VerifiedCache>>,
     mut on_progress: impl FnMut(ProgressEvent),
 ) -> Result<usize> {
     on_progress(ProgressEvent::Started { total: downloads.len() });
@@ -38,39 +106,41 @@ pub async fn download_all(
     ));
     let mut failed: Vec<(String, String)> = Vec::new();
 
+    // each finished file is reported as it lands, not when its worker
+    // runs out of queue, so progress moves during the install
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<std::result::Result<String, (String, String)>>();
     let mut workers = tokio::task::JoinSet::new();
     for _ in 0..concurrency.max(1) {
         let client = client.clone();
         let queue = queue.clone();
+        let cache = cache.clone();
+        let tx = tx.clone();
         workers.spawn(async move {
-            let mut results = Vec::new();
             loop {
                 let next = queue.lock().await.pop_front();
                 let Some(dl) = next else { break };
-                let res = download_one(&client, &dl).await;
-                match res {
-                    Ok(()) => results.push(Ok(dl.url.clone())),
-                    Err(e) => results.push(Err((dl.url.clone(), e.to_string()))),
-                }
+                let res = download_checked(&client, &dl, cache.as_deref()).await;
+                let _ = tx.send(res.map(|()| dl.url.clone()).map_err(|e| (dl.url.clone(), e.to_string())));
             }
-            results
         });
     }
+    drop(tx);
 
     let mut done = 0usize;
-    while let Some(joined) = workers.join_next().await {
-        for result in joined.map_err(|e| Error::Other(e.to_string()))? {
-            match result {
-                Ok(url) => {
-                    done += 1;
-                    on_progress(ProgressEvent::FileDone { url });
-                }
-                Err((url, error)) => {
-                    on_progress(ProgressEvent::Failed { url: url.clone(), error: error.clone() });
-                    failed.push((url, error));
-                }
+    while let Some(result) = rx.recv().await {
+        match result {
+            Ok(url) => {
+                done += 1;
+                on_progress(ProgressEvent::FileDone { url });
+            }
+            Err((url, error)) => {
+                on_progress(ProgressEvent::Failed { url: url.clone(), error: error.clone() });
+                failed.push((url, error));
             }
         }
+    }
+    while let Some(joined) = workers.join_next().await {
+        joined.map_err(|e| Error::Other(e.to_string()))?;
     }
     on_progress(ProgressEvent::Finished);
 
@@ -83,9 +153,21 @@ pub async fn download_all(
 }
 
 pub async fn download_one(client: &reqwest::Client, dl: &Download) -> Result<()> {
-    if verify_existing(dl).await? {
+    download_checked(client, dl, None).await
+}
+
+async fn download_checked(client: &reqwest::Client, dl: &Download, cache: Option<&VerifiedCache>) -> Result<()> {
+    if verify_existing(dl, cache).await? {
         return Ok(());
     }
+    fetch_with_retries(client, dl).await?;
+    if let Some(cache) = cache {
+        cache.record(dl);
+    }
+    Ok(())
+}
+
+async fn fetch_with_retries(client: &reqwest::Client, dl: &Download) -> Result<()> {
     // Retry what a flaky network does to a fetch: a truncated body (checksum
     // mismatch), a reset or timed-out connection, a 5xx or 429. Mojang's CDN
     // drops connections mid-body often enough to fail a 4000-object asset
@@ -140,6 +222,11 @@ async fn fetch_and_write(client: &reqwest::Client, dl: &Download) -> Result<()> 
     Ok(())
 }
 
+/// Hex sha1 of some bytes.
+pub fn sha1_hex(bytes: &[u8]) -> String {
+    hex::encode(Sha1::digest(bytes))
+}
+
 /// Hex sha1 of a file on disk — the key Modrinth's `version_files` lookup
 /// answers by.
 pub async fn sha1_file(path: &Path) -> Result<String> {
@@ -149,23 +236,62 @@ pub async fn sha1_file(path: &Path) -> Result<String> {
     Ok(hex::encode(hasher.finalize()))
 }
 
-async fn verify_existing(dl: &Download) -> Result<bool> {
+async fn verify_existing(dl: &Download, cache: Option<&VerifiedCache>) -> Result<bool> {
     let Ok(meta) = tokio::fs::metadata(&dl.dest).await else { return Ok(false) };
     if let Some(size) = dl.size {
         if meta.len() != size {
             return Ok(false);
         }
     }
-    let Some(expected) = &dl.sha1 else { return Ok(true) };
-    let bytes = tokio::fs::read(&dl.dest).await?;
-    let mut hasher = Sha1::new();
-    hasher.update(&bytes);
-    Ok(hex::encode(hasher.finalize()) == *expected)
+    let Some(expected) = dl.sha1.clone() else { return Ok(true) };
+    if cache.is_some_and(|c| c.holds(dl, &meta)) {
+        return Ok(true);
+    }
+    // hashing a big jar is CPU work: keep it off the async workers
+    let path = dl.dest.clone();
+    let ok = tokio::task::spawn_blocking(move || -> std::io::Result<bool> {
+        let bytes = std::fs::read(&path)?;
+        let mut hasher = Sha1::new();
+        hasher.update(&bytes);
+        Ok(hex::encode(hasher.finalize()) == expected)
+    })
+    .await
+    .map_err(|e| Error::Other(e.to_string()))??;
+    if ok {
+        if let Some(cache) = cache {
+            cache.record(dl);
+        }
+    }
+    Ok(ok)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn trusts_a_verified_file_until_it_changes() {
+        let dir = std::env::temp_dir().join(format!("dusk-verified-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let dest = dir.join("a.bin");
+        std::fs::write(&dest, b"hello").unwrap();
+        let dl = Download {
+            url: String::new(),
+            dest: dest.clone(),
+            sha1: Some("aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d".into()),
+            size: Some(5),
+        };
+        let cache = VerifiedCache::load(dir.join("verified.json"));
+        assert!(verify_existing(&dl, Some(&cache)).await.unwrap());
+        cache.save();
+        let cache = VerifiedCache::load(dir.join("verified.json"));
+        assert!(cache.holds(&dl, &std::fs::metadata(&dest).unwrap()));
+        // same size, different bytes, new mtime: hashed again and rejected
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(&dest, b"jello").unwrap();
+        assert!(!verify_existing(&dl, Some(&cache)).await.unwrap());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn retries_corrupt_bodies_but_not_local_failures() {

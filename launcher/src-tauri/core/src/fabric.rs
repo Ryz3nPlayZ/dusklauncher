@@ -86,6 +86,13 @@ pub async fn install_fabric(
     versions_dir: &Path,
     vanilla: &meta::VersionJson,
 ) -> Result<meta::VersionJson> {
+    // a pinned loader's profile never changes: the one saved last launch
+    // is the answer, without a round trip to meta
+    if loader_version.is_some_and(|v| !v.is_empty() && v != "latest") {
+        if let Some(saved) = saved_profile(versions_dir, game_version, loader_version) {
+            return Ok(saved);
+        }
+    }
     let profile = match fetch_fabric_profile(client, game_version, loader_version).await {
         Ok(p) => p,
         Err(e) => return saved_profile(versions_dir, game_version, loader_version).ok_or(e),

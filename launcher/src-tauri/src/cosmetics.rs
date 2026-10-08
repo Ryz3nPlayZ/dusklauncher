@@ -67,9 +67,42 @@ pub fn client_mod_jar_for(game_version: &str) -> Option<&'static str> {
 }
 
 /// Whether a `mods/` folder already carries one of our jars (a copy from
-/// "install bundled client mod" wins over the forced one).
+/// "install bundled client mod" wins over the forced one), switched on or
+/// off: a copy the player disabled means they don't want DuskClient there.
 pub fn client_mod_in_mods(mods_dir: &Path) -> bool {
-    CLIENT_MOD_JARS.iter().any(|j| mods_dir.join(j).exists())
+    CLIENT_MOD_JARS
+        .iter()
+        .any(|j| mods_dir.join(j).exists() || mods_dir.join(format!("{j}.disabled")).exists())
+}
+
+/// Keep a visible DuskClient copy in `mods/` in step with the launcher: a
+/// copy is made once and the launcher updates under it, and an instance moved
+/// to another game version still holds the old line's jar, which the loader
+/// can't run. The enabled copy is replaced by this build's jar for the
+/// instance's version (or removed when there's none); a disabled one is left.
+pub fn refresh_client_mod_copy(app: &AppHandle, data_dir: &Path, mods_dir: &Path, game_version: &str) {
+    let want = client_mod_jar_for(game_version);
+    for jar in CLIENT_MOD_JARS {
+        let path = mods_dir.join(jar);
+        if !path.is_file() {
+            continue;
+        }
+        let Some(want) = want else {
+            let _ = std::fs::remove_file(&path);
+            continue;
+        };
+        let Some(src) = bundled_client_mod_jar(app, data_dir, want) else { continue };
+        let same = jar == want
+            && std::fs::metadata(&src).ok().map(|m| m.len()) == std::fs::metadata(&path).ok().map(|m| m.len())
+            && std::fs::read(&src).ok() == std::fs::read(&path).ok();
+        if same {
+            continue;
+        }
+        let dest = mods_dir.join(want);
+        if std::fs::copy(&src, &dest).is_ok() && dest != path {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
 }
 const REGISTRY_PATH: &str = "assets/duskclient/cosmetics/registry.json";
 const COSMETICS_PREFIX: &str = "assets/duskclient/cosmetics/";
