@@ -44,8 +44,9 @@ export default function Cosmetics({
 }) {
   const [skins, setSkins] = useState<Skin[]>([]);
   const [data, setData] = useState<Record<string, string>>({});
-  /* what the PNG says about each skin's arms — the game reads the same
-     pixels, so AUTO here is what AUTO means in-game */
+  /* what the PNG says about each skin's arms. The PNG carries no flag: the
+     model sent with the skin is what the game uses, so a skin can override
+     this (its model) when the pixels read wrong */
   const [detected, setDetected] = useState<Record<string, SkinModel>>({});
   const [picked, setPicked] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('SKINS');
@@ -157,10 +158,27 @@ export default function Cosmetics({
   }, [tab, loadout, loadWardrobe]);
 
   const current = skins.find((s) => s.selected) ?? null;
-  /** the arm model the upload declares: read off the PNG the way the game does */
-  const pickedModel: SkinModel = (picked ? detected[picked] : undefined) ?? 'classic';
-  /** the previewed skin is the one already on the account / selected locally */
-  const applied = !!picked && picked === current?.name;
+  const modelOf = (s: Skin | undefined): SkinModel | undefined => s?.model ?? (s ? detected[s.name] : undefined);
+  const pickedSkin = skins.find((s) => s.name === picked);
+  /** the arm model the upload declares: the skin's own pick, else read off the PNG */
+  const pickedModel: SkinModel = modelOf(pickedSkin) ?? 'classic';
+  /** the previewed skin is the one already on the account / selected locally,
+   *  with the arms the account has for it */
+  const applied =
+    !!picked && picked === current?.name && (!account?.skinVariant || account.skinVariant === pickedModel);
+  const flipArms = async () => {
+    if (!pickedSkin) return;
+    const next: SkinModel = pickedModel === 'slim' ? 'classic' : 'slim';
+    // matching what the PNG reads is the same as no pick
+    const pin = next === detected[pickedSkin.name] ? null : next;
+    setNote(null);
+    try {
+      await api.setSkinModel(pickedSkin.name, pin);
+      setSkins((cur) => cur.map((s) => (s.name === pickedSkin.name ? { ...s, model: pin ?? undefined } : s)));
+    } catch (e) {
+      setNote(String(e));
+    }
+  };
   const wornCape = equippedCape(loadout);
   const wornAcc = useMemo(() => equippedAccessories(loadout), [loadout]);
   const lookDirty = pickedCape !== wornCape || !sameIds(pickedAcc, wornAcc);
@@ -483,6 +501,8 @@ export default function Cosmetics({
                     title={
                       applied
                         ? 'This skin is already applied'
+                        : picked === current?.name
+                        ? `Apply again with ${pickedModel} arms`
                         : account?.authenticated
                         ? 'Apply to your Minecraft account'
                         : account?.offline
@@ -514,6 +534,13 @@ export default function Cosmetics({
                     label={pose}
                     onClick={() => onPose(POSES[(POSES.indexOf(pose) + 1) % POSES.length])}
                   />
+                  {pickedSkin && (
+                    <NavCell
+                      label={`${pickedModel === 'slim' ? 'SLIM' : 'CLASSIC'} ARMS`}
+                      title={`${pickedSkin.model ? 'Picked' : 'Read off the skin'}: the model sent with it. Switch if the arms look wrong.`}
+                      onClick={() => void flipArms()}
+                    />
+                  )}
                   <div className="win__fill" />
                   <NavLabel label={`${skins.length} SKIN${skins.length === 1 ? '' : 'S'}`} />
                 </div>
@@ -549,7 +576,7 @@ export default function Cosmetics({
                         onKeyDown={(e) => e.key === 'Enter' && setPicked(s.name)}
                       >
                         <div className="skin-tile__stage">
-                          <SkinSnapshot skin={data[s.name]} model={detected[s.name] ?? 'auto'} />
+                          <SkinSnapshot skin={data[s.name]} model={modelOf(s) ?? 'auto'} />
                         </div>
                         <span className="skin-tile__name">
                           <TT size={16} tone={s.selected ? 'green' : 'dim'}>

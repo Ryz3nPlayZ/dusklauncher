@@ -1560,7 +1560,7 @@ pub async fn get_current_account(state: State<'_, AppState>) -> Result<Option<Ac
             username: session.username,
             uuid: session.uuid,
             authenticated: false,
-            skin_variant: String::new(),
+            skin_variant: crate::skins::offline_model(&state),
             offline: true,
         }));
     }

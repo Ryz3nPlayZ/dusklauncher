@@ -104,6 +104,8 @@ export interface Skin {
   name: string;
   addedAt: number;
   selected: boolean;
+  /** the arms picked for this skin; absent means read off the PNG */
+  model?: SkinModel;
 }
 
 /** One bundled cape as the client-mod registry describes it. */
@@ -2241,6 +2243,7 @@ export const api = {
   uploadSkin: (name: string, variant: SkinModel) =>
     invoke<void>('upload_skin', { name, variant }),
   /** pin a wardrobe skin's arm model; null goes back to auto-detect */
+  setSkinModel: (name: string, model: SkinModel | null) => invoke<void>('set_skin_model', { name, model }),
   accountSkin: () => invoke<string | null>('get_account_skin'),
 
   listCosmetics: () => invoke<CosmeticsCatalog>('list_cosmetics'),

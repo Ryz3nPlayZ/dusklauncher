@@ -18,6 +18,10 @@ pub struct SkinDto {
     pub name: String,
     pub added_at: u64,
     pub selected: bool,
+    /// the arm model picked for this skin; none means read it off the PNG
+    /// (the launcher's lib/skin.ts and the mod's SkinLibrary share the rule)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -93,6 +97,7 @@ pub async fn import_skin(app: tauri::AppHandle, state: State<'_, AppState>) -> R
         name: name.clone(),
         added_at: now_millis(),
         selected: false,
+        model: None,
     };
     index.skins.retain(|s| s.name != name);
     index.skins.push(dto.clone());
@@ -157,6 +162,22 @@ pub fn set_selected_skin(state: State<'_, AppState>, name: String) -> Result<(),
     Ok(())
 }
 
+/// Say which arms a wardrobe skin has (`"classic"` or `"slim"`), or go back
+/// to reading them off the PNG (`null`). The PNG carries no flag, so this is
+/// what decides the model sent with the skin when the PNG reads wrong.
+#[tauri::command(async)]
+pub fn set_skin_model(state: State<'_, AppState>, name: String, model: Option<String>) -> Result<(), String> {
+    let model = model.map(|m| m.to_lowercase());
+    if model.as_deref().is_some_and(|m| m != "classic" && m != "slim") {
+        return Err("model must be \"classic\" or \"slim\"".into());
+    }
+    let mut index = load_index(&state);
+    let skin = index.skins.iter_mut().find(|s| s.name == name).ok_or("skin not found")?;
+    skin.model = model;
+    save_index(&state, &index);
+    Ok(())
+}
+
 /// Return the selected skin PNG as a data URL (skins are a few KB).
 #[tauri::command(async)]
 pub fn read_skin(state: State<'_, AppState>, name: String) -> Result<String, String> {
@@ -184,7 +205,8 @@ pub async fn upload_skin(
     if crate::commands::offline_session(&state).is_some() {
         let path = format!("/v1/me/skin?model={variant}");
         let resp = crate::dusk::send(&state, reqwest::Method::PUT, &path, Some(crate::dusk::Body::Raw(png, "image/png"))).await?;
-        crate::dusk::parse::<serde_json::Value>(resp).await?;
+        let saved = crate::dusk::parse::<serde_json::Value>(resp).await?;
+        remember_offline_model(&state, saved.get("model").and_then(|m| m.as_str()).unwrap_or(&variant));
         return Ok(());
     }
     let mut session = crate::auth_store::load_session(&state.data_dir)
@@ -215,6 +237,7 @@ pub async fn reset_skin(state: State<'_, AppState>) -> Result<(), String> {
         if !resp.status().is_success() {
             return Err(format!("Dusk service returned HTTP {}", resp.status().as_u16()));
         }
+        remember_offline_model(&state, "");
         return Ok(());
     }
     let mut session = crate::auth_store::load_session(&state.data_dir)
@@ -237,31 +260,31 @@ pub async fn get_account_skin(state: State<'_, AppState>) -> Result<Option<Strin
     if let Some(offline) = crate::commands::offline_session(&state) {
         return Ok(offline_skin(&state, &offline.username).await);
     }
-    let Some(session) = crate::auth_store::load_session(&state.data_dir) else {
+    let Some(mut session) = crate::auth_store::load_session(&state.data_dir) else {
         return Ok(None);
     };
-    let mut skin_url = session.skin_url.clone();
-    if skin_url.is_empty() {
-        // Sessions saved before skin tracking exists have no URL — backfill
-        // via a profile fetch (the token is fresh enough in practice; if not,
-        // the avatar simply stays empty until the next sign-in).
+    // Ask Mojang what the account wears now: a skin changed in game or on
+    // minecraft.net (and its arm model) shows here without a re-login.
+    // Offline or with a stale token, the one last seen stands.
+    if !session.needs_refresh() {
         if let Ok(profile) =
             fasterlauncher_core::auth::fetch_profile(&state.client, &session.access_token).await
         {
-            let mut session = session;
-            if let Some(active) = profile.active_skin() {
-                skin_url = active.url.clone();
-                session.skin_url = skin_url.clone();
-                session.skin_variant = active.variant.clone();
+            let (url, variant) = profile
+                .active_skin()
+                .map(|s| (s.url.clone(), s.variant.clone()))
+                .unwrap_or_default();
+            if url != session.skin_url || variant != session.skin_variant {
+                session.skin_url = url;
+                session.skin_variant = variant;
                 crate::auth_store::save_session(&state.data_dir, &session);
-            } else {
-                return Ok(None);
             }
-        } else {
-            return Ok(None);
         }
     }
-    Ok(Some(account_skin_data_url(&state, &skin_url).await?))
+    if session.skin_url.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(account_skin_data_url(&state, &session.skin_url).await?))
 }
 
 /// The offline identity's skin on the Dusk service, as a data URL; None
@@ -274,11 +297,40 @@ async fn offline_skin(state: &AppState, username: &str) -> Option<String> {
         .send()
         .await
         .ok()?;
+    if resp.status() == reqwest::StatusCode::NOT_FOUND {
+        remember_offline_model(state, "");
+    }
     if !resp.status().is_success() {
         return None;
     }
+    let model = resp.headers().get("x-skin-model").and_then(|v| v.to_str().ok()).unwrap_or("classic").to_string();
+    remember_offline_model(state, &model);
     let png = resp.bytes().await.ok()?;
     Some(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))
+}
+
+fn offline_model_path(state: &AppState) -> PathBuf {
+    state.data_dir.join("cache").join("offline-skin.model")
+}
+
+/// What the Dusk service last said about the offline skin's arms, so the
+/// account knows it the way a Microsoft one knows Mojang's; "" for none.
+fn remember_offline_model(state: &AppState, model: &str) {
+    let path = offline_model_path(state);
+    if model.is_empty() {
+        let _ = std::fs::remove_file(path);
+    } else if std::fs::read_to_string(&path).ok().as_deref() != Some(model) {
+        let _ = std::fs::create_dir_all(state.data_dir.join("cache"));
+        let _ = std::fs::write(path, model);
+    }
+}
+
+/// The offline skin's arm model as last seen ("classic"/"slim"), or "".
+pub(crate) fn offline_model(state: &AppState) -> String {
+    match std::fs::read_to_string(offline_model_path(state)).unwrap_or_default().trim() {
+        m @ ("classic" | "slim") => m.to_string(),
+        _ => String::new(),
+    }
 }
 
 /// One Mojang cape the account owns (Migrator, Pan, …), with its texture.
@@ -363,4 +415,21 @@ fn now_millis() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_skins_arm_pick_round_trips_and_older_indexes_still_load() {
+        let old: SkinIndex = serde_json::from_str(r#"{"skins":[{"name":"steve","addedAt":1,"selected":true}]}"#).unwrap();
+        assert_eq!(old.skins[0].model, None);
+        // no pick, no key: the mod's SkinLibrary reads the PNG then
+        assert!(!serde_json::to_string(&old).unwrap().contains("model"));
+        let mut index = old;
+        index.skins[0].model = Some("slim".into());
+        let back: SkinIndex = serde_json::from_str(&serde_json::to_string(&index).unwrap()).unwrap();
+        assert_eq!(back.skins[0].model.as_deref(), Some("slim"));
+    }
 }

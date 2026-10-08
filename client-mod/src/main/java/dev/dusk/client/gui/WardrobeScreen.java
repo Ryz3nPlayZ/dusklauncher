@@ -92,7 +92,7 @@ public class WardrobeScreen extends PanelScreen {
     private final boolean offline = DuskAccount.offline();
     @Nullable private Set<Integer> owned;
     @Nullable private String picked; // library skin in the preview; null: the account's own
-    /** Arm model per library skin, read off its PNG (see {@link SkinLibrary#slim}). */
+    /** Arm model per library skin: its pick in the launcher, else its PNG (see {@link SkinLibrary#slim(String, byte[])}). */
     private final Map<String, Boolean> slimOf = new ConcurrentHashMap<>();
     /** The look being put together; APPLY LOOK publishes it. -1: no cape. */
     private int pickedCape;
@@ -255,7 +255,7 @@ public class WardrobeScreen extends PanelScreen {
         if (name == null) return;
         act("Uploading skin...", () -> {
             byte[] png = SkinLibrary.read(name);
-            boolean variant = SkinLibrary.slim(png);
+            boolean variant = SkinLibrary.slim(name, png);
             SkinLibrary.select(name);
             if (offline) {
                 Http.Response r = DuskAccount.raw("PUT", "/v1/me/skin?model=" + (variant ? "slim" : "classic"), "image/png", png);
@@ -510,7 +510,7 @@ public class WardrobeScreen extends PanelScreen {
     private RemoteImages.Image skinImage(String name) {
         return images.get("skin:" + name, () -> {
             byte[] raw = SkinLibrary.read(name);
-            slimOf.put(name, SkinLibrary.slim(raw));
+            slimOf.put(name, SkinLibrary.slim(name, raw));
             return SkinLibrary.modernize(raw);
         });
     }

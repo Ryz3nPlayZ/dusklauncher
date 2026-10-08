@@ -229,6 +229,7 @@ pub fn run() {
             skins::set_selected_skin,
             skins::read_skin,
             skins::upload_skin,
+            skins::set_skin_model,
             skins::reset_skin,
             skins::get_account_skin,
             skins::list_account_capes,

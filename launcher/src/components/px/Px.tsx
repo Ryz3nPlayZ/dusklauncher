@@ -193,15 +193,17 @@ export function NavCell({
   active = false,
   label,
   className,
+  title,
   onClick,
 }: {
   active?: boolean;
   label: string;
   className?: string;
+  title?: string;
   onClick?: () => void;
 }) {
   return (
-    <button className={cellClass(active, className)} onClick={onClick}>
+    <button className={cellClass(active, className)} title={title} onClick={onClick}>
       <TT size={16} sx={NAV_SX}>
         {label}
       </TT>

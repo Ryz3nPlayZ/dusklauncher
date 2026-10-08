@@ -124,6 +124,24 @@ public final class SkinLibrary {
     private static final int[][] SLIM_GAPS = {{50, 16, 2, 4}, {54, 20, 2, 12}, {42, 48, 2, 4}, {46, 52, 2, 12}};
 
     /**
+     * Whether library skin {@code name} has slim arms: the model picked for it
+     * in the launcher's wardrobe ({@code "model"} in skins.json), else what
+     * {@link #slim(byte[])} reads off its PNG.
+     */
+    public static boolean slim(String name, byte[] png) {
+        for (JsonElement e : index().getAsJsonArray("skins")) {
+            if (!e.isJsonObject()) continue;
+            JsonObject o = e.getAsJsonObject();
+            if (o.has("name") && name.equals(o.get("name").getAsString()) && o.has("model") && o.get("model").isJsonPrimitive()) {
+                String model = o.get("model").getAsString();
+                if (model.equalsIgnoreCase("slim")) return true;
+                if (model.equalsIgnoreCase("classic")) return false;
+            }
+        }
+        return slim(png);
+    }
+
+    /**
      * Whether a skin has slim arms, read off the PNG the way the launcher's
      * wardrobe does (lib/skin.ts): a square skin whose slim-arm gaps are
      * transparent anywhere, or all black, or all white. Legacy 64x32 skins are classic.

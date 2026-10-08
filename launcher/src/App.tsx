@@ -81,6 +81,8 @@ export default function App() {
     setAccount(await api.getAccount());
     setAccountKnown(true);
     setSkin(await api.accountSkin());
+    // reading the skin learns its arm model (Mojang's, or the Dusk service's offline)
+    setAccount(await api.getAccount());
   }, []);
 
   // gifting ends when you leave the store
@@ -194,8 +196,12 @@ export default function App() {
       listen<GameState>('game-state', (s) => {
         setGame(s);
         if (s.state !== 'starting') setProgress(null);
-        // the session's playtime was just added to the instance
-        if (s.state === 'exited') void refreshProfiles();
+        // the session's playtime was just added to the instance, and the
+        // skin may have been changed in the game's wardrobe
+        if (s.state === 'exited') {
+          void refreshProfiles();
+          void refreshAccount();
+        }
       }),
       listen<GameActivity | null>('game-activity', setActivity),
       listen<CrashInfo>('game-crash', setCrash),
@@ -203,7 +209,7 @@ export default function App() {
     return () => {
       void Promise.all(unlisten).then((fns) => fns.forEach((f) => f?.()));
     };
-  },[refreshProfiles]);
+  },[refreshProfiles, refreshAccount]);
 
   const selected = useMemo(
     () => profiles.find((p) => p.id === settings?.selectedProfileId) ?? profiles[0] ?? null,
