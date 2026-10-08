@@ -57,7 +57,7 @@ fn store(root: &Path, old: Option<&str>, bytes: &[u8]) -> Result<String, String>
 }
 
 /// Record `bytes` as `profile_id`'s picture.
-fn apply(state: &AppState, profile_id: &str, bytes: &[u8]) -> Result<ProfileDto, String> {
+pub fn apply(state: &AppState, profile_id: &str, bytes: &[u8]) -> Result<ProfileDto, String> {
     let (root, old) = {
         let store = state.profiles.lock().unwrap();
         let p = store.profiles.iter().find(|p| p.id == profile_id).ok_or("profile not found")?;

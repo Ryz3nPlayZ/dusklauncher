@@ -33,6 +33,9 @@ pub struct ExternalInstanceDto {
     pub blocked: Option<String>,
     /// the group the other launcher files it under; the import keeps it
     pub group: Option<String>,
+    /// the other launcher's picture for it, when it has its own
+    #[serde(skip)]
+    pub icon: Option<PathBuf>,
 }
 
 /// Every instance the other launchers on this machine have.
@@ -99,10 +102,22 @@ pub async fn import_external_instance(state: State<'_, AppState>, path: String) 
                 .collect()
         })
         .unwrap_or_default();
-    let mut store = state.profiles.lock().unwrap();
-    store.profiles.push(profile);
-    state.save_profiles(&store);
-    Ok(dto(store.profiles.last().unwrap(), &state.data_dir))
+    let id = profile.id.clone();
+    {
+        let mut store = state.profiles.lock().unwrap();
+        store.profiles.push(profile);
+        state.save_profiles(&store);
+    }
+    if let Some(bytes) = match &ext.icon {
+        Some(icon) => tokio::fs::read(icon).await.ok(),
+        None => None,
+    } {
+        if let Err(e) = crate::icons::apply(&state, &id, &bytes) {
+            tracing::debug!("{}'s picture not kept: {e}", ext.name);
+        }
+    }
+    let store = state.profiles.lock().unwrap();
+    store.profiles.iter().find(|p| p.id == id).map(|p| dto(p, &state.data_dir)).ok_or_else(|| "profile not found".into())
 }
 
 fn scan_all() -> Vec<ExternalInstanceDto> {
@@ -158,6 +173,7 @@ fn entry(source: &str, name: String, game_dir: &Path, version: (Option<String>, 
         worlds: count("saves", &|p| p.join("level.dat").is_file()),
         blocked,
         group: None,
+        icon: None,
     }
 }
 
@@ -180,6 +196,11 @@ fn scan_prism(root: &Path) -> Vec<ExternalInstanceDto> {
         let name = ini_value(&cfg, "name").unwrap_or_else(|| file_name(&inst));
         let mut e = entry("Prism Launcher", name, &game_dir, parse_mmc_pack(&pack));
         e.group = groups.get(&file_name(&inst)).cloned();
+        // iconKey names a file in the launcher's icons folder; the built-in
+        // ones ("default", "grass", …) have none and stay behind
+        e.icon = ini_value(&cfg, "iconKey")
+            .filter(|k| !k.contains(['/', '\\']) && k != "..")
+            .and_then(|k| ["png", "jpg", "jpeg", "gif", "webp"].iter().map(|x| root.join("icons").join(format!("{k}.{x}"))).find(|p| p.is_file()));
         out.push(e);
     }
     out
@@ -278,19 +299,26 @@ fn scan_modrinth(root: &Path) -> Vec<ExternalInstanceDto> {
     };
     // groups are a JSON list per profile; read on their own so an app
     // version without the column still lists its instances
-    let groups: std::collections::HashMap<String, String> = (|| -> rusqlite::Result<Vec<(String, String)>> {
-        let conn = rusqlite::Connection::open_with_flags(&db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-        let mut stmt = conn.prepare("SELECT path, groups FROM profiles")?;
-        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
-        rows.collect()
-    })()
-    .unwrap_or_default()
-    .into_iter()
-    .filter_map(|(path, groups)| {
-        let first = serde_json::from_str::<Vec<String>>(&groups).ok()?.into_iter().find(|g| !g.trim().is_empty())?;
-        Some((path, first))
-    })
-    .collect();
+    let extra = |sql: &str| -> std::collections::HashMap<String, String> {
+        (|| -> rusqlite::Result<Vec<(String, Option<String>)>> {
+            let conn = rusqlite::Connection::open_with_flags(&db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+            let mut stmt = conn.prepare(sql)?;
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            rows.collect()
+        })()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|(path, v)| Some((path, v?)))
+        .collect()
+    };
+    let groups: std::collections::HashMap<String, String> = extra("SELECT path, groups FROM profiles")
+        .into_iter()
+        .filter_map(|(path, groups)| {
+            let first = serde_json::from_str::<Vec<String>>(&groups).ok()?.into_iter().find(|g| !g.trim().is_empty())?;
+            Some((path, first))
+        })
+        .collect();
+    let icons = extra("SELECT path, icon_path FROM profiles");
     rows.into_iter()
         .filter_map(|(path, name, game, loader, loader_version)| {
             let dir = root.join("profiles").join(&path);
@@ -298,6 +326,7 @@ fn scan_modrinth(root: &Path) -> Vec<ExternalInstanceDto> {
                 let loader = loader.to_ascii_lowercase();
                 let mut e = entry("Modrinth App", name, &dir, (Some(game), loader, loader_version.filter(|v| !v.is_empty())));
                 e.group = groups.get(&path).cloned();
+                e.icon = icons.get(&path).map(PathBuf::from).filter(|p| p.is_file());
                 e
             })
         })
