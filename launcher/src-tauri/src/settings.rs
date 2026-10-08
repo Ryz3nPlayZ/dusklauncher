@@ -142,18 +142,50 @@ impl Settings {
         Ok(())
     }
 
-    /// Parse the env_vars text block into KEY=VALUE pairs.
+    /// Parse the env_vars field into KEY=VALUE pairs: one per line, or several
+    /// on a line split by `;`. A `;` stays inside a value (a PATH list) unless
+    /// what follows it starts a new `KEY=`.
     pub fn env_pairs(&self) -> Vec<(String, String)> {
-        self.env_vars
-            .lines()
-            .filter_map(|line| {
-                let line = line.trim();
-                if line.is_empty() {
-                    return None;
-                }
-                let (k, v) = line.split_once('=')?;
-                Some((k.trim().to_string(), v.trim().to_string()))
+        let starts_pair = |s: &str| {
+            s.trim_start().split_once('=').is_some_and(|(k, _)| {
+                let k = k.trim();
+                !k.is_empty() && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
             })
-            .collect()
+        };
+        let mut pairs: Vec<(String, String)> = Vec::new();
+        for line in self.env_vars.lines() {
+            let mut open = false;
+            for part in line.split(';') {
+                if starts_pair(part) {
+                    let (k, v) = part.split_once('=').unwrap();
+                    pairs.push((k.trim().to_string(), v.trim().to_string()));
+                    open = true;
+                } else if open && !part.trim().is_empty() {
+                    let v = &mut pairs.last_mut().unwrap().1;
+                    v.push(';');
+                    v.push_str(part.trim());
+                }
+            }
+        }
+        pairs
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn env_pairs_split_on_lines_and_semicolons() {
+        let s = Settings { env_vars: "A=1; B = x=y\nPATH=/a;/b;C=3\n\njunk".into(), ..Settings::default() };
+        assert_eq!(
+            s.env_pairs(),
+            vec![
+                ("A".into(), "1".into()),
+                ("B".into(), "x=y".into()),
+                ("PATH".into(), "/a;/b".into()),
+                ("C".into(), "3".into()),
+            ]
+        );
     }
 }

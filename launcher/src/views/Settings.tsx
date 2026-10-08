@@ -298,24 +298,6 @@ export default function SettingsView({
                   )}
                 </Row>
               )}
-              <Row label="VOLUME">
-                <input
-                  className="slider"
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={Math.round(settings.volume * 100)}
-                  onChange={(e) => set({ volume: Number(e.target.value) / 100 })}
-                />
-                <Choice
-                  value={settings.muted ? 'on' : 'off'}
-                  onPick={(v) => set({ muted: v === 'on' })}
-                  options={[
-                    { value: 'off', label: 'SOUND' },
-                    { value: 'on', label: 'MUTED' },
-                  ]}
-                />
-              </Row>
             </>
           )}
 
@@ -343,11 +325,11 @@ export default function SettingsView({
                   />
                 </PxBox>
               </Row>
-              <Row label="ENVIRONMENT" hint="KEY=VALUE pairs, one per line, passed to the game process.">
+              <Row label="ENVIRONMENT" hint="KEY=VALUE pairs separated by ; passed to the game process.">
                 <PxBox family="panel" height="md" className="px--wide">
                   <input
                     className="input"
-                    placeholder="MESA_GL_VERSION_OVERRIDE=4.6"
+                    placeholder="MESA_GL_VERSION_OVERRIDE=4.6; __GL_THREADED_OPTIMIZATIONS=1"
                     value={settings.envVars}
                     onChange={(e) => set({ envVars: e.target.value })}
                   />
@@ -359,6 +341,25 @@ export default function SettingsView({
                     className="input"
                     value={settings.prelaunchHook}
                     onChange={(e) => set({ prelaunchHook: e.target.value })}
+                  />
+                </PxBox>
+              </Row>
+              <Row label="WRAPPER" hint="Starts Java through this command, e.g. gamemoderun or prime-run.">
+                <PxBox family="panel" height="md" className="px--wide">
+                  <input
+                    className="input"
+                    placeholder="gamemoderun"
+                    value={settings.wrapperHook}
+                    onChange={(e) => set({ wrapperHook: e.target.value })}
+                  />
+                </PxBox>
+              </Row>
+              <Row label="POST-EXIT HOOK" hint="Runs after the game closes.">
+                <PxBox family="panel" height="md" className="px--wide">
+                  <input
+                    className="input"
+                    value={settings.postExitHook}
+                    onChange={(e) => set({ postExitHook: e.target.value })}
                   />
                 </PxBox>
               </Row>
