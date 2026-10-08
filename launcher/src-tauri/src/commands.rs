@@ -430,7 +430,7 @@ fn millis(t: std::time::SystemTime) -> u64 {
     t.duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
-fn dir_size(dir: &std::path::Path) -> u64 {
+pub(crate) fn dir_size(dir: &std::path::Path) -> u64 {
     let mut total = 0u64;
     let mut stack = vec![dir.to_path_buf()];
     // capped walk: worlds can hold thousands of region files; 20k entries is

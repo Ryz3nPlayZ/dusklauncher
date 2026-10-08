@@ -118,7 +118,7 @@ fn dto_for(path: &PathBuf, filename: String, enabled: bool) -> ProfileModDto {
 /// 48px, and a few multi-megabyte pack.pngs would bloat every refresh.
 const MAX_ICON_BYTES: u64 = 512 * 1024;
 
-fn read_zip_entry(zip: &mut zip::ZipArchive<std::fs::File>, name: &str, cap: u64) -> Option<Vec<u8>> {
+pub(crate) fn read_zip_entry(zip: &mut zip::ZipArchive<std::fs::File>, name: &str, cap: u64) -> Option<Vec<u8>> {
     use std::io::Read;
     let mut f = zip.by_name(name).ok()?;
     if f.size() > cap {

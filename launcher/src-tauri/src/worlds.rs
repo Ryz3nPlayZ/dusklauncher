@@ -389,6 +389,227 @@ pub async fn import_world(app: AppHandle, state: State<'_, AppState>, profile_id
     tokio::task::spawn_blocking(move || import_all(&saves, paths)).await.map_err(|e| e.to_string())?
 }
 
+/* ── datapacks: a world's `datapacks/` ─────────────────────────────────── */
+
+/// One pack in a world's `datapacks/`: a zip, or a folder with a `pack.mcmeta`.
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Datapack {
+    /// its name on disk, without a `.disabled`
+    pub file: String,
+    /// pack.mcmeta's description, formatting stripped
+    pub description: Option<String>,
+    pub enabled: bool,
+    pub folder: bool,
+    pub size: u64,
+    pub icon: Option<String>,
+}
+
+fn datapacks_dir(state: &AppState, profile_id: &str, world: &str) -> Result<PathBuf, String> {
+    Ok(world_dir(state, profile_id, world)?.1.join("datapacks"))
+}
+
+/// A pack's description as plain text: a string, or a text component
+/// (`{"text":…,"extra":[…]}` or a list of them), less `§` codes.
+fn plain_text(v: &serde_json::Value) -> String {
+    let raw = match v {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Array(parts) => parts.iter().map(plain_text).collect(),
+        serde_json::Value::Object(o) => {
+            let mut s = o.get("text").and_then(|t| t.as_str()).unwrap_or("").to_string();
+            if let Some(extra) = o.get("extra") {
+                s.push_str(&plain_text(extra));
+            }
+            s
+        }
+        _ => String::new(),
+    };
+    let mut out = String::with_capacity(raw.len());
+    let mut chars = raw.chars();
+    while let Some(c) = chars.next() {
+        if c == '§' {
+            chars.next();
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+fn describe(meta: Option<Vec<u8>>, icon: Option<Vec<u8>>) -> (Option<String>, Option<String>) {
+    use base64::Engine;
+    let description = meta
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+        .and_then(|v| v.get("pack")?.get("description").map(plain_text))
+        .map(|d| d.trim().to_string())
+        .filter(|d| !d.is_empty());
+    let icon = icon
+        .filter(|b| b.len() <= 256 * 1024)
+        .map(|b| format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(b)));
+    (description, icon)
+}
+
+fn read_pack(path: &Path, file: String, enabled: bool) -> Option<Datapack> {
+    if path.is_dir() {
+        let meta = std::fs::read(path.join("pack.mcmeta")).ok()?;
+        let (description, icon) = describe(Some(meta), std::fs::read(path.join("pack.png")).ok());
+        return Some(Datapack { file, description, enabled, folder: true, size: crate::commands::dir_size(path), icon });
+    }
+    let size = std::fs::metadata(path).ok()?.len();
+    let mut zip = std::fs::File::open(path).ok().and_then(|f| zip::ZipArchive::new(f).ok());
+    let mut entry = |name: &str, cap| zip.as_mut().and_then(|z| crate::mods::read_zip_entry(z, name, cap));
+    let meta = entry("pack.mcmeta", 64 * 1024);
+    let icon = entry("pack.png", 256 * 1024);
+    let (description, icon) = describe(meta, icon);
+    Some(Datapack { file, description, enabled, folder: false, size, icon })
+}
+
+/// The packs in a world, by name. A zip named `x.zip.disabled` is off: the
+/// game only reads `.zip` files, and drops it from the world until it's back.
+fn list_packs(dir: &Path) -> Vec<Datapack> {
+    let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut out: Vec<Datapack> = rd
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            let path = e.path();
+            if let Some(base) = name.strip_suffix(".disabled").filter(|b| b.to_ascii_lowercase().ends_with(".zip")) {
+                read_pack(&path, base.to_string(), false)
+            } else if name.to_ascii_lowercase().ends_with(".zip") || path.is_dir() {
+                read_pack(&path, name, true)
+            } else {
+                None
+            }
+        })
+        .collect();
+    out.sort_by_key(|p| p.file.to_lowercase());
+    out
+}
+
+/// A pack's file name from the UI: a plain name directly in `datapacks/`.
+fn pack_path(dir: &Path, file: &str, enabled: bool) -> Result<PathBuf, String> {
+    if file.is_empty() || file.contains(['/', '\\']) || file == "." || file == ".." {
+        return Err("That pack isn't in this world.".into());
+    }
+    let path = if enabled { dir.join(file) } else { dir.join(format!("{file}.disabled")) };
+    if !path.exists() {
+        return Err("That pack isn't in this world.".into());
+    }
+    Ok(path)
+}
+
+#[tauri::command(async)]
+pub fn list_datapacks(state: State<AppState>, profile_id: String, world: String) -> Result<Vec<Datapack>, String> {
+    Ok(list_packs(&datapacks_dir(&state, &profile_id, &world)?))
+}
+
+/// Turn a zip pack on or off (`.disabled`); the world picks it up next time it opens.
+#[tauri::command]
+pub async fn set_datapack_enabled(
+    state: State<'_, AppState>,
+    profile_id: String,
+    world: String,
+    file: String,
+    enabled: bool,
+) -> Result<(), String> {
+    let dir = datapacks_dir(&state, &profile_id, &world)?;
+    ensure_closed(&state, &profile_id).await?;
+    let from = pack_path(&dir, &file, !enabled)?;
+    if from.is_dir() {
+        return Err("A pack folder can't be turned off here; remove it or turn it off in game with /datapack.".into());
+    }
+    let to = if enabled { dir.join(&file) } else { dir.join(format!("{file}.disabled")) };
+    std::fs::rename(from, to).map_err(|e| e.to_string())
+}
+
+/// Move a pack to the trash.
+#[tauri::command]
+pub async fn remove_datapack(
+    state: State<'_, AppState>,
+    profile_id: String,
+    world: String,
+    file: String,
+    enabled: bool,
+) -> Result<(), String> {
+    let dir = datapacks_dir(&state, &profile_id, &world)?;
+    ensure_closed(&state, &profile_id).await?;
+    let path = pack_path(&dir, &file, enabled)?;
+    tokio::task::spawn_blocking(move || trash::delete(&path))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("Couldn't move it to the trash: {e}"))
+}
+
+/// Copy zips (or pack folders) into a world's `datapacks/`. Resolves to the
+/// names they landed under; anything that isn't a datapack is left out.
+fn add_packs(dir: &Path, paths: Vec<PathBuf>) -> Result<ImportedWorlds, String> {
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let mut out = ImportedWorlds::default();
+    for path in paths {
+        let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let is_pack = if path.is_dir() {
+            path.join("pack.mcmeta").is_file()
+        } else {
+            path.extension().is_some_and(|e| e.eq_ignore_ascii_case("zip"))
+                && std::fs::File::open(&path)
+                    .ok()
+                    .and_then(|f| zip::ZipArchive::new(f).ok())
+                    .is_some_and(|mut z| z.by_name("pack.mcmeta").is_ok())
+        };
+        if !is_pack || path.starts_with(dir) {
+            out.skipped.push(file_name);
+            continue;
+        }
+        let (stem, ext) = match path.is_dir() {
+            true => (clean_name(&file_name), String::new()),
+            false => (
+                clean_name(path.file_stem().map(|s| s.to_string_lossy()).as_deref().unwrap_or("pack")),
+                ".zip".to_string(),
+            ),
+        };
+        let mut name = format!("{stem}{ext}");
+        let mut n = 1;
+        while dir.join(&name).exists() || dir.join(format!("{name}.disabled")).exists() {
+            name = format!("{stem} ({n}){ext}");
+            n += 1;
+        }
+        let target = dir.join(&name);
+        let copied = if path.is_dir() { copy_tree(&path, &target) } else { std::fs::copy(&path, &target).map(|_| ()) };
+        copied.map_err(|e| format!("Couldn't copy {file_name}: {e}"))?;
+        out.added.push(name);
+    }
+    Ok(out)
+}
+
+/// Datapacks dropped onto a world's pack list.
+#[tauri::command]
+pub async fn add_datapack_paths(
+    state: State<'_, AppState>,
+    profile_id: String,
+    world: String,
+    paths: Vec<String>,
+) -> Result<ImportedWorlds, String> {
+    let dir = datapacks_dir(&state, &profile_id, &world)?;
+    let paths = paths.into_iter().map(PathBuf::from).collect();
+    tokio::task::spawn_blocking(move || add_packs(&dir, paths)).await.map_err(|e| e.to_string())?
+}
+
+/// Pick datapack zips and add them to a world. Empty when the picker is cancelled.
+#[tauri::command]
+pub async fn add_datapacks(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    profile_id: String,
+    world: String,
+) -> Result<ImportedWorlds, String> {
+    let dir = datapacks_dir(&state, &profile_id, &world)?;
+    let Some(picked) = app.dialog().file().add_filter("Datapack (ZIP)", &["zip"]).blocking_pick_files() else {
+        return Ok(ImportedWorlds::default());
+    };
+    let paths = picked.into_iter().filter_map(|f| f.into_path().ok()).collect();
+    tokio::task::spawn_blocking(move || add_packs(&dir, paths)).await.map_err(|e| e.to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -466,6 +687,43 @@ mod tests {
             }
         );
         assert_eq!(parse_level(b"junk"), LevelInfo::default());
+    }
+
+    #[test]
+    fn datapacks_list_add_and_toggle() {
+        let tmp = std::env::temp_dir().join(format!("dusk-packs-{}", std::process::id()));
+        let src = tmp.join("src");
+        std::fs::create_dir_all(src.join("Folder Pack")).unwrap();
+        std::fs::write(src.join("Folder Pack").join("pack.mcmeta"), br#"{"pack":{"pack_format":48,"description":"A folder"}}"#).unwrap();
+        let zip_path = src.join("Trees.zip");
+        {
+            let mut z = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+            z.start_file("pack.mcmeta", zip::write::SimpleFileOptions::default()).unwrap();
+            z.write_all(br#"{"pack":{"pack_format":48,"description":[{"text":"\u00a7aBetter "},{"text":"trees"}]}}"#).unwrap();
+            z.finish().unwrap();
+        }
+        std::fs::write(src.join("notes.zip"), b"not a zip").unwrap();
+        let dir = tmp.join("datapacks");
+
+        let r = add_packs(&dir, vec![zip_path.clone(), src.join("Folder Pack"), src.join("notes.zip")]).unwrap();
+        assert_eq!(r.added, ["Trees.zip", "Folder Pack"]);
+        assert_eq!(r.skipped, ["notes.zip"]);
+        assert_eq!(add_packs(&dir, vec![zip_path]).unwrap().added, ["Trees (1).zip"]);
+
+        std::fs::rename(dir.join("Trees.zip"), dir.join("Trees.zip.disabled")).unwrap();
+        let packs = list_packs(&dir);
+        let summary: Vec<_> = packs.iter().map(|p| (p.file.as_str(), p.enabled, p.folder, p.description.as_deref())).collect();
+        assert_eq!(
+            summary,
+            [
+                ("Folder Pack", true, true, Some("A folder")),
+                ("Trees (1).zip", true, false, Some("Better trees")),
+                ("Trees.zip", false, false, Some("Better trees")),
+            ]
+        );
+        assert!(pack_path(&dir, "Trees.zip", false).is_ok());
+        assert!(pack_path(&dir, "../src", true).is_err());
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]

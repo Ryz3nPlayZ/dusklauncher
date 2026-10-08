@@ -16,6 +16,7 @@ import {
   playtime,
   type ContentKind,
   type ContentUpdate,
+  type Datapack,
   type GameState,
   type InstalledProject,
   type JavaInstall,
@@ -1211,6 +1212,10 @@ function WorldsTab({
   /* files dragged over the window */
   const [dragOver, setDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
+  /* the world whose DATAPACKS window is open; drops go to it meanwhile */
+  const [packsOf, setPacksOf] = useState<World | null>(null);
+  const packsOpen = useRef(false);
+  packsOpen.current = packsOf !== null;
 
   const imported = async (run: () => Promise<ImportedWorlds>) => {
     setNote(null);
@@ -1235,6 +1240,7 @@ function WorldsTab({
     let gone = false;
     void getCurrentWebview()
       .onDragDropEvent(({ payload: p }) => {
+        if (packsOpen.current) return;
         if (p.type === 'enter' || p.type === 'over') setDragOver(true);
         else if (p.type === 'leave') setDragOver(false);
         else {
@@ -1519,6 +1525,14 @@ function WorldsTab({
                 <TT size={16}>{backing === w.name ? 'BACKING UP…' : 'BACKUP'}</TT>
               </PxButton>
               <PxButton
+                family="grey"
+                height="sm"
+                title="The world's datapacks: add, turn off or remove them"
+                onClick={() => setPacksOf(w)}
+              >
+                <TT size={16}>DATAPACKS</TT>
+              </PxButton>
+              <PxButton
                 family="red"
                 height="sm"
                 disabled={busy || backing === w.name}
@@ -1640,6 +1654,7 @@ function WorldsTab({
           </PxBox>
         </div>
       )}
+      {packsOf && <DatapacksWindow profile={profile} world={packsOf} busy={busy} onClose={() => setPacksOf(null)} />}
       {trashing && (
         <div className="modal-scrim" onClick={() => setTrashing(null)}>
           <PxBox family="red" className="px--window modal" onClick={(e) => e.stopPropagation()}>
@@ -1663,6 +1678,156 @@ function WorldsTab({
           </PxBox>
         </div>
       )}
+    </div>
+  );
+}
+
+/** One world's datapacks/: zips that can be turned off (renamed
+ *  `.zip.disabled`, which the game skips) or trashed, pack folders that can
+ *  be trashed, and ADD / drop to copy more in. Off and on take effect the
+ *  next time the world opens; while the game runs only adding works. */
+function DatapacksWindow({
+  profile,
+  world,
+  busy,
+  onClose,
+}: {
+  profile: Profile;
+  world: World;
+  busy: boolean;
+  onClose: () => void;
+}) {
+  const [packs, setPacks] = useState<Datapack[] | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [working, setWorking] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const load = () =>
+    api
+      .listDatapacks(profile.id, world.name)
+      .then(setPacks)
+      .catch((e) => setNote(String(e)));
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.id, world.name]);
+
+  const run = async (key: string, task: () => Promise<unknown>) => {
+    setWorking(key);
+    setNote(null);
+    try {
+      await task();
+      await load();
+    } catch (e) {
+      setNote(String(e));
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  const added = (r: ImportedWorlds) => {
+    const a = r.added.length ? `Added ${r.added.join(', ')}` : '';
+    const s = r.skipped.length ? `not a datapack: ${r.skipped.join(', ')}` : '';
+    setNote([a, s].filter(Boolean).join(' · ') || null);
+  };
+
+  useEffect(() => {
+    if (!isTauri) return;
+    let off: (() => void) | undefined;
+    let gone = false;
+    void getCurrentWebview()
+      .onDragDropEvent(({ payload: p }) => {
+        if (p.type === 'enter' || p.type === 'over') setDragOver(true);
+        else if (p.type === 'leave') setDragOver(false);
+        else {
+          setDragOver(false);
+          void run('add', async () => added(await api.addDatapackPaths(profile.id, world.name, p.paths)));
+        }
+      })
+      .then((u) => (gone ? u() : (off = u)));
+    return () => {
+      gone = true;
+      off?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.id, world.name]);
+
+  const closed = busy ? 'Close the game first' : null;
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <PxBox family="red" className="px--window modal extimport" onClick={(e) => e.stopPropagation()}>
+        <TT size={22}>{`DATAPACKS · ${plain(world.levelName ?? world.name).toUpperCase()}`}</TT>
+        <span className="meta">
+          {dragOver
+            ? 'Drop to add these to the world.'
+            : 'Changes take effect the next time the world opens. Drop pack zips or folders here to add them.'}
+        </span>
+        {note && <span className="meta">{note}</span>}
+        <div className="extimport__list">
+          {packs?.length === 0 && <span className="meta">No datapacks in this world yet.</span>}
+          {packs === null && <span className="meta">Reading the world’s datapacks…</span>}
+          {packs?.map((p) => (
+            <div key={`${p.file}|${p.enabled}`} className="extimport__row">
+              <span className="editor__row-icon packs__icon">
+                {p.icon ? (
+                  <img src={p.icon} alt="" draggable={false} />
+                ) : (
+                  <PixelGlyph glyph="box" size={28} color="var(--text-3)" />
+                )}
+              </span>
+              <span className="extimport__info">
+                <TT size={16} tone={p.enabled ? undefined : 'dim'}>
+                  {p.file.replace(/\.zip$/i, '')}
+                </TT>
+                <span className="meta" title={p.description ?? undefined}>
+                  {[p.enabled ? '' : 'off', p.folder ? 'folder' : '', fmtBytes(p.size), p.description]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </span>
+              {!p.folder && (
+                <PxButton
+                  family="grey"
+                  height="sm"
+                  disabled={busy || working !== null}
+                  title={closed ?? (p.enabled ? 'Leave it out of the world' : 'Put it back in the world')}
+                  onClick={() => void run(p.file, () => api.setDatapackEnabled(profile.id, world.name, p.file, !p.enabled))}
+                >
+                  <TT size={16}>{p.enabled ? 'TURN OFF' : 'TURN ON'}</TT>
+                </PxButton>
+              )}
+              <PxButton
+                family="red"
+                height="sm"
+                disabled={busy || working !== null}
+                title={closed ?? 'Move it to the trash'}
+                onClick={() => void run(p.file, () => api.removeDatapack(profile.id, world.name, p.file, p.enabled))}
+              >
+                <TT size={16} tone="red">
+                  REMOVE
+                </TT>
+              </PxButton>
+            </div>
+          ))}
+        </div>
+        <div className="modal__row modal__row--tall">
+          {isTauri && (
+            <PxButton
+              family="accent"
+              height="md"
+              disabled={working !== null}
+              onClick={() => void run('add', async () => added(await api.addDatapacks(profile.id, world.name)))}
+            >
+              <TT size={20} tone="accent">
+                {working === 'add' ? 'ADDING…' : 'ADD…'}
+              </TT>
+            </PxButton>
+          )}
+          <PxButton family="grey" height="md" onClick={onClose}>
+            <TT size={20}>DONE</TT>
+          </PxButton>
+        </div>
+      </PxBox>
     </div>
   );
 }

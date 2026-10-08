@@ -813,6 +813,18 @@ export interface ImportedWorlds {
   /** file names that held no world */
   skipped: string[];
 }
+/** one pack in a world's datapacks/ */
+export interface Datapack {
+  /** its name on disk, without a `.disabled` */
+  file: string;
+  /** pack.mcmeta's description, formatting stripped */
+  description: string | null;
+  enabled: boolean;
+  /** a pack folder rather than a zip: can't be turned off from here */
+  folder: boolean;
+  size: number;
+  icon: string | null;
+}
 /** the instance's logs/latest.log, for when the launcher didn't watch the run */
 export interface LatestLog {
   lines: GameLogLine[];
@@ -1112,6 +1124,11 @@ const fixtures: Record<string, unknown> = {
       gameMode: 'creative', hardcore: false, cheats: true, version: '26.2', seed: '9154800003455089103',
     },
   ] satisfies World[],
+  list_datapacks: [
+    { file: 'Terralith.zip', description: 'Explore Nature’s Wonders', enabled: true, folder: false, size: 2_480_000, icon: null },
+    { file: 'graves', description: 'Keeps your items in a grave', enabled: true, folder: true, size: 38_000, icon: null },
+    { file: 'one-player-sleep.zip', description: 'Only one player needs to sleep', enabled: false, folder: false, size: 9_200, icon: null },
+  ] satisfies Datapack[],
   search_projects: {
     hits: [
       {
@@ -1213,6 +1230,10 @@ const sideEffects = new Set([
   'import_content_paths',
   'import_world',
   'import_world_paths',
+  'set_datapack_enabled',
+  'remove_datapack',
+  'add_datapacks',
+  'add_datapack_paths',
   'install_content_to_profile',
   'import_mrpack',
   'export_instance',
@@ -1960,6 +1981,17 @@ export const api = {
   /** dropped world zips / folders → saves/ */
   importWorldPaths: (profileId: string, paths: string[]) =>
     invoke<ImportedWorlds>('import_world_paths', { profileId, paths }),
+  /** a world's datapacks/: zips (on, or off as `.zip.disabled`) and pack folders */
+  listDatapacks: (profileId: string, world: string) => invoke<Datapack[]>('list_datapacks', { profileId, world }),
+  setDatapackEnabled: (profileId: string, world: string, file: string, enabled: boolean) =>
+    invoke<void>('set_datapack_enabled', { profileId, world, file, enabled }),
+  /** to the trash; `enabled` says which name it has on disk */
+  removeDatapack: (profileId: string, world: string, file: string, enabled: boolean) =>
+    invoke<void>('remove_datapack', { profileId, world, file, enabled }),
+  /** pick zips to add; `added` is empty when the picker is cancelled */
+  addDatapacks: (profileId: string, world: string) => invoke<ImportedWorlds>('add_datapacks', { profileId, world }),
+  addDatapackPaths: (profileId: string, world: string, paths: string[]) =>
+    invoke<ImportedWorlds>('add_datapack_paths', { profileId, world, paths }),
   /** native file picker (several at once) → copies .jar mods / .zip packs
    *  into the kind's folder; empty if cancelled */
   importLocalContent: (profileId: string, kind: ContentKind) =>

@@ -581,6 +581,10 @@
 .extimport__blocked {
   color: var(--text-3);
 }
+.packs__icon {
+  width: calc(56 * var(--u));
+  height: calc(56 * var(--u));
+}
 .extimport__row > .px {
   flex: none;
   padding: 0 calc(24 * var(--u));
