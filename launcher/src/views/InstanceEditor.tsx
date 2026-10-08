@@ -21,6 +21,7 @@ import {
   type InstalledProject,
   type JavaInstall,
   type LatestLog,
+  type LogFile,
   type ImportedWorlds,
   type ModProblems,
   releaseNewer,
@@ -1979,6 +1980,10 @@ function LogTab({
   const live = useGameLog(profile.id);
   /* latest.log, shown when this launcher didn't watch the last run */
   const [disk, setDisk] = useState<LatestLog | null>(null);
+  /* older runs' logs and crash reports, and the one picked (null: this run) */
+  const [files, setFiles] = useState<LogFile[]>([]);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [pickedLog, setPickedLog] = useState<LatestLog | null>(null);
   const [filter, setFilter] = useState('');
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [follow, setFollow] = useState(true);
@@ -1986,8 +1991,9 @@ function LogTab({
   const [sharing, setSharing] = useState<'ask' | 'busy' | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  const fromDisk = live.length === 0 && !game && disk !== null && disk.lines.length > 0;
-  const all = fromDisk ? disk.lines : live;
+  const fromFile = picked !== null;
+  const fromDisk = !fromFile && live.length === 0 && !game && disk !== null && disk.lines.length > 0;
+  const all = fromFile ? (pickedLog?.lines ?? []) : fromDisk ? disk.lines : live;
   const needle = filter.trim().toLowerCase();
   const lines = useMemo(
     () =>
@@ -2006,6 +2012,30 @@ function LogTab({
       .then(setDisk)
       .catch(() => setDisk(null));
   }, [profile.id, live.length, game]);
+
+  /* the list again after each run; a new run takes the tab back to it */
+  const running = game !== null;
+  useEffect(() => {
+    if (running) setPicked(null);
+    else
+      void api
+        .listLogs(profile.id)
+        .then(setFiles)
+        .catch(() => setFiles([]));
+  }, [profile.id, running]);
+
+  useEffect(() => {
+    setPickedLog(null);
+    if (!picked) return;
+    let gone = false;
+    api
+      .readLog(profile.id, picked)
+      .then((l) => !gone && setPickedLog(l))
+      .catch((e) => !gone && setNote(String(e)));
+    return () => {
+      gone = true;
+    };
+  }, [profile.id, picked]);
 
   const share = async () => {
     setSharing('busy');
@@ -2046,17 +2076,21 @@ function LogTab({
     }
   };
 
-  const status = game
-    ? game.state === 'running'
-      ? 'RUNNING'
-      : game.state === 'stopping'
-        ? 'STOPPING…'
-        : 'STARTING…'
-    : fromDisk
-      ? `LATEST.LOG · ${ago(disk.modified).toUpperCase()}`
-      : all.length
-        ? 'LAST RUN'
-        : 'NOT RUNNING';
+  const status = fromFile
+    ? `${picked.startsWith('crash-reports/') ? 'CRASH REPORT' : 'OLD LOG'}${
+        pickedLog ? ` · ${ago(pickedLog.modified).toUpperCase()}` : ''
+      }`
+    : game
+      ? game.state === 'running'
+        ? 'RUNNING'
+        : game.state === 'stopping'
+          ? 'STOPPING…'
+          : 'STARTING…'
+      : fromDisk
+        ? `LATEST.LOG · ${ago(disk.modified).toUpperCase()}`
+        : all.length
+          ? 'LAST RUN'
+          : 'NOT RUNNING';
 
   return (
     <div className="win__body editor__body">
@@ -2067,6 +2101,27 @@ function LogTab({
               STOP GAME
             </TT>
           </PxButton>
+        )}
+        {(files.length > 0 || fromFile) && (
+          <PxBox family="panel" height="sm" className="browse__select">
+            <select
+              className="input select"
+              value={picked ?? ''}
+              title="Older runs' logs and crash reports"
+              onChange={(e) => {
+                setNote(null);
+                setPicked(e.target.value || null);
+              }}
+            >
+              <option value="">{game || live.length ? 'This run' : 'latest.log'}</option>
+              {files.map((f) => (
+                <option key={f.path} value={f.path}>
+                  {f.path.startsWith('crash-reports/') ? 'Crash · ' : ''}
+                  {f.path.slice(f.path.indexOf('/') + 1)}
+                </option>
+              ))}
+            </select>
+          </PxBox>
         )}
         <PxBox family="panel" height="sm" className="search editor__search">
           <PixelGlyph glyph="search" size={20} color="var(--text-3)" />
@@ -2100,7 +2155,7 @@ function LogTab({
         >
           <TT size={16}>{sharing === 'busy' ? 'SHARING…' : 'SHARE'}</TT>
         </PxButton>
-        {!fromDisk && (
+        {!fromDisk && !fromFile && (
           <PxButton family="grey" height="sm" disabled={live.length === 0} onClick={clearGameLog}>
             <TT size={16}>CLEAR</TT>
           </PxButton>
@@ -2128,9 +2183,15 @@ function LogTab({
             <span className="meta">
               {all.length > 0
                 ? 'No lines match.'
-                : game
+                : fromFile
+                  ? pickedLog
+                    ? 'That log is empty.'
+                    : 'Reading…'
+                  : game
                   ? 'Waiting for the game to say something…'
-                  : 'Nothing yet — PLAY NOW and the console shows up here. Older runs are in the logs folder.'}
+                  : `Nothing yet — PLAY NOW and the console shows up here.${
+                        files.length ? ' Older runs are in the list up top.' : ''
+                      }`}
             </span>
           ) : (
             lines.map((l, i) => (

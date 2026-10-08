@@ -839,6 +839,13 @@ export interface LatestLog {
   /** unix millis the game last wrote it */
   modified: number;
 }
+/** an older run's log or a crash report, picked in the LOG tab */
+export interface LogFile {
+  /** `logs/2026-10-01-1.log.gz`, `crash-reports/crash-….txt` */
+  path: string;
+  modified: number;
+  size: number;
+}
 
 // ── browser fixtures ───────────────────────────────────────────────────────
 
@@ -1086,6 +1093,20 @@ const fixtures: Record<string, unknown> = {
     duplicates: [{ name: 'Lithium', keep: 'lithium-fabric-0.15.1+mc1.21.11.jar', keepVersion: '0.15.1+mc1.21.11', extra: ['lithium-fabric-0.15.0+mc1.21.11.jar'] }],
     clashes: [{ name: 'Sodium', file: 'sodium-fabric-0.6.13+mc1.21.11.jar', other: 'Iris', otherVersion: '1.8.0+1.21.11', otherFile: 'iris-fabric-1.8.0+mc1.21.11.jar' }],
   } satisfies ModProblems,
+  list_logs: [
+    { path: 'logs/2026-10-06-2.log.gz', modified: Date.now() - 50 * 3600_000, size: 18_400 },
+    { path: 'crash-reports/crash-2026-10-06_14.21.07-client.txt', modified: Date.now() - 52 * 3600_000, size: 9_100 },
+    { path: 'logs/2026-10-06-1.log.gz', modified: Date.now() - 53 * 3600_000, size: 22_900 },
+  ] satisfies LogFile[],
+  read_log: {
+    modified: Date.now() - 52 * 3600_000,
+    lines: [
+      { line: '---- Minecraft Crash Report ----', stream: 'out' },
+      { line: 'Description: Rendering overlay', stream: 'out' },
+      { line: 'java.lang.NullPointerException: Cannot invoke "net.minecraft.class_310.method_1551()"', stream: 'err' },
+      { line: '\tat net.minecraft.class_329.method_1753(class_329.java:118)', stream: 'err' },
+    ],
+  } satisfies LatestLog,
   read_latest_log: {
     modified: Date.now() - 3 * 3600_000,
     lines: [
@@ -1976,6 +1997,9 @@ export const api = {
     invoke<void>('rename_world', { profileId, name, levelName }),
   /** the instance's multiplayer list, in the game's order */
   readLatestLog: (profileId: string) => invoke<LatestLog | null>('read_latest_log', { profileId }),
+  /** older logs and crash reports, newest first */
+  listLogs: (profileId: string) => invoke<LogFile[]>('list_logs', { profileId }),
+  readLog: (profileId: string, path: string) => invoke<LatestLog>('read_log', { profileId, path }),
   /** Puts the log on mclo.gs (tokens and the home folder taken out); resolves to its link. */
   uploadLog: (text: string) => invoke<string>('upload_log', { text }),
   listJavas: () => invoke<JavaInstall[]>('list_javas'),

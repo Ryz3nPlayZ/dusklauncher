@@ -116,6 +116,8 @@ pub fn run() {
             selfinstall::script_update,
             logs::read_latest_log,
             logs::upload_log,
+            logs::list_logs,
+            logs::read_log,
             servers::list_servers,
             servers::ping_server,
             servers::add_server,
