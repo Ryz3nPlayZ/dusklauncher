@@ -785,7 +785,7 @@ function ImportExternal({
                   <TT size={16}>{e.name}</TT>
                   <span className="meta">
                     {[
-                      e.source,
+                      e.group ? `${e.source} › ${e.group}` : e.source,
                       [e.loader === 'neoforge' ? 'NeoForge' : e.loader.charAt(0).toUpperCase() + e.loader.slice(1), e.gameVersion].filter(Boolean).join(' '),
                       e.mods ? `${e.mods} mod${e.mods === 1 ? '' : 's'}` : '',
                       e.worlds ? `${e.worlds} world${e.worlds === 1 ? '' : 's'}` : '',

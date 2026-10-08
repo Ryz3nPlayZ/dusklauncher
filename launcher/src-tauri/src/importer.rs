@@ -31,6 +31,8 @@ pub struct ExternalInstanceDto {
     pub worlds: usize,
     /// why it can't come in, when it can't
     pub blocked: Option<String>,
+    /// the group the other launcher files it under; the import keeps it
+    pub group: Option<String>,
 }
 
 /// Every instance the other launchers on this machine have.
@@ -80,6 +82,7 @@ pub async fn import_external_instance(state: State<'_, AppState>, path: String) 
     };
     let mut profile = crate::commands::new_profile(&state, name, game_version, Loader::parse(&ext.loader), None);
     profile.loader_version = ext.loader_version.clone().filter(|_| profile.loader != Loader::Vanilla);
+    profile.group = ext.group.as_deref().map(|g| g.trim().chars().take(32).collect::<String>()).filter(|g| !g.is_empty());
     let to = profile.dirs(&state.data_dir).root;
     let from = PathBuf::from(&ext.path);
     let dest = to.clone();
@@ -154,6 +157,7 @@ fn entry(source: &str, name: String, game_dir: &Path, version: (Option<String>, 
         mods: count("mods", &|p| p.extension().is_some_and(|x| x == "jar")),
         worlds: count("saves", &|p| p.join("level.dat").is_file()),
         blocked,
+        group: None,
     }
 }
 
@@ -167,13 +171,29 @@ fn scan_prism(root: &Path) -> Vec<ExternalInstanceDto> {
     let dir = ini_value(&cfg, "InstanceDir").map(PathBuf::from).unwrap_or_else(|| "instances".into());
     let instances = if dir.is_absolute() { dir } else { root.join(dir) };
     let Ok(rd) = std::fs::read_dir(&instances) else { return Vec::new() };
+    let groups = std::fs::read_to_string(instances.join("instgroups.json")).map(|s| prism_groups(&s)).unwrap_or_default();
     let mut out = Vec::new();
     for inst in rd.flatten().map(|e| e.path()) {
         let Ok(pack) = std::fs::read_to_string(inst.join("mmc-pack.json")) else { continue };
         let Some(game_dir) = [".minecraft", "minecraft"].iter().map(|d| inst.join(d)).find(|d| d.is_dir()) else { continue };
         let cfg = std::fs::read_to_string(inst.join("instance.cfg")).unwrap_or_default();
         let name = ini_value(&cfg, "name").unwrap_or_else(|| file_name(&inst));
-        out.push(entry("Prism Launcher", name, &game_dir, parse_mmc_pack(&pack)));
+        let mut e = entry("Prism Launcher", name, &game_dir, parse_mmc_pack(&pack));
+        e.group = groups.get(&file_name(&inst)).cloned();
+        out.push(e);
+    }
+    out
+}
+
+/// instgroups.json: `{"groups": {"<group>": {"instances": ["<folder>", …]}}}`,
+/// read as folder → group.
+fn prism_groups(json: &str) -> std::collections::HashMap<String, String> {
+    let v: Value = serde_json::from_str(json).unwrap_or_default();
+    let mut out = std::collections::HashMap::new();
+    for (group, g) in v["groups"].as_object().into_iter().flatten() {
+        for inst in g["instances"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+            out.insert(inst.to_string(), group.clone());
+        }
     }
     out
 }
@@ -256,12 +276,29 @@ fn scan_modrinth(root: &Path) -> Vec<ExternalInstanceDto> {
             return Vec::new();
         }
     };
+    // groups are a JSON list per profile; read on their own so an app
+    // version without the column still lists its instances
+    let groups: std::collections::HashMap<String, String> = (|| -> rusqlite::Result<Vec<(String, String)>> {
+        let conn = rusqlite::Connection::open_with_flags(&db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        let mut stmt = conn.prepare("SELECT path, groups FROM profiles")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect()
+    })()
+    .unwrap_or_default()
+    .into_iter()
+    .filter_map(|(path, groups)| {
+        let first = serde_json::from_str::<Vec<String>>(&groups).ok()?.into_iter().find(|g| !g.trim().is_empty())?;
+        Some((path, first))
+    })
+    .collect();
     rows.into_iter()
         .filter_map(|(path, name, game, loader, loader_version)| {
             let dir = root.join("profiles").join(&path);
             dir.is_dir().then(|| {
                 let loader = loader.to_ascii_lowercase();
-                entry("Modrinth App", name, &dir, (Some(game), loader, loader_version.filter(|v| !v.is_empty())))
+                let mut e = entry("Modrinth App", name, &dir, (Some(game), loader, loader_version.filter(|v| !v.is_empty())));
+                e.group = groups.get(&path).cloned();
+                e
             })
         })
         .collect()
@@ -417,6 +454,9 @@ mod tests {
         let pack = r#"{"components":[{"uid":"org.lwjgl3","version":"3.3.3"},{"uid":"net.minecraft","version":"1.21.11"},{"uid":"net.fabricmc.intermediary","version":"1.21.11"},{"uid":"net.fabricmc.fabric-loader","version":"0.16.10"}]}"#;
         assert_eq!(parse_mmc_pack(pack), (Some("1.21.11".into()), "fabric".into(), Some("0.16.10".into())));
         assert_eq!(ini_value("InstanceType=OneSix\nname=My Pack\n", "name"), Some("My Pack".into()));
+        let groups = prism_groups(r#"{"formatVersion":"1","groups":{"PvP":{"hidden":false,"instances":["1.21.11","Fabulously"]}}}"#);
+        assert_eq!(groups.get("Fabulously").map(String::as_str), Some("PvP"));
+        assert!(prism_groups("not json").is_empty());
         let cf: Value = serde_json::from_str(r#"{"name":"x","gameVersion":"1.21.1","baseModLoader":{"name":"neoforge-21.1.77","minecraftVersion":"1.21.1"}}"#).unwrap();
         assert_eq!(parse_curseforge(&cf), (Some("1.21.1".into()), "neoforge".into(), Some("21.1.77".into())));
         let cf: Value = serde_json::from_str(r#"{"name":"x","gameVersion":"1.21.11","baseModLoader":{"name":"fabric-0.16.10-1.21.11"}}"#).unwrap();

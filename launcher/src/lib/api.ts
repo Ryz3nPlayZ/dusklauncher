@@ -643,6 +643,8 @@ export interface ExternalInstance {
   worlds: number;
   /** why it can't come in, when it can't */
   blocked: string | null;
+  /** the group the other launcher files it under; the import keeps it */
+  group: string | null;
 }
 
 /** where a launch goes once the game is up: a server, a world, a recording */
@@ -1613,6 +1615,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
         mods: 74,
         worlds: 3,
         blocked: null,
+        group: 'PvP',
       },
       {
         source: 'CurseForge',
@@ -1624,6 +1627,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
         mods: 412,
         worlds: 1,
         blocked: 'Dusk runs Fabric and NeoForge, not Forge',
+        group: null,
       },
       {
         source: 'Minecraft Launcher',
@@ -1635,6 +1639,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
         mods: 0,
         worlds: 8,
         blocked: null,
+        group: null,
       },
     ] as T;
   if (cmd === 'duplicate_profile') {
