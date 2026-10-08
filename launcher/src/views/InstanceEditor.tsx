@@ -1265,6 +1265,8 @@ function WorldsTab({
   /* world being zipped right now */
   const [backing, setBacking] = useState<string | null>(null);
   const [trashing, setTrashing] = useState<World | null>(null);
+  /* the RENAME dialog, open when set */
+  const [renaming, setRenaming] = useState<{ world: World; name: string } | null>(null);
   /* the ADD SERVER form, open when set */
   const [adding, setAdding] = useState<{ name: string; address: string } | null>(null);
   const [dropping, setDropping] = useState<SavedServer | null>(null);
@@ -1336,6 +1338,18 @@ function WorldsTab({
       setNote(`${w.name} moved to the trash.`);
     } catch (e) {
       setNote(String(e));
+    }
+  };
+
+  const rename = async (w: World, levelName: string) => {
+    setNote(null);
+    try {
+      await api.renameWorld(profile.id, w.name, levelName);
+      setRenaming(null);
+      setWorlds(await api.listWorlds(profile.id));
+    } catch (e) {
+      setNote(String(e));
+      setRenaming(null);
     }
   };
 
@@ -1557,7 +1571,15 @@ function WorldsTab({
                 .filter(Boolean)
                 .join('\n')}
             >
-              <TT size={16}>{plain(w.levelName ?? w.name)}</TT>
+              <button
+                type="button"
+                className="worlds__name"
+                disabled={busy}
+                title={busy ? 'Close the game first to rename it' : 'Rename'}
+                onClick={() => setRenaming({ world: w, name: w.levelName ?? w.name })}
+              >
+                <TT size={16}>{plain(w.levelName ?? w.name)}</TT>
+              </button>
               <span className="meta">
                 {[
                   w.hardcore ? 'Hardcore' : w.gameMode && w.gameMode[0].toUpperCase() + w.gameMode.slice(1),
@@ -1632,6 +1654,51 @@ function WorldsTab({
           </div>
         ))}
       </div>
+      {renaming && (
+        <div className="modal-scrim" onClick={() => setRenaming(null)}>
+          <PxBox family="red" className="px--window modal" onClick={(e) => e.stopPropagation()}>
+            <form
+              className="worlds__form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void rename(renaming.world, renaming.name);
+              }}
+            >
+              <TT size={22}>RENAME WORLD</TT>
+              <span className="meta">
+                The name it&apos;s listed under in the game. Its folder stays saves/{renaming.world.name}.
+              </span>
+              <div className="modal__row">
+                <span className="modal__label">
+                  <TT size={16} tone="sub">
+                    NAME
+                  </TT>
+                </span>
+                <PxBox family="panel" height="md">
+                  <input
+                    className="input"
+                    value={renaming.name}
+                    maxLength={100}
+                    autoFocus
+                    onFocus={(e) => e.currentTarget.select()}
+                    onChange={(e) => setRenaming({ ...renaming, name: e.target.value })}
+                  />
+                </PxBox>
+              </div>
+              <div className="modal__row modal__row--tall">
+                <PxButton family="grey" height="md" type="button" onClick={() => setRenaming(null)}>
+                  <TT size={20}>CANCEL</TT>
+                </PxButton>
+                <PxButton family="accent" height="md" type="submit" disabled={renaming.name.trim() === ''}>
+                  <TT size={20} tone="accent">
+                    RENAME
+                  </TT>
+                </PxButton>
+              </div>
+            </form>
+          </PxBox>
+        </div>
+      )}
       {adding && (
         <div className="modal-scrim" onClick={() => setAdding(null)}>
           <PxBox family="red" className="px--window modal" onClick={(e) => e.stopPropagation()}>

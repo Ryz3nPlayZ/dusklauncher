@@ -156,6 +156,119 @@ fn read_gz(path: &Path) -> Option<Vec<u8>> {
     Some(bytes)
 }
 
+/// RENAME on a world: the name the game lists it under (`Data.LevelName`),
+/// as the game's own Edit World screen sets it; the folder keeps its name.
+/// The old `level.dat` is kept as `level.dat_old`, as the game does on save.
+#[tauri::command]
+pub async fn rename_world(state: State<'_, AppState>, profile_id: String, name: String, level_name: String) -> Result<(), String> {
+    let (_, dir) = world_dir(&state, &profile_id, &name)?;
+    ensure_closed(&state, &profile_id).await?;
+    // NUL and characters past U+FFFF are written differently in Java's
+    // modified UTF-8; leave them out so plain UTF-8 is exactly right
+    let level_name: String = level_name.trim().chars().filter(|c| *c != '\0' && (*c as u32) <= 0xFFFF).take(100).collect();
+    if level_name.is_empty() {
+        return Err("The name can't be empty.".into());
+    }
+    tokio::task::spawn_blocking(move || {
+        let path = dir.join("level.dat");
+        let bytes = read_gz(&path).ok_or("Couldn't read the world's level.dat.")?;
+        let renamed = set_level_name(&bytes, &level_name).ok_or("The world's level.dat has no name to change.")?;
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gz.write_all(&renamed).map_err(|e| e.to_string())?;
+        let out = gz.finish().map_err(|e| e.to_string())?;
+        let tmp = dir.join("level.dat_new");
+        std::fs::write(&tmp, out).map_err(|e| e.to_string())?;
+        let _ = std::fs::copy(&path, dir.join("level.dat_old"));
+        std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// `bytes` (uncompressed level.dat) with `Data.LevelName` swapped for
+/// `name` and every other byte left as it was.
+fn set_level_name(bytes: &[u8], name: &str) -> Option<Vec<u8>> {
+    let (start, end) = level_name_span(bytes)?;
+    let len = u16::try_from(name.len()).ok()?;
+    let mut out = Vec::with_capacity(bytes.len() + name.len());
+    out.extend_from_slice(&bytes[..start]);
+    out.extend_from_slice(&len.to_be_bytes());
+    out.extend_from_slice(name.as_bytes());
+    out.extend_from_slice(&bytes[end..]);
+    Some(out)
+}
+
+/// Where `Data.LevelName`'s string (length prefix included) sits.
+fn level_name_span(b: &[u8]) -> Option<(usize, usize)> {
+    // the root: a compound with a (usually empty) name
+    if *b.first()? != 10 {
+        return None;
+    }
+    let i = nbt_skip_string(b, 1)?;
+    let fields = |b: &[u8], mut i: usize, want: &str, want_kind: u8| -> Option<(usize, usize)> {
+        loop {
+            let kind = *b.get(i)?;
+            if kind == 0 {
+                return None;
+            }
+            let name_at = i + 1;
+            let value_at = nbt_skip_string(b, name_at)?;
+            let n = u16::from_be_bytes(b.get(name_at..name_at + 2)?.try_into().ok()?) as usize;
+            if kind == want_kind && b.get(name_at + 2..name_at + 2 + n)? == want.as_bytes() {
+                return Some((value_at, nbt_skip(b, value_at, kind, 0)?));
+            }
+            i = nbt_skip(b, value_at, kind, 0)?;
+        }
+    };
+    let (data, _) = fields(b, i, "Data", 10)?;
+    fields(b, data, "LevelName", 8)
+}
+
+fn nbt_skip_string(b: &[u8], i: usize) -> Option<usize> {
+    let n = u16::from_be_bytes(b.get(i..i + 2)?.try_into().ok()?) as usize;
+    let end = i + 2 + n;
+    (end <= b.len()).then_some(end)
+}
+
+/// The end of a `kind` payload starting at `i`.
+fn nbt_skip(b: &[u8], i: usize, kind: u8, depth: u32) -> Option<usize> {
+    if depth > 512 {
+        return None;
+    }
+    let count = |i: usize| -> Option<usize> { usize::try_from(i32::from_be_bytes(b.get(i..i + 4)?.try_into().ok()?)).ok() };
+    let end = match kind {
+        1 => i + 1,
+        2 => i + 2,
+        3 | 5 => i + 4,
+        4 | 6 => i + 8,
+        7 => i + 4 + count(i)?,
+        8 => return nbt_skip_string(b, i),
+        9 => {
+            let elem = *b.get(i)?;
+            let n = count(i + 1)?;
+            let mut j = i + 5;
+            for _ in 0..n {
+                j = nbt_skip(b, j, elem, depth + 1)?;
+            }
+            j
+        }
+        10 => {
+            let mut j = i;
+            loop {
+                let k = *b.get(j)?;
+                if k == 0 {
+                    break j + 1;
+                }
+                j = nbt_skip(b, nbt_skip_string(b, j + 1)?, k, depth + 1)?;
+            }
+        }
+        11 => i + 4 + count(i)?.checked_mul(4)?,
+        12 => i + 4 + count(i)?.checked_mul(8)?,
+        _ => return None,
+    };
+    (end <= b.len()).then_some(end)
+}
+
 fn parse_level(bytes: &[u8]) -> LevelInfo {
     use crate::servers::Tag;
     let root = crate::servers::read_nbt(bytes);
@@ -687,6 +800,15 @@ mod tests {
             }
         );
         assert_eq!(parse_level(b"junk"), LevelInfo::default());
+        // RENAME changes the name and nothing else
+        let renamed = set_level_name(&b, "Über Base ✨").unwrap();
+        let info = parse_level(&renamed);
+        assert_eq!(info.level_name.as_deref(), Some("Über Base ✨"));
+        assert_eq!((info.version, info.seed, info.hardcore), (Some("1.21.11".into()), Some("-4172144997902289642".into()), true));
+        assert_eq!(set_level_name(&renamed, "My Base").unwrap(), b);
+        assert!(set_level_name(b"junk", "x").is_none());
+        // a cut-off file is left alone
+        assert!(set_level_name(&b[..b.len() - 4], "x").is_none());
     }
 
     #[test]

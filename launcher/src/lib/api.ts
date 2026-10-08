@@ -1584,6 +1584,14 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     if (i >= 0) list.splice(i, 1);
     return undefined as T;
   }
+  if (cmd === 'rename_world') {
+    const w = (fixtures.list_worlds as World[]).find((x) => x.name === args?.name);
+    if (!w) throw new Error('world not found');
+    const name = String(args?.levelName ?? '').trim();
+    if (!name) throw new Error("The name can't be empty.");
+    w.levelName = name;
+    return undefined as T;
+  }
   if (cmd === 'set_profile_icon' || cmd === 'clear_profile_icon') {
     const p = (fixtures.list_profiles as Profile[]).find((x) => x.id === args?.profileId);
     if (!p) throw new Error('profile not found');
@@ -1963,6 +1971,9 @@ export const api = {
 
   // ── what an instance holds ──
   listWorlds: (profileId: string) => invoke<World[]>('list_worlds', { profileId }),
+  /** the name the game lists the world under; its folder keeps its name */
+  renameWorld: (profileId: string, name: string, levelName: string) =>
+    invoke<void>('rename_world', { profileId, name, levelName }),
   /** the instance's multiplayer list, in the game's order */
   readLatestLog: (profileId: string) => invoke<LatestLog | null>('read_latest_log', { profileId }),
   /** Puts the log on mclo.gs (tokens and the home folder taken out); resolves to its link. */

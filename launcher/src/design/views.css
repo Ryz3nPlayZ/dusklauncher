@@ -1265,11 +1265,12 @@
 .javas__old {
   color: var(--r-up);
 }
-/* the ADD SERVER dialog: the modal's own column, inside a form so Enter adds */
 /* the world was saved by a newer game than the instance runs */
 .worlds__newer {
   color: var(--y-up);
 }
+/* the ADD SERVER and RENAME dialogs: the modal's own column, inside a form so
+   Enter submits */
 .worlds__form {
   display: flex;
   flex-direction: column;
@@ -2637,4 +2638,19 @@ button.editor__icon {
 }
 button.editor__icon:hover {
   filter: brightness(1.1);
+}
+/* a world's name: click to rename it */
+button.worlds__name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: text;
+}
+button.worlds__name:hover:not(:disabled) {
+  text-decoration: underline dotted;
+}
+button.worlds__name:disabled {
+  cursor: default;
 }
