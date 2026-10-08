@@ -22,6 +22,7 @@ mod screenshots;
 mod selfinstall;
 mod servers;
 mod settings;
+mod shortcuts;
 mod skins;
 mod wallpapers;
 mod worlds;
@@ -46,12 +47,17 @@ pub fn run() {
         .init();
 
     tauri::Builder::default()
+        // first, so a second start hands over before anything else spins up
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            shortcuts::second_start(app, argv)
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())
         .manage(AppState::init())
+        .manage(shortcuts::PendingLaunch::from_args())
         .invoke_handler(tauri::generate_handler![
             // profiles
             commands::list_profiles,
@@ -62,6 +68,8 @@ pub fn run() {
             commands::repair_profile,
             importer::scan_external_instances,
             importer::import_external_instance,
+            shortcuts::create_shortcut,
+            shortcuts::take_launch_request,
             commands::list_worlds,
             commands::show_in_folder,
             crash::reveal_crash_report,

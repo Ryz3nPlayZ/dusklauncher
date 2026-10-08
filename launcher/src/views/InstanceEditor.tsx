@@ -430,6 +430,19 @@ function SettingsTab({
     }
   };
 
+  const shortcut = async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const at = await api.createShortcut(profile.id);
+      setNote(`Shortcut made: ${at.split(/[\\/]/).pop()} on the desktop starts ${profile.name} straight away.`);
+    } catch (e) {
+      setNote(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const exportPack = async () => {
     setBusy(true);
     setNote(null);
@@ -610,6 +623,17 @@ function SettingsTab({
           >
             <TT size={16} tone={isTauri ? 'plain' : 'dim'}>
               EXPORT
+            </TT>
+          </PxButton>
+          <PxButton
+            family="grey"
+            height="md"
+            disabled={busy || !isTauri}
+            title={isTauri ? 'A desktop shortcut that starts this instance straight away' : 'Needs the desktop app'}
+            onClick={() => void shortcut()}
+          >
+            <TT size={16} tone={isTauri ? 'plain' : 'dim'}>
+              SHORTCUT
             </TT>
           </PxButton>
           <PxButton

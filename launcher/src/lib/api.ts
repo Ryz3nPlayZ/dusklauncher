@@ -1569,6 +1569,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     return structuredClone(p) as T;
   }
   if (cmd === 'repair_profile') return undefined as T;
+  if (cmd === 'take_launch_request') return null as T;
   if (cmd === 'scan_external_instances')
     return [
       {
@@ -1841,6 +1842,10 @@ export const api = {
   /** a new instance with this one's settings and folder (not its logs or screenshots) */
   duplicateProfile: (id: string) => invoke<Profile>('duplicate_profile', { id }),
   repairProfile: (id: string) => invoke<void>('repair_profile', { id }),
+  /** a desktop shortcut that starts this instance; resolves to where it went */
+  createShortcut: (profileId: string) => invoke<string>('create_shortcut', { profileId }),
+  /** the instance a desktop shortcut started the launcher for, once */
+  takeLaunchRequest: () => invoke<string | null>('take_launch_request'),
   launch: (profileId: string) => invoke<void>('install_and_launch', { profileId }),
   /** launch straight onto a server (a friend's, an invite) without saving it on the instance */
   joinServer: (profileId: string, server: string) =>

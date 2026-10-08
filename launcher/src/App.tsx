@@ -259,6 +259,33 @@ export default function App() {
     [refreshProfiles, syncGame, canPlay],
   );
 
+  /* a desktop shortcut's instance: asked for once at startup, or handed over
+     by a second start while we're open; started once the account is known */
+  const [shortcutLaunch, setShortcutLaunch] = useState<string | null>(null);
+  useEffect(() => {
+    void api.takeLaunchRequest().then((id) => id && setShortcutLaunch(id)).catch(() => {});
+    const off = listen<string>('launch-request', setShortcutLaunch);
+    return () => void off.then((f) => f?.());
+  }, []);
+  useEffect(() => {
+    if (!shortcutLaunch || !accountKnown || !settings) return;
+    const id = shortcutLaunch;
+    setShortcutLaunch(null);
+    void (async () => {
+      const list = await api.listProfiles();
+      const g = gameRef.current;
+      if (!list.some((p) => p.id === id)) {
+        setError('That shortcut’s instance was deleted.');
+      } else if (g && (g.state === 'running' || g.state === 'starting')) {
+        // the game's already up; just show it
+      } else {
+        void saveSettings({ ...settings, selectedProfileId: id });
+        void launch(id);
+      }
+      setRoute('home');
+    })();
+  }, [shortcutLaunch, accountKnown, settings, saveSettings, launch]);
+
   /* JOIN from the social pane: the selected instance when it runs the
      friend's version (or no version is known), else another instance on
      that version, else the selected one anyway — servers often accept a

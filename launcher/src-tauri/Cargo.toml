@@ -15,6 +15,9 @@ tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-notification = "2"
+# a second launch (a desktop shortcut while the launcher is open) hands its
+# --launch over to the running window instead of opening another
+tauri-plugin-single-instance = "2"
 base64 = "0.22"
 serde.workspace = true
 serde_json.workspace = true
@@ -33,7 +36,7 @@ flate2 = "1"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 hickory-resolver = "0.26.3"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
-# reads the Modrinth App's instance list (its app.db) for FROM ANOTHER LAUNCHER
+# reads the Modrinth App's instance list (its app.db) for NEW INSTANCE → IMPORT
 rusqlite = { version = "0.32", features = ["bundled"] }
 
 [lib]
