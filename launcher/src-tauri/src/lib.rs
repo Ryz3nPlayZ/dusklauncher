@@ -84,6 +84,7 @@ pub fn run() {
             // versions
             commands::list_versions,
             commands::fabric_loader_version,
+            commands::fabric_loader_versions,
             // launch
             commands::install_and_launch,
             commands::stop_game,

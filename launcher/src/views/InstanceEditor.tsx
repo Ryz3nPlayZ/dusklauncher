@@ -18,6 +18,7 @@ import {
   type ContentKind,
   type ContentUpdate,
   type Datapack,
+  type FabricLoader,
   type GameState,
   type InstalledProject,
   type JavaInstall,
@@ -335,6 +336,22 @@ const tuningOf = (jvm: string): Tuning => {
 };
 
 /* ── SETTINGS: the profile's own fields, saved as one patch ─────────────── */
+/** The Fabric build an instance pins, or '' when it isn't a Fabric one. */
+function fabricPin(p: Profile): string {
+  return p.loader === 'fabric' ? (p.loaderVersion ?? '') : '';
+}
+
+/** `v` (dotted, a `-beta.1` tail ignored) is below `min`; unreadable counts as not. */
+function olderThan(v: string, min: number[]): boolean {
+  const parts = v.split(/[-+]/)[0].split('.').map(Number);
+  if (parts.some(Number.isNaN)) return false;
+  for (let i = 0; i < min.length; i++) {
+    const n = parts[i] ?? 0;
+    if (n !== min[i]) return n < min[i];
+  }
+  return false;
+}
+
 function SettingsTab({
   profile,
   groups,
@@ -349,6 +366,9 @@ function SettingsTab({
   const [name, setName] = useState(profile.name);
   const [version, setVersion] = useState(profile.gameVersion);
   const [loader, setLoader] = useState(profile.loader);
+  /** the pinned Fabric build; '' = the newest stable one */
+  const [loaderVersion, setLoaderVersion] = useState(fabricPin(profile));
+  const [loaderBuilds, setLoaderBuilds] = useState<FabricLoader[] | null>(null);
   const [width, setWidth] = useState(String(profile.resolution[0]));
   const [height, setHeight] = useState(String(profile.resolution[1]));
   const [jvm, setJvm] = useState(jvmText(profile));
@@ -373,6 +393,24 @@ function SettingsTab({
     void api.getSettings().then(setLauncher).catch(() => {});
   }, []);
 
+  // the builds Fabric has for the version being typed, once it settles
+  useEffect(() => {
+    setLoaderBuilds(null);
+    const game = version.trim();
+    if (loader !== 'fabric' || !game) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      api
+        .fabricLoaderVersions(game)
+        .then((b) => !cancelled && setLoaderBuilds(b))
+        .catch(() => !cancelled && setLoaderBuilds(null));
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [loader, version]);
+
   useEffect(() => {
     setPackInfo(null);
     if (!profile.pack) return;
@@ -391,6 +429,7 @@ function SettingsTab({
     setName(profile.name);
     setVersion(profile.gameVersion);
     setLoader(profile.loader);
+    setLoaderVersion(fabricPin(profile));
     setWidth(String(profile.resolution[0]));
     setHeight(String(profile.resolution[1]));
     setJvm(jvmText(profile));
@@ -408,6 +447,7 @@ function SettingsTab({
     name.trim() !== profile.name ||
     version.trim() !== profile.gameVersion ||
     loader !== profile.loader ||
+    (loader === 'fabric' && loaderVersion.trim() !== fabricPin(profile)) ||
     w !== profile.resolution[0] ||
     h !== profile.resolution[1] ||
     jvm.trim() !== jvmText(profile) ||
@@ -416,7 +456,11 @@ function SettingsTab({
     server.trim() !== (profile.server ?? '') ||
     group.trim() !== (profile.group ?? '') ||
     (Object.keys(hooks) as (keyof InstanceHooks)[]).some((k) => hooks[k].trim() !== profile.hooks[k]);
+  const pin = loaderVersion.trim();
+  // a build Fabric doesn't list for this version would stop the launch
+  const unknownBuild = loader === 'fabric' && pin !== '' && loaderBuilds !== null && !loaderBuilds.some((b) => b.version === pin);
   const valid =
+    !unknownBuild &&
     name.trim() !== '' &&
     version.trim() !== '' &&
     w >= 320 &&
@@ -432,6 +476,7 @@ function SettingsTab({
         name: name.trim(),
         gameVersion: version.trim(),
         loader,
+        ...(loader === 'fabric' && pin !== fabricPin(profile) ? { loaderVersion: pin } : {}),
         // the heap lives in MEMORY now; a -Xmx typed here would be overridden
         jvmArgs: jvm.trim() ? jvm.trim().split(/\s+/).filter((a) => !isHeapFlag(a)) : [],
         resolution: [Math.round(w), Math.round(h)],
@@ -615,6 +660,34 @@ function SettingsTab({
           onPick={setLoader}
         />
       </Row>
+      {loader === 'fabric' && (
+        <Row
+          label="FABRIC LOADER"
+          hint={
+            unknownBuild
+              ? `Fabric has no loader ${pin} for Minecraft ${version.trim()}.`
+              : pin !== '' && olderThan(pin, [0, 17, 0])
+                ? 'DuskClient needs 0.17 or newer, so it sits this one out.'
+                : 'Empty = the newest stable build.'
+          }
+        >
+          <PxBox family="panel" height="md">
+            <input
+              className="input"
+              list="editor-loaders"
+              value={loaderVersion}
+              placeholder={loaderBuilds?.find((b) => b.stable)?.version ?? 'newest stable'}
+              spellCheck={false}
+              onChange={(e) => setLoaderVersion(e.target.value)}
+            />
+            <datalist id="editor-loaders">
+              {(loaderBuilds ?? []).map((b) => (
+                <option key={b.version} value={b.version} label={b.stable ? undefined : 'beta'} />
+              ))}
+            </datalist>
+          </PxBox>
+        </Row>
+      )}
       <Row label="RESOLUTION" hint="The game window when it opens.">
         <PxBox family="panel" height="md">
           <input

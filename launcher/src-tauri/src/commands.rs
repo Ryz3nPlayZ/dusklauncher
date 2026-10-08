@@ -299,7 +299,8 @@ pub fn update_profile(state: State<'_, AppState>, id: String, patch: ProfilePatc
                 p.loader_version = None;
             }
             if let Some(lv) = &patch.loader_version {
-                p.loader_version = lv.clone();
+                // "" goes back to the newest stable build
+                p.loader_version = lv.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(str::to_string);
             }
             if let Some(args) = &patch.jvm_args {
                 p.jvm_args = args.clone();
@@ -598,6 +599,18 @@ pub async fn list_versions(state: State<'_, AppState>) -> Result<Vec<VersionDto>
 #[tauri::command]
 pub async fn fabric_loader_version(state: State<'_, AppState>) -> Result<String, String> {
     fasterlauncher_core::fabric::latest_loader_version(&state.client)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// The Fabric Loader builds there are for `game_version`, newest first, for
+/// an instance's FABRIC LOADER picker.
+#[tauri::command]
+pub async fn fabric_loader_versions(
+    state: State<'_, AppState>,
+    game_version: String,
+) -> Result<Vec<fasterlauncher_core::fabric::LoaderBuild>, String> {
+    fasterlauncher_core::fabric::loader_builds(&state.client, game_version.trim())
         .await
         .map_err(|e| e.to_string())
 }

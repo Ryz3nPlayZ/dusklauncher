@@ -391,6 +391,12 @@ export interface Version {
   releaseAt: string;
 }
 
+/** a Fabric Loader build meta lists for a game version */
+export interface FabricLoader {
+  version: string;
+  stable: boolean;
+}
+
 export interface ModpackFacets {
   categories: string[];
   versions: string[];
@@ -1038,6 +1044,13 @@ const fixtures: Record<string, unknown> = {
     { id: 'b1.7.3', type: 'old_beta', releaseAt: '2011-07-07' },
   ] satisfies Version[],
   fabric_loader_version: '0.16.14',
+  fabric_loader_versions: [
+    { version: '0.18.0-beta.2', stable: false },
+    { version: '0.17.3', stable: true },
+    { version: '0.17.2', stable: true },
+    { version: '0.16.14', stable: true },
+    { version: '0.16.10', stable: true },
+  ] satisfies FabricLoader[],
   search_modpacks: {
     hits: [
       {
@@ -1676,10 +1689,12 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     const patch = (args?.patch ?? {}) as ProfilePatch;
     if (patch.name?.trim()) p.name = patch.name.trim();
     if (patch.gameVersion) p.gameVersion = patch.gameVersion;
-    if (patch.loader) {
+    if (patch.loader && patch.loader !== p.loader) {
       p.loader = patch.loader;
       p.loaderVersion = patch.loader === 'fabric' ? String(fixtures.fabric_loader_version) : null;
     }
+    // "" goes back to the newest stable build
+    if (patch.loaderVersion !== undefined) p.loaderVersion = patch.loaderVersion?.trim() || null;
     if (patch.jvmArgs) p.jvmArgs = patch.jvmArgs;
     if (patch.resolution) p.resolution = patch.resolution;
     if (patch.server !== undefined) p.server = patch.server?.trim() ? patch.server : null;
@@ -1995,6 +2010,8 @@ export const api = {
   gameState: async () => (await invoke<GameState | null | undefined>('game_state')) ?? null,
   listVersions: () => invoke<Version[]>('list_versions'),
   fabricLoaderVersion: () => invoke<string>('fabric_loader_version'),
+  /** the Fabric Loader builds for a game version, newest first */
+  fabricLoaderVersions: (gameVersion: string) => invoke<FabricLoader[]>('fabric_loader_versions', { gameVersion }),
   searchModpacks: (
     query: string,
     facets: ModpackFacets,

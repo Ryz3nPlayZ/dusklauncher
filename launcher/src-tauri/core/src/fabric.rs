@@ -37,6 +37,33 @@ async fn loader_for_game(client: &reqwest::Client, game_version: &str) -> Result
         .ok_or_else(|| crate::Error::Other(format!("Fabric has no loader for Minecraft {game_version}")))
 }
 
+/// One loader build meta lists for a game version.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct LoaderBuild {
+    pub version: String,
+    pub stable: bool,
+}
+
+/// Every loader build meta lists for `game_version`, newest first.
+pub async fn loader_builds(client: &reqwest::Client, game_version: &str) -> Result<Vec<LoaderBuild>> {
+    let url = format!("{FABRIC_META_PROFILE_URL}/{game_version}");
+    let entries: Vec<Value> = client.get(&url).send().await?.error_for_status()?.json().await?;
+    Ok(builds(&entries))
+}
+
+fn builds(entries: &[Value]) -> Vec<LoaderBuild> {
+    entries
+        .iter()
+        .filter_map(|e| e.get("loader"))
+        .filter_map(|l| {
+            Some(LoaderBuild {
+                version: l.get("version")?.as_str()?.to_owned(),
+                stable: l.get("stable").and_then(Value::as_bool).unwrap_or(false),
+            })
+        })
+        .collect()
+}
+
 /// Meta lists loaders newest first.
 fn pick_loader(entries: &[Value]) -> Option<String> {
     let loaders: Vec<&Value> = entries.iter().filter_map(|e| e.get("loader")).collect();
@@ -193,6 +220,10 @@ mod tests {
         let unstable = serde_json::json!([{"loader": {"version": "0.1.0", "stable": false}}]);
         assert_eq!(pick_loader(unstable.as_array().unwrap()).as_deref(), Some("0.1.0"));
         assert_eq!(pick_loader(&[]), None);
+        let listed = builds(entries.as_array().unwrap());
+        assert_eq!(listed.len(), 3);
+        assert_eq!(listed[0], LoaderBuild { version: "0.20.0-beta.1".into(), stable: false });
+        assert!(listed[1].stable);
     }
 
     #[test]
