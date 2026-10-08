@@ -555,6 +555,7 @@ async fn install_mrpack_bytes(
         play_secs: 0,
         memory_mb: None,
         java_path: None,
+        group: None,
     };
     let dirs = profile.dirs(&state.data_dir);
     {

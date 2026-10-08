@@ -478,6 +478,7 @@ mod tests {
             play_secs: 0,
             memory_mb: None,
             java_path: None,
+            group: None,
         }
     }
 

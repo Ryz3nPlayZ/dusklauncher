@@ -26,8 +26,9 @@ import {
   type Version,
 } from '../lib/api';
 
+/* the loader tabs, then one per group (keyed `g:<name>` so a group called
+   "Fabric" doesn't collide with the loader) */
 const FILTERS = ['ALL', 'VANILLA', 'FABRIC', 'NEOFORGE'] as const;
-type Filter = (typeof FILTERS)[number];
 
 export default function Instances({
   profiles,
@@ -51,7 +52,7 @@ export default function Instances({
   onWatch: (profileId: string, path: string) => void;
   clock24h: boolean;
 }) {
-  const [filter, setFilter] = useState<Filter>('ALL');
+  const [filter, setFilter] = useState<string>('ALL');
   /* every instance's screenshots, one page (the instances layout) */
   const [gallery, setGallery] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -93,9 +94,20 @@ export default function Instances({
      every other card's PLAY waits */
   const live = game && game.state !== 'exited' ? game : null;
 
+  const groups = useMemo(
+    () => [...new Set(profiles.flatMap((p) => (p.group ? [p.group] : [])))].sort((a, b) => a.localeCompare(b)),
+    [profiles],
+  );
+  // the last instance left a group: its tab goes, so does the filter
+  useEffect(() => {
+    if (filter.startsWith('g:') && !groups.includes(filter.slice(2))) setFilter('ALL');
+  }, [groups, filter]);
+
   const shown = useMemo(
     () =>
-      profiles.filter((p) => filter === 'ALL' || p.loader.toUpperCase() === filter),
+      profiles.filter((p) =>
+        filter.startsWith('g:') ? p.group === filter.slice(2) : filter === 'ALL' || p.loader.toUpperCase() === filter,
+      ),
     [profiles, filter],
   );
 
@@ -166,6 +178,7 @@ export default function Instances({
           onStop={onStop}
           onRefresh={onRefresh}
           onDelete={setConfirm}
+          groups={groups}
         />
         {deleteModal}
       </>
@@ -226,6 +239,9 @@ export default function Instances({
         <div className="win__bar">
           {FILTERS.map((f) => (
             <NavCell key={f} label={f} active={filter === f} onClick={() => setFilter(f)} />
+          ))}
+          {groups.map((g) => (
+            <NavCell key={g} label={g.toUpperCase()} active={filter === `g:${g}`} onClick={() => setFilter(`g:${g}`)} />
           ))}
           <div className="win__fill" />
         </div>

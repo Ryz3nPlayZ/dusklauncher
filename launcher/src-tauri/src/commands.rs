@@ -35,6 +35,7 @@ pub struct ProfileDto {
     pub memory_mb: Option<u32>,
     /// per-instance java executable; null = launcher setting / provisioned
     pub java_path: Option<String>,
+    pub group: Option<String>,
 }
 
 pub fn dto(p: &Profile) -> ProfileDto {
@@ -54,6 +55,7 @@ pub fn dto(p: &Profile) -> ProfileDto {
         art: art_seed(&p.id),
         memory_mb: p.memory_mb,
         java_path: p.java_path.clone(),
+        group: p.group.clone(),
     }
 }
 
@@ -81,6 +83,8 @@ pub struct ProfilePatch {
     pub memory_mb: Option<u32>,
     /// "" clears the override
     pub java_path: Option<String>,
+    /// "" takes it out of its group
+    pub group: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -244,6 +248,7 @@ pub(crate) fn new_profile(state: &AppState, name: String, game_version: String, 
         play_secs: 0,
         memory_mb: None,
         java_path: None,
+        group: None,
     }
 }
 
@@ -282,6 +287,9 @@ pub fn update_profile(state: State<AppState>, id: String, patch: ProfilePatch) -
             }
             if let Some(mb) = patch.memory_mb {
                 p.memory_mb = Some(mb).filter(|m| *m > 0);
+            }
+            if let Some(group) = &patch.group {
+                p.group = Some(group.trim().chars().take(32).collect::<String>()).filter(|s| !s.is_empty());
             }
             if let Some(path) = &patch.java_path {
                 p.java_path = Some(path.trim().to_string()).filter(|s| !s.is_empty());

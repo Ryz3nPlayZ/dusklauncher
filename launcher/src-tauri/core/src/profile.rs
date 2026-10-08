@@ -102,6 +102,9 @@ pub struct Profile {
     /// for the version's Java major, else the provisioned runtime
     #[serde(default)]
     pub java_path: Option<String>,
+    /// a folder of the user's own on the INSTANCES page; None = ungrouped
+    #[serde(default)]
+    pub group: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

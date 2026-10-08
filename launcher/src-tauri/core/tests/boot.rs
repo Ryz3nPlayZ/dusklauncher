@@ -82,6 +82,7 @@ async fn boot_to_menu() {
         jvm_args: profile::default_jvm_args(),
         memory_mb: None,
         java_path: None,
+        group: None,
         resolution: (1280, 720),
         mod_filenames: vec![],
         server: None,

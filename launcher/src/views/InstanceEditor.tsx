@@ -89,6 +89,7 @@ export default function InstanceEditor({
   onStop,
   onRefresh,
   onDelete,
+  groups,
 }: {
   profile: Profile;
   game: GameState | null;
@@ -97,6 +98,8 @@ export default function InstanceEditor({
   onStop: () => void;
   onRefresh: () => Promise<void> | void;
   onDelete: (p: Profile) => void;
+  /** the groups other instances are in, offered when filing this one */
+  groups: string[];
 }) {
   const [tab, setTab] = useState<Tab>('CONTENT');
   const [kindTab, setKindTab] = useState<KindTab>('ALL');
@@ -282,7 +285,7 @@ export default function InstanceEditor({
           />
         )}
         {tab === 'SETTINGS' && (
-          <SettingsTab profile={profile} onSaved={onRefresh} onDelete={() => onDelete(profile)} />
+          <SettingsTab profile={profile} groups={groups} onSaved={onRefresh} onDelete={() => onDelete(profile)} />
         )}
         {tab === 'WORLDS' && (
           <WorldsTab profile={profile} busy={live !== null} onLaunch={(to) => onLaunch(profile.id, to)} />
@@ -320,10 +323,12 @@ const tuningOf = (jvm: string): Tuning => {
 /* ── SETTINGS: the profile's own fields, saved as one patch ─────────────── */
 function SettingsTab({
   profile,
+  groups,
   onSaved,
   onDelete,
 }: {
   profile: Profile;
+  groups: string[];
   onSaved: () => Promise<void> | void;
   onDelete: () => void;
 }) {
@@ -338,6 +343,7 @@ function SettingsTab({
   /* the JAVA picker: open when set, the installs once they're found */
   const [javas, setJavas] = useState<JavaInstall[] | 'open' | null>(null);
   const [server, setServer] = useState(profile.server ?? '');
+  const [group, setGroup] = useState(profile.group ?? '');
   const [versions, setVersions] = useState<Version[]>([]);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -357,6 +363,7 @@ function SettingsTab({
     setMemory(profile.memoryMb ? String(profile.memoryMb) : '');
     setJavaPath(profile.javaPath ?? '');
     setServer(profile.server ?? '');
+    setGroup(profile.group ?? '');
   }, [profile]);
 
   const w = Number(width);
@@ -371,7 +378,8 @@ function SettingsTab({
     jvm.trim() !== jvmText(profile) ||
     mb !== (profile.memoryMb ?? 0) ||
     javaPath.trim() !== (profile.javaPath ?? '') ||
-    server.trim() !== (profile.server ?? '');
+    server.trim() !== (profile.server ?? '') ||
+    group.trim() !== (profile.group ?? '');
   const valid =
     name.trim() !== '' &&
     version.trim() !== '' &&
@@ -394,6 +402,7 @@ function SettingsTab({
         server: server.trim(),
         memoryMb: mb,
         javaPath: javaPath.trim(),
+        group: group.trim(),
       });
       await onSaved();
       setNote('Saved.');
@@ -464,6 +473,23 @@ function SettingsTab({
       <Row label="NAME">
         <PxBox family="panel" height="md" className="px--wide">
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+        </PxBox>
+      </Row>
+      <Row label="GROUP" hint="Instances in a group get their own tab in INSTANCES. Empty = no group.">
+        <PxBox family="panel" height="md">
+          <input
+            className="input"
+            list="editor-groups"
+            maxLength={32}
+            placeholder="none"
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
+          />
+          <datalist id="editor-groups">
+            {groups.map((g) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
         </PxBox>
       </Row>
       <Row label="MINECRAFT VERSION" hint="Changing it re-installs the game files on the next launch.">

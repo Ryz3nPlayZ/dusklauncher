@@ -33,6 +33,8 @@ export interface Profile {
   memoryMb: number | null;
   /** java executable override; null = auto (launcher override → provisioned) */
   javaPath: string | null;
+  /** a name instances are filed under in INSTANCES; null = none */
+  group: string | null;
 }
 
 /** mirrors commands.rs ProfilePatch — every field optional, only set ones apply */
@@ -48,6 +50,8 @@ export interface ProfilePatch {
   memoryMb?: number;
   /** "" clears */
   javaPath?: string;
+  /** "" ungroups */
+  group?: string;
 }
 
 export interface Account {
@@ -859,6 +863,7 @@ const fixtures: Record<string, unknown> = {
       art: 0x9e3779b9,
       memoryMb: null,
       javaPath: null,
+      group: null,
     },
     {
       id: 'p-vanilla',
@@ -876,6 +881,7 @@ const fixtures: Record<string, unknown> = {
       art: 0x1b873593,
       memoryMb: null,
       javaPath: null,
+      group: null,
     },
   ] satisfies Profile[],
   get_current_account: null,
@@ -1590,6 +1596,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     if (patch.server !== undefined) p.server = patch.server?.trim() ? patch.server : null;
     if (patch.memoryMb !== undefined) p.memoryMb = patch.memoryMb > 0 ? patch.memoryMb : null;
     if (patch.javaPath !== undefined) p.javaPath = patch.javaPath.trim() || null;
+    if (patch.group !== undefined) p.group = patch.group.trim().slice(0, 32) || null;
     return structuredClone(p) as T;
   }
   if (cmd === 'repair_profile') return undefined as T;
@@ -1844,6 +1851,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
       lastPlayed: null,
       memoryMb: null,
       javaPath: null,
+      group: null,
     } as T;
   }
   return undefined as T;
