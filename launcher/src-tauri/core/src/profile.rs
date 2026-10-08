@@ -113,6 +113,8 @@ pub struct Profile {
     /// the pack's versions; None = not from a pack Modrinth knows
     #[serde(default)]
     pub pack: Option<PackLink>,
+    #[serde(default)]
+    pub hooks: InstanceHooks,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -125,6 +127,19 @@ pub struct PackLink {
     /// ships and nothing the player added
     #[serde(default)]
     pub files: Vec<String>,
+}
+
+/// An instance's own launch hooks and environment, like Prism's per-instance
+/// custom commands. An empty hook uses the launcher's; the environment adds
+/// to the launcher's, a key set here winning.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct InstanceHooks {
+    /// KEY=VALUE pairs, one per line or `;`-separated
+    pub env_vars: String,
+    pub prelaunch_hook: String,
+    pub wrapper_hook: String,
+    pub post_exit_hook: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

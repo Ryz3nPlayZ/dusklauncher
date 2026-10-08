@@ -151,33 +151,60 @@ impl Settings {
         Ok(())
     }
 
-    /// Parse the env_vars field into KEY=VALUE pairs: one per line, or several
-    /// on a line split by `;`. A `;` stays inside a value (a PATH list) unless
-    /// what follows it starts a new `KEY=`.
+    /// The env_vars field as KEY=VALUE pairs; see [`parse_env`].
     pub fn env_pairs(&self) -> Vec<(String, String)> {
-        let starts_pair = |s: &str| {
-            s.trim_start().split_once('=').is_some_and(|(k, _)| {
-                let k = k.trim();
-                !k.is_empty() && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-            })
+        parse_env(&self.env_vars)
+    }
+
+    /// The launch environment for `p`: the launcher's variables with the
+    /// instance's over them, and each hook the instance's when it has one.
+    pub fn launch_hooks(&self, p: &fasterlauncher_core::profile::Profile) -> (Vec<(String, String)>, [Option<String>; 3]) {
+        let mut env = self.env_pairs();
+        for (k, v) in parse_env(&p.hooks.env_vars) {
+            env.retain(|(have, _)| *have != k);
+            env.push((k, v));
+        }
+        let pick = |own: &str, global: &str| {
+            [own, global].into_iter().find(|s| !s.trim().is_empty()).map(|s| s.trim().to_string())
         };
-        let mut pairs: Vec<(String, String)> = Vec::new();
-        for line in self.env_vars.lines() {
-            let mut open = false;
-            for part in line.split(';') {
-                if starts_pair(part) {
-                    let (k, v) = part.split_once('=').unwrap();
-                    pairs.push((k.trim().to_string(), v.trim().to_string()));
-                    open = true;
-                } else if open && !part.trim().is_empty() {
-                    let v = &mut pairs.last_mut().unwrap().1;
-                    v.push(';');
-                    v.push_str(part.trim());
-                }
+        let h = &p.hooks;
+        (
+            env,
+            [
+                pick(&h.prelaunch_hook, &self.prelaunch_hook),
+                pick(&h.wrapper_hook, &self.wrapper_hook),
+                pick(&h.post_exit_hook, &self.post_exit_hook),
+            ],
+        )
+    }
+}
+
+/// KEY=VALUE pairs: one per line, or several on a line split by `;`. A `;`
+/// stays inside a value (a PATH list) unless what follows it starts a new
+/// `KEY=`.
+pub fn parse_env(text: &str) -> Vec<(String, String)> {
+    let starts_pair = |s: &str| {
+        s.trim_start().split_once('=').is_some_and(|(k, _)| {
+            let k = k.trim();
+            !k.is_empty() && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        })
+    };
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    for line in text.lines() {
+        let mut open = false;
+        for part in line.split(';') {
+            if starts_pair(part) {
+                let (k, v) = part.split_once('=').unwrap();
+                pairs.push((k.trim().to_string(), v.trim().to_string()));
+                open = true;
+            } else if open && !part.trim().is_empty() {
+                let v = &mut pairs.last_mut().unwrap().1;
+                v.push(';');
+                v.push_str(part.trim());
             }
         }
-        pairs
     }
+    pairs
 }
 
 #[cfg(test)]
@@ -196,5 +223,27 @@ mod tests {
                 ("C".into(), "3".into()),
             ]
         );
+    }
+
+    #[test]
+    fn an_instances_hooks_and_environment_go_over_the_launchers() {
+        let s = Settings {
+            env_vars: "A=1; B=2".into(),
+            prelaunch_hook: "echo global".into(),
+            wrapper_hook: "gamemoderun".into(),
+            ..Settings::default()
+        };
+        let mut p: fasterlauncher_core::profile::Profile = serde_json::from_value(serde_json::json!({
+            "id": "p1", "name": "x", "game_version": "1.21.11", "loader": "Fabric", "loader_version": null,
+            "created_at": 0, "last_played": null, "jvm_args": [], "resolution": [854, 480], "mod_filenames": [], "server": null
+        }))
+        .unwrap();
+        assert_eq!(s.launch_hooks(&p).1, [Some("echo global".into()), Some("gamemoderun".into()), None]);
+        p.hooks.env_vars = "B=3\nC=4".into();
+        p.hooks.wrapper_hook = "prime-run".into();
+        p.hooks.post_exit_hook = "  ".into();
+        let (env, hooks) = s.launch_hooks(&p);
+        assert_eq!(env, vec![("A".into(), "1".into()), ("B".into(), "3".into()), ("C".into(), "4".into())]);
+        assert_eq!(hooks, [Some("echo global".into()), Some("prime-run".into()), None]);
     }
 }

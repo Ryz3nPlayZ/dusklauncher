@@ -39,7 +39,19 @@ export interface Profile {
   icon: string | null;
   /** the Modrinth pack it was installed from; null = not from one */
   pack: PackLink | null;
+  hooks: InstanceHooks;
 }
+
+/** an instance's own launch hooks and environment (core InstanceHooks):
+ *  an empty hook uses the launcher's; the variables go over the launcher's */
+export interface InstanceHooks {
+  envVars: string;
+  prelaunchHook: string;
+  wrapperHook: string;
+  postExitHook: string;
+}
+
+const noHooks = (): InstanceHooks => ({ envVars: '', prelaunchHook: '', wrapperHook: '', postExitHook: '' });
 
 /** mirrors commands.rs PackDto */
 export interface PackLink {
@@ -63,6 +75,7 @@ export interface ProfilePatch {
   javaPath?: string;
   /** "" ungroups */
   group?: string;
+  hooks?: InstanceHooks;
 }
 
 export interface Account {
@@ -886,6 +899,7 @@ const fixtures: Record<string, unknown> = {
       group: null,
       icon: null,
       pack: { projectId: 'm-fabu', versionId: 'v-3', versionNumber: '7.1.3' },
+      hooks: noHooks(),
     },
     {
       id: 'p-vanilla',
@@ -906,6 +920,7 @@ const fixtures: Record<string, unknown> = {
       group: null,
       icon: null,
       pack: null,
+      hooks: noHooks(),
     },
   ] satisfies Profile[],
   get_current_account: null,
@@ -1658,6 +1673,10 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     if (patch.memoryMb !== undefined) p.memoryMb = patch.memoryMb > 0 ? patch.memoryMb : null;
     if (patch.javaPath !== undefined) p.javaPath = patch.javaPath.trim() || null;
     if (patch.group !== undefined) p.group = patch.group.trim().slice(0, 32) || null;
+    if (patch.hooks) {
+      const h = patch.hooks;
+      p.hooks = { envVars: h.envVars.trim(), prelaunchHook: h.prelaunchHook.trim(), wrapperHook: h.wrapperHook.trim(), postExitHook: h.postExitHook.trim() };
+    }
     return structuredClone(p) as T;
   }
   if (cmd === 'repair_profile') return undefined as T;

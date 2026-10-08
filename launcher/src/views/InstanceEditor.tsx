@@ -27,9 +27,11 @@ import {
   type ModProblems,
   releaseNewer,
   type LaunchTarget,
+  type InstanceHooks,
   type Profile,
   type ProfileFolder,
   type ProfileMod,
+  type Settings,
   type SavedServer,
   type ServerStatus,
   type Version,
@@ -356,6 +358,9 @@ function SettingsTab({
   const [javas, setJavas] = useState<JavaInstall[] | 'open' | null>(null);
   const [server, setServer] = useState(profile.server ?? '');
   const [group, setGroup] = useState(profile.group ?? '');
+  const [hooks, setHooks] = useState(profile.hooks);
+  /* the launcher's own hooks, shown where the instance leaves its empty */
+  const [launcher, setLauncher] = useState<Settings | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -365,6 +370,7 @@ function SettingsTab({
 
   useEffect(() => {
     void api.listVersions().then(setVersions).catch(() => setVersions([]));
+    void api.getSettings().then(setLauncher).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -392,6 +398,7 @@ function SettingsTab({
     setJavaPath(profile.javaPath ?? '');
     setServer(profile.server ?? '');
     setGroup(profile.group ?? '');
+    setHooks(profile.hooks);
   }, [profile]);
 
   const w = Number(width);
@@ -407,7 +414,8 @@ function SettingsTab({
     mb !== (profile.memoryMb ?? 0) ||
     javaPath.trim() !== (profile.javaPath ?? '') ||
     server.trim() !== (profile.server ?? '') ||
-    group.trim() !== (profile.group ?? '');
+    group.trim() !== (profile.group ?? '') ||
+    (Object.keys(hooks) as (keyof InstanceHooks)[]).some((k) => hooks[k].trim() !== profile.hooks[k]);
   const valid =
     name.trim() !== '' &&
     version.trim() !== '' &&
@@ -431,6 +439,7 @@ function SettingsTab({
         memoryMb: mb,
         javaPath: javaPath.trim(),
         group: group.trim(),
+        hooks,
       });
       await onSaved();
       setNote('Saved.');
@@ -712,6 +721,25 @@ function SettingsTab({
           />
         </PxBox>
       </Row>
+      {(
+        [
+          ['envVars', 'ENVIRONMENT', 'KEY=VALUE pairs separated by ;, added over the launcher\'s (SETTINGS → JAVA).', 'MESA_GL_VERSION_OVERRIDE=4.6'],
+          ['prelaunchHook', 'PRE-LAUNCH HOOK', 'Runs before the game starts. Empty = the launcher\'s.', ''],
+          ['wrapperHook', 'WRAPPER', 'Starts Java through this command, e.g. gamemoderun. Empty = the launcher\'s.', 'gamemoderun'],
+          ['postExitHook', 'POST-EXIT HOOK', 'Runs after the game closes. Empty = the launcher\'s.', ''],
+        ] as const
+      ).map(([key, label, hint, example]) => (
+        <Row key={key} label={label} hint={hint}>
+          <PxBox family="panel" height="md" className="px--wide">
+            <input
+              className="input"
+              placeholder={(key !== 'envVars' && launcher?.[key]) || example}
+              value={hooks[key]}
+              onChange={(e) => setHooks((h) => ({ ...h, [key]: e.target.value }))}
+            />
+          </PxBox>
+        </Row>
+      ))}
 
       <div className="srow editor__foot">
         <div className="srow__text">

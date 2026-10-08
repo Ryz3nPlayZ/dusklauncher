@@ -4,7 +4,7 @@ use crate::{auth_flow, auth_store};
 use fasterlauncher_core::auth::Session;
 use fasterlauncher_core::launch::{self, LaunchEnv};
 use fasterlauncher_core::natives;
-use fasterlauncher_core::profile::{default_jvm_args, Loader, Profile};
+use fasterlauncher_core::profile::{default_jvm_args, InstanceHooks, Loader, Profile};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -40,6 +40,7 @@ pub struct ProfileDto {
     pub icon: Option<String>,
     /// the Modrinth pack it was installed from; null = not from one
     pub pack: Option<PackDto>,
+    pub hooks: InstanceHooks,
 }
 
 #[derive(Serialize, Clone)]
@@ -74,6 +75,7 @@ pub fn dto(p: &Profile, data_dir: &std::path::Path) -> ProfileDto {
             version_id: l.version_id.clone(),
             version_number: l.version_number.clone(),
         }),
+        hooks: p.hooks.clone(),
     }
 }
 
@@ -103,6 +105,8 @@ pub struct ProfilePatch {
     pub java_path: Option<String>,
     /// "" takes it out of its group
     pub group: Option<String>,
+    /// the instance's own hooks and environment, whole
+    pub hooks: Option<InstanceHooks>,
 }
 
 #[derive(Serialize)]
@@ -269,11 +273,12 @@ pub(crate) fn new_profile(state: &AppState, name: String, game_version: String, 
         group: None,
         icon: None,
         pack: None,
+        hooks: Default::default(),
     }
 }
 
-#[tauri::command]
-pub fn update_profile(state: State<AppState>, id: String, patch: ProfilePatch) -> Result<ProfileDto, String> {
+#[tauri::command(async)]
+pub fn update_profile(state: State<'_, AppState>, id: String, patch: ProfilePatch) -> Result<ProfileDto, String> {
     state
         .patch_profile(&id, |p| {
             if let Some(name) = &patch.name {
@@ -313,6 +318,14 @@ pub fn update_profile(state: State<AppState>, id: String, patch: ProfilePatch) -
             }
             if let Some(path) = &patch.java_path {
                 p.java_path = Some(path.trim().to_string()).filter(|s| !s.is_empty());
+            }
+            if let Some(h) = &patch.hooks {
+                p.hooks = InstanceHooks {
+                    env_vars: h.env_vars.trim().to_string(),
+                    prelaunch_hook: h.prelaunch_hook.trim().to_string(),
+                    wrapper_hook: h.wrapper_hook.trim().to_string(),
+                    post_exit_hook: h.post_exit_hook.trim().to_string(),
+                };
             }
         })
         .map(|p| dto(&p, &state.data_dir))
@@ -702,12 +715,12 @@ pub async fn install_and_launch(
     let java_bin = java_for(&app, &client, &state, &profile, &dirs, &version.effective_java()).await?;
 
     let env = {
-        let settings = state.settings.lock().unwrap();
+        let (env_vars, [prelaunch_hook, wrapper_hook, post_exit_hook]) = state.settings.lock().unwrap().launch_hooks(&profile);
         LaunchEnv {
-            env_vars: settings.env_pairs(),
-            prelaunch_hook: Some(settings.prelaunch_hook.clone()).filter(|s| !s.trim().is_empty()),
-            wrapper_hook: Some(settings.wrapper_hook.clone()).filter(|s| !s.trim().is_empty()),
-            post_exit_hook: Some(settings.post_exit_hook.clone()).filter(|s| !s.trim().is_empty()),
+            env_vars,
+            prelaunch_hook,
+            wrapper_hook,
+            post_exit_hook,
             hook_cwd: Some(dirs.root.clone()),
             world,
         }

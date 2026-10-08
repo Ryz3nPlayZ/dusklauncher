@@ -481,6 +481,7 @@ mod tests {
             group: None,
             icon: None,
             pack: None,
+            hooks: Default::default(),
         }
     }
 
