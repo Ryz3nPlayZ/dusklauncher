@@ -82,6 +82,8 @@ export default function Instances({
     />
   );
   const [confirm, setConfirm] = useState<Profile | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
   /* the card's gear opens the editor; it is keyed by id so a save (which
      refreshes the list) re-renders it with the fresh profile */
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -98,27 +100,37 @@ export default function Instances({
   );
 
   const deleteModal = confirm && (
-    <div className="modal-scrim" onClick={() => setConfirm(null)}>
+    <div className="modal-scrim" onClick={() => !deleting && (setConfirm(null), setDeleteErr(null))}>
       <PxBox family="red" className="px--window modal" onClick={(e) => e.stopPropagation()}>
         <TT size={22} tone="red">
           DELETE INSTANCE?
         </TT>
         <span className="meta">
-          “{confirm.name}” and everything in its folder — worlds, mods, configs — is removed from
-          disk. This cannot be undone.
+          “{confirm.name}” leaves the list, and its folder — worlds, mods, configs — goes to the
+          trash.
         </span>
+        {deleteErr && <span className="meta">{deleteErr}</span>}
         <div className="modal__row modal__row--tall">
-          <PxButton family="grey" height="md" onClick={() => setConfirm(null)}>
+          <PxButton family="grey" height="md" disabled={deleting} onClick={() => (setConfirm(null), setDeleteErr(null))}>
             <TT size={20}>CANCEL</TT>
           </PxButton>
           <PxButton
             family="red"
             height="md"
+            disabled={deleting}
             onClick={async () => {
-              await api.deleteProfile(confirm.id);
-              setConfirm(null);
-              setEditingId(null);
-              await onRefresh();
+              setDeleting(true);
+              setDeleteErr(null);
+              try {
+                await api.deleteProfile(confirm.id);
+                setConfirm(null);
+                setEditingId(null);
+                await onRefresh();
+              } catch (e) {
+                setDeleteErr(String(e));
+              } finally {
+                setDeleting(false);
+              }
             }}
           >
             <TT size={20} tone="red">

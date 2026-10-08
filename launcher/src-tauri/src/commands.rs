@@ -291,11 +291,31 @@ pub fn update_profile(state: State<AppState>, id: String, patch: ProfilePatch) -
         .ok_or_else(|| "profile not found".to_string())
 }
 
+/// DELETE INSTANCE: drops it from the list and moves its folder — worlds,
+/// mods, config — to the trash (removed outright where there is none).
 #[tauri::command]
-pub fn delete_profile(state: State<AppState>, id: String) -> Result<(), String> {
-    let mut store = state.profiles.lock().unwrap();
-    store.profiles.retain(|p| p.id != id);
-    state.save_profiles(&store);
+pub async fn delete_profile(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    if state.running_game.lock().await.as_ref().is_some_and(|g| g.profile_id == id) {
+        return Err("That instance is running — stop the game first.".into());
+    }
+    let dir = {
+        let mut store = state.profiles.lock().unwrap();
+        let Some(p) = store.profiles.iter().find(|p| p.id == id).cloned() else { return Ok(()) };
+        store.profiles.retain(|p| p.id != id);
+        state.save_profiles(&store);
+        p.dirs(&state.data_dir).root
+    };
+    if dir.is_dir() {
+        let gone = dir.clone();
+        tokio::task::spawn_blocking(move || {
+            if let Err(e) = trash::delete(&gone) {
+                tracing::warn!("couldn't trash {}: {e}; removing it", gone.display());
+                let _ = std::fs::remove_dir_all(&gone);
+            }
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
