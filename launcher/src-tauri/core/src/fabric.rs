@@ -124,8 +124,11 @@ pub async fn install_fabric(
         Ok(p) => p,
         Err(e) => return saved_profile(versions_dir, game_version, loader_version).ok_or(e),
     };
+    let merged = match merge_with_vanilla(profile, vanilla) {
+        Ok(m) => m,
+        Err(e) => return saved_profile(versions_dir, game_version, loader_version).ok_or(e),
+    };
     tokio::fs::create_dir_all(versions_dir).await?;
-    let merged = merge_with_vanilla(profile, vanilla);
     let path = versions_dir.join(format!("{}.json", merged.id));
     tokio::fs::write(&path, serde_json::to_vec_pretty(&merged)?).await?;
     Ok(merged)
@@ -135,16 +138,19 @@ pub async fn install_fabric(
 /// fabric doesn't ship (java runtime, client jar, assets). Libraries are the
 /// union; a loader library replaces vanilla's copy of the same artifact (same
 /// group, name and classifier, any version), so two versions of one library
-/// never share the classpath.
+/// never share the classpath. A profile that isn't one (an error page, a
+/// changed schema) is an error rather than a panic.
 pub fn merge_with_vanilla(
     mut profile: serde_json::Value,
     vanilla: &meta::VersionJson,
-) -> meta::VersionJson {
+) -> Result<meta::VersionJson> {
     // Tolerate older fabric meta payloads that omit these piston fields.
-    let obj = profile.as_object_mut().expect("fabric profile is an object");
+    let Some(obj) = profile.as_object_mut() else {
+        return Err(crate::Error::Other("the loader profile isn't a version JSON".into()));
+    };
     obj.entry("type").or_insert_with(|| serde_json::json!("release"));
     obj.entry("libraries").or_insert_with(|| serde_json::json!([]));
-    let fabric: meta::VersionJson = serde_json::from_value(profile).expect("fabric profile json deserializes");
+    let fabric: meta::VersionJson = serde_json::from_value(profile)?;
     let mut merged = vanilla.clone();
     merged.id = fabric.id;
     merged.kind = fabric.kind;
@@ -180,7 +186,7 @@ pub fn merge_with_vanilla(
             None => merged.libraries.push(lib),
         }
     }
-    merged
+    Ok(merged)
 }
 
 /// A maven coordinate without its version: `group:name[:classifier]`.
@@ -278,7 +284,7 @@ mod tests {
                  "sha1": "ada2141c0cc52ee8f5c48cd5fa4ce0e794f22236", "size": 126151}
             ]
         });
-        let merged = merge_with_vanilla(profile, &vanilla());
+        let merged = merge_with_vanilla(profile, &vanilla()).unwrap();
 
         assert_eq!(merged.main_class, "net.fabricmc.loader.impl.launch.knot.KnotClient");
         assert_eq!(merged.id, "fabric-loader-0.19.3-26.2");

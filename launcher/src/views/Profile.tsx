@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { DevicePanel, useLogin } from '../components/SignIn';
+import { DevicePanel, ReconsentButton, useLogin } from '../components/SignIn';
 import PlayerHead from '../components/PlayerHead';
 import { PxBox, PxButton, TT } from '../components/px/Px';
 import { api, isTauri, type Account, type AppInfo, type SavedAccount } from '../lib/api';
@@ -19,7 +19,7 @@ export default function Profile({
   const [switching, setSwitching] = useState<string | null>(null);
   const [switchErr, setSwitchErr] = useState<string | null>(null);
   const refreshAccounts = () => void api.listAccounts().then(setAccounts).catch(() => setAccounts([]));
-  const { busy: signingIn, err, auth, start } = useLogin(async () => {
+  const { busy: signingIn, err, auth, start, startReconsent } = useLogin(async () => {
     await onChange();
     refreshAccounts();
   });
@@ -152,6 +152,11 @@ export default function Profile({
         {err && (
           <PxBox family="red" className="stack">
             <span className="meta">{err}</span>
+            {err.includes('has not been approved by Microsoft') && (
+              <div className="modal__row">
+                <ReconsentButton busy={signingIn} onClick={startReconsent} />
+              </div>
+            )}
           </PxBox>
         )}
 

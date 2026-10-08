@@ -51,6 +51,9 @@ export default function Cosmetics({
   const [picked, setPicked] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('SKINS');
   const [note, setNote] = useState<string | null>(null);
+  /** the skin being renamed, with the name typed so far */
+  const [renaming, setRenaming] = useState<{ skin: string; name: string } | null>(null);
+  const [trashing, setTrashing] = useState<string | null>(null);
 
   // the look: the registry bundled in the client mod + the launcher-wide loadout
   const [capes, setCapes] = useState<CapeEntry[]>([]);
@@ -175,6 +178,39 @@ export default function Cosmetics({
     try {
       await api.setSkinModel(pickedSkin.name, pin);
       setSkins((cur) => cur.map((s) => (s.name === pickedSkin.name ? { ...s, model: pin ?? undefined } : s)));
+    } catch (e) {
+      setNote(String(e));
+    }
+  };
+  /** the same rule the backend holds a name to */
+  const nameProblem = (name: string): string | null => {
+    const n = name.trim();
+    if (n === '' || n.length > 48) return 'A name is 1-48 characters.';
+    if (/[/\\.]/.test(n)) return 'A name can’t have / \\ or . in it.';
+    if (n !== renaming?.skin && skins.some((s) => s.name === n)) return 'Another skin has that name.';
+    return null;
+  };
+  const renameSkin = async (from: string, to: string) => {
+    to = to.trim();
+    setRenaming(null);
+    if (to === from) return;
+    setNote(null);
+    try {
+      await api.renameSkin(from, to);
+      if (picked === from) setPicked(to);
+      await load();
+    } catch (e) {
+      setNote(String(e));
+    }
+  };
+  const deleteSkin = async (name: string) => {
+    setTrashing(null);
+    setNote(null);
+    try {
+      await api.deleteSkin(name);
+      // load() keeps a pick it already has, so let go of this one first
+      if (picked === name) setPicked(null);
+      await load();
     } catch (e) {
       setNote(String(e));
     }
@@ -541,6 +577,20 @@ export default function Cosmetics({
                       onClick={() => void flipArms()}
                     />
                   )}
+                  {pickedSkin && isTauri && (
+                    <>
+                      <NavCell
+                        label="RENAME"
+                        title="The name it's listed under here"
+                        onClick={() => setRenaming({ skin: pickedSkin.name, name: pickedSkin.name })}
+                      />
+                      <NavCell
+                        label="DELETE"
+                        title="Take it out of the wardrobe (an applied skin stays on the account)"
+                        onClick={() => setTrashing(pickedSkin.name)}
+                      />
+                    </>
+                  )}
                   <div className="win__fill" />
                   <NavLabel label={`${skins.length} SKIN${skins.length === 1 ? '' : 'S'}`} />
                 </div>
@@ -603,6 +653,73 @@ export default function Cosmetics({
           )}
         </div>
       </div>
+      {renaming && (
+        <div className="modal-scrim" onClick={() => setRenaming(null)}>
+          <PxBox family="red" className="px--window modal" onClick={(e) => e.stopPropagation()}>
+            <form
+              className="worlds__form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!nameProblem(renaming.name)) void renameSkin(renaming.skin, renaming.name);
+              }}
+            >
+              <TT size={22}>RENAME SKIN</TT>
+              <span className="meta">{nameProblem(renaming.name) ?? 'The name it’s listed under in the wardrobe.'}</span>
+              <div className="modal__row">
+                <span className="modal__label">
+                  <TT size={16} tone="sub">
+                    NAME
+                  </TT>
+                </span>
+                <PxBox family="panel" height="md">
+                  <input
+                    className="input"
+                    value={renaming.name}
+                    maxLength={48}
+                    autoFocus
+                    spellCheck={false}
+                    onFocus={(e) => e.currentTarget.select()}
+                    onChange={(e) => setRenaming({ ...renaming, name: e.target.value })}
+                  />
+                </PxBox>
+              </div>
+              <div className="modal__row modal__row--tall">
+                <PxButton family="grey" height="md" type="button" onClick={() => setRenaming(null)}>
+                  <TT size={20}>CANCEL</TT>
+                </PxButton>
+                <PxButton family="accent" height="md" type="submit" disabled={!!nameProblem(renaming.name)}>
+                  <TT size={20} tone="accent">
+                    RENAME
+                  </TT>
+                </PxButton>
+              </div>
+            </form>
+          </PxBox>
+        </div>
+      )}
+      {trashing && (
+        <div className="modal-scrim" onClick={() => setTrashing(null)}>
+          <PxBox family="red" className="px--window modal" onClick={(e) => e.stopPropagation()}>
+            <TT size={22} tone="red">
+              DELETE SKIN?
+            </TT>
+            <span className="meta">
+              “{trashing}” moves to the trash.
+              {trashing === current?.name ? ' It stays on your account until you apply another.' : ''}
+            </span>
+            <div className="modal__row modal__row--tall">
+              <PxButton family="grey" height="md" onClick={() => setTrashing(null)}>
+                <TT size={20}>CANCEL</TT>
+              </PxButton>
+              <PxButton family="red" height="md" onClick={() => void deleteSkin(trashing)}>
+                <TT size={20} tone="red">
+                  DELETE
+                </TT>
+              </PxButton>
+            </div>
+          </PxBox>
+        </div>
+      )}
     </div>
   );
 }

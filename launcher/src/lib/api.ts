@@ -1333,6 +1333,7 @@ const sideEffects = new Set([
   'begin_reconsent_login',
   'upload_skin',
   'import_skin',
+  'reset_skin',
   'show_in_folder',
   'open_data_dir',
   'import_local_content',
@@ -2212,6 +2213,8 @@ export const api = {
   getAccount: () => invoke<Account | null>('get_current_account'),
   login: () => invoke<Account>('begin_login'),
   loginWithCode: () => invoke<Account>('begin_code_login'),
+  /** the sign-in again with Microsoft's permission screen forced, for a token missing its Xbox grant */
+  loginReconsent: () => invoke<Account>('begin_reconsent_login'),
   /** stop the sign-in in flight (closes the sign-in window if open) */
   cancelLogin: () => invoke<void>('cancel_login'),
   logout: () => invoke<void>('logout'),
@@ -2239,6 +2242,8 @@ export const api = {
   readSkin: (name: string) => invoke<string>('read_skin', { name }),
   importSkin: () => invoke<Skin | null>('import_skin'),
   deleteSkin: (name: string) => invoke<void>('delete_skin', { name }),
+  renameSkin: (oldName: string, newName: string) => invoke<void>('rename_skin', { oldName, newName }),
+  resetSkin: () => invoke<void>('reset_skin'),
   selectSkin: (name: string) => invoke<void>('set_selected_skin', { name }),
   uploadSkin: (name: string, variant: SkinModel) =>
     invoke<void>('upload_skin', { name, variant }),

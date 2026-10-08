@@ -144,7 +144,7 @@ pub async fn install_neoforge(
     let profile: serde_json::Value = serde_json::from_slice(&tokio::fs::read(&json_path).await.map_err(|e| {
         Error::Other(format!("NeoForge installer left no profile at {}: {e}", json_path.display()))
     })?)?;
-    let merged = fabric::merge_with_vanilla(profile, vanilla);
+    let merged = fabric::merge_with_vanilla(profile, vanilla)?;
     tokio::fs::create_dir_all(versions_dir).await?;
     let path = versions_dir.join(format!("{}.json", merged.id));
     tokio::fs::write(&path, serde_json::to_vec_pretty(&merged)?).await?;
@@ -273,7 +273,7 @@ mod tests {
                 "url": "https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.252/neoforge-21.1.252-universal.jar",
                 "sha1": "aa", "size": 1}}}]
         });
-        let merged = fabric::merge_with_vanilla(installed, &vanilla);
+        let merged = fabric::merge_with_vanilla(installed, &vanilla).unwrap();
         assert_eq!(merged.id, "neoforge-21.1.252");
         assert_eq!(merged.main_class, "cpw.mods.bootstraplauncher.BootstrapLauncher");
         let args = merged.arguments.as_ref().unwrap();

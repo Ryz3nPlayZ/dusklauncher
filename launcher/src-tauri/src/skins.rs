@@ -136,7 +136,12 @@ pub fn rename_skin(state: State<'_, AppState>, old_name: String, new_name: Strin
 }
 
 #[tauri::command(async)]
-pub fn delete_skin(state: State<AppState>, name: String) -> Result<(), String> {    let mut index = load_index(&state);
+pub fn delete_skin(state: State<AppState>, name: String) -> Result<(), String> {
+    let mut index = load_index(&state);
+    // Only a name the index holds: it becomes a file path below.
+    if !index.skins.iter().any(|s| s.name == name) {
+        return Err("skin not found".into());
+    }
     let was_selected = index.skins.iter().any(|s| s.name == name && s.selected);
     index.skins.retain(|s| s.name != name);
     if was_selected {
@@ -145,7 +150,11 @@ pub fn delete_skin(state: State<AppState>, name: String) -> Result<(), String> {
         }
     }
     save_index(&state, &index);
-    let _ = std::fs::remove_file(skins_dir(&state).join(format!("{name}.png")));
+    // To the trash, like a deleted world; gone outright where there's none.
+    let path = skins_dir(&state).join(format!("{name}.png"));
+    if trash::delete(&path).is_err() {
+        let _ = std::fs::remove_file(&path);
+    }
     Ok(())
 }
 

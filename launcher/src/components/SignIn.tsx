@@ -79,8 +79,12 @@ export function useLogin(onDone: () => Promise<void> | void) {
     await cancel();
     await run(api.loginWithCode);
   }, [cancel, run]);
+  const startReconsent = useCallback(async () => {
+    await cancel();
+    await run(api.loginReconsent);
+  }, [cancel, run]);
 
-  return { busy, err, auth, start, startWithCode, cancel, dismiss: () => setErr(null) };
+  return { busy, err, auth, start, startWithCode, startReconsent, cancel, dismiss: () => setErr(null) };
 }
 
 /** The in-progress panel: what to do, the code, and the two fallbacks. */
@@ -139,6 +143,16 @@ export function DevicePanel({ auth }: { auth: AuthEvent | null }) {
  * offline play isn't unlocked). Only in the desktop app — the browser
  * preview has no auth.
  */
+/** The fix the Azure-400 error names: sign in again with Microsoft's
+ *  permission screen forced, so a missing Xbox grant can be approved. */
+export function ReconsentButton({ busy, onClick }: { busy: boolean; onClick: () => Promise<void> }) {
+  return (
+    <PxButton family="grey" height="md" disabled={busy} onClick={() => void onClick()}>
+      <TT size={14}>RE-CONSENT AND SIGN IN</TT>
+    </PxButton>
+  );
+}
+
 export default function SignInGate({
   onDone,
   onLater,
@@ -147,7 +161,7 @@ export default function SignInGate({
   /** ADD ACCOUNT LATER: close the gate without signing in */
   onLater: () => void;
 }) {
-  const { busy, err, auth, start, startWithCode, cancel } = useLogin(onDone);
+  const { busy, err, auth, start, startWithCode, startReconsent, cancel } = useLogin(onDone);
   /* which flow the user is on: the code (default) or the in-app window */
   const [mode, setMode] = useState<'code' | 'window'>('code');
 
@@ -230,9 +244,12 @@ export default function SignInGate({
              * failure is the one whose advertised fix needs Settings access
              * the gate is blocking. */}
             {err.includes('has not been approved by Microsoft') && (
-              <PxButton family="grey" height="md" onClick={() => void switchToOfficial()}>
-                <TT size={14}>SWITCH TO OFFICIAL SIGN-IN AND RETRY</TT>
-              </PxButton>
+              <div className="modal__row">
+                <PxButton family="grey" height="md" onClick={() => void switchToOfficial()}>
+                  <TT size={14}>SWITCH TO OFFICIAL SIGN-IN AND RETRY</TT>
+                </PxButton>
+                <ReconsentButton busy={busy} onClick={startReconsent} />
+              </div>
             )}
           </PxBox>
         )}
