@@ -309,6 +309,26 @@
       "name": "Sharpness Glitched Enchant",
       "animated": true,
       "price": 971
+    },
+    {
+      "id": 88,
+      "name": "Aurora",
+      "animated": false
+    },
+    {
+      "id": 89,
+      "name": "Halloween",
+      "animated": false
+    },
+    {
+      "id": 90,
+      "name": "Hero",
+      "animated": false
+    },
+    {
+      "id": 91,
+      "name": "Twisted",
+      "animated": false
     }
   ],
   "accessories": [

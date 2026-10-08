@@ -444,6 +444,34 @@
       "glint": false,
       "upsideDown": false,
       "ears": false
+    },
+    {
+      "id": 88,
+      "name": "Aurora",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 89,
+      "name": "Halloween",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 90,
+      "name": "Hero",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
+    },
+    {
+      "id": 91,
+      "name": "Twisted",
+      "glint": false,
+      "upsideDown": false,
+      "ears": false
     }
   ],
   "accessories": [
