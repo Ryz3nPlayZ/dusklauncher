@@ -725,6 +725,8 @@ export interface Settings {
   authMode: string;
   customBackground: string;
   discordRpc: boolean;
+  /** what the window does while the game runs */
+  onPlay: 'keep' | 'minimize' | 'hide';
   notifyFriendsOnline: boolean;
   notifyMessages: boolean;
   clock24h: boolean;
@@ -1180,6 +1182,7 @@ const fixtures: Record<string, unknown> = {
     authMode: 'official',
     customBackground: '',
     discordRpc: true,
+    onPlay: 'keep',
     notifyFriendsOnline: true,
     notifyMessages: true,
     clock24h: false,

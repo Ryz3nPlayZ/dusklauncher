@@ -74,6 +74,14 @@ pub struct Settings {
     /// lets PLAY launch with no Microsoft account (commands::launch_session).
     #[serde(default)]
     pub offline_name: String,
+    /// What the launcher window does while the game runs: "keep",
+    /// "minimize", or "hide" (brought back when the game closes).
+    #[serde(default = "default_on_play")]
+    pub on_play: String,
+}
+
+fn default_on_play() -> String {
+    "keep".into()
 }
 
 fn yes() -> bool {
@@ -122,6 +130,7 @@ impl Default for Settings {
             warn_on_links: true,
             sync_client_settings: true,
             offline_name: String::new(),
+            on_play: default_on_play(),
         }
     }
 }

@@ -910,6 +910,7 @@ pub async fn install_and_launch(
         let root2 = dirs.root.clone();
         let mods2 = dirs.mods.clone();
         let stop = std::sync::Arc::new(tokio::sync::Notify::new());
+        let on_play = state.settings.lock().unwrap().on_play.clone();
         *state.running_game.lock().await = Some(RunningGame { profile_id: profile_id.clone(), stop: stop.clone() });
         tokio::spawn(async move {
             let state = app3.state::<AppState>();
@@ -927,6 +928,13 @@ pub async fn install_and_launch(
             let _ = state.patch_profile(&pid2, |p| p.play_secs += played);
             let code = status.ok().and_then(|s| s.code());
             emit_state(&app3, &pid2, "exited", code);
+            if on_play != "keep" {
+                if let Some(w) = app3.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.unminimize();
+                    let _ = w.set_focus();
+                }
+            }
             // an error exit the player didn't ask for: say why, once the
             // last of the output has come through
             if let Some(code) = code.filter(|c| *c != 0 && !stopped) {
@@ -970,6 +978,13 @@ pub async fn install_and_launch(
     let _ = app.emit("game-activity", state.activity.lock().unwrap().clone());
     crate::discord::refresh(&app);
     emit_state(&app, &profile_id, "running", None);
+    if let Some(w) = app.get_webview_window("main") {
+        match state.settings.lock().unwrap().on_play.as_str() {
+            "minimize" => drop(w.minimize()),
+            "hide" => drop(w.hide()),
+            _ => {}
+        }
+    }
     let _ = state.patch_profile(&profile_id, |p| p.last_played = Some(now_millis()));
     Ok(())
 }

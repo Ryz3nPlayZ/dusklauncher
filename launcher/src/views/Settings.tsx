@@ -150,6 +150,26 @@ export default function SettingsView({
                   </TT>
                 </PxButton>
               </Row>
+              <Row
+                label="WHILE PLAYING"
+                hint={
+                  settings.onPlay === 'hide'
+                    ? 'The launcher hides while the game runs and comes back when it closes.'
+                    : settings.onPlay === 'minimize'
+                      ? 'The launcher minimizes while the game runs and comes back when it closes.'
+                      : 'The launcher stays open next to the game.'
+                }
+              >
+                <Choice
+                  value={settings.onPlay}
+                  onPick={(onPlay) => set({ onPlay })}
+                  options={[
+                    { value: 'keep', label: 'KEEP OPEN' },
+                    { value: 'minimize', label: 'MINIMIZE' },
+                    { value: 'hide', label: 'HIDE' },
+                  ]}
+                />
+              </Row>
               <Row label="REDUCE MOTION" hint="Freezes the scene and the player animation.">
                 <Choice
                   value={settings.reduceMotion ? 'on' : 'off'}
