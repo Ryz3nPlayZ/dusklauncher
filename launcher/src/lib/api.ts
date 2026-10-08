@@ -842,6 +842,22 @@ export interface ModProblems {
   clashes: { name: string; file: string; other: string; otherVersion: string; otherFile: string }[];
 }
 
+/** an OptiFine feature an instance's resource packs use that no mod draws yet */
+export interface PackNeed {
+  feature: string;
+  /** what players call it: "custom skies" */
+  label: string;
+  /** the packs that have it */
+  packs: string[];
+  /** the mods it still needs, by name */
+  mods: string[];
+}
+export interface PackModsInstalled {
+  added: string[];
+  /** mods with no build for the instance's game version */
+  unavailable: string[];
+}
+
 /** worlds added to an instance's saves/ */
 export interface ImportedWorlds {
   /** the folder names they landed under */
@@ -1132,6 +1148,10 @@ const fixtures: Record<string, unknown> = {
     duplicates: [{ name: 'Lithium', keep: 'lithium-fabric-0.15.1+mc1.21.11.jar', keepVersion: '0.15.1+mc1.21.11', extra: ['lithium-fabric-0.15.0+mc1.21.11.jar'] }],
     clashes: [{ name: 'Sodium', file: 'sodium-fabric-0.6.13+mc1.21.11.jar', other: 'Iris', otherVersion: '1.8.0+1.21.11', otherFile: 'iris-fabric-1.8.0+mc1.21.11.jar' }],
   } satisfies ModProblems,
+  pack_mods: [
+    { feature: 'sky', label: 'custom skies', packs: ['FreshAnimations Skies', 'Stay True'], mods: ['Nuit Interop', 'Nuit'] },
+    { feature: 'ctm', label: 'connected textures', packs: ['Stay True'], mods: ['Continuity'] },
+  ] satisfies PackNeed[],
   list_logs: [
     { path: 'logs/2026-10-06-2.log.gz', modified: Date.now() - 50 * 3600_000, size: 18_400 },
     { path: 'crash-reports/crash-2026-10-06_14.21.07-client.txt', modified: Date.now() - 52 * 3600_000, size: 9_100 },
@@ -1288,6 +1308,7 @@ const sideEffects = new Set([
   'add_server',
   'remove_server',
   'edit_server',
+  'install_pack_mods',
   'reveal_crash_report',
   'install_modpack',
   'install_modpack_version',
@@ -2139,6 +2160,11 @@ export const api = {
     invoke<ModHit[]>('search_content', { kind, query, gameVersion, loader, limit }),
   /** what the instance's Fabric mods need that mods/ doesn't have */
   modProblems: (profileId: string) => invoke<ModProblems>('mod_problems', { profileId }),
+  /** OptiFine features (custom skies, connected textures, …) the instance's packs use with no mod to draw them */
+  packMods: (profileId: string) => invoke<PackNeed[]>('pack_mods', { profileId }),
+  /** install the mods for one pack feature, or for every one without `feature` */
+  installPackMods: (profileId: string, feature?: string) =>
+    invoke<PackModsInstalled>('install_pack_mods', { profileId, feature: feature ?? null }),
   /** Linux: installed by scripts/install-linux.sh, so UPDATE re-runs the script */
   scriptInstalled: () => invoke<boolean>('script_installed'),
   /** re-run the install script, replacing this install with the latest release */

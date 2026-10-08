@@ -114,3 +114,26 @@ users).
   `-Dfabric.addMods` for that launch only; an instance that already has e4mc
   in mods/ uses its own copy. The address shows in the friends pane and goes
   out with INVITE; Discord only says "Hosting a world".
+
+## Installed when the packs ask for them
+
+Resource packs made for OptiFine keep their extras under
+`assets/minecraft/optifine/` (or `mcpatcher/`), which the game ignores.
+`packmods::pack_mods` reads each enabled pack's file list (zips: just the
+central directory; folders: a few existence checks) and the content tab offers
+INSTALL for each feature an instance has no mod for. Fabric only. Not in the
+default set: ETF/EMF cost frames, and most players' packs don't need them.
+
+| Pack folder | Feature | Mods (Modrinth) | License |
+|---|---|---|---|
+| `sky/` | custom skies | nuit-interop + nuit | MIT |
+| `ctm/` | connected textures | continuity | LGPL-3.0 |
+| `random/`, `mob/`, `emissive.properties` | random / glowing mob textures | entitytexturefeatures | LGPL-3.0 |
+| `cem/` | custom mob models | entity-model-features (+ ETF) | LGPL-3.0 |
+| `cit/` | custom item textures | cit-resewn (no build past 1.21.1 — the forks are single-maintainer, closed-source or ARR, so none is installed) | MIT |
+| `gui/` | custom GUI textures | optigui | LGPL-3.0 |
+| `anim/` | custom animations | animatica (up to 1.21.6) | LGPL-3.0 |
+
+Nuit Interop pins one exact Nuit build in its fabric.mod.json, often not the
+newest, so mods go in one at a time and a pinned library gets the build its
+mod names (`packmods::exact_pins`).

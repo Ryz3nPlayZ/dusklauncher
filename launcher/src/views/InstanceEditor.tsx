@@ -26,6 +26,7 @@ import {
   type LogFile,
   type ImportedWorlds,
   type ModProblems,
+  type PackNeed,
   releaseNewer,
   type LaunchTarget,
   type InstanceHooks,
@@ -1003,6 +1004,9 @@ function ContentTab({
   /* what would stop the mods loading: missing or wrong-version libraries,
      a mod twice, mods that break each other (Fabric only) */
   const [problems, setProblems] = useState<ModProblems | null>(null);
+  /* OptiFine features (custom skies, connected textures, …) the resource
+     packs use that no mod draws yet (Fabric only) */
+  const [packNeeds, setPackNeeds] = useState<PackNeed[]>([]);
   /* the problem row whose fix is running */
   const [fixing, setFixing] = useState<string | null>(null);
 
@@ -1044,6 +1048,14 @@ function ContentTab({
         .catch(() => setProblems(null));
     } else {
       setProblems(null);
+    }
+    if ((kindTab === 'ALL' || kindTab === 'RESOURCE PACKS') && profile.loader === 'fabric') {
+      void api
+        .packMods(profile.id)
+        .then(setPackNeeds)
+        .catch(() => setPackNeeds([]));
+    } else {
+      setPackNeeds([]);
     }
     return Promise.all(
       targets.map(async (t) => {
@@ -1158,6 +1170,15 @@ function ContentTab({
         ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
         : names[0];
 
+  const installPackMods = async (feature: string) => {
+    const r = await api.installPackMods(profile.id, feature);
+    const added = r.added.length ? `Added ${and(r.added)} — ${r.added.length > 1 ? 'they work' : 'it works'} from the next launch` : '';
+    const missing = r.unavailable.length
+      ? `${and(r.unavailable)} ${r.unavailable.length > 1 ? 'have' : 'has'} no build for ${profile.gameVersion} yet`
+      : '';
+    setNote([added, missing].filter(Boolean).join(' · ') || null);
+  };
+
   /* each problem as a row: the warning, the rest of the sentence, and the fix when there's one */
   type ProblemRow = { key: string; warn: string; text: string; fix?: { label: string; title: string; run: () => Promise<unknown> } };
   const problemRows: ProblemRow[] = problems
@@ -1203,6 +1224,15 @@ function ContentTab({
         })),
       ]
     : [];
+  /* resource packs made for OptiFine: what of theirs doesn't show, and the mods that draw it */
+  problemRows.push(
+    ...packNeeds.map((n) => ({
+      key: `pack/${n.feature}`,
+      warn: `${n.label[0].toUpperCase()}${n.label.slice(1)} don’t show`,
+      text: ` — ${and(n.packs)} ${n.packs.length > 1 ? 'have' : 'has'} them, made for OptiFine; on Fabric they need ${and(n.mods)}.`,
+      fix: { label: 'INSTALL', title: `Install ${and(n.mods)} from Modrinth`, run: () => installPackMods(n.feature) },
+    })),
+  );
 
   return (
     <div className="win__body editor__body">

@@ -78,7 +78,7 @@ fn content_kind(kind: &str) -> Result<&'static str, String> {
     }
 }
 
-fn profile_and_content(
+pub(crate) fn profile_and_content(
     state: &AppState,
     profile_id: &str,
     kind: &str,
@@ -694,7 +694,7 @@ const MAX_DEPENDENCY_INSTALLS: usize = 16;
 /// turn — each as the newest version for the instance, like a fresh install.
 /// Best effort: a mod without a dependency crashes at launch, but a
 /// dependency Modrinth can't resolve shouldn't fail the install that asked.
-async fn install_required_deps(
+pub(crate) async fn install_required_deps(
     app: &AppHandle,
     state: &State<'_, AppState>,
     profile: &Profile,
@@ -930,7 +930,7 @@ pub async fn install_performance_mods(
 }
 
 /// Download a version's primary file into `dir` and register it.
-async fn install_version_file(
+pub(crate) async fn install_version_file(
     app: AppHandle,
     state: State<'_, AppState>,
     profile_id: String,

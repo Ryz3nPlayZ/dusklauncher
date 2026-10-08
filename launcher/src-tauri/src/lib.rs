@@ -16,6 +16,7 @@ mod javas;
 mod logs;
 mod modpacks;
 mod mods;
+mod packmods;
 mod recordings;
 mod quickplay;
 mod release_art;
@@ -173,6 +174,8 @@ pub fn run() {
             mods::install_content_version_to_profile,
             mods::install_bundled_client_mod,
             mods::install_performance_mods,
+            packmods::pack_mods,
+            packmods::install_pack_mods,
             mods::install_dusk_essentials,
             // cosmetics
             cosmetics::list_cosmetics,

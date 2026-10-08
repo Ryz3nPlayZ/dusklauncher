@@ -402,6 +402,20 @@ pub async fn project_version_for_loader(
     game_version: &str,
     loader: Option<&str>,
 ) -> Result<Version> {
+    let versions = project_versions_for_loader(client, project_id, game_version, loader).await?;
+    newest_preferring_release(versions).ok_or_else(|| {
+        crate::Error::Other(format!("no release for Minecraft {game_version}"))
+    })
+}
+
+/// Every version of a project playable on this game version + loader,
+/// newest first.
+pub async fn project_versions_for_loader(
+    client: &reqwest::Client,
+    project_id: &str,
+    game_version: &str,
+    loader: Option<&str>,
+) -> Result<Vec<Version>> {
     let mut req = client
         .get(format!("{MODRINTH_API}/project/{project_id}/version"))
         .header(reqwest::header::USER_AGENT, USER_AGENT)
@@ -414,11 +428,7 @@ pub async fn project_version_for_loader(
     }
     let resp = req.send_retry()
         .await?;
-    let versions: Vec<Version> =
-        decode(check(resp, "project version lookup").await?, "project version lookup").await?;
-    newest_preferring_release(versions).ok_or_else(|| {
-        crate::Error::Other(format!("no release for Minecraft {game_version}"))
-    })
+    decode(check(resp, "project version lookup").await?, "project version lookup").await
 }
 
 /// The newest release build; a beta or alpha only when the project has no
