@@ -1335,6 +1335,7 @@ const sideEffects = new Set([
   'install_content_to_profile',
   'import_mrpack',
   'export_instance',
+  'copy_instance_settings',
   'install_bundled_pack',
   'import_wallpaper',
   'remove_wallpaper',
@@ -2078,9 +2079,13 @@ export const api = {
   /** copy one of those in as a new instance (mods, config, worlds, packs, options) */
   importExternalInstance: (path: string) => invoke<Profile>('import_external_instance', { path }),
   /** save dialog → writes the instance as a .mrpack; resolves to a short
-   *  summary ("12 files"), or null if cancelled */
+   *  summary ("30 linked from Modrinth, 12 included"), or null if cancelled */
   exportInstance: (profileId: string) =>
     invoke<string | null>('export_instance', { profileId }),
+  /** bring another instance's options and keybinds and/or the servers on its
+   *  list this one lacks; resolves to what happened */
+  copyInstanceSettings: (profileId: string, fromId: string, options: boolean, servers: boolean) =>
+    invoke<string>('copy_instance_settings', { profileId, fromId, options, servers }),
   /** open one of the profile's folders in Finder / Explorer */
   openProfileFolder: (profileId: string, subdir: ProfileFolder = '') =>
     invoke<void>('show_in_folder', { profileId, subdir }),

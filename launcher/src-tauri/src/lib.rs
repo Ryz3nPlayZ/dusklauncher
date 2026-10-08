@@ -1,6 +1,7 @@
 mod appstate;
 mod auth_flow;
 mod auth_store;
+mod carry;
 mod client_settings;
 mod commands;
 mod cosmetics;
@@ -126,6 +127,7 @@ pub fn run() {
             servers::add_server,
             servers::remove_server,
             servers::edit_server,
+            carry::copy_instance_settings,
             worlds::backup_world,
             worlds::delete_world,
             worlds::rename_world,

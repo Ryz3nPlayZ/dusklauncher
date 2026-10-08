@@ -388,11 +388,21 @@ function SettingsTab({
   /* CHANGE VERSION… on a pack instance: the pack's name and icon, once read */
   const [packInfo, setPackInfo] = useState<{ title: string; iconUrl: string | null } | null>(null);
   const [changing, setChanging] = useState(false);
+  /* COPY FROM: the other instances, and the one picked */
+  const [others, setOthers] = useState<Profile[]>([]);
+  const [copyFrom, setCopyFrom] = useState('');
 
   useEffect(() => {
     void api.listVersions().then(setVersions).catch(() => setVersions([]));
     void api.getSettings().then(setLauncher).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    void api
+      .listProfiles()
+      .then((all) => setOthers(all.filter((p) => p.id !== profile.id)))
+      .catch(() => setOthers([]));
+  }, [profile.id]);
 
   // the builds Fabric has for the version being typed, once it settles
   useEffect(() => {
@@ -542,6 +552,18 @@ function SettingsTab({
     try {
       const at = await api.createShortcut(profile.id);
       setNote(`Shortcut made: ${at.split(/[\\/]/).pop()} on the desktop starts ${profile.name} straight away.`);
+    } catch (e) {
+      setNote(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copySetup = async (options: boolean, servers: boolean) => {
+    setBusy(true);
+    setNote(null);
+    try {
+      setNote(`${await api.copyInstanceSettings(profile.id, copyFrom, options, servers)}.`);
     } catch (e) {
       setNote(String(e));
     } finally {
@@ -795,6 +817,29 @@ function SettingsTab({
           />
         </PxBox>
       </Row>
+      {others.length > 0 && (
+        <Row
+          label="COPY FROM"
+          hint="OPTIONS brings another instance's video, sound and controls settings and keybinds over this one's (its resource packs stay). SERVERS adds the servers on its list this one doesn't have."
+        >
+          <PxBox family="panel" height="md">
+            <select className="input select" value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)}>
+              <option value="">Pick an instance</option>
+              {others.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </PxBox>
+          <PxButton family="grey" height="md" disabled={busy || !copyFrom || !isTauri} onClick={() => void copySetup(true, false)}>
+            <TT size={16}>OPTIONS</TT>
+          </PxButton>
+          <PxButton family="grey" height="md" disabled={busy || !copyFrom || !isTauri} onClick={() => void copySetup(false, true)}>
+            <TT size={16}>SERVERS</TT>
+          </PxButton>
+        </Row>
+      )}
       {(
         [
           ['envVars', 'ENVIRONMENT', 'KEY=VALUE pairs separated by ;, added over the launcher\'s (SETTINGS → JAVA).', 'MESA_GL_VERSION_OVERRIDE=4.6'],

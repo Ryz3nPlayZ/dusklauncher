@@ -460,6 +460,49 @@ pub async fn remove_server(
     .await
 }
 
+/// Append `from`'s visible servers that `into` doesn't list yet (same
+/// address, any case), each with all its fields. Returns how many went in.
+fn merge_raw(into: &mut RawServers, from: &RawServers) -> usize {
+    let ip = |raw: &[u8]| -> Option<String> {
+        let tag = (Nbt { b: raw, i: 0 }).tag(10, 1)?;
+        if matches!(tag.get("hidden"), Some(Tag::Byte(1))) {
+            return None;
+        }
+        Some(tag.get("ip").and_then(Tag::str)?.trim().to_ascii_lowercase())
+    };
+    let mut have: std::collections::HashSet<String> = into.entries.iter().filter_map(|e| ip(e)).collect();
+    let mut added = 0;
+    for e in &from.entries {
+        if let Some(addr) = ip(e) {
+            if have.insert(addr) {
+                into.entries.push(e.clone());
+                added += 1;
+            }
+        }
+    }
+    added
+}
+
+/// Add the servers on another instance's list (its folder `from_root`) that
+/// this one doesn't have. Returns how many were added.
+pub(crate) async fn copy_servers(state: &AppState, profile_id: &str, from_root: &std::path::Path) -> Result<usize, String> {
+    let from = match std::fs::read(from_root.join("servers.dat")) {
+        Ok(bytes) => split_raw(&bytes).ok_or("The other instance's server list is damaged.")?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(e.to_string()),
+    };
+    if from.entries.is_empty() {
+        return Ok(0);
+    }
+    let mut added = 0;
+    edit_servers(state, profile_id, |raw| {
+        added = merge_raw(raw, &from);
+        Ok(())
+    })
+    .await?;
+    Ok(added)
+}
+
 // ---- status ping ----
 
 /// The same shape check the friends-list JOIN uses.
@@ -819,6 +862,26 @@ mod tests {
 
     fn read_nbt_compound(raw: &[u8]) -> Tag {
         (Nbt { b: raw, i: 0 }).tag(10, 1).unwrap()
+    }
+
+    #[test]
+    fn copying_a_list_adds_only_the_servers_not_there_yet() {
+        let mut into = RawServers { other: Vec::new(), entries: vec![new_entry("Mine", "MC.example.net")] };
+        let mut hidden = Vec::new();
+        entry(&mut hidden, "lan", "10.0.0.2", true);
+        let from = RawServers {
+            other: Vec::new(),
+            entries: vec![
+                new_entry("Same place", "mc.example.net "),
+                new_entry("Hypixel", "mc.hypixel.net"),
+                hidden,
+                new_entry("Hypixel again", "mc.hypixel.net"),
+            ],
+        };
+        assert_eq!(merge_raw(&mut into, &from), 1);
+        let list = parse_servers(&join_raw(&into));
+        let names: Vec<&str> = list.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["Mine", "Hypixel"]);
     }
 
     #[test]
