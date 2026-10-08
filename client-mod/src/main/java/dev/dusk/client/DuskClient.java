@@ -283,7 +283,10 @@ public class DuskClient implements ClientModInitializer {
             if (MediaBackend.replaying()) return;
             var server = client.getCurrentServer();
             if (server != null && server.ip != null && !server.ip.isBlank()) LOGGER.info("[DuskPresence] server {}", server.ip);
-            else LOGGER.info("[DuskPresence] singleplayer");
+            else {
+                LOGGER.info("[DuskPresence] singleplayer");
+                dev.dusk.client.social.WorldHost.onJoin(client);
+            }
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ServerApi.reset();

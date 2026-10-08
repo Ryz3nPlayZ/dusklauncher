@@ -547,7 +547,9 @@ pub async fn install_and_launch(
     join_server: Option<String>,
     watch_replay: Option<String>,
     open_world: Option<String>,
+    host: Option<bool>,
 ) -> Result<(), String> {
+    let host = host.unwrap_or(false);
     // Only one install+spawn at a time; the guard is held until the child spawns.
     let _launch_guard = state
         .launch_lock
@@ -593,6 +595,20 @@ pub async fn install_and_launch(
         }
         None => (profile, None),
     };
+    // HOST: DuskClient opens the world to other players and e4mc relays it
+    // (see `hosting`), so it takes a Fabric instance on a line DuskClient
+    // ships for
+    if host {
+        if world.is_none() {
+            return Err("Pick a world to host.".into());
+        }
+        if profile.loader != Loader::Fabric || crate::cosmetics::client_mod_jar_for(&profile.game_version).is_none() {
+            return Err(format!(
+                "Hosting needs a Fabric instance on Minecraft {}.",
+                crate::cosmetics::CLIENT_MOD_GAME_VERSIONS
+            ));
+        }
+    }
     // WATCH on the media page: this launch opens that recording as soon as
     // the title screen is up. Only a clip or replay this instance recorded.
     let replay = match watch_replay.as_deref() {
@@ -677,7 +693,25 @@ pub async fn install_and_launch(
     let injects_client = profile.loader == Loader::Fabric
         && !crate::cosmetics::client_mod_in_mods(&dirs.mods)
         && crate::cosmetics::client_mod_jar_for(&profile.game_version).is_some();
-    let fabric_api_ok = !injects_client || crate::mods::ensure_fabric_api(&app, &profile, &dirs.mods).await;
+    let fabric_api_ok = !(injects_client || host) || crate::mods::ensure_fabric_api(&app, &profile, &dirs.mods).await;
+    // the relay, unless the instance carries its own copy
+    let relay = if host {
+        if !fabric_api_ok {
+            return Err("Hosting needs Fabric API, and it couldn't be downloaded. Check your connection.".into());
+        }
+        let mods = dirs.mods.clone();
+        let has_own = tokio::task::spawn_blocking(move || crate::mods::fabric_mod_ids(&mods).contains(crate::hosting::E4MC_MOD_ID))
+            .await
+            .unwrap_or(false);
+        match has_own {
+            true => None,
+            false => Some(crate::hosting::relay_jar(&state, &profile.game_version).await.ok_or_else(|| {
+                format!("Couldn't get the relay hosting uses for Minecraft {}. Check your connection.", profile.game_version)
+            })?),
+        }
+    } else {
+        None
+    };
     let profile = {
         let mut p = profile;
         p.jvm_args.retain(|a| {
@@ -686,9 +720,12 @@ pub async fn install_and_launch(
                 && !a.starts_with("-Ddusk.loadout=")
                 && !a.starts_with("-Ddusk.replay=")
                 && !a.starts_with("-Ddusk.tools=")
+                && !a.starts_with("-Ddusk.host=")
         });
         if p.loader == Loader::Fabric {
             let in_mods = crate::cosmetics::client_mod_in_mods(&dirs.mods);
+            // jars the loader takes on top of mods/, one list
+            let mut add_mods: Vec<std::path::PathBuf> = relay.into_iter().collect();
             match crate::cosmetics::client_mod_jar_for(&p.game_version) {
                 None => tracing::warn!(
                     "bundled client mod targets {}; skipping it for {}",
@@ -699,12 +736,18 @@ pub async fn install_and_launch(
                     Some(_) if !in_mods && !fabric_api_ok => {
                         tracing::warn!("Fabric API is missing and couldn't be downloaded; launching without DuskClient")
                     }
-                    Some(jar) if !in_mods => {
-                        p.jvm_args.push(format!("-Dfabric.addMods={}", jar.display()));
-                    }
+                    Some(jar) if !in_mods => add_mods.insert(0, jar),
                     Some(_) => {}
                     None => tracing::warn!("bundled client mod {name} not found; launching without it"),
                 },
+            }
+            if let Ok(list) = std::env::join_paths(&add_mods) {
+                if !add_mods.is_empty() {
+                    p.jvm_args.push(format!("-Dfabric.addMods={}", list.to_string_lossy()));
+                }
+            }
+            if host {
+                p.jvm_args.push("-Ddusk.host=1".into());
             }
             p.jvm_args.push(format!("-Ddusk.api={}", crate::dusk::api_base()));
             p.jvm_args.push(format!("-Ddusk.loadout={}", crate::cosmetics::loadout_path(&state.data_dir).display()));
@@ -807,7 +850,9 @@ pub async fn install_and_launch(
             match recv {
                 Some(line) => {
                     if let Some(server) = presence_from_log(&line.line) {
-                        set_activity_server(&app3, server);
+                        set_activity_server(&app3, server, false);
+                    } else if let Some(address) = crate::hosting::relay_address(&line.line) {
+                        set_activity_server(&app3, Some(address), true);
                     }
                     {
                         let mut tail = tail2.lock().unwrap();
@@ -893,6 +938,7 @@ pub async fn install_and_launch(
         profile_name: profile.name.clone(),
         game_version: profile.game_version.clone(),
         server: None,
+        hosting: false,
         started_at: now_millis() / 1000,
     });
     let _ = app.emit("game-activity", state.activity.lock().unwrap().clone());
@@ -921,13 +967,14 @@ fn presence_from_log(line: &str) -> Option<Option<String>> {
     Some(Some(if port == 25565 { host } else { format!("{host}:{port}") }))
 }
 
-fn set_activity_server(app: &AppHandle, server: Option<String>) {
+fn set_activity_server(app: &AppHandle, server: Option<String>, hosting: bool) {
     let state = app.state::<AppState>();
     let changed = {
         let mut activity = state.activity.lock().unwrap();
         match activity.as_mut() {
-            Some(a) if a.server != server => {
+            Some(a) if a.server != server || a.hosting != hosting => {
                 a.server = server;
+                a.hosting = hosting;
                 true
             }
             _ => false,

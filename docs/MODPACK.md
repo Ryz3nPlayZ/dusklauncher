@@ -103,3 +103,14 @@ users).
 3. **Xaero's** (not in pack) — ARR with conditional pack permission.
 4. Avoid entirely: `custom-crosshair-mod` (ARR, no pack permission stated),
    NC-licensed fullbright variants.
+
+## Loaded per launch, never installed
+
+- **e4mc** (MIT, `qANg5Jrr`) — HOST in an instance's WORLDS tab. DuskClient
+  opens the world to other players as it loads (`-Ddusk.host`) and e4mc relays
+  it under a public `*.e4mc.link` address, so friends join without port
+  forwarding. The launcher fetches the Fabric build for the game version into
+  `tools/hosting/<version>/` and hands it to the loader with
+  `-Dfabric.addMods` for that launch only; an instance that already has e4mc
+  in mods/ uses its own copy. The address shows in the friends pane and goes
+  out with INVITE; Discord only says "Hosting a world".

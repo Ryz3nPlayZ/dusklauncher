@@ -227,7 +227,7 @@ export default function App() {
      `replay`: straight into that clip or replay (WATCH on the media page) */
   const launch = useCallback(
     async (id: string, to?: LaunchTarget) => {
-      const { server, world, replay } = to ?? {};
+      const { server, world, host, replay } = to ?? {};
       if (!canPlay) {
         setGateDismissed(false);
         return;
@@ -243,7 +243,7 @@ export default function App() {
           : server
             ? api.joinServer(id, server)
             : world
-              ? api.playWorld(id, world)
+              ? api.playWorld(id, world, host)
               : api.launch(id));
         setProgress(null);
         setGame({ profileId: id, state: 'running', code: null });

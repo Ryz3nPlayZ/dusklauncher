@@ -336,8 +336,11 @@ export interface GameActivity {
   profileId: string;
   profileName: string;
   gameVersion: string;
-  /** the multiplayer server, from the game log; null in singleplayer / menus */
+  /** the multiplayer server, from the game log; null in singleplayer / menus.
+   *  While hosting, the public address friends join the world at. */
   server: string | null;
+  /** `server` is this player's own world, opened to friends (HOST) */
+  hosting: boolean;
   /** unix seconds */
   startedAt: number;
 }
@@ -627,6 +630,8 @@ export interface ServerStatus {
 export interface LaunchTarget {
   server?: string;
   world?: string;
+  /** with `world`: open it to friends through a public relay address */
+  host?: boolean;
   replay?: string;
 }
 
@@ -1785,8 +1790,8 @@ export const api = {
   joinServer: (profileId: string, server: string) =>
     invoke<void>('install_and_launch', { profileId, joinServer: server }),
   /** launch straight into one of the instance's singleplayer worlds */
-  playWorld: (profileId: string, world: string) =>
-    invoke<void>('install_and_launch', { profileId, openWorld: world }),
+  playWorld: (profileId: string, world: string, host = false) =>
+    invoke<void>('install_and_launch', { profileId, openWorld: world, host }),
   /** launch the instance that recorded it, straight into this clip or replay */
   watchRecording: (profileId: string, path: string) =>
     invoke<void>('install_and_launch', { profileId, watchReplay: path }),

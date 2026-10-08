@@ -51,7 +51,7 @@ pub struct ModHitDto {
 }
 
 /// Keep only the file name: profile mods must never escape the mods dir.
-fn sanitize_filename(name: &str) -> Result<String, String> {
+pub(crate) fn sanitize_filename(name: &str) -> Result<String, String> {
     let base = std::path::Path::new(name)
         .file_name()
         .and_then(|s| s.to_str())
@@ -771,7 +771,7 @@ pub(crate) fn fabric_meta(path: &std::path::Path) -> Option<serde_json::Value> {
 
 /// Mod ids (and what they `provides`) of every enabled Fabric jar in `dir`,
 /// read from each jar's fabric.mod.json, so a renamed jar still counts.
-fn fabric_mod_ids(dir: &std::path::Path) -> std::collections::HashSet<String> {
+pub(crate) fn fabric_mod_ids(dir: &std::path::Path) -> std::collections::HashSet<String> {
     let mut ids = std::collections::HashSet::new();
     let Ok(entries) = std::fs::read_dir(dir) else { return ids };
     for entry in entries.flatten() {

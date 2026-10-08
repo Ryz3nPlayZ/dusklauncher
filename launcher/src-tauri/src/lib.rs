@@ -8,6 +8,7 @@ mod crash;
 mod discord;
 mod dusk;
 mod friends;
+mod hosting;
 mod deps;
 mod javas;
 mod logs;

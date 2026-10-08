@@ -1505,6 +1505,21 @@ function WorldsTab({
                   DELETE
                 </TT>
               </PxButton>
+              {profile.loader === 'fabric' && (
+                <PxButton
+                  family="grey"
+                  height="sm"
+                  disabled={busy}
+                  title={
+                    busy
+                      ? 'A game is already running'
+                      : `Open ${w.name} to friends: they join at an address shown in the friends pane, no port forwarding`
+                  }
+                  onClick={() => onLaunch({ world: w.name, host: true })}
+                >
+                  <TT size={16}>HOST</TT>
+                </PxButton>
+              )}
               <PxButton
                 family="accent"
                 height="sm"

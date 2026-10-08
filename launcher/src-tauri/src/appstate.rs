@@ -41,6 +41,8 @@ pub struct GameActivity {
     pub profile_name: String,
     pub game_version: String,
     pub server: Option<String>,
+    /// `server` is the public address of this player's own world (HOST)
+    pub hosting: bool,
     /// unix seconds the game was started
     pub started_at: u64,
 }

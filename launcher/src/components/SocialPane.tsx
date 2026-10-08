@@ -500,6 +500,20 @@ export default function SocialPane({
               </div>
 
               <div className="win__body social__body scroll">
+                {activity?.hosting && activity.server && (
+                  <PxBox family="accent" height="md" className="social__notice" role="status">
+                    <span className="meta">
+                      Hosting at <b>{activity.server}</b> — open a friend's chat and INVITE, or share the address.
+                    </span>
+                    <PxButton
+                      family="grey"
+                      height="sm"
+                      onClick={() => void navigator.clipboard?.writeText(activity.server ?? '').catch(() => {})}
+                    >
+                      <TT size={14}>COPY</TT>
+                    </PxButton>
+                  </PxBox>
+                )}
                 {notice && (
                   <PxBox family="green" height="md" className="social__notice" role="status">
                     <span className="meta">{notice}</span>
@@ -1030,7 +1044,7 @@ function ChatView({
 
   const invite = () => {
     if (!activity?.server) {
-      setError('Join a server in game first — then INVITE sends them its address.');
+      setError('Join a server or HOST a world first — then INVITE sends them its address.');
       return;
     }
     setError(null);

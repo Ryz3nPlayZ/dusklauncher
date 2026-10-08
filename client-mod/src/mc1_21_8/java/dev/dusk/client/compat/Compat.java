@@ -133,4 +133,9 @@ public final class Compat {
         if (local) mc.disconnectWithSavingScreen();
         else mc.disconnectWithProgressScreen();
     }
+
+    /** Open the integrated server to other players on `port`, with the world's own game mode and cheat setting. */
+    public static boolean publishLan(net.minecraft.client.server.IntegratedServer server, int port) {
+        return server.publishServer(server.getDefaultGameType(), server.getWorldData().isAllowCommands(), port);
+    }
 }
