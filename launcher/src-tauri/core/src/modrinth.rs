@@ -522,35 +522,58 @@ pub fn parse_mrpack_index(bytes: &[u8]) -> Result<MrpackIndex> {
     let mut entry = zip.by_name("modrinth.index.json").map_err(|e| crate::Error::Other(e.to_string()))?;
     let mut text = String::new();
     std::io::Read::read_to_string(&mut entry, &mut text)?;
-    Ok(serde_json::from_str(&text)?)
+    let mut index: MrpackIndex = serde_json::from_str(&text)?;
+    // the format's rules: a path leaving the instance fails the whole pack,
+    // and a file the client can't use (a server-only mod) isn't fetched
+    if let Some(bad) = index.files.iter().find(|f| !inside(&f.path)) {
+        return Err(crate::Error::Other(format!(
+            "This modpack wants to put a file outside its instance ({}), so it wasn't installed.",
+            bad.path
+        )));
+    }
+    index.files.retain(|f| f.env.as_ref().and_then(|e| e.get("client")).and_then(|c| c.as_str()) != Some("unsupported"));
+    Ok(index)
 }
 
-/// Extract the `overrides/` tree of an .mrpack into a profile root.
-pub fn extract_overrides(bytes: &[u8], profile_root: &Path) -> Result<usize> {
+/// A plain relative path: no root, drive, `..` or `.` anywhere in it.
+fn inside(path: &str) -> bool {
+    !path.is_empty()
+        && !path.contains('\\')
+        && Path::new(path).components().all(|c| matches!(c, std::path::Component::Normal(_)))
+}
+
+/// Extract an .mrpack's `overrides/` tree, then its `client-overrides/` over
+/// it, into a profile root — each file only where `may_write(rel)` says so.
+/// Returns the paths written, relative to the root and `/`-separated.
+pub fn extract_overrides(bytes: &[u8], profile_root: &Path, may_write: impl Fn(&str) -> bool) -> Result<Vec<String>> {
     let reader = std::io::Cursor::new(bytes);
     let mut zip = zip::ZipArchive::new(reader).map_err(|e| crate::Error::Other(e.to_string()))?;
-    let mut count = 0;
-    for i in 0..zip.len() {
-        let mut entry = zip.by_index(i).map_err(|e| crate::Error::Other(e.to_string()))?;
-        if entry.is_dir() {
-            continue;
+    let mut written = Vec::new();
+    for prefix in ["overrides/", "client-overrides/"] {
+        for i in 0..zip.len() {
+            let mut entry = zip.by_index(i).map_err(|e| crate::Error::Other(e.to_string()))?;
+            if entry.is_dir() {
+                continue;
+            }
+            let Some(name) = entry.enclosed_name() else { continue };
+            let name = name.to_string_lossy().replace('\\', "/");
+            let Some(rel) = name.strip_prefix(prefix) else { continue };
+            if rel.is_empty() || !may_write(rel) {
+                continue;
+            }
+            let out = profile_root.join(rel);
+            if let Some(parent) = out.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let mut buf = Vec::with_capacity(entry.size() as usize);
+            std::io::Read::read_to_end(&mut entry, &mut buf)?;
+            std::fs::write(&out, &buf)?;
+            if !written.iter().any(|w| w == rel) {
+                written.push(rel.to_string());
+            }
         }
-        let Some(name) = entry.enclosed_name() else { continue };
-        let name = name.display().to_string();
-        let Some(rel) = name.strip_prefix("overrides/") else { continue };
-        if rel.is_empty() {
-            continue;
-        }
-        let out = profile_root.join(rel);
-        if let Some(parent) = out.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let mut buf = Vec::with_capacity(entry.size() as usize);
-        std::io::Read::read_to_end(&mut entry, &mut buf)?;
-        std::fs::write(&out, &buf)?;
-        count += 1;
     }
-    Ok(count)
+    Ok(written)
 }
 
 /// Downloads for the index files (mods, configs...) into the profile root.
@@ -574,6 +597,10 @@ pub fn dependency_downloads(versions: &[Version], profile_root: &Path) -> Vec<Do
         .iter()
         .filter_map(|v| {
             let f = v.files.iter().find(|f| f.primary).or_else(|| v.files.first())?;
+            // a bare file name, so it lands in mods/ and nowhere else
+            if !inside(&f.filename) || f.filename.contains('/') {
+                return None;
+            }
             Some(Download {
                 url: f.url.clone(),
                 dest: profile_root.join("mods").join(&f.filename),
@@ -622,6 +649,57 @@ mod tests {
         let err = parse_mrpack_index(&zip_of("readme.txt")).unwrap_err().to_string();
         assert!(err.contains("no modrinth.index.json"), "{err}");
         assert!(parse_mrpack_index(b"not a zip").unwrap_err().to_string().contains("isn't a zip"));
+    }
+
+    fn mrpack(index: &str, extra: &[(&str, &str)]) -> Vec<u8> {
+        use std::io::Write;
+        let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        w.start_file("modrinth.index.json", zip::write::SimpleFileOptions::default()).unwrap();
+        w.write_all(index.as_bytes()).unwrap();
+        for (name, body) in extra {
+            w.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+            w.write_all(body.as_bytes()).unwrap();
+        }
+        w.finish().unwrap().into_inner()
+    }
+
+    fn index_with(files: &str) -> String {
+        format!(r#"{{"formatVersion":1,"game":"minecraft","versionId":"1","name":"P","files":[{files}],"dependencies":{{"minecraft":"1.21.11"}}}}"#)
+    }
+
+    #[test]
+    fn pack_files_stay_inside_and_on_the_client() {
+        let file = |path: &str, env: &str| {
+            let path = path.replace('\\', "\\\\");
+            format!(r#"{{"path":"{path}","hashes":{{}},"downloads":["https://cdn.modrinth.com/x"]{env}}}"#)
+        };
+        for bad in ["../evil.jar", "mods/../../evil.jar", "/etc/evil", "./mods/a.jar", "mods\\..\\..\\x.jar", ""] {
+            let err = parse_mrpack_index(&mrpack(&index_with(&file(bad, "")), &[])).unwrap_err().to_string();
+            assert!(err.contains("outside its instance"), "{bad}: {err}");
+        }
+        let files = [
+            file("mods/a.jar", ""),
+            file("mods/server-only.jar", r#","env":{"client":"unsupported","server":"required"}"#),
+            file("mods/opt.jar", r#","env":{"client":"optional","server":"unsupported"}"#),
+        ]
+        .join(",");
+        let index = parse_mrpack_index(&mrpack(&index_with(&files), &[])).unwrap();
+        let paths: Vec<_> = index.files.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(paths, ["mods/a.jar", "mods/opt.jar"]);
+    }
+
+    #[test]
+    fn client_overrides_land_over_overrides() {
+        let pack = mrpack(
+            &index_with(""),
+            &[("overrides/config/a.txt", "common"), ("client-overrides/config/a.txt", "client"), ("overrides/options.txt", "o")],
+        );
+        let root = std::env::temp_dir().join(format!("dusk-overrides-{}", std::process::id()));
+        let written = extract_overrides(&pack, &root, |rel| rel != "options.txt").unwrap();
+        assert_eq!(written, ["config/a.txt"]);
+        assert_eq!(std::fs::read_to_string(root.join("config/a.txt")).unwrap(), "client");
+        assert!(!root.join("options.txt").exists());
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// The real api.modrinth.com search payload (captured) must parse into

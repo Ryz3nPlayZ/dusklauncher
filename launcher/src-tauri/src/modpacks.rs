@@ -579,7 +579,7 @@ async fn install_mrpack_bytes(
     std::fs::create_dir_all(&dirs.root).map_err(|e| e.to_string())?;
     {
         let (pack, root) = (bytes.to_vec(), dirs.root.clone());
-        let _ = tokio::task::spawn_blocking(move || mr::extract_overrides(&pack, &root)).await;
+        let _ = tokio::task::spawn_blocking(move || mr::extract_overrides(&pack, &root, |_| true)).await;
     }
     if dusk {
         seed_dusk_defaults(&dirs.root);
