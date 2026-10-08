@@ -29,6 +29,7 @@ export default function Home({
   onWardrobe,
   onManage,
   onStop,
+  still = false,
 }: {
   account: Account | null;
   skin: string | null;
@@ -43,6 +44,8 @@ export default function Home({
   onWardrobe: () => void;
   onManage: () => void;
   onStop: () => void;
+  /** REDUCE MOTION: the character stands still */
+  still?: boolean;
 }) {
   const [popout, setPopout] = useState(false);
   /* true while the pointer is over the character itself (ray-tested), not
@@ -103,7 +106,7 @@ export default function Home({
               pose={pose}
               zoom={0.92}
               className="home__canvas"
-              paused={running}
+              paused={running || still}
               onHit={setHit}
             />
           </span>

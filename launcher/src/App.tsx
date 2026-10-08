@@ -324,16 +324,25 @@ export default function App() {
   const playing =
     game?.state === 'running' ? (profiles.find((p) => p.id === game.profileId)?.gameVersion ?? null) : null;
 
+  /* the backdrop holds still for REDUCE MOTION and SCENE FPS → STATIC, and
+     while the game runs — the launcher never takes frames the game could use */
+  const sceneStill =
+    !!settings?.reduceMotion || settings?.fpsCap === 0 || game?.state === 'running' || game?.state === 'starting';
+
   return (
     <div className="app">
       {settings?.customBackground ? (
         <CustomWallpaper
           name={settings.customBackground}
           scene={settings.theme === 'nether' ? 'mcpvp' : 'dusk'}
-          paused={settings.reduceMotion}
+          paused={sceneStill}
         />
       ) : (
-        <SceneBackground scene={settings?.theme === 'nether' ? 'mcpvp' : 'dusk'} />
+        <SceneBackground
+          scene={settings?.theme === 'nether' ? 'mcpvp' : 'dusk'}
+          still={sceneStill}
+          fps={settings?.fpsCap ?? 30}
+        />
       )}
 
       <Nav route={route} onRoute={setRoute} account={account} skin={skin} claimable={claimable} />
@@ -354,6 +363,7 @@ export default function App() {
             onWardrobe={() => setRoute('cosmetics')}
             onManage={() => setRoute('instances')}
             onStop={() => void stop()}
+            still={!!settings?.reduceMotion}
           />
         )}
         {route === 'instances' && (

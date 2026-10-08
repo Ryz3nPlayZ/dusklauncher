@@ -22,6 +22,10 @@ Both scenes share the same 400×280 native canvas and are composed bottom→top:
 | 2 | `foreground.png` | static, RGBA | terrain silhouette, transparent sky |
 | 3 | `flower-anim.webp` | **baked 16-frame loop, 2000 ms** (125 ms/frame) | sway animation, alpha — `dusk/` only |
 
+`sea-still.png` / `flower-still.png` are frame 0 of the animated layers: the
+scene swaps them in when it holds still (REDUCE MOTION, SCENE FPS → STATIC,
+and while the game runs).
+
 Composition recipe (what dawn.gg does and what `SceneBackground.tsx` does):
 stack all layers with `object-fit: cover; object-position: center bottom`,
 `image-rendering: pixelated`. Native art is 400×280 — never smooth-scale it.
