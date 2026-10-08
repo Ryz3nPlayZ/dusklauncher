@@ -113,8 +113,8 @@ pub fn list_screenshots(state: State<AppState>) -> Vec<Screenshot> {
     out
 }
 
-#[tauri::command]
-pub fn set_screenshot_favorite(state: State<AppState>, path: String, favorite: bool) -> Result<(), String> {
+#[tauri::command(async)]
+pub fn set_screenshot_favorite(state: State<'_, AppState>, path: String, favorite: bool) -> Result<(), String> {
     let (_, key) = locate(&state, &path)?;
     let mut favs = load_favorites(&state.data_dir);
     if favorite {

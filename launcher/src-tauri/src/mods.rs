@@ -424,9 +424,9 @@ pub fn remove_profile_content(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_mod_enabled(
-    state: State<AppState>,
+    state: State<'_, AppState>,
     profile_id: String,
     filename: String,
     enabled: bool,
@@ -434,9 +434,9 @@ pub fn set_mod_enabled(
     set_content_enabled(state, profile_id, filename, enabled, "mod".into())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_content_enabled(
-    state: State<AppState>,
+    state: State<'_, AppState>,
     profile_id: String,
     filename: String,
     enabled: bool,

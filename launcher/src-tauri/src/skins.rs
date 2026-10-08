@@ -102,8 +102,8 @@ pub async fn import_skin(app: tauri::AppHandle, state: State<'_, AppState>) -> R
 
 /// Rename a skin (file + index entry). Names are display names too, so this
 /// is how hash-named imports become readable.
-#[tauri::command]
-pub fn rename_skin(state: State<AppState>, old_name: String, new_name: String) -> Result<(), String> {
+#[tauri::command(async)]
+pub fn rename_skin(state: State<'_, AppState>, old_name: String, new_name: String) -> Result<(), String> {
     let new_name = new_name.trim().to_string();
     if new_name.is_empty() || new_name.len() > 48 {
         return Err("name must be 1-48 characters".into());
@@ -144,8 +144,8 @@ pub fn delete_skin(state: State<AppState>, name: String) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-pub fn set_selected_skin(state: State<AppState>, name: String) -> Result<(), String> {
+#[tauri::command(async)]
+pub fn set_selected_skin(state: State<'_, AppState>, name: String) -> Result<(), String> {
     let mut index = load_index(&state);
     if !index.skins.iter().any(|s| s.name == name) {
         return Err("skin not found".into());
@@ -158,8 +158,8 @@ pub fn set_selected_skin(state: State<AppState>, name: String) -> Result<(), Str
 }
 
 /// Return the selected skin PNG as a data URL (skins are a few KB).
-#[tauri::command]
-pub fn read_skin(state: State<AppState>, name: String) -> Result<String, String> {
+#[tauri::command(async)]
+pub fn read_skin(state: State<'_, AppState>, name: String) -> Result<String, String> {
     let bytes = std::fs::read(skins_dir(&state).join(format!("{name}.png"))).map_err(|e| e.to_string())?;
     use base64::Engine;
     let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);

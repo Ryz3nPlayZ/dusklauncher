@@ -225,19 +225,19 @@ pub fn list_profiles(state: State<AppState>) -> Vec<ProfileDto> {
     state.profiles.lock().unwrap().profiles.iter().map(|p| dto(p, &state.data_dir)).collect()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_profile(
-    state: State<AppState>,
+    state: State<'_, AppState>,
     name: String,
     game_version: String,
     loader: String,
     server: Option<String>,
-) -> ProfileDto {
+) -> Result<ProfileDto, String> {
     let profile = new_profile(&state, name, game_version, Loader::parse(&loader), server);
     let mut store = state.profiles.lock().unwrap();
     store.profiles.push(profile);
     state.save_profiles(&store);
-    dto(store.profiles.last().unwrap(), &state.data_dir)
+    Ok(dto(store.profiles.last().unwrap(), &state.data_dir))
 }
 
 /// A fresh instance with the launcher-wide JVM args and window size, not
@@ -1451,8 +1451,8 @@ fn seed_instance_config(root: &std::path::Path) {
     }
 }
 
-#[tauri::command]
-pub fn set_settings(app: AppHandle, state: State<AppState>, mut settings: Settings) -> Result<Settings, String> {
+#[tauri::command(async)]
+pub fn set_settings(app: AppHandle, state: State<'_, AppState>, mut settings: Settings) -> Result<Settings, String> {
     {
         let mut s = state.settings.lock().unwrap();
         // the UI doesn't know this field; don't let a round-trip rewind it
@@ -1637,14 +1637,15 @@ pub fn cancel_login(state: State<AppState>) {
 
 /// Sign out of the active account and forget it; other saved accounts stay
 /// in the switcher.
-#[tauri::command]
-pub fn logout(state: State<AppState>) {
+#[tauri::command(async)]
+pub fn logout(state: State<'_, AppState>) -> Result<(), String> {
     if let Some(session) = auth_store::load_session(&state.data_dir) {
         auth_store::remove_stashed(&state.data_dir, &session.uuid);
     }
     auth_store::clear_session(&state.data_dir);
     crate::dusk::clear_token(&state.data_dir);
     *state.account.lock().unwrap() = Some(Account::default());
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -1656,17 +1657,17 @@ pub struct SavedAccountDto {
 }
 
 /// Every Microsoft account signed in on this machine, for the switcher.
-#[tauri::command]
-pub fn list_accounts(state: State<AppState>) -> Vec<SavedAccountDto> {
+#[tauri::command(async)]
+pub fn list_accounts(state: State<'_, AppState>) -> Result<Vec<SavedAccountDto>, String> {
     let active = auth_store::load_session(&state.data_dir).map(|s| s.uuid.replace('-', ""));
-    auth_store::list_stashed(&state.data_dir)
+    Ok(auth_store::list_stashed(&state.data_dir)
         .into_iter()
         .map(|s| SavedAccountDto {
             active: active.as_deref() == Some(s.uuid.replace('-', "").as_str()),
             uuid: s.uuid,
             username: s.username,
         })
-        .collect()
+        .collect())
 }
 
 /// Make a saved account the active one — no browser needed; its refresh
@@ -1689,8 +1690,8 @@ pub async fn switch_account(state: State<'_, AppState>, uuid: String) -> Result<
 }
 
 /// Forget a saved account that isn't the active one.
-#[tauri::command]
-pub fn remove_account(state: State<AppState>, uuid: String) -> Result<(), String> {
+#[tauri::command(async)]
+pub fn remove_account(state: State<'_, AppState>, uuid: String) -> Result<(), String> {
     let active = auth_store::load_session(&state.data_dir).map(|s| s.uuid.replace('-', ""));
     if active.as_deref() == Some(uuid.replace('-', "").as_str()) {
         return Err("That's the account in use — sign out instead.".into());

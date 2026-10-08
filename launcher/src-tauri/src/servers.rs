@@ -227,8 +227,8 @@ pub(crate) fn profile_root(state: &AppState, profile_id: &str) -> Result<std::pa
     Ok(profile.dirs(&state.data_dir).root)
 }
 
-#[tauri::command]
-pub fn list_servers(state: State<AppState>, profile_id: String) -> Result<Vec<ServerDto>, String> {
+#[tauri::command(async)]
+pub fn list_servers(state: State<'_, AppState>, profile_id: String) -> Result<Vec<ServerDto>, String> {
     let root = profile_root(&state, &profile_id)?;
     match std::fs::read(root.join("servers.dat")) {
         Ok(bytes) => Ok(parse_servers(&bytes)),
