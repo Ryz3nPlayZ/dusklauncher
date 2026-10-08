@@ -752,7 +752,8 @@ pub async fn install_and_launch(
     // DuskClient needs Fabric API; fetch it if missing, and if that can't
     // happen (offline, no copy) leave DuskClient out so the game still starts.
     if profile.loader == Loader::Fabric {
-        crate::cosmetics::refresh_client_mod_copy(&app, &state.data_dir, &dirs.mods, &profile.game_version);
+        let (app, data, mods, game) = (app.clone(), state.data_dir.clone(), dirs.mods.clone(), profile.game_version.clone());
+        let _ = tokio::task::spawn_blocking(move || crate::cosmetics::refresh_client_mod_copy(&app, &data, &mods, &game)).await;
     }
     // Only when DuskClient goes in: an instance that doesn't get it keeps
     // exactly the mods its owner chose.
