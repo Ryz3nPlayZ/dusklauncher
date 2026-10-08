@@ -479,6 +479,7 @@ mod tests {
             memory_mb: None,
             java_path: None,
             group: None,
+            icon: None,
         }
     }
 

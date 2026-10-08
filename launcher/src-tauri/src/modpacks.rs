@@ -376,7 +376,16 @@ async fn install_version_inner(
             }
         }
     }
-    install_mrpack_bytes(app, state, &bytes, &dep_versions, name, dusk).await
+    let installed = install_mrpack_bytes(app, state.clone(), &bytes, &dep_versions, name, dusk).await?;
+    // the pack's Modrinth icon becomes the instance's picture
+    let icon = match mr::project(&state.client, &version.project_id).await {
+        Ok(project) => project.icon_url,
+        Err(_) => None,
+    };
+    let Some(url) = icon.filter(|_| !version.project_id.is_empty()) else { return Ok(installed) };
+    crate::icons::fetch_pack_icon(&state, &installed.id, &url).await;
+    let store = state.profiles.lock().unwrap();
+    Ok(store.profiles.iter().find(|p| p.id == installed.id).map(|p| dto(p, &state.data_dir)).unwrap_or(installed))
 }
 
 /// Import a modpack from a local `.mrpack` (native picker). Same install as
@@ -556,6 +565,7 @@ async fn install_mrpack_bytes(
         memory_mb: None,
         java_path: None,
         group: None,
+        icon: None,
     };
     let dirs = profile.dirs(&state.data_dir);
     {
@@ -567,7 +577,10 @@ async fn install_mrpack_bytes(
     // overrides (configs, shaderpacks, resourcepacks — and, for a pack
     // exported from here or Prism, the mods themselves)
     std::fs::create_dir_all(&dirs.root).map_err(|e| e.to_string())?;
-    let _ = mr::extract_overrides(bytes, &dirs.root);
+    {
+        let (pack, root) = (bytes.to_vec(), dirs.root.clone());
+        let _ = tokio::task::spawn_blocking(move || mr::extract_overrides(&pack, &root)).await;
+    }
     if dusk {
         seed_dusk_defaults(&dirs.root);
     }
@@ -605,8 +618,8 @@ async fn install_mrpack_bytes(
     .map_err(|e| e.to_string())?;
     tracing::info!(pack = %name, files = downloaded, "modpack installed");
 
-    let _ = state.patch_profile(&profile.id, |_| {});
-    Ok(dto(&profile))
+    let stored = state.patch_profile(&profile.id, |_| {}).unwrap_or(profile);
+    Ok(dto(&stored, &state.data_dir))
 }
 
 // ── export ─────────────────────────────────────────────────────────────────

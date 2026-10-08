@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { NavCell, PxBox, PxButton, TT } from '../components/px/Px';
 import { Choice, Combobox } from '../components/px/Form';
 import InstanceEditor from './InstanceEditor';
+import InstanceArt from '../components/InstanceArt';
 import BrowseProjects from './Browse';
 import Project from './Project';
 import InstallModpack, { type InstallTarget } from './InstallModpack';
@@ -272,7 +273,7 @@ export default function Instances({
                 >
                   {/* 30:374 — a 2px black + 3px band frame around the picture */}
                   <span className="card__banner-frame">
-                    <img className="card__banner" src={instanceBanner} alt="" draggable={false} />
+                    <InstanceArt profile={p} className="card__banner" />
                   </span>
                   <span className="card__name">{p.name}</span>
                   <span className="card__info">

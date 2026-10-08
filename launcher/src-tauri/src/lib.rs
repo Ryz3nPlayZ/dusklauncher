@@ -9,6 +9,7 @@ mod discord;
 mod dusk;
 mod friends;
 mod hosting;
+mod icons;
 mod importer;
 mod deps;
 mod javas;
@@ -69,6 +70,8 @@ pub fn run() {
             importer::scan_external_instances,
             importer::import_external_instance,
             shortcuts::create_shortcut,
+            icons::set_profile_icon,
+            icons::clear_profile_icon,
             shortcuts::take_launch_request,
             commands::list_worlds,
             commands::show_in_folder,

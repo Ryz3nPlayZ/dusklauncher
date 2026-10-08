@@ -36,9 +36,11 @@ pub struct ProfileDto {
     /// per-instance java executable; null = launcher setting / provisioned
     pub java_path: Option<String>,
     pub group: Option<String>,
+    /// absolute path of the instance's own picture; null = the stock banner
+    pub icon: Option<String>,
 }
 
-pub fn dto(p: &Profile) -> ProfileDto {
+pub fn dto(p: &Profile, data_dir: &std::path::Path) -> ProfileDto {
     ProfileDto {
         id: p.id.clone(),
         name: p.name.clone(),
@@ -56,6 +58,7 @@ pub fn dto(p: &Profile) -> ProfileDto {
         memory_mb: p.memory_mb,
         java_path: p.java_path.clone(),
         group: p.group.clone(),
+        icon: crate::icons::icon_path(p, data_dir).map(|f| f.display().to_string()),
     }
 }
 
@@ -200,7 +203,7 @@ impl ProgressEmitter {
 
 #[tauri::command]
 pub fn list_profiles(state: State<AppState>) -> Vec<ProfileDto> {
-    state.profiles.lock().unwrap().profiles.iter().map(dto).collect()
+    state.profiles.lock().unwrap().profiles.iter().map(|p| dto(p, &state.data_dir)).collect()
 }
 
 #[tauri::command]
@@ -215,7 +218,7 @@ pub fn create_profile(
     let mut store = state.profiles.lock().unwrap();
     store.profiles.push(profile);
     state.save_profiles(&store);
-    dto(store.profiles.last().unwrap())
+    dto(store.profiles.last().unwrap(), &state.data_dir)
 }
 
 /// A fresh instance with the launcher-wide JVM args and window size, not
@@ -249,6 +252,7 @@ pub(crate) fn new_profile(state: &AppState, name: String, game_version: String, 
         memory_mb: None,
         java_path: None,
         group: None,
+        icon: None,
     }
 }
 
@@ -295,7 +299,7 @@ pub fn update_profile(state: State<AppState>, id: String, patch: ProfilePatch) -
                 p.java_path = Some(path.trim().to_string()).filter(|s| !s.is_empty());
             }
         })
-        .map(|p| dto(&p))
+        .map(|p| dto(&p, &state.data_dir))
         .ok_or_else(|| "profile not found".to_string())
 }
 
@@ -390,7 +394,7 @@ pub async fn duplicate_profile(state: State<'_, AppState>, id: String) -> Result
     let mut store = state.profiles.lock().unwrap();
     store.profiles.push(copy);
     state.save_profiles(&store);
-    Ok(dto(store.profiles.last().unwrap()))
+    Ok(dto(store.profiles.last().unwrap(), &state.data_dir))
 }
 
 /// One world = one subdir of saves/ carrying a level.dat. Name, last

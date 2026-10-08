@@ -102,7 +102,7 @@ pub async fn import_external_instance(state: State<'_, AppState>, path: String) 
     let mut store = state.profiles.lock().unwrap();
     store.profiles.push(profile);
     state.save_profiles(&store);
-    Ok(dto(store.profiles.last().unwrap()))
+    Ok(dto(store.profiles.last().unwrap(), &state.data_dir))
 }
 
 fn scan_all() -> Vec<ExternalInstanceDto> {

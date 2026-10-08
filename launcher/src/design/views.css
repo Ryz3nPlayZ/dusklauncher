@@ -2602,3 +2602,39 @@
   font-size: calc(15 * var(--t));
   overflow-wrap: anywhere;
 }
+
+/* an instance's own picture (InstanceArt): whole, over a blurred copy */
+.art {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: var(--panel-bd);
+}
+.art .art__fill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(calc(10 * var(--u))) brightness(0.55);
+  transform: scale(1.2);
+  image-rendering: auto;
+}
+.art .art__pic {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: auto;
+}
+.art .art__pic.is-small {
+  image-rendering: pixelated;
+}
+button.editor__icon {
+  padding: 0;
+  cursor: pointer;
+}
+button.editor__icon:hover {
+  filter: brightness(1.1);
+}

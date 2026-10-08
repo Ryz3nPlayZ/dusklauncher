@@ -105,6 +105,10 @@ pub struct Profile {
     /// a folder of the user's own on the INSTANCES page; None = ungrouped
     #[serde(default)]
     pub group: Option<String>,
+    /// the instance's own picture, a file in its folder (`dusk-icon-…`);
+    /// None = the stock banner
+    #[serde(default)]
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

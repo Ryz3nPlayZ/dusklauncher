@@ -3,7 +3,7 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import PixelGlyph from '../components/px/PixelGlyph';
 import { Choice, Row } from '../components/px/Form';
 import { NavCell, PxBox, PxButton, TT } from '../components/px/Px';
-import instanceBanner from '../assets/brand/instance-banner.webp';
+import InstanceArt from '../components/InstanceArt';
 import BrowseProjects from './Browse';
 import Project from './Project';
 import {
@@ -203,9 +203,19 @@ export default function InstanceEditor({
     <div className="page">
       {/* 172:580 / 172:352 / 172:602 — icon, name + metadata, the type plate */}
       <div className="page__head editor__head">
-        <span className="editor__icon">
-          <img src={instanceBanner} alt="" draggable={false} />
-        </span>
+        <button
+          type="button"
+          className="editor__icon"
+          title="Change the picture"
+          onClick={() =>
+            void api
+              .setProfileIcon(profile.id)
+              .then((p) => p && onRefresh())
+              .catch(() => {})
+          }
+        >
+          <InstanceArt profile={profile} />
+        </button>
         <div className="editor__ident">
           <div className="editor__ident-row">
             <h1 className="page__title editor__title">{profile.name}</h1>
@@ -440,6 +450,19 @@ function SettingsTab({
     }
   };
 
+  const picture = async (reset: boolean) => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const p = reset ? await api.clearProfileIcon(profile.id) : await api.setProfileIcon(profile.id);
+      if (p) await onSaved();
+    } catch (e) {
+      setNote(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const shortcut = async () => {
     setBusy(true);
     setNote(null);
@@ -491,6 +514,16 @@ function SettingsTab({
             ))}
           </datalist>
         </PxBox>
+      </Row>
+      <Row label="PICTURE" hint="Shown on the instance's card. A PNG, JPEG, GIF or WebP, up to 8 MB.">
+        <PxButton family="grey" height="md" disabled={busy} onClick={() => void picture(false)}>
+          <TT size={16}>CHOOSE…</TT>
+        </PxButton>
+        {profile.icon && (
+          <PxButton family="grey" height="md" disabled={busy} onClick={() => void picture(true)}>
+            <TT size={16}>RESET</TT>
+          </PxButton>
+        )}
       </Row>
       <Row label="MINECRAFT VERSION" hint="Changing it re-installs the game files on the next launch.">
         <PxBox family="panel" height="md">

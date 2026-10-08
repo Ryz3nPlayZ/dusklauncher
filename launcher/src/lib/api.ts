@@ -35,6 +35,8 @@ export interface Profile {
   javaPath: string | null;
   /** a name instances are filed under in INSTANCES; null = none */
   group: string | null;
+  /** absolute path of the instance's own picture; null = the stock banner */
+  icon: string | null;
 }
 
 /** mirrors commands.rs ProfilePatch — every field optional, only set ones apply */
@@ -866,6 +868,7 @@ const fixtures: Record<string, unknown> = {
       memoryMb: null,
       javaPath: null,
       group: null,
+      icon: null,
     },
     {
       id: 'p-vanilla',
@@ -884,6 +887,7 @@ const fixtures: Record<string, unknown> = {
       memoryMb: null,
       javaPath: null,
       group: null,
+      icon: null,
     },
   ] satisfies Profile[],
   get_current_account: null,
@@ -1580,6 +1584,12 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     if (i >= 0) list.splice(i, 1);
     return undefined as T;
   }
+  if (cmd === 'set_profile_icon' || cmd === 'clear_profile_icon') {
+    const p = (fixtures.list_profiles as Profile[]).find((x) => x.id === args?.profileId);
+    if (!p) throw new Error('profile not found');
+    p.icon = cmd === 'set_profile_icon' ? shot(96, 96, '#3b6b4a', 'icon') : null;
+    return structuredClone(p) as T;
+  }
   if (cmd === 'update_profile') {
     // the preview's profiles live in the fixture list, so a save shows up on
     // the next list_profiles like it would from the store
@@ -1857,6 +1867,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
       memoryMb: null,
       javaPath: null,
       group: null,
+      icon: null,
     } as T;
   }
   return undefined as T;
@@ -1881,6 +1892,9 @@ export const api = {
   repairProfile: (id: string) => invoke<void>('repair_profile', { id }),
   /** a desktop shortcut that starts this instance; resolves to where it went */
   createShortcut: (profileId: string) => invoke<string>('create_shortcut', { profileId }),
+  /** picker; null when cancelled */
+  setProfileIcon: (profileId: string) => invoke<Profile | null>('set_profile_icon', { profileId }),
+  clearProfileIcon: (profileId: string) => invoke<Profile>('clear_profile_icon', { profileId }),
   /** the instance a desktop shortcut started the launcher for, once */
   takeLaunchRequest: () => invoke<string | null>('take_launch_request'),
   launch: (profileId: string) => invoke<void>('install_and_launch', { profileId }),
