@@ -1,5 +1,6 @@
 package dev.dusk.client.modules.render;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.BoolSetting;
@@ -15,7 +16,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 
@@ -30,7 +30,7 @@ import java.util.List;
 public class Freecam extends Module {
     private static Freecam active;
 
-    private final KeySetting toggleKey = add(new KeySetting("freecam", "Freecam key", GLFW.GLFW_KEY_F4), "Keybinds");
+    private final KeySetting toggleKey = add(new KeySetting("freecam", "Freecam key", InputConstants.KEY_F4), "Keybinds");
     private final IntSetting speed = add(new IntSetting("speed", "Fly speed", 10, 1, 50, 1, " b/s"), "Movement");
     private final BoolSetting followLook = add(new BoolSetting("followLook", "Fly where you look", false), "Movement");
     private final BoolSetting noclip = add(new BoolSetting("noclip", "Fly through blocks (singleplayer)", false), "Movement");

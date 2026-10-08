@@ -2,6 +2,7 @@ package dev.dusk.client.modules.render;
 
 import dev.dusk.client.compat.AppleSkinChannel;
 import dev.dusk.client.compat.FoodCompat;
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.TooltipImage;
 import dev.dusk.client.mixin.hunger.FoodDataAccessor;
@@ -20,7 +21,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.food.FoodData;
 import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.ItemStack;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 import java.util.Random;
@@ -365,9 +365,7 @@ public class HungerInfo extends Module {
     private boolean shouldShowTooltip() {
         if (tooltip.is(ALWAYS)) return true;
         if (!tooltip.is(SHIFT)) return false;
-        long window = GLFW.glfwGetCurrentContext();
-        return window != 0L && (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS
-                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS);
+        return Input.shiftDown();
     }
 
     // ---- helpers ----

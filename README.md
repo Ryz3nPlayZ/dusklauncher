@@ -1,6 +1,6 @@
 # DuskLauncher
 
-A modern, PvP-oriented Minecraft launcher for **1.21 through 26.2**. Lean where Lunar is bloated, transparent where Dawn is closed-source. No ads, ever.
+A modern, PvP-oriented Minecraft launcher for **1.21 through 26.3**. Lean where Lunar is bloated, transparent where Dawn is closed-source. No ads, ever.
 
 - `docs/RESEARCH.md` — competitive analysis of Lunar, Badlion, Feather→Dawn (with sources)
 - `docs/ARCHITECTURE.md` — technical design, verified API details, IPC contract
@@ -29,7 +29,7 @@ It adds an app-menu entry and a `dusklauncher` command, and the launcher's UPDAT
 ## Layout
 
 - `launcher/` — Tauri 2 desktop app. Rust core (`src-tauri/core`: meta, download, auth, fabric, modrinth, natives, java, profile, launch) + React/TS pixel-art UI (animated parallax scenes, live 3D player render, Modrinth modpacks, local skins).
-- `client-mod/` — Fabric mod ("DuskClient", nine builds covering every release from 1.21 through 26.2, force-injected into every Fabric instance the launcher starts): module framework, 34 HUD elements (keystrokes, CPS, FPS, ping, TPS, armor, effects, shield, combo, reach, coords, clock, …), render modules (custom crosshair, hitboxes, nametags, particles, motion blur, fullbright, colour grading, low fire/shield, time and weather changers, …), Toggle Sprint, cosmetics, clips and replays, and an in-game HUD editor (Right Shift) with a single centred module window. See `docs/IN-GAME-GUI.md`.
+- `client-mod/` — Fabric mod ("DuskClient", ten builds covering every release from 1.21 through 26.3, force-injected into every Fabric instance the launcher starts): module framework, 34 HUD elements (keystrokes, CPS, FPS, ping, TPS, armor, effects, shield, combo, reach, coords, clock, …), render modules (custom crosshair, hitboxes, nametags, particles, motion blur, fullbright, colour grading, low fire/shield, time and weather changers, …), Toggle Sprint, cosmetics, clips and replays, and an in-game HUD editor (Right Shift) with a single centred module window. See `docs/IN-GAME-GUI.md`.
 
 ## Development
 
@@ -58,7 +58,7 @@ cd launcher && node scripts/gen-art.mjs
 cd launcher && npm run tauri build
 
 # Client mod (all nine Minecraft targets; Gradle 9.7 + JDK 21 for 1.21.x, JDK 25 for 26.x — CI uses the same)
-cd client-mod && for mc in 1.21.1 1.21.3 1.21.4 1.21.5 1.21.8 1.21.10 1.21.11 26.1 26.2; do gradle build -Pmc=$mc || break; done
+cd client-mod && for mc in 1.21.1 1.21.3 1.21.4 1.21.5 1.21.8 1.21.10 1.21.11 26.1 26.2 26.3; do gradle build -Pmc=$mc || break; done
 
 # In-game tests (boots the client: mixin audit, HUD, cosmetics, server API; not on 1.21.1/1.21.3)
 cd client-mod && gradle runClientGameTest -Pmc=1.21.11

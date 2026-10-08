@@ -1,6 +1,8 @@
 package dev.dusk.client.modules.toggle;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.compat.Compat;
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.hud.Keys;
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.BoolSetting;
@@ -10,7 +12,6 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.OptionInstance;
 import net.minecraft.client.Options;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Function;
 
@@ -29,9 +30,9 @@ public class ToggleSprint extends Module {
 
     private static ToggleSprint instance;
 
-    private final Control sprint = new Control("sprint", "Sprint", GLFW.GLFW_KEY_RIGHT_CONTROL, true, ALWAYS,
+    private final Control sprint = new Control("sprint", "Sprint", InputConstants.KEY_RCONTROL, true, ALWAYS,
             Options::toggleSprint, o -> o.keySprint);
-    private final Control sneak = new Control("sneak", "Sneak", GLFW.GLFW_KEY_UNKNOWN, false, WHEN_UNTOGGLED,
+    private final Control sneak = new Control("sneak", "Sneak", Input.UNKNOWN, false, WHEN_UNTOGGLED,
             Options::toggleCrouch, o -> o.keyShift);
     private final BoolSetting keepSprintingOnDeath = add(new BoolSetting("keepSprintingOnDeath", "Keep sprinting after death", true));
 

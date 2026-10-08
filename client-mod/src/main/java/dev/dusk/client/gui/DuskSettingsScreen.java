@@ -1,6 +1,8 @@
 package dev.dusk.client.gui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.DuskClient;
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.gui.widget.TextFieldWidget;
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.Setting;
@@ -8,7 +10,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -360,20 +361,20 @@ public class DuskSettingsScreen extends MenuScreen {
 
     @Override
     protected boolean menuKey(int key, int scancode, int modifiers) {
-        boolean cmd = (modifiers & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) != 0;
-        if (key == GLFW.GLFW_KEY_F && cmd) {
+        boolean cmd = (modifiers & Input.MOD_SHORTCUT) != 0;
+        if (key == InputConstants.KEY_F && cmd) {
             search.setFocused(true);
             return true;
         }
         if (search.focused()) {
             // the menu key still closes the menu unless it would type into the search
-            if (isSettingsKey(key, scancode) && (!NavBar.printable(key) || search.text().isEmpty())) return false;
-            if (key == GLFW.GLFW_KEY_ESCAPE && !search.text().isEmpty()) {
+            if (isSettingsKey(key, scancode) && (!Input.printable(key) || search.text().isEmpty())) return false;
+            if (key == InputConstants.KEY_ESCAPE && !search.text().isEmpty()) {
                 search.setText("");
                 search.setFocused(false);
                 return true;
             }
-            return key != GLFW.GLFW_KEY_ESCAPE && search.keyPressed(key, modifiers);
+            return key != InputConstants.KEY_ESCAPE && search.keyPressed(key, modifiers);
         }
         return false;
     }

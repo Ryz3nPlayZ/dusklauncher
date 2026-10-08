@@ -1,12 +1,13 @@
 package dev.dusk.client.gui.widget;
 
+import com.mojang.blaze3d.platform.InputConstants;
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.Px;
 import dev.dusk.client.gui.Vanilla;
 import dev.dusk.client.module.setting.PixelGridSetting;
 import dev.dusk.client.modules.render.CrosshairPresets;
 import dev.dusk.client.modules.render.CustomCrosshair;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
@@ -182,8 +183,8 @@ public class CrosshairEditorPopup implements Popup {
 
     @Override
     public boolean keyPressed(int key, int modifiers) {
-        boolean cmd = (modifiers & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) != 0;
-        if (key == GLFW.GLFW_KEY_Z && cmd) {
+        boolean cmd = (modifiers & Input.MOD_SHORTCUT) != 0;
+        if (key == InputConstants.KEY_Z && cmd) {
             if (!undo.isEmpty()) {
                 pixels.setGrid(undo.pop());
                 crosshair.markCustom();

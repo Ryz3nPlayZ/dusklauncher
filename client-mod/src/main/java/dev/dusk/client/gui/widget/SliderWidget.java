@@ -1,9 +1,9 @@
 package dev.dusk.client.gui.widget;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.Px;
 import dev.dusk.client.module.setting.IntSetting;
-import org.lwjgl.glfw.GLFW;
 
 /** The launcher's range as a Px slider with the value written on it. Arrow keys step it while hovered. */
 public class SliderWidget extends SettingRow {
@@ -48,7 +48,7 @@ public class SliderWidget extends SettingRow {
 
     @Override
     public boolean keyPressed(int key, int modifiers) {
-        int dir = key == GLFW.GLFW_KEY_LEFT ? -1 : key == GLFW.GLFW_KEY_RIGHT ? 1 : 0;
+        int dir = key == InputConstants.KEY_LEFT ? -1 : key == InputConstants.KEY_RIGHT ? 1 : 0;
         if (dir == 0) return false;
         int before = setting.get();
         setting.set(before + dir * setting.step());

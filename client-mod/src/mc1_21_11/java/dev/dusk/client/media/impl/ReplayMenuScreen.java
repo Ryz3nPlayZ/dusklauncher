@@ -1,5 +1,6 @@
 package dev.dusk.client.media.impl;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.MenuScreen;
 import dev.dusk.client.gui.NavBar;
@@ -7,7 +8,6 @@ import dev.dusk.client.gui.Theme;
 import dev.dusk.client.gui.Vanilla;
 import dev.dusk.client.media.Mcpr;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * What Esc opens while a replay plays, in place of the pause menu: the
@@ -305,14 +305,14 @@ public final class ReplayMenuScreen extends MenuScreen {
         ReplayPlayer p = ReplayPlayer.current();
         if (p == null || VideoExporter.active()) return false;
         switch (key) {
-            case GLFW.GLFW_KEY_SPACE, GLFW.GLFW_KEY_P -> p.setPaused(!p.paused());
-            case GLFW.GLFW_KEY_UP -> p.setSpeed(p.speedIndex() + 1);
-            case GLFW.GLFW_KEY_DOWN -> p.setSpeed(p.speedIndex() - 1);
-            case GLFW.GLFW_KEY_V -> p.togglePov();
-            case GLFW.GLFW_KEY_COMMA -> p.cyclePov(-1);
-            case GLFW.GLFW_KEY_PERIOD -> p.cyclePov(1);
-            case GLFW.GLFW_KEY_I -> p.setMarkIn(p.clock());
-            case GLFW.GLFW_KEY_O -> p.setMarkOut(p.clock());
+            case InputConstants.KEY_SPACE, InputConstants.KEY_P -> p.setPaused(!p.paused());
+            case InputConstants.KEY_UP -> p.setSpeed(p.speedIndex() + 1);
+            case InputConstants.KEY_DOWN -> p.setSpeed(p.speedIndex() - 1);
+            case InputConstants.KEY_V -> p.togglePov();
+            case InputConstants.KEY_COMMA -> p.cyclePov(-1);
+            case InputConstants.KEY_PERIOD -> p.cyclePov(1);
+            case InputConstants.KEY_I -> p.setMarkIn(p.clock());
+            case InputConstants.KEY_O -> p.setMarkOut(p.clock());
             default -> {
                 return false;
             }

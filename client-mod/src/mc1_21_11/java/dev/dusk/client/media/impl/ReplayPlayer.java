@@ -35,7 +35,6 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,8 +72,8 @@ public final class ReplayPlayer {
     public static final int VIEWER_ID = Integer.MIN_VALUE + 42;
     public static final float[] SPEEDS = {0.25f, 0.5f, 1f, 2f, 4f};
     private static final int SEEK_STEP_MS = 5000;
-    private static final int[] KEYS = {GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_P,
-            GLFW.GLFW_KEY_V, GLFW.GLFW_KEY_COMMA, GLFW.GLFW_KEY_PERIOD, GLFW.GLFW_KEY_I, GLFW.GLFW_KEY_O};
+    private static final int[] KEYS = {InputConstants.KEY_LEFT, InputConstants.KEY_RIGHT, InputConstants.KEY_UP, InputConstants.KEY_DOWN, InputConstants.KEY_P,
+            InputConstants.KEY_V, InputConstants.KEY_COMMA, InputConstants.KEY_PERIOD, InputConstants.KEY_I, InputConstants.KEY_O};
 
     private static @Nullable ReplayPlayer current;
 
@@ -282,20 +281,20 @@ public final class ReplayPlayer {
         for (int i = 0; i < KEYS.length; i++) {
             boolean down = Compat.currentScreen(mc) == null && InputConstants.isKeyDown(mc.getWindow(), KEYS[i]);
             // an export owns the clock: going back would reload the world mid-video
-            boolean locked = VideoExporter.active() && KEYS[i] != GLFW.GLFW_KEY_V && KEYS[i] != GLFW.GLFW_KEY_COMMA
-                    && KEYS[i] != GLFW.GLFW_KEY_PERIOD;
+            boolean locked = VideoExporter.active() && KEYS[i] != InputConstants.KEY_V && KEYS[i] != InputConstants.KEY_COMMA
+                    && KEYS[i] != InputConstants.KEY_PERIOD;
             if (down && !held[i] && !locked) {
                 switch (KEYS[i]) {
-                    case GLFW.GLFW_KEY_LEFT -> seek(clock - SEEK_STEP_MS);
-                    case GLFW.GLFW_KEY_RIGHT -> seek(clock + SEEK_STEP_MS);
-                    case GLFW.GLFW_KEY_UP -> setSpeed(speed + 1);
-                    case GLFW.GLFW_KEY_DOWN -> setSpeed(speed - 1);
-                    case GLFW.GLFW_KEY_P -> paused = !paused;
-                    case GLFW.GLFW_KEY_V -> togglePov();
-                    case GLFW.GLFW_KEY_COMMA -> cyclePov(-1);
-                    case GLFW.GLFW_KEY_PERIOD -> cyclePov(1);
-                    case GLFW.GLFW_KEY_I -> setMarkIn(clock);
-                    case GLFW.GLFW_KEY_O -> setMarkOut(clock);
+                    case InputConstants.KEY_LEFT -> seek(clock - SEEK_STEP_MS);
+                    case InputConstants.KEY_RIGHT -> seek(clock + SEEK_STEP_MS);
+                    case InputConstants.KEY_UP -> setSpeed(speed + 1);
+                    case InputConstants.KEY_DOWN -> setSpeed(speed - 1);
+                    case InputConstants.KEY_P -> paused = !paused;
+                    case InputConstants.KEY_V -> togglePov();
+                    case InputConstants.KEY_COMMA -> cyclePov(-1);
+                    case InputConstants.KEY_PERIOD -> cyclePov(1);
+                    case InputConstants.KEY_I -> setMarkIn(clock);
+                    case InputConstants.KEY_O -> setMarkOut(clock);
                     default -> {}
                 }
             }

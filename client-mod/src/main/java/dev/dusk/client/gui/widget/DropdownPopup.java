@@ -1,9 +1,9 @@
 package dev.dusk.client.gui.widget;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.Px;
 import dev.dusk.client.gui.Vanilla;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 import java.util.function.IntConsumer;
@@ -86,7 +86,7 @@ public class DropdownPopup implements Popup {
 
     @Override
     public boolean keyPressed(int key, int modifiers) {
-        if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+        if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
             if (hovered >= 0) onPick.accept(hovered);
             close();
             return true;

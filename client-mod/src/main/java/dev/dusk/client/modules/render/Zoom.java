@@ -1,6 +1,8 @@
 package dev.dusk.client.modules.render;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.compat.HudToggle;
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.module.Module;
@@ -14,7 +16,6 @@ import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.item.Items;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.Set;
 
@@ -47,11 +48,11 @@ public class Zoom extends Module {
 
     private static Zoom instance;
 
-    private final KeySetting key = add(new KeySetting("zoom", "Zoom key", GLFW.GLFW_KEY_C), "Keybinds");
+    private final KeySetting key = add(new KeySetting("zoom", "Zoom key", InputConstants.KEY_C), "Keybinds");
     private final ChoiceSetting mode = add(new ChoiceSetting("keyMode", "Key mode", HOLD, HOLD, TOGGLE), "Keybinds");
-    private final KeySetting inKey = add(new KeySetting("zoom_in", "Zoom further key", GLFW.GLFW_KEY_UNKNOWN), "Keybinds");
-    private final KeySetting outKey = add(new KeySetting("zoom_out", "Zoom back key", GLFW.GLFW_KEY_UNKNOWN), "Keybinds");
-    private final KeySetting secondaryKey = add(new KeySetting("zoom_secondary", "Secondary zoom key", GLFW.GLFW_KEY_UNKNOWN), "Keybinds");
+    private final KeySetting inKey = add(new KeySetting("zoom_in", "Zoom further key", Input.UNKNOWN), "Keybinds");
+    private final KeySetting outKey = add(new KeySetting("zoom_out", "Zoom back key", Input.UNKNOWN), "Keybinds");
+    private final KeySetting secondaryKey = add(new KeySetting("zoom_secondary", "Secondary zoom key", Input.UNKNOWN), "Keybinds");
 
     private final ChoiceSetting preset = add(new ChoiceSetting("preset", "Preset (applies when picked)", CUSTOM,
             CUSTOM, P_DUSK, P_OPTIFINE, P_OKZOOMER, P_SPYGLASS) {

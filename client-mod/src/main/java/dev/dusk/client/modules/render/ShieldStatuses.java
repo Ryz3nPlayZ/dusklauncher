@@ -1,5 +1,6 @@
 package dev.dusk.client.modules.render;
 
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.BoolSetting;
 import dev.dusk.client.module.setting.ColorSetting;
@@ -8,7 +9,6 @@ import dev.dusk.client.render.shield.ShieldStateTracker;
 import dev.dusk.client.render.shield.ShieldTint;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * A port of Walksy's Shield Statuses (MIT, see NOTICE): shields are tinted by
@@ -22,7 +22,7 @@ public class ShieldStatuses extends Module {
 
     private final BoolSetting colorInterpolation = add(new BoolSetting("colorInterpolation", "Fade colour over the cooldown", false));
     private final BoolSetting selfStateOnly = add(new BoolSetting("selfStateOnly", "Only tint your own shield", false));
-    private final KeySetting toggleSelfState = add(new KeySetting("shield_self_state", "Toggle own-shield-only key", GLFW.GLFW_KEY_UNKNOWN));
+    private final KeySetting toggleSelfState = add(new KeySetting("shield_self_state", "Toggle own-shield-only key", Input.UNKNOWN));
     private final BoolSetting customEnabled = add(new BoolSetting("customEnabledShieldColor", "Tint ready shields", true), "Colours");
     private final ColorSetting enabledColor = add(new ColorSetting("enabledColor", "Ready colour", 0xFF00FF00), "Colours");
     private final BoolSetting customUsing = add(new BoolSetting("customUsingShieldColor", "Tint raised shields", false), "Colours");

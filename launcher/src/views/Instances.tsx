@@ -539,7 +539,7 @@ function NewInstance({
               ? ' '
               : clientModSupports(v)
                 ? `Fabric with Dusk Essentials (Sodium, Iris, Lithium and friends, the newest builds for ${v}), plus DuskClient and your cosmetics at every launch.`
-                : `Fabric with Dusk Essentials for ${v}. DuskClient isn't out for ${v} yet (it runs on 1.21 – 26.2), so no client modules or cosmetics there.`}
+                : `Fabric with Dusk Essentials for ${v}. DuskClient isn't out for ${v} yet (it runs on 1.21 – 26.3), so no client modules or cosmetics there.`}
           </span>
           {err && <span className="meta">{err}</span>}
 

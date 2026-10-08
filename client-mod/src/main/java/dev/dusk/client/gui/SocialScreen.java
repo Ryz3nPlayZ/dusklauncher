@@ -1,6 +1,8 @@
 package dev.dusk.client.gui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.compat.Compat;
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.cosmetics.CapeRegistry;
 import dev.dusk.client.gui.widget.TextFieldWidget;
@@ -16,7 +18,6 @@ import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -1140,29 +1141,29 @@ public class SocialScreen extends PanelScreen {
 
     @Override
     protected boolean menuKey(int key, int scancode, int modifiers) {
-        if (zoom != null && key == GLFW.GLFW_KEY_ESCAPE) {
+        if (zoom != null && key == InputConstants.KEY_ESCAPE) {
             zoom = null;
             return true;
         }
         TextFieldWidget f = composer.focused() ? composer : addField.focused() ? addField : null;
         if (f != null) {
-            boolean mod = (modifiers & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) != 0;
-            if (mod && key == GLFW.GLFW_KEY_V) {
+            boolean mod = (modifiers & Input.MOD_SHORTCUT) != 0;
+            if (mod && key == InputConstants.KEY_V) {
                 paste(f, f == composer ? Social.MESSAGE_MAX : 16);
                 return true;
             }
-            if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+            if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
                 if (f == composer) send();
                 else sendRequest();
                 return true;
             }
-            if (key == GLFW.GLFW_KEY_ESCAPE) {
+            if (key == InputConstants.KEY_ESCAPE) {
                 f.setFocused(false);
                 return true;
             }
             return f.keyPressed(key, modifiers);
         }
-        if (key == GLFW.GLFW_KEY_ESCAPE && tab == FRIENDS && (view == View.SHOTS || view == View.PROFILE)) {
+        if (key == InputConstants.KEY_ESCAPE && tab == FRIENDS && (view == View.SHOTS || view == View.PROFILE)) {
             openView(View.CHAT);
             return true;
         }

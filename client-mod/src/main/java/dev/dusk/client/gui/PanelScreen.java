@@ -1,5 +1,7 @@
 package dev.dusk.client.gui;
 
+import com.mojang.blaze3d.platform.InputConstants;
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.gui.widget.TextFieldWidget;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -190,8 +192,8 @@ public abstract class PanelScreen extends MenuScreen {
         TextFieldWidget s = search();
         if (s == null || !s.focused()) return false;
         // the menu key still closes the page unless it would type into the box
-        if (isSettingsKey(key, scancode) && (!NavBar.printable(key) || s.text().isEmpty())) return false;
-        if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE) {
+        if (isSettingsKey(key, scancode) && (!Input.printable(key) || s.text().isEmpty())) return false;
+        if (key == InputConstants.KEY_ESCAPE) {
             s.setFocused(false);
             return true;
         }

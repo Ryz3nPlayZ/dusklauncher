@@ -1,6 +1,7 @@
 package dev.dusk.client.modules.hud;
 
 import dev.dusk.client.compat.Compat;
+import dev.dusk.client.compat.SignCompat;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.hud.HudElement;
@@ -178,9 +179,9 @@ public class SignReader extends HudElement {
 
         if (sign == null) return d;
 
-        d.facingFront = sign.isFacingFrontText(player);
-        SignText text = sign.getText(d.facingFront);
-        d.content = text.getMessages(false);
+        d.facingFront = SignCompat.facingFront(sign, player);
+        SignText text = SignCompat.text(sign, d.facingFront);
+        d.content = SignCompat.lines(text);
         d.textColor = text.getColor().getTextColor();
         d.glowColor = Compat.signDarkColor(text);
         d.glowing = text.hasGlowingText();

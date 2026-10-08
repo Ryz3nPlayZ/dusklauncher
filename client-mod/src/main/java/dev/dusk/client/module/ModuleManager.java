@@ -4,11 +4,11 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import dev.dusk.client.compat.Compat;
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.hud.HudElement;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.lang.reflect.Type;
 import java.nio.file.Files;
@@ -60,12 +60,11 @@ public class ModuleManager {
      * screen open. True when one changed, so the caller saves.
      */
     public boolean tickToggleKeys(Minecraft mc) {
-        long window = GLFW.glfwGetCurrentContext();
-        boolean inGame = window != 0L && mc.player != null && Compat.currentScreen(mc) == null;
+        boolean inGame = Input.hasWindow() && mc.player != null && Compat.currentScreen(mc) == null;
         boolean changed = false;
         for (Module m : modules) {
             boolean down = inGame && m.toggleKey().bound()
-                    && GLFW.glfwGetKey(window, m.toggleKey().get()) == GLFW.GLFW_PRESS;
+                    && Input.keyDown(m.toggleKey().get());
             if (!down) {
                 toggleHeld.remove(m);
                 continue;

@@ -1,7 +1,9 @@
 package dev.dusk.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.compat.ChatCompat;
 import dev.dusk.client.compat.Compat;
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.cosmetics.CosmeticsManager;
 import dev.dusk.client.cosmetics.LoadoutWatcher;
@@ -123,7 +125,6 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.screens.Screen;
-import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -158,7 +159,7 @@ public class DuskClient implements ClientModInitializer {
         modules = new ModuleManager();
         // Keystroke-ish HUD
         // first, so it heads the Dusk section of Controls; module keys register with their modules
-        settingsKey = Compat.registerKey("key.duskclient.settings", GLFW.GLFW_KEY_RIGHT_SHIFT);
+        settingsKey = Compat.registerKey("key.duskclient.settings", InputConstants.KEY_RSHIFT);
         modules.register(new Keystrokes());
         modules.register(new CpsCounter());
         modules.register(new FpsDisplay());
@@ -292,8 +293,8 @@ public class DuskClient implements ClientModInitializer {
             ServerApi.reset();
             LOGGER.info("[DuskPresence] menu");
         });
-        clipKey = Compat.registerKey("key.duskclient.save_clip", GLFW.GLFW_KEY_F8);
-        friendsKey = Compat.registerKey("key.duskclient.friends", GLFW.GLFW_KEY_UNKNOWN);
+        clipKey = Compat.registerKey("key.duskclient.save_clip", InputConstants.KEY_F8);
+        friendsKey = Compat.registerKey("key.duskclient.friends", Input.UNKNOWN);
         MediaBackend.init();
         SocialNotifier.start();
         ScreenEvents.AFTER_INIT.register((client, screen, w, h) -> {

@@ -310,12 +310,15 @@ fn parse_curseforge(v: &Value) -> (Option<String>, String, Option<String>) {
 
 // ── Modrinth App ──────────────────────────────────────────────────────────
 
+/// A Modrinth App profile row: path, name, game version, loader, loader version.
+type ModrinthProfileRow = (String, String, String, String, Option<String>);
+
 fn scan_modrinth(root: &Path) -> Vec<ExternalInstanceDto> {
     let db = root.join("app.db");
     if !db.is_file() {
         return Vec::new();
     }
-    let rows = (|| -> rusqlite::Result<Vec<(String, String, String, String, Option<String>)>> {
+    let rows = (|| -> rusqlite::Result<Vec<ModrinthProfileRow>> {
         let conn = rusqlite::Connection::open_with_flags(&db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
         let mut stmt = conn.prepare("SELECT path, name, game_version, mod_loader, mod_loader_version FROM profiles")?;
         let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?;

@@ -1,10 +1,10 @@
 package dev.dusk.client.gui.widget;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.Px;
 import dev.dusk.client.gui.Vanilla;
 import dev.dusk.client.module.setting.ColorSetting;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * Flex-HUD's colour picker: a saturation/value square, a hue bar, an alpha
@@ -150,9 +150,9 @@ public class ColorPickerPopup implements Popup {
     public boolean keyPressed(int key, int modifiers) {
         if (!editing) return false;
         switch (key) {
-            case GLFW.GLFW_KEY_BACKSPACE -> { if (!buffer.isEmpty()) buffer = buffer.substring(0, buffer.length() - 1); }
-            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> commitHex();
-            case GLFW.GLFW_KEY_ESCAPE -> editing = false;
+            case InputConstants.KEY_BACKSPACE -> { if (!buffer.isEmpty()) buffer = buffer.substring(0, buffer.length() - 1); }
+            case InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER -> commitHex();
+            case InputConstants.KEY_ESCAPE -> editing = false;
             default -> {}
         }
         return true;

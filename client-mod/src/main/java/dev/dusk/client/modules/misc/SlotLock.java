@@ -1,5 +1,6 @@
 package dev.dusk.client.modules.misc;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.hud.Keys;
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.KeySetting;
@@ -9,7 +10,6 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.BitSet;
 
@@ -24,7 +24,7 @@ public class SlotLock extends Module {
     public static final int OUTLINE = 0xFFFF5555, TINT = 0x30FF5555;
     private static SlotLock instance;
 
-    private final KeySetting key = add(new KeySetting("slotlock", "Lock key (hover a slot)", GLFW.GLFW_KEY_K));
+    private final KeySetting key = add(new KeySetting("slotlock", "Lock key (hover a slot)", InputConstants.KEY_K));
     /** Locked inventory indices (0–8 hotbar, 9–35 main, 36–39 armour, 40 offhand), comma-separated. */
     private final TextSetting locked = add(new TextSetting("locked", "Locked slots", "", 160));
 

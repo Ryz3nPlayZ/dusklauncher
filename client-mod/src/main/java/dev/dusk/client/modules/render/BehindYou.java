@@ -1,5 +1,6 @@
 package dev.dusk.client.modules.render;
 
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.BoolSetting;
 import dev.dusk.client.module.setting.ChoiceSetting;
@@ -7,7 +8,6 @@ import dev.dusk.client.module.setting.IntSetting;
 import dev.dusk.client.module.setting.KeySetting;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * Port of Polyfrost's BehindYouV3 (SnapLook): keys that flip the camera to
@@ -25,8 +25,8 @@ public class BehindYou extends Module {
 
     private static BehindYou instance;
 
-    private final KeySetting backKey = add(new KeySetting("behindyou_back", "Back view key", GLFW.GLFW_KEY_UNKNOWN), "Keybinds");
-    private final KeySetting frontKey = add(new KeySetting("behindyou_front", "Front view key", GLFW.GLFW_KEY_UNKNOWN), "Keybinds");
+    private final KeySetting backKey = add(new KeySetting("behindyou_back", "Back view key", Input.UNKNOWN), "Keybinds");
+    private final KeySetting frontKey = add(new KeySetting("behindyou_front", "Front view key", Input.UNKNOWN), "Keybinds");
     private final ChoiceSetting backMode = add(new ChoiceSetting("backKeyMode", "Back view key mode", HOLD, HOLD, TOGGLE), "Keybinds");
     private final ChoiceSetting frontMode = add(new ChoiceSetting("frontKeyMode", "Front view key mode", HOLD, HOLD, TOGGLE), "Keybinds");
     private final BoolSetting enableF5 = add(new BoolSetting("enableF5", "Animate the F5 key", false), "Keybinds");

@@ -47,7 +47,8 @@ public class ClientLevelParticlesMixin {
         ci.cancel();
     }
 
-    @Inject(method = {"addDestroyBlockEffect", "addBreakingBlockEffect"}, at = @At("HEAD"), cancellable = true)
+    // 26.3 folded the hit sound into addBreakingBlockEffects, so it is the particles part there
+    @Inject(method = {"addDestroyBlockEffect", "addBreakingBlockEffect", "addBreakingParticles"}, at = @At("HEAD"), cancellable = true)
     private void duskclient$cancelBlockParticles(CallbackInfo ci) {
         if (!Particles.active()) return;
         Particles.Entry blocks = Particles.blocks();

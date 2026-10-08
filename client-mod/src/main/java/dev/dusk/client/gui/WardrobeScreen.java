@@ -3,10 +3,12 @@ package dev.dusk.client.gui;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.account.DuskAccount;
 import dev.dusk.client.account.Http;
 import dev.dusk.client.account.MojangProfile;
 import dev.dusk.client.account.SkinLibrary;
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.compat.SkinCompat;
 import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.cosmetics.CapeRegistry;
@@ -18,10 +20,6 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.PointerBuffer;
-import org.lwjgl.glfw.GLFW;
-import org.lwjgl.system.MemoryStack;
-import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -277,13 +275,7 @@ public class WardrobeScreen extends PanelScreen {
 
     private void addSkin() {
         act("Choose a skin file...", () -> {
-            String path;
-            try (MemoryStack stack = MemoryStack.stackPush()) {
-                PointerBuffer filters = stack.mallocPointer(1);
-                filters.put(stack.UTF8("*.png"));
-                filters.flip();
-                path = TinyFileDialogs.tinyfd_openFileDialog("Add skin", System.getProperty("user.home") + "/", filters, "Minecraft skin (PNG)", false);
-            }
+            String path = Input.openFile("Add skin", "*.png", "Minecraft skin (PNG)");
             if (path == null) return "";
             SkinLibrary.Entry e = SkinLibrary.add(Path.of(path));
             post(() -> {
@@ -1106,7 +1098,7 @@ public class WardrobeScreen extends PanelScreen {
     @Override
     protected boolean menuKey(int key, int scancode, int modifiers) {
         if (!outfitField.focused()) return super.menuKey(key, scancode, modifiers);
-        if ((modifiers & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) != 0 && key == GLFW.GLFW_KEY_V) {
+        if ((modifiers & Input.MOD_SHORTCUT) != 0 && key == InputConstants.KEY_V) {
             String clip = Minecraft.getInstance().keyboardHandler.getClipboard();
             if (clip != null) {
                 String text = (outfitName + clip.replaceAll("\\s+", " "));
@@ -1114,11 +1106,11 @@ public class WardrobeScreen extends PanelScreen {
             }
             return true;
         }
-        if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+        if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
             saveOutfit();
             return true;
         }
-        if (key == GLFW.GLFW_KEY_ESCAPE) {
+        if (key == InputConstants.KEY_ESCAPE) {
             outfitField.setFocused(false);
             return true;
         }

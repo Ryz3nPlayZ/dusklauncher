@@ -1,17 +1,17 @@
 package dev.dusk.client.modules.hud;
 
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.hud.TextHud;
 import dev.dusk.client.module.setting.BoolSetting;
 import dev.dusk.client.module.setting.KeySetting;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.Locale;
 
 /** A stopwatch on the HUD: one key starts and pauses it, another resets it. */
 public class Stopwatch extends TextHud {
-    private final KeySetting startKey = add(new KeySetting("stopwatch", "Start / pause key", GLFW.GLFW_KEY_UNKNOWN), "Keybinds");
-    private final KeySetting resetKey = add(new KeySetting("stopwatch_reset", "Reset key", GLFW.GLFW_KEY_UNKNOWN), "Keybinds");
+    private final KeySetting startKey = add(new KeySetting("stopwatch", "Start / pause key", Input.UNKNOWN), "Keybinds");
+    private final KeySetting resetKey = add(new KeySetting("stopwatch_reset", "Reset key", Input.UNKNOWN), "Keybinds");
     private final BoolSetting hundredths = add(new BoolSetting("hundredths", "Show hundredths", false));
     private final BoolSetting hideIdle = add(new BoolSetting("hideIdle", "Hide until started", false));
 

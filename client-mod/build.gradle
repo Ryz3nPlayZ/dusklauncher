@@ -56,12 +56,21 @@ def layerExcludes = layerDirs.collect { dir ->
     def f = new File(dir, 'layer.exclude')
     f.exists() ? f.readLines().collect { it.trim() }.findAll { it && !it.startsWith('#') } : []
 }
+// A layer may also carry `mixins.extra`: mixin class names (one per line, relative to the
+// mixin package) added to the client list of whichever duskclient.mixins.json it ends up with,
+// for a version that splits one target class in two without forking the whole list. A line
+// starting with `-` takes a name out instead, for a shared mixin whose target that version
+// dropped (not the list's last entry: the comma before it would stay).
+def mixinLines = layerDirs.collect { new File(it, 'mixins.extra') }.findAll { it.exists() }
+        .collectMany { f -> f.readLines().collect { it.trim() }.findAll { it && !it.startsWith('#') } }
+def extraMixins = mixinLines.findAll { !it.startsWith('-') }
+def droppedMixins = mixinLines.findAll { it.startsWith('-') }.collect { '"' + it.substring(1).trim() + '",' }
 tasks.register('layerSources', Sync) {
     description = "Stacks the per-version source layers for ${mc} (${layers.join(' < ')})"
     layerDirs.eachWithIndex { dir, i ->
         def hidden = layerExcludes.drop(i + 1).flatten()
         from(dir) {
-            exclude 'layer.exclude'
+            exclude 'layer.exclude', 'mixins.extra'
             if (hidden) exclude hidden
         }
     }
@@ -78,11 +87,19 @@ processResources {
     inputs.property "version", project.version
     inputs.property "mc", mc
     inputs.property "javaRelease", javaRelease
+    inputs.property "extraMixins", extraMixins
+    inputs.property "droppedMixins", droppedMixins
     filesMatching("fabric.mod.json") {
         expand "version": project.version, "mc_range": mcRange, "java": ">=${javaRelease}"
     }
     filesMatching("duskclient.mixins.json") {
         expand "java_level": "JAVA_${javaRelease}"
+        if (extraMixins) {
+            filter { line -> line.contains('"client": [') ? line + extraMixins.collect { "\n    \"${it}\"," }.join('') : line }
+        }
+        if (droppedMixins) {
+            filter { line -> line.trim() in droppedMixins ? null : line }
+        }
     }
 }
 

@@ -1,9 +1,9 @@
 package dev.dusk.client.modules.render;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.IntSetting;
 import dev.dusk.client.module.setting.KeySetting;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * PolyTime: holds the sky at a time of day for you alone. The server's clock
@@ -20,8 +20,8 @@ public class TimeChanger extends Module {
 
     private final IntSetting time = add(new IntSetting("time", "Time of day", 12, 0, 24, 1, "h"));
     // PolyTime's own defaults; they step the slider by an hour
-    private final KeySetting forwardKey = add(new KeySetting("time_forward", "Hour forward key", GLFW.GLFW_KEY_RIGHT_BRACKET));
-    private final KeySetting backwardKey = add(new KeySetting("time_backward", "Hour back key", GLFW.GLFW_KEY_LEFT_BRACKET));
+    private final KeySetting forwardKey = add(new KeySetting("time_forward", "Hour forward key", InputConstants.KEY_RBRACKET));
+    private final KeySetting backwardKey = add(new KeySetting("time_backward", "Hour back key", InputConstants.KEY_LBRACKET));
 
     public TimeChanger() {
         super("timechanger", "Time Changer", Category.RENDER,

@@ -40,6 +40,8 @@ public final class NametagHooks {
     private static final float[] ARC_SIN = new float[PERIMETER_POINTS];
     private static final float[] perimeter = new float[PERIMETER_POINTS * 2];
     private static final float[] quads = new float[PERIMETER_POINTS * 8];
+    /** Two rows a pixel of corner radius (at most 10), and the middle. */
+    private static final float[] strips = new float[(2 * 10 + 1) * 4];
 
     /** The Dusk mark, one glyph of the duskclient:badge bitmap font. */
     private static final Component DUSK_BADGE = Component.literal("\uE000").withStyle(style -> style
@@ -253,6 +255,38 @@ public final class NametagHooks {
             out[o++] = ax; out[o++] = ay;
         }
         return o;
+    }
+
+    /**
+     * The same box as {@link #backgroundQuads} as axis-aligned rectangles
+     * (x0, y0, x1, y1 each), for renderers that only draw rectangles: the
+     * rounded corners become one-pixel steps. Returns the number of floats
+     * written to {@link #stripBuffer()}.
+     */
+    public static int backgroundStrips(float x, float y, float width) {
+        Nametags n = Nametags.active();
+        float padX = n == null ? 0 : n.paddingX.get();
+        float padY = n == null ? 0 : n.paddingY.get();
+        float x0 = x - 1.0F - padX;
+        float x1 = x + width + padX;
+        float y0 = y - 1.0F - padY;
+        float y1 = y + 9.0F + padY;
+        int radius = n != null && n.rounded.get()
+                ? (int) Math.min(n.cornerRadius.get(), Math.min((x1 - x0) / 2.0F, (y1 - y0) / 2.0F)) : 0;
+        float[] out = strips;
+        int o = 0;
+        for (int row = 0; row < radius; row++) {
+            float dy = radius - row - 0.5F;
+            float inset = radius - (float) Math.sqrt(radius * radius - dy * dy);
+            out[o++] = x0 + inset; out[o++] = y0 + row; out[o++] = x1 - inset; out[o++] = y0 + row + 1;
+            out[o++] = x0 + inset; out[o++] = y1 - row - 1; out[o++] = x1 - inset; out[o++] = y1 - row;
+        }
+        out[o++] = x0; out[o++] = y0 + radius; out[o++] = x1; out[o++] = y1 - radius;
+        return o;
+    }
+
+    public static float[] stripBuffer() {
+        return strips;
     }
 
     /** Scale factor for the nametag's pose. */

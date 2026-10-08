@@ -1,7 +1,7 @@
 package dev.dusk.client.gui.widget;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.gui.Canvas;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -67,7 +67,7 @@ public class PopupStack implements PopupHost {
     public boolean keyPressed(int key, int modifiers) {
         if (!any()) return false;
         Popup p = top();
-        if (!p.keyPressed(key, modifiers) && key == GLFW.GLFW_KEY_ESCAPE) p.close();
+        if (!p.keyPressed(key, modifiers) && key == InputConstants.KEY_ESCAPE) p.close();
         return true;
     }
 

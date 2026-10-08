@@ -2,6 +2,7 @@ package dev.dusk.client.module.setting;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.compat.Compat;
+import dev.dusk.client.compat.Input;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 
@@ -14,7 +15,7 @@ public class KeySetting extends Setting<String> {
     private final KeyMapping mapping;
 
     public KeySetting(String id, String name, int defaultKey) {
-        super(id, name, InputConstants.Type.KEYSYM.getOrCreate(defaultKey).getName());
+        super(id, name, Input.KEYBOARD.getOrCreate(defaultKey).getName());
         this.mapping = Compat.registerKey("key.duskclient." + id, defaultKey);
     }
 

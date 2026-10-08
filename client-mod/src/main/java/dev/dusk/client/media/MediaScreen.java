@@ -1,5 +1,6 @@
 package dev.dusk.client.media;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.DuskClient;
 import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.gui.Canvas;
@@ -13,7 +14,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -536,9 +536,9 @@ public class MediaScreen extends PanelScreen {
     protected boolean menuKey(int key, int scancode, int modifiers) {
         if (viewing < 0) return super.menuKey(key, scancode, modifiers);
         switch (key) {
-            case GLFW.GLFW_KEY_ESCAPE -> viewing = -1;
-            case GLFW.GLFW_KEY_LEFT -> step(-1);
-            case GLFW.GLFW_KEY_RIGHT -> step(1);
+            case InputConstants.KEY_ESCAPE -> viewing = -1;
+            case InputConstants.KEY_LEFT -> step(-1);
+            case InputConstants.KEY_RIGHT -> step(1);
             default -> {
                 if (!isSettingsKey(key, scancode)) return false;
                 viewing = -1;

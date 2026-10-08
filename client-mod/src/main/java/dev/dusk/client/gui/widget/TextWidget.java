@@ -1,10 +1,10 @@
 package dev.dusk.client.gui.widget;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.Px;
 import dev.dusk.client.gui.Vanilla;
 import dev.dusk.client.module.setting.TextSetting;
-import org.lwjgl.glfw.GLFW;
 
 /** Label and a text box; Enter or clicking away saves, Esc puts the old text back, right-click clears. */
 public class TextWidget extends SettingRow {
@@ -60,15 +60,15 @@ public class TextWidget extends SettingRow {
     @Override
     public boolean keyPressed(int key, int modifiers) {
         if (!focused) return false;
-        if (key == GLFW.GLFW_KEY_BACKSPACE) {
+        if (key == InputConstants.KEY_BACKSPACE) {
             if (!buffer.isEmpty()) buffer = buffer.substring(0, buffer.length() - 1);
             return true;
         }
-        if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+        if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
             setFocused(false);
             return true;
         }
-        if (key == GLFW.GLFW_KEY_ESCAPE) {
+        if (key == InputConstants.KEY_ESCAPE) {
             buffer = setting.get();
             super.setFocused(false);
             return true;

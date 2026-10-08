@@ -1,5 +1,6 @@
 package dev.dusk.client.modules.misc;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.WaypointsScreen;
@@ -17,7 +18,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -42,8 +42,8 @@ public class Waypoints extends Module {
 
     private static Waypoints instance;
 
-    private final KeySetting addKey = add(new KeySetting("waypoint_add", "Add waypoint", GLFW.GLFW_KEY_B), "Keybinds");
-    private final KeySetting listKey = add(new KeySetting("waypoint_list", "Open waypoints", GLFW.GLFW_KEY_U), "Keybinds");
+    private final KeySetting addKey = add(new KeySetting("waypoint_add", "Add waypoint", InputConstants.KEY_B), "Keybinds");
+    private final KeySetting listKey = add(new KeySetting("waypoint_list", "Open waypoints", InputConstants.KEY_U), "Keybinds");
 
     private final ChoiceSetting names = add(new ChoiceSetting("names", "Show names", NEAR, ALWAYS, NEAR, NEVER), "Markers");
     private final BoolSetting distance = add(new BoolSetting("distance", "Show distance", true), "Markers");

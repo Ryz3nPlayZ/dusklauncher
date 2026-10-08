@@ -1,5 +1,6 @@
 package dev.dusk.client.gui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.realmsclient.RealmsMainScreen;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.social.SocialNotifier;
@@ -16,7 +17,6 @@ import net.minecraft.client.gui.screens.options.SkinCustomizationScreen;
 import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -281,7 +281,7 @@ public class DuskTitleScreen extends DuskScreen {
             open(new DuskSettingsScreen(this));
             return true;
         }
-        return key == GLFW.GLFW_KEY_ESCAPE; // the title screen has nowhere to go back to
+        return key == InputConstants.KEY_ESCAPE; // the title screen has nowhere to go back to
     }
 
     @Override

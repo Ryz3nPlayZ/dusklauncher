@@ -1,5 +1,6 @@
 package dev.dusk.client.gui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.gui.widget.TextFieldWidget;
 import dev.dusk.client.modules.misc.Waypoints;
 import dev.dusk.client.waypoints.WaypointStore;
@@ -8,7 +9,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -341,7 +341,7 @@ public class WaypointsScreen extends PanelScreen {
     protected boolean menuKey(int key, int scancode, int modifiers) {
         if (nameField != null && nameField.focused()) {
             boolean handled = nameField.keyPressed(key, modifiers);
-            if (key == GLFW.GLFW_KEY_ESCAPE || !nameField.focused()) {
+            if (key == InputConstants.KEY_ESCAPE || !nameField.focused()) {
                 nameField = null;
                 editing = null;
                 editingCoords = false;

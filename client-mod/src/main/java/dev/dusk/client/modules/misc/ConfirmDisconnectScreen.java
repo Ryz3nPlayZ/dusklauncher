@@ -1,5 +1,6 @@
 package dev.dusk.client.modules.misc;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.MenuScreen;
 import dev.dusk.client.gui.Px;
@@ -7,7 +8,6 @@ import dev.dusk.client.gui.Theme;
 import dev.dusk.client.gui.Vanilla;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * {@link ConfirmDisconnect}'s "Are you sure?" screen, in the Dusk menu's
@@ -79,7 +79,7 @@ final class ConfirmDisconnectScreen extends MenuScreen {
 
     @Override
     protected boolean menuKey(int key, int scancode, int modifiers) {
-        if ((key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) && ready()) {
+        if ((key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) && ready()) {
             disconnect.run();
             return true;
         }

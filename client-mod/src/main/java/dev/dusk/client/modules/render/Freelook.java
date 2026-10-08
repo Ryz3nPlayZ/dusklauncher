@@ -1,5 +1,6 @@
 package dev.dusk.client.modules.render;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.BoolSetting;
 import dev.dusk.client.module.setting.ChoiceSetting;
@@ -8,7 +9,6 @@ import net.minecraft.client.CameraType;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * Freelook: while the key is held the camera swings behind you and the mouse
@@ -23,7 +23,7 @@ public class Freelook extends Module {
 
     private static Freelook instance;
 
-    private final KeySetting key = add(new KeySetting("freelook", "Freelook key", GLFW.GLFW_KEY_LEFT_ALT), "Keybinds");
+    private final KeySetting key = add(new KeySetting("freelook", "Freelook key", InputConstants.KEY_LALT), "Keybinds");
     private final ChoiceSetting mode = add(new ChoiceSetting("keyMode", "Key mode", HOLD, HOLD, TOGGLE), "Keybinds");
     private final ChoiceSetting view = add(new ChoiceSetting("view", "View while looking", BACK, BACK, FRONT, KEEP), "Camera");
     private final BoolSetting invertPitch = add(new BoolSetting("invertPitch", "Invert up/down", false), "Camera");

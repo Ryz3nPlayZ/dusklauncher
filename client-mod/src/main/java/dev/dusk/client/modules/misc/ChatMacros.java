@@ -1,11 +1,11 @@
 package dev.dusk.client.modules.misc;
 
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.KeySetting;
 import dev.dusk.client.module.setting.TextSetting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * Chat Macros: bind a key to a chat line or a /command ("gg", "/spawn").
@@ -25,7 +25,7 @@ public class ChatMacros extends Module {
                 "Bind keys to send a chat message or a /command.");
         for (int i = 0; i < SLOTS; i++) {
             String group = "Macro " + (i + 1);
-            keys[i] = add(new KeySetting("macro_" + (i + 1), "Key", GLFW.GLFW_KEY_UNKNOWN), group);
+            keys[i] = add(new KeySetting("macro_" + (i + 1), "Key", Input.UNKNOWN), group);
             texts[i] = add(new TextSetting("text" + (i + 1), "Sends", "", 256), group);
         }
         setEnabled(true);

@@ -1,6 +1,8 @@
 package dev.dusk.client.gui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.DuskClient;
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.hud.HudElement;
 import dev.dusk.client.hud.HudRenderer;
@@ -8,7 +10,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 
@@ -18,7 +19,7 @@ import java.util.List;
  * scaled with the wheel, or right-clicked for its settings.
  */
 public class HudEditorScreen extends MenuScreen {
-    private static final int NUDGE_MODS = GLFW.GLFW_MOD_SHIFT;
+    private static final int NUDGE_MODS = Input.MOD_SHIFT;
 
     private HudElement hovered;
     private HudElement selected;
@@ -145,10 +146,10 @@ public class HudEditorScreen extends MenuScreen {
         int step = (modifiers & NUDGE_MODS) != 0 ? 10 : 1;
         int nx = selected.x(), ny = selected.y();
         switch (key) {
-            case GLFW.GLFW_KEY_LEFT -> nx -= step;
-            case GLFW.GLFW_KEY_RIGHT -> nx += step;
-            case GLFW.GLFW_KEY_UP -> ny -= step;
-            case GLFW.GLFW_KEY_DOWN -> ny += step;
+            case InputConstants.KEY_LEFT -> nx -= step;
+            case InputConstants.KEY_RIGHT -> nx += step;
+            case InputConstants.KEY_UP -> ny -= step;
+            case InputConstants.KEY_DOWN -> ny += step;
             default -> { return false; }
         }
         selected.setPosition(nx, ny);

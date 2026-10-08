@@ -1,0 +1,5 @@
+# 26.3 split the first-person hands: the renderer (ItemInHandMixin) and the ticking part
+FirstPersonHandsTickMixin
+# Dropping the held item moved from the player to the game mode
+-slotlock.SlotLockDropMixin
+slotlock.SlotLockGameModeMixin

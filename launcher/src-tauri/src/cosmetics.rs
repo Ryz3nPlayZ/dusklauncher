@@ -27,8 +27,8 @@ use tauri::{AppHandle, Manager, State};
 /// render states, HUD layers, screen ownership), so the mod is compiled per
 /// target (`client-mod/build.gradle -Pmc=…`) and the launcher picks the one
 /// matching the profile. Together they cover every release from 1.21
-/// through 26.2. Keep in step with `client-mod/gradle.properties`.
-pub const CLIENT_MOD_JARS: [&str; 9] = [
+/// through 26.3. Keep in step with `client-mod/gradle.properties`.
+pub const CLIENT_MOD_JARS: [&str; 10] = [
     "duskclient-1.21.1.jar",  // 1.21, 1.21.1
     "duskclient-1.21.3.jar",  // 1.21.2, 1.21.3
     "duskclient-1.21.4.jar",  // 1.21.4
@@ -38,9 +38,10 @@ pub const CLIENT_MOD_JARS: [&str; 9] = [
     "duskclient-1.21.11.jar", // 1.21.11
     "duskclient-26.1.jar",    // 26.1.x
     "duskclient-26.2.jar",    // 26.2.x
+    "duskclient-26.3.jar",    // 26.3.x
 ];
 /// Human-readable list of the game versions those jars cover.
-pub const CLIENT_MOD_GAME_VERSIONS: &str = "1.21 through 26.2";
+pub const CLIENT_MOD_GAME_VERSIONS: &str = "1.21 through 26.3";
 
 /// The bundled jar to inject into a `game_version`, or `None` when this
 /// build has nothing compiled for it.
@@ -62,6 +63,7 @@ pub fn client_mod_jar_for(game_version: &str) -> Option<&'static str> {
         }),
         (Some("26"), Some("1")) => Some(CLIENT_MOD_JARS[7]),
         (Some("26"), Some("2")) => Some(CLIENT_MOD_JARS[8]),
+        (Some("26"), Some("3")) => Some(CLIENT_MOD_JARS[9]),
         _ => None,
     }
 }
@@ -112,9 +114,7 @@ pub fn refresh_client_mod_copy(app: &AppHandle, data_dir: &Path, mods_dir: &Path
             continue;
         };
         let Some(src) = bundled_client_mod_jar(app, data_dir, want) else { continue };
-        let same = jar == want
-            && std::fs::metadata(&src).ok().map(|m| m.len()) == std::fs::metadata(&path).ok().map(|m| m.len())
-            && std::fs::read(&src).ok() == std::fs::read(&path).ok();
+        let same = jar == want && same_contents(&src, &path);
         if same {
             continue;
         }
@@ -124,6 +124,28 @@ pub fn refresh_client_mod_copy(app: &AppHandle, data_dir: &Path, mods_dir: &Path
         }
     }
 }
+
+/// Whether two files hold the same bytes, read a block at a time so a
+/// mismatch stops early and neither jar is held whole in memory.
+fn same_contents(a: &Path, b: &Path) -> bool {
+    use std::io::Read;
+    let (Ok(fa), Ok(fb)) = (std::fs::File::open(a), std::fs::File::open(b)) else { return false };
+    if fa.metadata().ok().map(|m| m.len()) != fb.metadata().ok().map(|m| m.len()) {
+        return false;
+    }
+    let (mut ra, mut rb) = (std::io::BufReader::new(fa), std::io::BufReader::new(fb));
+    let (mut ba, mut bb) = (vec![0u8; 64 * 1024], vec![0u8; 64 * 1024]);
+    loop {
+        let Ok(n) = ra.read(&mut ba) else { return false };
+        if n == 0 {
+            return true;
+        }
+        if rb.read_exact(&mut bb[..n]).is_err() || ba[..n] != bb[..n] {
+            return false;
+        }
+    }
+}
+
 const REGISTRY_PATH: &str = "assets/duskclient/cosmetics/registry.json";
 const COSMETICS_PREFIX: &str = "assets/duskclient/cosmetics/";
 
@@ -457,9 +479,30 @@ mod tests {
         assert_eq!(client_mod_jar_for("26.2.1"), Some("duskclient-26.2.jar"));
         assert_eq!(client_mod_jar_for("26.1"), Some("duskclient-26.1.jar"));
         assert_eq!(client_mod_jar_for("26.1.2"), Some("duskclient-26.1.jar"));
-        assert_eq!(client_mod_jar_for("26.3"), None);
+        assert_eq!(client_mod_jar_for("26.3"), Some("duskclient-26.3.jar"));
+        assert_eq!(client_mod_jar_for("26.3.1"), Some("duskclient-26.3.jar"));
+        assert_eq!(client_mod_jar_for("26.4"), None);
         assert_eq!(client_mod_jar_for("1.20.1"), None);
         assert_eq!(client_mod_jar_for("1.8.9"), None);
+    }
+
+    #[test]
+    fn same_contents_compares_bytes() {
+        let dir = std::env::temp_dir().join(format!("dusk-same-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let big: Vec<u8> = (0..200_000u32).map(|i| (i % 251) as u8).collect();
+        let mut other = big.clone();
+        other[150_000] ^= 1;
+        let (a, b, c, d) = (dir.join("a"), dir.join("b"), dir.join("c"), dir.join("d"));
+        std::fs::write(&a, &big).unwrap();
+        std::fs::write(&b, &big).unwrap();
+        std::fs::write(&c, &other).unwrap();
+        std::fs::write(&d, &big[..1000]).unwrap();
+        assert!(same_contents(&a, &b));
+        assert!(!same_contents(&a, &c));
+        assert!(!same_contents(&a, &d));
+        assert!(!same_contents(&a, &dir.join("missing")));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

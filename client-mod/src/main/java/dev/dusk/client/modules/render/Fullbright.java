@@ -1,5 +1,6 @@
 package dev.dusk.client.modules.render;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.BoolSetting;
@@ -7,7 +8,6 @@ import dev.dusk.client.module.setting.IntSetting;
 import dev.dusk.client.module.setting.KeySetting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * Gamma Utils' gamma controls (behaviour only; that mod is LGPL — see
@@ -23,9 +23,9 @@ public class Fullbright extends Module {
 
     private static Fullbright instance;
 
-    private final KeySetting toggleKey = add(new KeySetting("fullbright", "Toggle key", GLFW.GLFW_KEY_G));
-    private final KeySetting upKey = add(new KeySetting("gamma_up", "Increase key", GLFW.GLFW_KEY_UP));
-    private final KeySetting downKey = add(new KeySetting("gamma_down", "Decrease key", GLFW.GLFW_KEY_DOWN));
+    private final KeySetting toggleKey = add(new KeySetting("fullbright", "Toggle key", InputConstants.KEY_G));
+    private final KeySetting upKey = add(new KeySetting("gamma_up", "Increase key", InputConstants.KEY_UP));
+    private final KeySetting downKey = add(new KeySetting("gamma_down", "Decrease key", InputConstants.KEY_DOWN));
     private final IntSetting brightness = add(new IntSetting("brightness", "Toggled gamma", 1500, MIN, MAX, 10, "%"));
     private final IntSetting step = add(new IntSetting("step", "Gamma step", 10, 10, 500, 10, "%"));
     private final BoolSetting updateToggle = add(new BoolSetting("updateToggle", "Remember adjusted gamma", false));

@@ -3,8 +3,8 @@ package dev.dusk.client.render.shield;
 import dev.dusk.client.compat.Compat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.AxeItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
@@ -191,6 +191,6 @@ public final class ShieldStateTracker {
     }
 
     private static boolean disablesShield(Player player) {
-        return player.getWeaponItem().getItem() instanceof AxeItem;
+        return player.getWeaponItem().is(ItemTags.AXES);
     }
 }

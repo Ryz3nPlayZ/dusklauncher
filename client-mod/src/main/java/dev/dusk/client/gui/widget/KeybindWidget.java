@@ -1,11 +1,11 @@
 package dev.dusk.client.gui.widget;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.Px;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
@@ -29,18 +29,18 @@ public class KeybindWidget extends SettingRow {
         this.bind = key -> {
             KeyMapping k = mapping.get();
             if (k == null) return;
-            k.setKey(InputConstants.Type.KEYSYM.getOrCreate(key));
+            k.setKey(Input.KEYBOARD.getOrCreate(key));
             KeyMapping.resetMapping();
             Minecraft.getInstance().options.save();
         };
     }
 
-    /** A plain key code; {@code bind} gets GLFW_KEY_UNKNOWN when cleared. */
+    /** A plain key code; {@code bind} gets {@link Input#UNKNOWN} when cleared. */
     public KeybindWidget(String label, Supplier<String> keyName, IntConsumer bind) {
         super(label);
         this.keyName = keyName;
-        this.bind = key -> bind.accept(key == GLFW.GLFW_KEY_BACKSPACE || key == GLFW.GLFW_KEY_DELETE
-                ? GLFW.GLFW_KEY_UNKNOWN : key);
+        this.bind = key -> bind.accept(key == InputConstants.KEY_BACKSPACE || key == InputConstants.KEY_DELETE
+                ? Input.UNKNOWN : key);
     }
 
     @Override
@@ -69,7 +69,7 @@ public class KeybindWidget extends SettingRow {
     @Override
     public boolean keyPressed(int key, int modifiers) {
         if (!focused) return false;
-        if (key != GLFW.GLFW_KEY_ESCAPE) bind.accept(key);
+        if (key != InputConstants.KEY_ESCAPE) bind.accept(key);
         setFocused(false);
         return true;
     }

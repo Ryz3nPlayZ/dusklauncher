@@ -145,11 +145,6 @@ public final class NavBar {
         c.text(label, x + (w - c.textWidth(label)) / 2, y + (CELL_H - 7) / 2, Theme.DIM, false);
     }
 
-    /** Whether a GLFW key types a character (so a search box should get it before any keybind). */
-    public static boolean printable(int key) {
-        return key >= 32 && key <= 96 || key == 161 || key == 162 || key >= 320 && key <= 336;
-    }
-
     /**
      * The window under the bar (nav.css .win/.win__body): a black outline and
      * the body at 90%. Draw it before anything that sits in the body.

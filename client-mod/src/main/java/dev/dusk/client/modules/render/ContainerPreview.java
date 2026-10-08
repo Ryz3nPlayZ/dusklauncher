@@ -1,5 +1,6 @@
 package dev.dusk.client.modules.render;
 
+import dev.dusk.client.compat.Input;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.TooltipImage;
 import dev.dusk.client.module.Module;
@@ -16,7 +17,6 @@ import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 
@@ -73,9 +73,7 @@ public class ContainerPreview extends Module {
 
     private boolean shouldShow() {
         if (show.is(ALWAYS)) return true;
-        long window = GLFW.glfwGetCurrentContext();
-        return window != 0L && (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS
-                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS);
+        return Input.shiftDown();
     }
 
     /** The slots, row by row, as far as the last filled one. */
