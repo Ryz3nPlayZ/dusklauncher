@@ -554,7 +554,7 @@ function SettingsTab({
     setNote(null);
     try {
       const r = await api.exportInstance(profile.id);
-      setNote(r ? `Exported ${r} to the .mrpack.` : null);
+      setNote(r ? `Exported the .mrpack: ${r}.` : null);
     } catch (e) {
       setNote(String(e));
     } finally {

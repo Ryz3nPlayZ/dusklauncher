@@ -808,9 +808,11 @@ const EXPORT_DIRS: &[&str] = &["mods", "config", "resourcepacks", "shaderpacks",
 const EXPORT_FILES: &[&str] = &["options.txt", "servers.dat"];
 
 /// Export an instance as a `.mrpack` (native save dialog): the version and
-/// loader pinned in `modrinth.index.json`, the folder contents as
-/// overrides — so it opens in Prism, the Modrinth app, or back here.
-/// Resolves to the written path, or `None` when the dialog is cancelled.
+/// loader pinned in `modrinth.index.json`, the mods and packs Modrinth hosts
+/// linked by hash (so the pack is small and installers fetch them), and the
+/// rest — configs, options, files from elsewhere — as overrides. It opens in
+/// Prism, the Modrinth app, or back here. Resolves to a summary of what went
+/// in, or `None` when the dialog is cancelled.
 #[tauri::command]
 pub async fn export_instance(
     app: AppHandle,
@@ -850,70 +852,158 @@ pub async fn export_instance(
     if let (Some(key), Some(v)) = (loader_key, &profile.loader_version) {
         dependencies.insert(key.to_string(), v.clone());
     }
+
+    let root = profile.dirs(&state.data_dir).root;
+    // what goes in, and the sha1 of each file Modrinth might host
+    let (files, hashed) = tokio::task::spawn_blocking(move || {
+        let files = export_files(&root);
+        let hashed: Vec<(String, String)> = files
+            .iter()
+            .filter(|(rel, _)| linkable(rel))
+            .filter_map(|(rel, path)| {
+                let bytes = std::fs::read(path).ok()?;
+                Some((rel.clone(), fasterlauncher_core::download::sha1_hex(&bytes)))
+            })
+            .collect();
+        (files, hashed)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    let hashes: Vec<String> = hashed.iter().map(|(_, h)| h.clone()).collect();
+    // offline, or Modrinth down: everything is embedded, which still works
+    let found = match mr::version_files(&state.client, &hashes).await {
+        Ok(found) => found,
+        Err(e) => {
+            tracing::warn!(error = %e, "couldn't look the export's files up on Modrinth; embedding them");
+            Default::default()
+        }
+    };
+    let (linked, embedded) = split_export(files, &hashed, &found);
+
     let index = mr::MrpackIndex {
         format_version: 1,
         game: "minecraft".into(),
         version_id: "1.0.0".into(),
         name: profile.name.clone(),
-        files: Vec::new(),
+        files: linked,
         dependencies,
     };
     let index_json = serde_json::to_string_pretty(&index).map_err(|e| e.to_string())?;
-
-    let dirs = profile.dirs(&state.data_dir);
-    let root = dirs.root.clone();
-    let written = tokio::task::spawn_blocking(move || -> Result<usize, String> {
-        let file = std::fs::File::create(&out_path).map_err(|e| e.to_string())?;
-        let mut zip = zip::ZipWriter::new(file);
-        let opts = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
-        zip.start_file("modrinth.index.json", opts).map_err(|e| e.to_string())?;
-        zip.write_all(index_json.as_bytes()).map_err(|e| e.to_string())?;
-        let mut count = 0;
-        for dir in EXPORT_DIRS {
-            count += zip_tree(&mut zip, &root, &root.join(dir), opts)?;
+    let n_linked = index.files.len();
+    let n_embedded = embedded.len();
+    tokio::task::spawn_blocking(move || {
+        let written = write_mrpack(&out_path, &index_json, &embedded);
+        if written.is_err() {
+            // half a zip is no pack
+            let _ = std::fs::remove_file(&out_path);
         }
-        for name in EXPORT_FILES {
-            let p = root.join(name);
-            if p.is_file() {
-                zip.start_file(format!("overrides/{name}"), opts).map_err(|e| e.to_string())?;
-                zip.write_all(&std::fs::read(&p).map_err(|e| e.to_string())?)
-                    .map_err(|e| e.to_string())?;
-                count += 1;
-            }
-        }
-        zip.finish().map_err(|e| e.to_string())?;
-        Ok(count)
+        written
     })
     .await
     .map_err(|e| e.to_string())??;
-    tracing::info!(pack = %profile.name, files = written, "instance exported");
-    Ok(Some(format!("{written} files")))
+    tracing::info!(pack = %profile.name, linked = n_linked, embedded = n_embedded, "instance exported");
+    Ok(Some(format!("{n_linked} linked from Modrinth, {n_embedded} included")))
 }
 
-/// Recursively add `dir` to the zip under `overrides/<path relative to root>`.
-fn zip_tree(
-    zip: &mut zip::ZipWriter<std::fs::File>,
-    root: &Path,
-    dir: &Path,
-    opts: zip::write::SimpleFileOptions,
-) -> Result<usize, String> {
-    let Ok(rd) = std::fs::read_dir(dir) else { return Ok(0) };
-    let mut count = 0;
-    for entry in rd.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            count += zip_tree(zip, root, &path, opts)?;
-            continue;
+/// Never worth shipping: the OS's folder litter.
+const EXPORT_JUNK: &[&str] = &[".DS_Store", "Thumbs.db", "desktop.ini"];
+
+/// Every file an export takes, as (path in the pack, path on disk): the
+/// content and config folders and a few files at the root. DuskClient's own
+/// jar stays out — the launcher adds it at launch, and it isn't ours to
+/// hand out inside someone's pack.
+fn export_files(root: &Path) -> Vec<(String, PathBuf)> {
+    fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for entry in rd.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if EXPORT_JUNK.contains(&name.as_str()) {
+                continue;
+            }
+            if path.is_dir() {
+                walk(root, &path, out);
+                continue;
+            }
+            let Ok(rel) = path.strip_prefix(root) else { continue };
+            let rel = rel.to_string_lossy().replace('\\', "/");
+            if rel.strip_prefix("mods/").is_some_and(|f| crate::cosmetics::CLIENT_MOD_JARS.contains(&f)) {
+                continue;
+            }
+            out.push((rel, path));
         }
-        let rel = path.strip_prefix(root).map_err(|e| e.to_string())?;
-        let name = format!("overrides/{}", rel.to_string_lossy().replace('\\', "/"));
-        zip.start_file(name, opts).map_err(|e| e.to_string())?;
-        zip.write_all(&std::fs::read(&path).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
-        count += 1;
     }
-    Ok(count)
+    let mut out = Vec::new();
+    for dir in EXPORT_DIRS {
+        walk(root, &root.join(dir), &mut out);
+    }
+    for name in EXPORT_FILES {
+        let p = root.join(name);
+        if p.is_file() {
+            out.push((name.to_string(), p));
+        }
+    }
+    out.sort();
+    out
+}
+
+/// Whether Modrinth could host this file: a mod or pack right in its folder,
+/// turned on (a pack's file list has no "off").
+fn linkable(rel: &str) -> bool {
+    ["mods/", "resourcepacks/", "shaderpacks/"].iter().any(|dir| {
+        rel.strip_prefix(dir).is_some_and(|f| !f.contains('/') && !f.ends_with(".disabled"))
+    })
+}
+
+/// Split the export into the files linked by hash (`found`: Modrinth's
+/// version per sha1) and those embedded as overrides.
+fn split_export(
+    files: Vec<(String, PathBuf)>,
+    hashed: &[(String, String)],
+    found: &std::collections::HashMap<String, mr::Version>,
+) -> (Vec<mr::MrpackFile>, Vec<(String, PathBuf)>) {
+    let sha1_of: std::collections::HashMap<&str, &str> =
+        hashed.iter().map(|(rel, h)| (rel.as_str(), h.as_str())).collect();
+    let mut linked = Vec::new();
+    let mut embedded = Vec::new();
+    for (rel, path) in files {
+        let hosted = sha1_of.get(rel.as_str()).and_then(|sha1| {
+            let v = found.get(*sha1)?;
+            let f = v.files.iter().find(|f| f.hashes.get("sha1").map(String::as_str) == Some(*sha1))?;
+            // the format wants both hashes
+            let sha512 = f.hashes.get("sha512")?;
+            Some(mr::MrpackFile {
+                path: rel.clone(),
+                hashes: [("sha1".to_string(), sha1.to_string()), ("sha512".to_string(), sha512.clone())].into(),
+                env: None,
+                downloads: vec![f.url.clone()],
+                file_size: f.size,
+            })
+        });
+        match hosted {
+            Some(f) => linked.push(f),
+            None => embedded.push((rel, path)),
+        }
+    }
+    (linked, embedded)
+}
+
+/// Write the pack: the index, then each embedded file under `overrides/`,
+/// streamed rather than read whole.
+fn write_mrpack(out: &Path, index_json: &str, embedded: &[(String, PathBuf)]) -> Result<(), String> {
+    let file = std::fs::File::create(out).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(std::io::BufWriter::new(file));
+    let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    zip.start_file("modrinth.index.json", opts).map_err(|e| e.to_string())?;
+    zip.write_all(index_json.as_bytes()).map_err(|e| e.to_string())?;
+    for (rel, path) in embedded {
+        let mut src = std::fs::File::open(path).map_err(|e| format!("{rel}: {e}"))?;
+        let big = src.metadata().map(|m| m.len() >= u32::MAX as u64).unwrap_or(false);
+        zip.start_file(format!("overrides/{rel}"), opts.large_file(big)).map_err(|e| e.to_string())?;
+        std::io::copy(&mut src, &mut zip).map_err(|e| format!("{rel}: {e}"))?;
+    }
+    zip.finish().map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 fn now_millis() -> u64 {
@@ -926,6 +1016,79 @@ fn now_millis() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_export_links_what_modrinth_hosts_and_embeds_the_rest() {
+        let root = std::env::temp_dir().join(format!("dusk-export-{}", now_millis()));
+        let write = |rel: &str, body: &[u8]| {
+            let f = root.join(rel);
+            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+            std::fs::write(f, body).unwrap();
+        };
+        write("mods/sodium.jar", b"sodium");
+        write("mods/homemade.jar", b"mine");
+        write("mods/off.jar.disabled", b"sodium");
+        write("mods/duskclient-1.21.1.jar", b"ours");
+        write("mods/.DS_Store", b"x");
+        write("resourcepacks/Stay True.zip", b"pack");
+        write("config/sodium-options.json", b"{}");
+        write("options.txt", b"fov:1");
+        write("saves/World/level.dat", b"x");
+
+        let files = export_files(&root);
+        let rels: Vec<&str> = files.iter().map(|(r, _)| r.as_str()).collect();
+        assert_eq!(
+            rels,
+            [
+                "config/sodium-options.json",
+                "mods/homemade.jar",
+                "mods/off.jar.disabled",
+                "mods/sodium.jar",
+                "options.txt",
+                "resourcepacks/Stay True.zip",
+            ]
+        );
+        let hashed: Vec<(String, String)> = files
+            .iter()
+            .filter(|(rel, _)| linkable(rel))
+            .map(|(rel, p)| (rel.clone(), fasterlauncher_core::download::sha1_hex(&std::fs::read(p).unwrap())))
+            .collect();
+        assert_eq!(hashed.len(), 3);
+        let sodium = fasterlauncher_core::download::sha1_hex(b"sodium");
+        let pack = fasterlauncher_core::download::sha1_hex(b"pack");
+        let version = |sha1: &str, sha512: Option<&str>| -> mr::Version {
+            let mut hashes = serde_json::json!({ "sha1": sha1 });
+            if let Some(h) = sha512 {
+                hashes["sha512"] = h.into();
+            }
+            serde_json::from_value(serde_json::json!({
+                "id": "v", "name": "v",
+                "files": [{ "url": format!("https://cdn.modrinth.com/{sha1}"), "filename": "f", "size": 6, "hashes": hashes }],
+            }))
+            .unwrap()
+        };
+        // the pack's listing has no sha512, so it can't be linked
+        let found = [(sodium.clone(), version(&sodium, Some("s512"))), (pack.clone(), version(&pack, None))].into();
+        let (linked, embedded) = split_export(files, &hashed, &found);
+        assert_eq!(linked.len(), 1);
+        assert_eq!(linked[0].path, "mods/sodium.jar");
+        assert_eq!(linked[0].hashes["sha512"], "s512");
+        assert_eq!(linked[0].downloads, [format!("https://cdn.modrinth.com/{sodium}")]);
+        let embedded_rels: Vec<&str> = embedded.iter().map(|(r, _)| r.as_str()).collect();
+        assert_eq!(
+            embedded_rels,
+            ["config/sodium-options.json", "mods/homemade.jar", "mods/off.jar.disabled", "options.txt", "resourcepacks/Stay True.zip"]
+        );
+
+        let out = root.join("out.mrpack");
+        write_mrpack(&out, "{}", &embedded).unwrap();
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(&out).unwrap()).unwrap();
+        assert_eq!(zip.len(), 6);
+        let mut body = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("overrides/options.txt").unwrap(), &mut body).unwrap();
+        assert_eq!(body, "fov:1");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn a_version_change_swaps_the_packs_files_and_leaves_the_players() {
