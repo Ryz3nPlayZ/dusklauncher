@@ -106,7 +106,9 @@ pub async fn install_fabric(
 
 /// `inheritsFrom` merge: fabric fields override, vanilla supplies everything
 /// fabric doesn't ship (java runtime, client jar, assets). Libraries are the
-/// union with fabric entries winning on a name collision.
+/// union; a loader library replaces vanilla's copy of the same artifact (same
+/// group, name and classifier, any version), so two versions of one library
+/// never share the classpath.
 pub fn merge_with_vanilla(
     mut profile: serde_json::Value,
     vanilla: &meta::VersionJson,
@@ -142,11 +144,25 @@ pub fn merge_with_vanilla(
     let mut seen = std::collections::HashSet::new();
     merged.libraries.retain(|l| seen.insert(l.name.clone()));
     for lib in fabric.libraries {
-        if !seen.contains(&lib.name) {
-            merged.libraries.push(lib);
+        let key = artifact_key(&lib.name);
+        match merged.libraries.iter().position(|l| artifact_key(&l.name) == key) {
+            Some(at) => {
+                merged.libraries.retain(|l| artifact_key(&l.name) != key);
+                merged.libraries.insert(at.min(merged.libraries.len()), lib);
+            }
+            None => merged.libraries.push(lib),
         }
     }
     merged
+}
+
+/// A maven coordinate without its version: `group:name[:classifier]`.
+fn artifact_key(name: &str) -> String {
+    let mut parts: Vec<&str> = name.split(':').collect();
+    if parts.len() >= 3 {
+        parts.remove(2);
+    }
+    parts.join(":")
 }
 
 /// Resolve the stable "latest stable" loader version from Fabric meta
@@ -201,7 +217,7 @@ mod tests {
             "mainClass": "net.minecraft.client.main.Main",
             "javaVersion": {"component": "java-runtime-epsilon", "majorVersion": 25},
             "arguments": {"jvm": ["-cp", "${classpath}"], "game": ["--username", "${auth_player_name}"]},
-            "libraries": [{"name": "com.mojang:logging"}],
+            "libraries": [{"name": "com.mojang:logging"}, {"name": "org.ow2.asm:asm:9.6"}],
             "assetIndex": {"id": "262", "url": "https://example.test/262.json", "sha1": "aa", "totalSize": 1},
             "assets": "262",
             "downloads": {"client": {"url": "https://example.test/client.jar", "sha1": "bb", "size": 2}}
@@ -252,6 +268,8 @@ mod tests {
         let names: Vec<&str> = merged.libraries.iter().map(|l| l.name.as_str()).collect();
         assert!(names.contains(&"com.mojang:logging"));
         assert!(names.contains(&"net.fabricmc:fabric-loader:0.19.3"));
+        // the loader's asm replaces vanilla's older one rather than joining it
+        assert!(names.contains(&"org.ow2.asm:asm:9.10.1") && !names.contains(&"org.ow2.asm:asm:9.6"));
         assert_eq!(names.len(), 3);
         // every merged library resolves to a real jar (download + classpath)
         let fabric_loader = merged
