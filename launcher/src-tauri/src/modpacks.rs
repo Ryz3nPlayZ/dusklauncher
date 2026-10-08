@@ -394,7 +394,7 @@ pub async fn import_mrpack(
         .blocking_pick_file();
     let Some(file) = picked else { return Ok(None) };
     let path = file.into_path().map_err(|e| e.to_string())?;
-    let bytes = std::fs::read(&path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
+    let bytes = tokio::fs::read(&path).await.map_err(|e| format!("could not read {}: {e}", path.display()))?;
     install_mrpack_bytes(app, state, &bytes, &[], None, false).await.map(Some)
 }
 
@@ -426,7 +426,7 @@ pub async fn install_bundled_pack(
 ) -> Result<ProfileDto, String> {
     let path = bundled_pack_path(&app, &state.data_dir, &pack)
         .ok_or_else(|| format!("bundled pack \"{pack}\" is not packaged in this build"))?;
-    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let bytes = tokio::fs::read(&path).await.map_err(|e| e.to_string())?;
     install_mrpack_bytes(app, state, &bytes, &[], None, pack == "dusk-essentials").await
 }
 

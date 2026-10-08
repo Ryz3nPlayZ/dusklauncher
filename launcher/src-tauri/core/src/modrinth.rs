@@ -506,10 +506,20 @@ pub async fn download_mrpack(client: &reqwest::Client, ver: &Version) -> Result<
 /// Parse `modrinth.index.json` out of an .mrpack (zip) in memory.
 pub fn parse_mrpack_index(bytes: &[u8]) -> Result<MrpackIndex> {
     let reader = std::io::Cursor::new(bytes);
-    let mut zip = zip::ZipArchive::new(reader).map_err(|e| crate::Error::Other(e.to_string()))?;
-    let mut entry = zip
-        .by_name("modrinth.index.json")
-        .map_err(|e| crate::Error::Other(format!("no modrinth.index.json: {e}")))?;
+    let mut zip = zip::ZipArchive::new(reader)
+        .map_err(|_| crate::Error::Other("That file isn't a modpack: it isn't a zip.".into()))?;
+    if zip.index_for_name("modrinth.index.json").is_none() {
+        // a CurseForge pack names its mods by CurseForge id only, which needs
+        // CurseForge's API key to download
+        let why = if zip.index_for_name("manifest.json").is_some() {
+            "That's a CurseForge pack; Dusk installs Modrinth packs (.mrpack). Install it in the CurseForge app, \
+             then bring it over with FROM ANOTHER LAUNCHER, or look for the pack on Modrinth."
+        } else {
+            "That zip isn't a Modrinth modpack: it has no modrinth.index.json."
+        };
+        return Err(crate::Error::Other(why.into()));
+    }
+    let mut entry = zip.by_name("modrinth.index.json").map_err(|e| crate::Error::Other(e.to_string()))?;
     let mut text = String::new();
     std::io::Read::read_to_string(&mut entry, &mut text)?;
     Ok(serde_json::from_str(&text)?)
@@ -597,6 +607,22 @@ pub async fn download_files(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_curseforge_pack_is_named_as_one() {
+        use std::io::Write;
+        let zip_of = |name: &str| {
+            let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+            w.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+            w.write_all(b"{}").unwrap();
+            w.finish().unwrap().into_inner()
+        };
+        let err = parse_mrpack_index(&zip_of("manifest.json")).unwrap_err().to_string();
+        assert!(err.contains("CurseForge pack"), "{err}");
+        let err = parse_mrpack_index(&zip_of("readme.txt")).unwrap_err().to_string();
+        assert!(err.contains("no modrinth.index.json"), "{err}");
+        assert!(parse_mrpack_index(b"not a zip").unwrap_err().to_string().contains("isn't a zip"));
+    }
 
     /// The real api.modrinth.com search payload (captured) must parse into
     /// our structs. If Modrinth changes shape, this fails instead of users.
