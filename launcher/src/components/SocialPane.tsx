@@ -983,7 +983,10 @@ function ChatView({
     seenCount.current = 0;
     setMissed(0);
     setMessages(null);
+    // nothing while the window is hidden (in game, minimised): no one is
+    // reading, and a poll would mark what arrives as seen
     const poll = async () => {
+      if (document.hidden && afterId.current !== 0) return;
       try {
         const batch = await api.getMessages(uuid, afterId.current);
         if (!live) return;
@@ -999,9 +1002,12 @@ function ChatView({
     };
     void poll();
     const id = setInterval(() => void poll(), CHAT_POLL_MS);
+    const shown = () => !document.hidden && void poll();
+    document.addEventListener('visibilitychange', shown);
     return () => {
       live = false;
       clearInterval(id);
+      document.removeEventListener('visibilitychange', shown);
     };
   }, [uuid, merge]);
 
