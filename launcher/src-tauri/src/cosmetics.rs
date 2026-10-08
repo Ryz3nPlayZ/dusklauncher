@@ -66,6 +66,26 @@ pub fn client_mod_jar_for(game_version: &str) -> Option<&'static str> {
     }
 }
 
+/// The oldest Fabric Loader DuskClient runs on. Keep in step with
+/// `fabricloader` in `client-mod/src/main/resources/fabric.mod.json`.
+const CLIENT_MOD_MIN_LOADER: [u32; 3] = [0, 17, 0];
+
+/// Whether the instance's Fabric Loader can run DuskClient. A pack or an
+/// imported instance may pin an older one; adding DuskClient there would stop
+/// the game at mod resolution, so it's left out instead. No pin (the newest
+/// stable) or one that doesn't read as a version is taken as fine.
+pub fn loader_runs_client(loader_version: Option<&str>) -> bool {
+    let Some(v) = loader_version else { return true };
+    let mut have = [0u32; 3];
+    for (slot, part) in have.iter_mut().zip(v.split(['.', '+', '-']).take(3)) {
+        match part.parse() {
+            Ok(n) => *slot = n,
+            Err(_) => return true,
+        }
+    }
+    have >= CLIENT_MOD_MIN_LOADER
+}
+
 /// Whether a `mods/` folder already carries one of our jars (a copy from
 /// "install bundled client mod" wins over the forced one), switched on or
 /// off: a copy the player disabled means they don't want DuskClient there.
@@ -408,6 +428,15 @@ pub async fn get_inventory(state: State<'_, AppState>) -> Result<Inventory, Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn duskclient_stays_out_of_loaders_too_old_for_it() {
+        assert!(loader_runs_client(None));
+        assert!(loader_runs_client(Some("0.17.0")) && loader_runs_client(Some("0.18.1")) && loader_runs_client(Some("1.0.0")));
+        assert!(!loader_runs_client(Some("0.16.14")) && !loader_runs_client(Some("0.15.11")));
+        assert!(loader_runs_client(Some("0.17.2+build.7")));
+        assert!(loader_runs_client(Some("weird")));
+    }
 
     #[test]
     fn jar_follows_the_game_line() {

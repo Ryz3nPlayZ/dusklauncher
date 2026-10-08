@@ -756,12 +756,20 @@ pub async fn install_and_launch(
     }
     // Only when DuskClient goes in: an instance that doesn't get it keeps
     // exactly the mods its owner chose.
+    let loader_ok = crate::cosmetics::loader_runs_client(profile.loader_version.as_deref());
     let injects_client = profile.loader == Loader::Fabric
+        && loader_ok
         && !crate::cosmetics::client_mod_in_mods(&dirs.mods)
         && crate::cosmetics::client_mod_jar_for(&profile.game_version).is_some();
     let fabric_api_ok = !(injects_client || host) || crate::mods::ensure_fabric_api(&app, &profile, &dirs.mods).await;
     // the relay, unless the instance carries its own copy
     let relay = if host {
+        if !loader_ok {
+            return Err(format!(
+                "Hosting runs through DuskClient, which needs Fabric Loader 0.17 or newer; this instance pins {}.",
+                profile.loader_version.as_deref().unwrap_or("an older one")
+            ));
+        }
         if !fabric_api_ok {
             return Err("Hosting needs Fabric API, and it couldn't be downloaded. Check your connection.".into());
         }
@@ -797,6 +805,10 @@ pub async fn install_and_launch(
                     "bundled client mod targets {}; skipping it for {}",
                     crate::cosmetics::CLIENT_MOD_GAME_VERSIONS,
                     p.game_version
+                ),
+                Some(_) if !loader_ok => tracing::warn!(
+                    "Fabric Loader {} is older than DuskClient needs; launching without it",
+                    p.loader_version.as_deref().unwrap_or("?")
                 ),
                 Some(name) => match crate::cosmetics::bundled_client_mod_jar(&app, &state.data_dir, name) {
                     Some(_) if !in_mods && !fabric_api_ok => {
