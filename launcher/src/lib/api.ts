@@ -626,6 +626,21 @@ export interface ServerStatus {
   icon: string | null;
 }
 
+/** an instance another launcher on this machine keeps (FROM ANOTHER LAUNCHER) */
+export interface ExternalInstance {
+  source: string;
+  name: string;
+  gameVersion: string | null;
+  loader: string;
+  loaderVersion: string | null;
+  /** its game folder — what gets copied, and the key to import it by */
+  path: string;
+  mods: number;
+  worlds: number;
+  /** why it can't come in, when it can't */
+  blocked: string | null;
+}
+
 /** where a launch goes once the game is up: a server, a world, a recording */
 export interface LaunchTarget {
   server?: string;
@@ -1554,6 +1569,42 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     return structuredClone(p) as T;
   }
   if (cmd === 'repair_profile') return undefined as T;
+  if (cmd === 'scan_external_instances')
+    return [
+      {
+        source: 'Prism Launcher',
+        name: 'Fabulously Optimized',
+        gameVersion: '1.21.11',
+        loader: 'fabric',
+        loaderVersion: '0.16.10',
+        path: '/mock/prism/fo/.minecraft',
+        mods: 74,
+        worlds: 3,
+        blocked: null,
+      },
+      {
+        source: 'CurseForge',
+        name: 'All the Mods 10',
+        gameVersion: '1.21.1',
+        loader: 'forge',
+        loaderVersion: '52.0.1',
+        path: '/mock/curseforge/atm10',
+        mods: 412,
+        worlds: 1,
+        blocked: 'Dusk runs Fabric and NeoForge, not Forge',
+      },
+      {
+        source: 'Minecraft Launcher',
+        name: 'Minecraft',
+        gameVersion: '1.21.11',
+        loader: 'vanilla',
+        loaderVersion: null,
+        path: '/mock/.minecraft',
+        mods: 0,
+        worlds: 8,
+        blocked: null,
+      },
+    ] as T;
   if (cmd === 'duplicate_profile') {
     const list = fixtures.list_profiles as Profile[];
     const src = list.find((x) => x.id === args?.id);
@@ -1744,6 +1795,11 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
   }
   if (cmd === 'recording_thumb') return shot(480, 270, '#2a2346', 'recording') as T;
   if (cmd === 'get_public_skin') return null as T;
+  if (cmd === 'import_external_instance') {
+    const ext = (await invoke<ExternalInstance[]>('scan_external_instances')).find((e) => e.path === args?.path);
+    if (!ext || ext.blocked) throw new Error('That instance can’t be imported.');
+    return invoke<T>('create_profile', { name: ext.name, gameVersion: ext.gameVersion, loader: ext.loader });
+  }
   if (cmd === 'create_profile') {
     // the preview has no store to write — echo a plausible DTO so the flow
     // can be walked end to end in the browser
@@ -1836,6 +1892,10 @@ export const api = {
   installPerformanceMods: (profileId: string) => invoke<number>('install_performance_mods', { profileId }),
   /** native picker → installs a .mrpack as a new instance (null if cancelled) */
   importMrpack: () => invoke<Profile | null>('import_mrpack'),
+  /** instances Prism, CurseForge, the Modrinth App and Mojang's launcher have here */
+  scanExternalInstances: () => invoke<ExternalInstance[]>('scan_external_instances'),
+  /** copy one of those in as a new instance (mods, config, worlds, packs, options) */
+  importExternalInstance: (path: string) => invoke<Profile>('import_external_instance', { path }),
   /** save dialog → writes the instance as a .mrpack; resolves to a short
    *  summary ("12 files"), or null if cancelled */
   exportInstance: (profileId: string) =>

@@ -9,6 +9,7 @@ mod discord;
 mod dusk;
 mod friends;
 mod hosting;
+mod importer;
 mod deps;
 mod javas;
 mod logs;
@@ -59,6 +60,8 @@ pub fn run() {
             commands::delete_profile,
             commands::duplicate_profile,
             commands::repair_profile,
+            importer::scan_external_instances,
+            importer::import_external_instance,
             commands::list_worlds,
             commands::show_in_folder,
             crash::reveal_crash_report,

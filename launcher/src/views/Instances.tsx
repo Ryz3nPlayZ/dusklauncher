@@ -18,6 +18,7 @@ import {
   featuredVersions,
   isTauri,
   loaderLabel,
+  type ExternalInstance,
   type GameState,
   type LaunchTarget,
   type Profile,
@@ -362,7 +363,7 @@ function NewInstance({
   onBrowse: () => void;
   onCreated: (p: Profile) => void;
 }) {
-  const [step, setStep] = useState<'pick' | 'custom'>('pick');
+  const [step, setStep] = useState<'pick' | 'custom' | 'import'>('pick');
   const [versions, setVersions] = useState<Version[]>([]);
   const [art, setArt] = useState<ReleaseArt[]>([]);
   /* the DUSK PROFILE's version and name; the name follows the version until
@@ -413,19 +414,6 @@ function NewInstance({
   );
   const known = versions.some((v) => v.id === duskVer.trim());
   const finalName = (duskName ?? DUSK_PROFILE.instanceName(duskVer.trim())).trim();
-
-  const importFile = async () => {
-    setBusy(true);
-    setErr(null);
-    try {
-      const p = await api.importMrpack();
-      if (p) onCreated(p);
-    } catch (e) {
-      setErr(String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const createDusk = async () => {
     setBusy(true);
@@ -538,13 +526,11 @@ function NewInstance({
             <PxButton
               family="grey"
               height="md"
-              disabled={!isTauri || busy}
-              title={isTauri ? 'Import a .mrpack from disk' : 'Needs the desktop app'}
-              onClick={() => void importFile()}
+              disabled={busy}
+              title="An instance from Prism, MultiMC, CurseForge, the Modrinth App or Mojang's launcher, or a .mrpack file"
+              onClick={() => setStep('import')}
             >
-              <TT size={16} tone={isTauri ? 'plain' : 'dim'}>
-                {busy ? 'IMPORTING…' : 'IMPORT .MRPACK'}
-              </TT>
+              <TT size={16}>IMPORT</TT>
             </PxButton>
             <span className="modal__spacer" />
             <PxButton family="grey" height="md" onClick={onClose}>
@@ -554,6 +540,10 @@ function NewInstance({
         </PxBox>
       </div>
     );
+  }
+
+  if (step === 'import') {
+    return <ImportExternal onBack={() => setStep('pick')} onClose={onClose} onCreated={onCreated} />;
   }
 
   return (
@@ -687,6 +677,131 @@ function NewInstance({
             <TT size={20} tone="green">
               CREATE
             </TT>
+          </PxButton>
+        </div>
+      </PxBox>
+    </div>
+  );
+}
+
+/** NEW INSTANCE → IMPORT: a .mrpack from disk, or any instance the other
+ *  launchers on this machine keep, each copied in (mods, config, worlds, packs, options)
+ *  as a new Dusk instance on the same version and loader. The original is
+ *  left as it was. */
+function ImportExternal({
+  onBack,
+  onClose,
+  onCreated,
+}: {
+  onBack: () => void;
+  onClose: () => void;
+  onCreated: (p: Profile) => void;
+}) {
+  const [found, setFound] = useState<ExternalInstance[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    void api
+      .scanExternalInstances()
+      .then(setFound)
+      .catch((e) => {
+        setErr(String(e));
+        setFound([]);
+      });
+  }, []);
+
+  const importFile = async () => {
+    setBusy('.mrpack');
+    setErr(null);
+    try {
+      const p = await api.importMrpack();
+      if (p) onCreated(p);
+      else setBusy(null);
+    } catch (e) {
+      setErr(String(e));
+      setBusy(null);
+    }
+  };
+
+  const bring = async (e: ExternalInstance) => {
+    setBusy(e.path);
+    setErr(null);
+    try {
+      onCreated(await api.importExternalInstance(e.path));
+    } catch (x) {
+      setErr(String(x));
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="modal-scrim" onClick={busy ? undefined : onClose}>
+      <PxBox family="panel" className="px--window modal extimport" onClick={(e) => e.stopPropagation()}>
+        <TT size={22}>IMPORT</TT>
+        <span className="meta">
+          Copies the instance's mods, config, worlds, packs and options into a new instance here. The original stays as it is.
+        </span>
+
+        <div className="extimport__list">
+          {found === null ? (
+            <span className="meta">Looking for other launchers…</span>
+          ) : found.length === 0 ? (
+            <span className="meta">
+              No instances found from Prism, MultiMC, CurseForge, the Modrinth App or Mojang's launcher.
+            </span>
+          ) : (
+            found.map((e) => (
+              <div key={e.path} className="extimport__row" title={e.path}>
+                <span className="extimport__info">
+                  <TT size={16}>{e.name}</TT>
+                  <span className="meta">
+                    {[
+                      e.source,
+                      [e.loader === 'neoforge' ? 'NeoForge' : e.loader.charAt(0).toUpperCase() + e.loader.slice(1), e.gameVersion].filter(Boolean).join(' '),
+                      e.mods ? `${e.mods} mod${e.mods === 1 ? '' : 's'}` : '',
+                      e.worlds ? `${e.worlds} world${e.worlds === 1 ? '' : 's'}` : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  {e.blocked && <span className="meta extimport__blocked">{e.blocked}</span>}
+                </span>
+                <PxButton
+                  family="green"
+                  height="md"
+                  disabled={!!e.blocked || busy !== null}
+                  onClick={() => void bring(e)}
+                >
+                  <TT size={16} tone={e.blocked ? 'dim' : 'green'}>
+                    {busy === e.path ? 'COPYING…' : 'IMPORT'}
+                  </TT>
+                </PxButton>
+              </div>
+            ))
+          )}
+        </div>
+
+        {err && <span className="meta">{err}</span>}
+
+        <div className="modal__row">
+          <PxButton family="grey" height="md" disabled={busy !== null} onClick={onBack}>
+            <TT size={20}>BACK</TT>
+          </PxButton>
+          <span className="modal__spacer" />
+          <PxButton
+            family="grey"
+            height="md"
+            disabled={!isTauri || busy !== null}
+            title={isTauri ? 'A Modrinth modpack file from disk' : 'Needs the desktop app'}
+            onClick={() => void importFile()}
+          >
+            <TT size={20} tone={isTauri ? 'plain' : 'dim'}>
+              {busy === '.mrpack' ? 'IMPORTING…' : '.MRPACK FILE…'}
+            </TT>
+          </PxButton>
+          <PxButton family="grey" height="md" disabled={busy !== null} onClick={onClose}>
+            <TT size={20}>CANCEL</TT>
           </PxButton>
         </div>
       </PxBox>

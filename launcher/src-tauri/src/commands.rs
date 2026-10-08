@@ -207,6 +207,16 @@ pub fn create_profile(
     loader: String,
     server: Option<String>,
 ) -> ProfileDto {
+    let profile = new_profile(&state, name, game_version, Loader::parse(&loader), server);
+    let mut store = state.profiles.lock().unwrap();
+    store.profiles.push(profile);
+    state.save_profiles(&store);
+    dto(store.profiles.last().unwrap())
+}
+
+/// A fresh instance with the launcher-wide JVM args and window size, not
+/// yet saved.
+pub(crate) fn new_profile(state: &AppState, name: String, game_version: String, loader: Loader, server: Option<String>) -> Profile {
     let jvm_args = {
         let settings = state.settings.lock().unwrap();
         let parsed: Vec<String> = settings
@@ -216,12 +226,11 @@ pub fn create_profile(
             .collect();
         if parsed.is_empty() { default_jvm_args() } else { parsed }
     };
-    let id = format!("p{}", now_millis());
-    let profile = Profile {
-        id: id.clone(),
+    Profile {
+        id: format!("p{}", now_millis()),
         name,
         game_version,
-        loader: Loader::parse(&loader),
+        loader,
         loader_version: None,
         jvm_args,
         resolution: {
@@ -235,11 +244,7 @@ pub fn create_profile(
         play_secs: 0,
         memory_mb: None,
         java_path: None,
-    };
-    let mut store = state.profiles.lock().unwrap();
-    store.profiles.push(profile);
-    state.save_profiles(&store);
-    dto(store.profiles.last().unwrap())
+    }
 }
 
 #[tauri::command]
