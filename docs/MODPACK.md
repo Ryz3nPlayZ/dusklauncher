@@ -133,6 +133,7 @@ default set: ETF/EMF cost frames, and most players' packs don't need them.
 | `cit/` | custom item textures | cit-resewn (no build past 1.21.1 — the forks are single-maintainer, closed-source or ARR, so none is installed) | MIT |
 | `gui/` | custom GUI textures | optigui | LGPL-3.0 |
 | `anim/` | custom animations | animatica (up to 1.21.6) | LGPL-3.0 |
+| any pack in `shaderpacks/` | shaders | iris + sodium (already in Dusk Essentials; this catches instances that dropped them) | LGPL-3.0 / PolyForm Shield |
 
 Nuit Interop pins one exact Nuit build in its fabric.mod.json, often not the
 newest, so mods go in one at a time and a pinned library gets the build its

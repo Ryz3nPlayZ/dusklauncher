@@ -1153,6 +1153,7 @@ const fixtures: Record<string, unknown> = {
   pack_mods: [
     { feature: 'sky', label: 'custom skies', packs: ['FreshAnimations Skies', 'Stay True'], mods: ['Nuit Interop', 'Nuit'] },
     { feature: 'ctm', label: 'connected textures', packs: ['Stay True'], mods: ['Continuity'] },
+    { feature: 'shaders', label: 'shaders', packs: ['BSL Shaders'], mods: ['Iris'] },
   ] satisfies PackNeed[],
   list_logs: [
     { path: 'logs/2026-10-06-2.log.gz', modified: Date.now() - 50 * 3600_000, size: 18_400 },

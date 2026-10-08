@@ -1049,7 +1049,7 @@ function ContentTab({
     } else {
       setProblems(null);
     }
-    if ((kindTab === 'ALL' || kindTab === 'RESOURCE PACKS') && profile.loader === 'fabric') {
+    if ((kindTab === 'ALL' || kindTab === 'RESOURCE PACKS' || kindTab === 'SHADERS') && profile.loader === 'fabric') {
       void api
         .packMods(profile.id)
         .then(setPackNeeds)
@@ -1224,14 +1224,20 @@ function ContentTab({
         })),
       ]
     : [];
-  /* resource packs made for OptiFine: what of theirs doesn't show, and the mods that draw it */
+  /* resource packs made for OptiFine: what of theirs doesn't show, and the mods that draw it;
+     shader packs with nothing to run them */
   problemRows.push(
-    ...packNeeds.map((n) => ({
-      key: `pack/${n.feature}`,
-      warn: `${n.label[0].toUpperCase()}${n.label.slice(1)} don’t show`,
-      text: ` — ${and(n.packs)} ${n.packs.length > 1 ? 'have' : 'has'} them, made for OptiFine; on Fabric they need ${and(n.mods)}.`,
-      fix: { label: 'INSTALL', title: `Install ${and(n.mods)} from Modrinth`, run: () => installPackMods(n.feature) },
-    })),
+    ...packNeeds
+      .filter((n) => kindTab === 'ALL' || (n.feature === 'shaders') === (kindTab === 'SHADERS'))
+      .map((n) => ({
+        key: `pack/${n.feature}`,
+        warn: n.feature === 'shaders' ? 'Shaders don’t load' : `${n.label[0].toUpperCase()}${n.label.slice(1)} don’t show`,
+        text:
+          n.feature === 'shaders'
+            ? ` — ${and(n.packs)} ${n.packs.length > 1 ? 'are' : 'is'} in shaderpacks/, but Fabric runs shaders through ${and(n.mods)}.`
+            : ` — ${and(n.packs)} ${n.packs.length > 1 ? 'have' : 'has'} them, made for OptiFine; on Fabric they need ${and(n.mods)}.`,
+        fix: { label: 'INSTALL', title: `Install ${and(n.mods)} from Modrinth`, run: () => installPackMods(n.feature) },
+      })),
   );
 
   return (

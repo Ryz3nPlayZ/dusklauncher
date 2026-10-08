@@ -3,7 +3,8 @@
 //! textures and animations under `assets/minecraft/optifine/` (or the older
 //! `mcpatcher/`). The game ignores all of it, so on Fabric each needs a mod
 //! that reads the format. This finds which of those an instance's packs use
-//! and installs the mods that draw them.
+//! and installs the mods that draw them — and Iris, when there are shader
+//! packs and nothing to run them.
 
 use crate::appstate::AppState;
 use crate::mods;
@@ -84,7 +85,17 @@ const FEATURES: &[Feature] = &[
         files: &[],
         mods: &[("animatica", "animatica", "Animatica")],
     },
+    // not an OptiFine folder: any pack in shaderpacks/ (see `needs`)
+    Feature {
+        id: SHADERS,
+        label: "shaders",
+        dirs: &[],
+        files: &[],
+        mods: &[("iris", "iris", "Iris"), ("sodium", "sodium", "Sodium")],
+    },
 ];
+
+const SHADERS: &str = "shaders";
 
 const ROOTS: &[&str] = &["assets/minecraft/optifine/", "assets/minecraft/mcpatcher/"];
 
@@ -157,9 +168,35 @@ pub struct PackNeed {
     pub mods: Vec<String>,
 }
 
-/// The pack features in `packs_dir` that `mods_dir` has no mod for yet.
-fn needs(packs_dir: &Path, mods_dir: &Path) -> Vec<PackNeed> {
-    let packs = scan_packs(packs_dir);
+/// The enabled shader packs in `dir`: zips and folders (Iris keeps each
+/// pack's options beside it as a .txt, which isn't one).
+fn shader_packs(dir: &Path) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut out: Vec<String> = entries
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') {
+                return None;
+            }
+            if e.path().is_dir() {
+                return Some(name);
+            }
+            name.strip_suffix(".zip").map(str::to_string)
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// The pack features in `packs_dir` that `mods_dir` has no mod for yet, and
+/// the shaders in `shaders_dir` when nothing runs them.
+fn needs(packs_dir: &Path, shaders_dir: &Path, mods_dir: &Path) -> Vec<PackNeed> {
+    let mut packs = scan_packs(packs_dir);
+    let shaders = shader_packs(shaders_dir);
+    if !shaders.is_empty() {
+        packs.extend(shaders.into_iter().map(|n| (n, HashSet::from([SHADERS]))));
+    }
     if packs.is_empty() {
         return Vec::new();
     }
@@ -171,6 +208,10 @@ fn needs(packs_dir: &Path, mods_dir: &Path) -> Vec<PackNeed> {
                 f.mods.iter().filter(|m| !held.contains(m.1)).map(|m| m.2.to_string()).collect();
             let having: Vec<String> =
                 packs.iter().filter(|(_, found)| found.contains(f.id)).map(|(n, _)| n.clone()).collect();
+            // Sodium alone doesn't run shaders: Iris is what's missing
+            if f.id == SHADERS && held.contains("iris") {
+                return None;
+            }
             (!missing.is_empty() && !having.is_empty()).then(|| PackNeed {
                 feature: f.id.into(),
                 label: f.label.into(),
@@ -181,15 +222,16 @@ fn needs(packs_dir: &Path, mods_dir: &Path) -> Vec<PackNeed> {
         .collect()
 }
 
-/// What an instance's resource packs use that it has no mod for. Empty for
-/// anything but Fabric: the mods are installed as Fabric builds.
+/// What an instance's resource and shader packs use that it has no mod for.
+/// Empty for anything but Fabric: the mods are installed as Fabric builds.
 #[tauri::command(async)]
 pub fn pack_mods(state: State<AppState>, profile_id: String) -> Result<Vec<PackNeed>, String> {
     let (profile, packs) = mods::profile_and_content(&state, &profile_id, "resourcepack")?;
     if profile.loader != Loader::Fabric {
         return Ok(Vec::new());
     }
-    Ok(needs(&packs, &profile.dirs(&state.data_dir).mods))
+    let dirs = profile.dirs(&state.data_dir);
+    Ok(needs(&packs, &dirs.shaderpacks, &dirs.mods))
 }
 
 /// A dependency a fabric.mod.json pins to one exact version (`"nuit":
@@ -254,10 +296,11 @@ pub async fn install_pack_mods(
     if profile.loader != Loader::Fabric {
         return Err("These mods are Fabric mods — switch the loader to Fabric in SETTINGS.".into());
     }
-    let mods_dir = profile.dirs(&state.data_dir).mods;
+    let dirs = profile.dirs(&state.data_dir);
+    let mods_dir = dirs.mods.clone();
     let scan = {
-        let (packs, mods_dir) = (packs.clone(), mods_dir.clone());
-        tokio::task::spawn_blocking(move || (needs(&packs, &mods_dir), mods::fabric_mod_ids(&mods_dir)))
+        let (packs, shaders, mods_dir) = (packs.clone(), dirs.shaderpacks.clone(), mods_dir.clone());
+        tokio::task::spawn_blocking(move || (needs(&packs, &shaders, &mods_dir), mods::fabric_mod_ids(&mods_dir)))
     };
     let (needs, mut held) = scan.await.map_err(|e| e.to_string())?;
     let mut wanted: Vec<FabricMod> = Vec::new();
@@ -328,7 +371,7 @@ mod tests {
     #[test]
     fn a_pack_with_skies_asks_for_the_sky_mods_the_instance_lacks() {
         let tmp = std::env::temp_dir().join(format!("dusk-packmods-{}", std::process::id()));
-        let (packs, mods_dir) = (tmp.join("resourcepacks"), tmp.join("mods"));
+        let (packs, shaders, mods_dir) = (tmp.join("resourcepacks"), tmp.join("shaderpacks"), tmp.join("mods"));
         std::fs::create_dir_all(&packs).unwrap();
         std::fs::create_dir_all(&mods_dir).unwrap();
         let zip = |path: &Path, entries: &[(&str, &[u8])]| {
@@ -348,7 +391,7 @@ mod tests {
         // Nuit is in, Nuit Interop isn't
         zip(&mods_dir.join("nuit.jar"), &[("fabric.mod.json", br#"{"id":"nuit","version":"1.0.0-beta.5"}"#)]);
 
-        let got = needs(&packs, &mods_dir);
+        let got = needs(&packs, &shaders, &mods_dir);
         assert_eq!(
             got,
             [
@@ -366,6 +409,24 @@ mod tests {
                 },
             ]
         );
+
+        // shader packs, zipped and a folder, and Iris's options file for one
+        std::fs::create_dir_all(shaders.join("Folder Shader/shaders")).unwrap();
+        std::fs::write(shaders.join("Complementary.zip"), b"zip").unwrap();
+        std::fs::write(shaders.join("Complementary.zip.txt"), b"x").unwrap();
+        zip(&mods_dir.join("sodium.jar"), &[("fabric.mod.json", br#"{"id":"sodium","version":"0.6.13"}"#)]);
+        let got = needs(&packs, &shaders, &mods_dir);
+        assert_eq!(
+            got.last(),
+            Some(&PackNeed {
+                feature: "shaders".into(),
+                label: "shaders".into(),
+                packs: vec!["Complementary".into(), "Folder Shader".into()],
+                mods: vec!["Iris".into()],
+            })
+        );
+        zip(&mods_dir.join("iris.jar"), &[("fabric.mod.json", br#"{"id":"iris","version":"1.9.0"}"#)]);
+        assert!(needs(&packs, &shaders, &mods_dir).iter().all(|n| n.feature != "shaders"));
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
