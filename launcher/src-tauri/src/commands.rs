@@ -921,7 +921,8 @@ pub async fn install_and_launch(
             *state.activity.lock().unwrap() = None;
             let _ = app3.emit("game-activity", None::<crate::appstate::GameActivity>);
             crate::discord::refresh(&app3);
-            launch::run_post_exit(&env2);
+            let post = env2.clone();
+            let _ = tokio::task::spawn_blocking(move || launch::run_post_exit(&post)).await;
             let played = started.elapsed().map(|d| d.as_secs()).unwrap_or(0);
             let _ = state.patch_profile(&pid2, |p| p.play_secs += played);
             let code = status.ok().and_then(|s| s.code());

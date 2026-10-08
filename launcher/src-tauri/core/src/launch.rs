@@ -24,7 +24,8 @@ pub struct LaunchEnv {
     pub env_vars: Vec<(String, String)>,
     /// run before the game starts (shell command)
     pub prelaunch_hook: Option<String>,
-    /// replaces the java binary: wrapper <java> becomes argv0[0]
+    /// a command the game starts through (`gamemoderun`, `prime-run`):
+    /// `wrapper [its args] <java> <jvm args> …`
     pub wrapper_hook: Option<String>,
     /// run after the game exits (shell command)
     pub post_exit_hook: Option<String>,
@@ -368,27 +369,12 @@ fn run_hook(cmd: &str, cwd: &Path) {
 pub async fn launch(spec: &LaunchSpec, env: &LaunchEnv) -> Result<tokio::process::Child> {
     let hook_cwd = env.hook_cwd.clone().unwrap_or_else(|| spec.cwd.clone());
 
-    if let Some(pre) = &env.prelaunch_hook {
-        if !pre.trim().is_empty() {
-            run_hook(pre, &hook_cwd);
-        }
+    if let Some(pre) = env.prelaunch_hook.clone().filter(|p| !p.trim().is_empty()) {
+        // a hook can take a while; keep it off the async workers
+        let _ = tokio::task::spawn_blocking(move || run_hook(&pre, &hook_cwd)).await;
     }
 
-    let mut java_bin = spec.java_bin.clone();
-    let mut extra_prefix: Vec<String> = Vec::new();
-    if let Some(wrapper) = env.wrapper_hook.as_deref().filter(|w| !w.trim().is_empty()) {
-        let mut parts = wrapper.split_whitespace();
-        if let Some(bin) = parts.next() {
-            java_bin = PathBuf::from(bin);
-            extra_prefix = parts.map(str::to_string).collect();
-        }
-    }
-
-    let mut cmd_args: Vec<String> = Vec::new();
-    cmd_args.extend(extra_prefix);
-    cmd_args.extend(spec.jvm_args.iter().cloned());
-    cmd_args.push(spec.main_class.clone());
-    cmd_args.extend(spec.game_args.iter().cloned());
+    let (java_bin, cmd_args) = command_line(spec, env);
 
     tracing::info!(java = ?java_bin, "launching: {:?} {}", java_bin, cmd_args.join(" "));
 
@@ -410,6 +396,25 @@ pub async fn launch(spec: &LaunchSpec, env: &LaunchEnv) -> Result<tokio::process
     Ok(child)
 }
 
+/// The program to start and its arguments: java and the game's arguments,
+/// behind the wrapper command when one is set.
+fn command_line(spec: &LaunchSpec, env: &LaunchEnv) -> (PathBuf, Vec<String>) {
+    let mut program = spec.java_bin.clone();
+    let mut args: Vec<String> = Vec::new();
+    if let Some(wrapper) = env.wrapper_hook.as_deref().filter(|w| !w.trim().is_empty()) {
+        let mut parts = wrapper.split_whitespace();
+        if let Some(bin) = parts.next() {
+            program = PathBuf::from(bin);
+            args.extend(parts.map(str::to_string));
+            args.push(spec.java_bin.to_string_lossy().into_owned());
+        }
+    }
+    args.extend(spec.jvm_args.iter().cloned());
+    args.push(spec.main_class.clone());
+    args.extend(spec.game_args.iter().cloned());
+    (program, args)
+}
+
 /// Run the post-exit hook (called by the supervisor after the game exits).
 pub fn run_post_exit(env: &LaunchEnv) {
     if let Some(post) = &env.post_exit_hook {
@@ -423,6 +428,25 @@ mod tests {
     use super::*;
     use crate::auth::Session;
     use crate::profile::Loader;
+
+    #[test]
+    fn wrapper_runs_java_with_the_game() {
+        let spec = LaunchSpec {
+            java_bin: PathBuf::from("/jre/bin/java"),
+            jvm_args: vec!["-Xmx4G".into()],
+            main_class: "Main".into(),
+            game_args: vec!["--demo".into()],
+            cwd: PathBuf::from("."),
+            env: vec![],
+        };
+        let (bin, args) = command_line(&spec, &LaunchEnv::default());
+        assert_eq!(bin, PathBuf::from("/jre/bin/java"));
+        assert_eq!(args, ["-Xmx4G", "Main", "--demo"]);
+        let env = LaunchEnv { wrapper_hook: Some("prime-run --flag".into()), ..LaunchEnv::default() };
+        let (bin, args) = command_line(&spec, &env);
+        assert_eq!(bin, PathBuf::from("prime-run"));
+        assert_eq!(args, ["--flag", "/jre/bin/java", "-Xmx4G", "Main", "--demo"]);
+    }
 
     fn test_version() -> meta::VersionJson {
         let json = r#"{
