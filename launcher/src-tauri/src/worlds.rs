@@ -65,6 +65,60 @@ pub async fn backup_world(state: State<'_, AppState>, profile_id: String, name: 
     Ok(file_name)
 }
 
+/// Backups the launcher makes on its own go in `backups/auto/`, apart from
+/// the ones made by hand, so pruning only ever deletes its own.
+const AUTO_BACKUPS: &str = "auto";
+
+/// After a session: zip every world the game saved since `since` into
+/// `backups/auto/`, then keep only the newest `keep` there for each.
+/// Returns the worlds backed up.
+pub(crate) fn auto_backup(root: &Path, since: std::time::SystemTime, keep: usize) -> Vec<String> {
+    let dir = root.join("backups").join(AUTO_BACKUPS);
+    let Ok(entries) = std::fs::read_dir(root.join("saves")) else { return Vec::new() };
+    let mut done = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        // the game rewrites level.dat on every save and on quit
+        let played = std::fs::metadata(entry.path().join("level.dat"))
+            .and_then(|m| m.modified())
+            .is_ok_and(|t| t >= since);
+        if name.starts_with('.') || !played {
+            continue;
+        }
+        if std::fs::create_dir_all(&dir).is_err() {
+            break;
+        }
+        let out = dir.join(format!("{}_{name}.zip", chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")));
+        if let Err(e) = write_zip(&entry.path(), &name, &out) {
+            let _ = std::fs::remove_file(&out);
+            tracing::warn!(world = %name, "auto backup failed: {e}");
+            continue;
+        }
+        prune_backups(&dir, &name, keep);
+        done.push(name);
+    }
+    done
+}
+
+/// Delete all but the newest `keep` of one world's backups in `dir`. Names
+/// start with a sortable timestamp, so the newest sort last.
+fn prune_backups(dir: &Path, world: &str, keep: usize) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let suffix = format!("_{world}.zip");
+    let mut mine: Vec<String> = entries
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        // `yyyy-MM-dd_HH-mm-ss` then `_<world>.zip`: a world named `b`
+        // doesn't claim `..._a_b.zip`
+        .filter(|f| f.len() == 19 + suffix.len() && f.ends_with(&suffix))
+        .collect();
+    mine.sort();
+    let extra = mine.len().saturating_sub(keep);
+    for old in &mine[..extra] {
+        let _ = std::fs::remove_file(dir.join(old));
+    }
+}
+
 fn write_zip(dir: &Path, name: &str, out: &Path) -> Result<(), String> {
     let file = std::fs::File::create(out).map_err(|e| format!("Couldn't write the backup: {e}"))?;
     let mut zip = zip::ZipWriter::new(file);
@@ -781,6 +835,39 @@ mod tests {
         let mut names: Vec<String> = (0..zip.len()).map(|i| zip.by_index(i).unwrap().name().to_string()).collect();
         names.sort();
         assert_eq!(names, ["My World/level.dat", "My World/region/", "My World/region/r.0.0.mca"]);
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn a_session_backs_up_the_worlds_it_played_and_keeps_the_newest() {
+        let tmp = std::env::temp_dir().join(format!("dusk-auto-{}", std::process::id()));
+        let saves = tmp.join("saves");
+        let world = |name: &str| {
+            std::fs::create_dir_all(saves.join(name)).unwrap();
+            std::fs::write(saves.join(name).join("level.dat"), b"lvl").unwrap();
+        };
+        world("Old");
+        let since = std::time::SystemTime::now();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        world("Played");
+        world("b");
+        let auto = tmp.join("backups").join("auto");
+        std::fs::create_dir_all(&auto).unwrap();
+        for f in ["2020-01-01_00-00-00_Played.zip", "2020-01-02_00-00-00_Played.zip", "2020-01-01_00-00-00_a_b.zip"] {
+            std::fs::write(auto.join(f), b"zip").unwrap();
+        }
+
+        let mut done = auto_backup(&tmp, since, 2);
+        done.sort();
+        assert_eq!(done, ["Played", "b"]);
+        let mut left: Vec<String> =
+            std::fs::read_dir(&auto).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
+        left.sort();
+        // Played: the oldest went; a_b isn't b's, so it stays
+        assert_eq!(left.len(), 4);
+        assert_eq!(left[0], "2020-01-01_00-00-00_a_b.zip");
+        assert_eq!(left[1], "2020-01-02_00-00-00_Played.zip");
+        assert!(left[2..].iter().all(|f| !f.starts_with("2020")));
         let _ = std::fs::remove_dir_all(&tmp);
     }
 

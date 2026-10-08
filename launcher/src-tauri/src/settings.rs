@@ -78,6 +78,14 @@ pub struct Settings {
     /// "minimize", or "hide" (brought back when the game closes).
     #[serde(default = "default_on_play")]
     pub on_play: String,
+    /// When the game closes, each world it saved is zipped into the
+    /// instance's `backups/auto/`, keeping this many per world. 0 = off.
+    #[serde(default = "default_auto_backups")]
+    pub auto_backups: u32,
+}
+
+fn default_auto_backups() -> u32 {
+    5
 }
 
 fn default_on_play() -> String {
@@ -131,6 +139,7 @@ impl Default for Settings {
             sync_client_settings: true,
             offline_name: String::new(),
             on_play: default_on_play(),
+            auto_backups: default_auto_backups(),
         }
     }
 }

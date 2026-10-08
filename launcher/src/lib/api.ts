@@ -763,6 +763,8 @@ export interface Settings {
   discordRpc: boolean;
   /** what the window does while the game runs */
   onPlay: 'keep' | 'minimize' | 'hide';
+  /** worlds kept per world in backups/auto when the game closes; 0 = off */
+  autoBackups: number;
   notifyFriendsOnline: boolean;
   notifyMessages: boolean;
   clock24h: boolean;
@@ -1292,6 +1294,7 @@ const fixtures: Record<string, unknown> = {
     customBackground: '',
     discordRpc: true,
     onPlay: 'keep',
+    autoBackups: 5,
     notifyFriendsOnline: true,
     notifyMessages: true,
     clock24h: false,

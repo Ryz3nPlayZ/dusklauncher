@@ -980,7 +980,10 @@ pub async fn install_and_launch(
         let root2 = dirs.root.clone();
         let mods2 = dirs.mods.clone();
         let stop = std::sync::Arc::new(tokio::sync::Notify::new());
-        let on_play = state.settings.lock().unwrap().on_play.clone();
+        let (on_play, auto_backups) = {
+            let s = state.settings.lock().unwrap();
+            (s.on_play.clone(), s.auto_backups as usize)
+        };
         *state.running_game.lock().await = Some(RunningGame { profile_id: profile_id.clone(), stop: stop.clone() });
         tokio::spawn(async move {
             let state = app3.state::<AppState>();
@@ -998,6 +1001,15 @@ pub async fn install_and_launch(
             let _ = state.patch_profile(&pid2, |p| p.play_secs += played);
             let code = status.ok().and_then(|s| s.code());
             emit_state(&app3, &pid2, "exited", code);
+            if auto_backups > 0 {
+                let root = root2.clone();
+                tokio::task::spawn_blocking(move || {
+                    let done = crate::worlds::auto_backup(&root, started, auto_backups);
+                    if !done.is_empty() {
+                        tracing::info!(worlds = ?done, "worlds backed up after the session");
+                    }
+                });
+            }
             if on_play != "keep" {
                 if let Some(w) = app3.get_webview_window("main") {
                     let _ = w.show();

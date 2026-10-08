@@ -170,6 +170,25 @@ export default function SettingsView({
                   ]}
                 />
               </Row>
+              <Row
+                label="WORLD BACKUPS"
+                hint={
+                  settings.autoBackups > 0
+                    ? `When the game closes, each world you played is zipped into the instance's backups/auto folder; the newest ${settings.autoBackups} per world are kept.`
+                    : 'Worlds are only backed up when you ask.'
+                }
+              >
+                <Choice
+                  value={settings.autoBackups}
+                  onPick={(autoBackups) => set({ autoBackups })}
+                  options={[
+                    { value: 0, label: 'OFF' },
+                    { value: 3, label: 'KEEP 3' },
+                    { value: 5, label: 'KEEP 5' },
+                    { value: 10, label: 'KEEP 10' },
+                  ]}
+                />
+              </Row>
               <Row label="REDUCE MOTION" hint="Freezes the scene and the player animation.">
                 <Choice
                   value={settings.reduceMotion ? 'on' : 'off'}
