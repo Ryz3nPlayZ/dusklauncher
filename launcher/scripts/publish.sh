@@ -108,14 +108,24 @@ prev="$(git describe --tags --abbrev=0 "$tag^" 2>/dev/null || true)"
 body="$(printf '%s' "$json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["body"])')"
 if [[ "$body" == Draft* || -z "$body" ]]; then
   if [ -n "$prev" ]; then
-    notes="$(git log --no-merges --format='- %s' "$prev..$tag")"
+    notes="$(git log --no-merges --format='- %s' "$prev..$tag" | grep -v '^- Release v' || true)"
     header="Changes since $prev"
   else
-    notes="$(git log --no-merges --format='- %s' -n 30 "$tag")"
+    notes="$(git log --no-merges --format='- %s' -n 30 "$tag" | grep -v '^- Release v' || true)"
     header="First release"
   fi
-  printf '## %s\n\n%s\n' "$header" "$notes" | gh release edit "$tag" --notes-file - >/dev/null
+  body="$(printf '## %s\n\n%s\n' "$header" "$notes")"
+  printf '%s\n' "$body" | gh release edit "$tag" --notes-file - >/dev/null
 fi
+
+# the launcher's update prompt shows latest.json's notes, which CI wrote as a
+# Draft placeholder: put the release notes there too (the signatures cover
+# the binaries, not this file, so re-uploading it is safe)
+tmp="$(mktemp -d)"
+gh release download "$tag" -p latest.json -D "$tmp"
+NOTES="$body" python3 -c 'import json,os,sys; p=sys.argv[1]; d=json.load(open(p)); d["notes"]=os.environ["NOTES"]; json.dump(d,open(p,"w"),indent=2)' "$tmp/latest.json"
+gh release upload "$tag" "$tmp/latest.json" --clobber >/dev/null
+rm -rf "$tmp"
 
 gh release edit "$tag" --draft=false --latest >/dev/null
 echo "published $tag — launchers polling latest.json will offer it now"

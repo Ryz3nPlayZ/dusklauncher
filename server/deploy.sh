@@ -10,7 +10,7 @@ cd "$(dirname "$0")"
 
 HOST="${DUSK_HOST:-129.213.43.152}"
 USER="${DUSK_USER:-ubuntu}"
-KEY="${DUSK_KEY:-$HOME/Downloads/ssh-key-2026-04-19.key}"
+KEY="${DUSK_KEY:-$HOME/Downloads/Documents/ssh-key-2026-04-19.key}"
 SSH=(ssh -i "$KEY" -o StrictHostKeyChecking=accept-new "$USER@$HOST")
 
 echo "→ syncing server/ to $USER@$HOST:~/dusk"
