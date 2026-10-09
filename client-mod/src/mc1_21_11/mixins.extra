@@ -3,3 +3,5 @@ invtweaks.ContainerScreenAccessor
 invtweaks.ScrollTransferMouseMixin
 # Item Pickups, on every version
 qol.ItemPickupMixin
+# Scrollable Tooltips; 26.x layers have their own copy of the class
+qol.TooltipScrollMixin

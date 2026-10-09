@@ -97,6 +97,6 @@ and the [Backup Manager](https://modrinth.com/mod/backup-manager) mod.
 | Health on nametags (Lunar) | have | Nametags |
 | Item Physics, Scroll Transfer (Feather; Mouse Tweaks) | **added** in this pass | `ItemPhysics.java`, `ScrollTransfer.java` |
 | Playtime, instance groups, Discord status, log upload (Modrinth App, Prism) | have | launcher |
-| Scrollable Tooltips (Lunar) | **not yet** | tooltip drawing differs across the ten builds, and it would fight Scroll Transfer for the wheel |
+| Scrollable Tooltips (Lunar; the [Scrollable Tooltips](https://github.com/iso2t/Scrollable-Tooltips) and [SimpleScrollToolTips](https://modrinth.com/mod/simplescrolltooltips) mods) | **added**: Ctrl + wheel moves a tooltip that doesn't fit, so the plain wheel stays with Scroll Transfer | `ScrollableTooltips.java`, `mixin/qol/TooltipScrollMixin.java` (one copy for GuiGraphics, one for 26.x's GuiGraphicsExtractor) |
 | Hurt Cam, Chunk Borders, Menu Blur (Lunar) | left out | the game already has them (Damage Tilt, F3+G, menu blur) |
 | 1.7 Visuals, Mumble link, WorldEdit CUI (Lunar) | left out | niche; WorldEdit CUI can go in a modpack as a normal mod |

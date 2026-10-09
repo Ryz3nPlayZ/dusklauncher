@@ -42,6 +42,7 @@ cost while their module is **off**:
 | Damage tint / shield events (`LivingEntity.handleDamageEvent`, `handleEntityEvent`) | only when the server sends the event | negligible |
 | Item Physics (`ItemPhysicsRendererMixin`) | every dropped item, every frame | one boolean on the render state, set when the state is extracted |
 | Scroll Transfer (`ScrollTransferMouseMixin`) | each scroll notch | a screen-type check |
+| Scrollable Tooltips (`TooltipScrollMixin` on the tooltip positioner) | each tooltip drawn | one enabled check; a new position object only while the tooltip is actually scrolled |
 | Item Pickups (`ItemPickupMixin` on `handleTakeItemEntity`) | once per pickup packet, not per frame | one static `ItemPickups.active()` check |
 | Custom Skies | the sky pass | nothing unless a resource pack has an OptiFine sky; the sky cube is built once and stays on the GPU, and the pipelines are made once per blend mode |
 

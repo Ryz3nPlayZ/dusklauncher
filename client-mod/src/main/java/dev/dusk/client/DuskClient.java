@@ -108,6 +108,7 @@ import dev.dusk.client.modules.hud.BedwarsResources;
 import dev.dusk.client.modules.hud.SkyblockStats;
 import dev.dusk.client.modules.misc.HypixelTweaks;
 import dev.dusk.client.modules.misc.ScrollTransfer;
+import dev.dusk.client.modules.misc.ScrollableTooltips;
 import dev.dusk.client.modules.render.ItemPhysics;
 import dev.dusk.client.modules.misc.SlotLock;
 import dev.dusk.client.modules.render.NoNightVision;
@@ -220,6 +221,7 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new FovChanger());
         modules.register(new SlotLock());
         modules.register(new ScrollTransfer());
+        modules.register(new ScrollableTooltips());
         // Hypixel: chat tweaks, Bed Wars and SkyBlock HUDs
         modules.register(new HypixelTweaks());
         HypixelTweaks.register();
