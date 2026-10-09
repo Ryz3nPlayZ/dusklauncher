@@ -15,7 +15,8 @@ export default function PlayerHead({
 }) {
   const src = skin || steveSkin;
   const scale = size / 8; // the face is 8×8 in a 64-wide sheet
-  const sheet = `${64 * scale}px ${64 * scale}px`;
+  // height auto: a legacy 64×32 sheet keeps its shape instead of stretching
+  const sheet = `${64 * scale}px auto`;
   return (
     <div className={['head', className ?? ''].join(' ')} style={{ width: size, height: size }}>
       <div

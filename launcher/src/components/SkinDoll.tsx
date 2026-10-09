@@ -40,7 +40,8 @@ export default function SkinDoll({
 
   useEffect(() => {
     const img = new Image();
-    img.onload = () => setLegacy(img.naturalHeight === 32);
+    setLegacy(false);
+    img.onload = () => setLegacy(img.naturalWidth === img.naturalHeight * 2);
     img.src = src;
   }, [src]);
 
@@ -63,7 +64,7 @@ export default function SkinDoll({
             width: sw * scale,
             height: sh * scale,
             backgroundImage: `url(${src})`,
-            backgroundSize: `${64 * scale}px ${64 * scale}px`,
+            backgroundSize: `${64 * scale}px auto`,
             backgroundPosition: `-${sx * scale}px -${sy * scale}px`,
           }}
         />

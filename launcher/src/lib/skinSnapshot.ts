@@ -41,7 +41,8 @@ export function snapshotSkin(src: string, model: SkinModel | 'auto' = 'auto'): P
   const key = `${model}|${src}`;
   let hit = cache.get(key);
   if (!hit) {
-    hit = (queue = queue.then(async () => {
+    // a failed render must not reject every later one queued behind it
+    hit = (queue = queue.catch(() => undefined).then(async () => {
       const v = await viewer();
       await v.loadSkin(src, {
         model: model === 'auto' ? 'auto-detect' : model === 'slim' ? 'slim' : 'default',
