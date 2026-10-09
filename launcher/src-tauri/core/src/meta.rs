@@ -235,19 +235,39 @@ pub async fn fetch_version_json(
         .find(version_id)
         .ok_or_else(|| Error::VersionNotFound(version_id.to_string()))?;
 
+    // the cached copy is used while it matches the manifest's hash, so a
+    // version Mojang re-publishes (they fix old ones now and then) is fetched again
     let cache_path: PathBuf = cache_dir.join(format!("{}.json", version_id));
-    if cache_path.exists() {
-        if let Ok(text) = tokio::fs::read_to_string(&cache_path).await {
-            if let Ok(v) = serde_json::from_str::<VersionJson>(&text) {
+    let cached = tokio::fs::read(&cache_path).await.ok();
+    if let Some(bytes) = &cached {
+        if crate::download::sha1_hex(bytes).eq_ignore_ascii_case(&entry.sha1) {
+            if let Ok(v) = serde_json::from_slice::<VersionJson>(bytes) {
                 return Ok(v);
             }
         }
     }
 
-    let text = client.get(&entry.url).send().await?.error_for_status()?.text().await?;
-    let version: VersionJson = serde_json::from_str(&text)?;
+    let fetched = async {
+        let bytes = client.get(&entry.url).send().await?.error_for_status()?.bytes().await?;
+        let actual = crate::download::sha1_hex(&bytes);
+        if !actual.eq_ignore_ascii_case(&entry.sha1) {
+            return Err(Error::Checksum { path: entry.url.clone(), expected: entry.sha1.clone(), actual });
+        }
+        Ok(bytes)
+    }
+    .await;
+    let bytes = match fetched {
+        Ok(bytes) => bytes,
+        // offline: an older copy still launches
+        Err(e) => {
+            return cached
+                .and_then(|b| serde_json::from_slice::<VersionJson>(&b).ok())
+                .ok_or(e);
+        }
+    };
+    let version: VersionJson = serde_json::from_slice(&bytes)?;
     tokio::fs::create_dir_all(cache_dir).await?;
-    tokio::fs::write(&cache_path, &text).await?;
+    crate::write_atomic(&cache_path, &bytes)?;
     Ok(version)
 }
 

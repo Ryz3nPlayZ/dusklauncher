@@ -1403,7 +1403,7 @@ async fn install_profile(
         let saved = tokio::fs::read_to_string(&index_path)
             .await
             .ok()
-            .filter(|text| download::sha1_hex(text.as_bytes()) == idx.sha1);
+            .filter(|text| download::sha1_hex(text.as_bytes()).eq_ignore_ascii_case(&idx.sha1));
         let index_text = match saved {
             Some(text) => text,
             None => {
@@ -1417,7 +1417,11 @@ async fn install_profile(
                     .text()
                     .await
                     .map_err(|e| e.to_string())?;
-                tokio::fs::write(&index_path, &text).await.map_err(|e| e.to_string())?;
+                let actual = download::sha1_hex(text.as_bytes());
+                if !actual.eq_ignore_ascii_case(&idx.sha1) {
+                    return Err(format!("asset index {} came back damaged (sha1 {actual}, expected {})", idx.id, idx.sha1));
+                }
+                fasterlauncher_core::write_atomic(&index_path, text.as_bytes()).map_err(|e| e.to_string())?;
                 text
             }
         };
