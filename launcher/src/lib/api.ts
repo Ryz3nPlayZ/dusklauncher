@@ -575,6 +575,8 @@ export interface ContentUpdate {
   /** the version to update to */
   versionId: string;
   versionNumber: string;
+  /** what that version says changed (markdown), when its author wrote it down */
+  changelog: string | null;
 }
 
 /** what a profile folder holds — `mod` → mods/, `resourcepack`, `shader` */
@@ -1393,8 +1395,8 @@ function previewIcon(color: string): string {
 
 /* two of the preview's jars have something newer on "Modrinth" */
 const previewUpdates = new Map<string, Omit<ContentUpdate, 'filename'>>([
-  ['sodium-fabric-0.6.13+mc1.21.11.jar', { projectId: 'AANobbMI', currentVersion: 'mc1.21.11-0.6.13', versionId: 'u-sodium', versionNumber: 'mc1.21.11-0.7.2' }],
-  ['lithium-fabric-0.15.0+mc1.21.11.jar', { projectId: 'gvQqBUqZ', currentVersion: 'mc1.21.11-0.15.0', versionId: 'u-lithium', versionNumber: 'mc1.21.11-0.15.1' }],
+  ['sodium-fabric-0.6.13+mc1.21.11.jar', { projectId: 'AANobbMI', currentVersion: 'mc1.21.11-0.6.13', versionId: 'u-sodium', versionNumber: 'mc1.21.11-0.7.2', changelog: '## Fixes\n- Chunks no longer flicker at the edge of render distance\n- Lower memory use with many entities\n\nSee the [full changelog](https://modrinth.com/mod/sodium/changelog).' }],
+  ['lithium-fabric-0.15.0+mc1.21.11.jar', { projectId: 'gvQqBUqZ', currentVersion: 'mc1.21.11-0.15.0', versionId: 'u-lithium', versionNumber: 'mc1.21.11-0.15.1', changelog: null }],
 ]);
 
 function previewFolder(profileId: string, kind: string): ProfileMod[] {

@@ -280,6 +280,8 @@ pub struct ContentUpdateDto {
     pub current_version: String,
     pub version_id: String,
     pub version_number: String,
+    /// what the new version says changed, as its author wrote it (markdown)
+    pub changelog: Option<String>,
 }
 
 /// The Modrinth loader slugs a kind's files are published under: mods follow
@@ -346,6 +348,7 @@ pub async fn check_content_updates(
                 current_version: cur.version_number.clone(),
                 version_id: new.id.clone(),
                 version_number: new.version_number.clone(),
+                changelog: new.changelog.as_deref().map(str::trim).filter(|c| !c.is_empty()).map(str::to_owned),
             })
         })
         .collect();

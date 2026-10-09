@@ -1231,6 +1231,26 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* WHAT'S NEW under a file with an update: its changelog opens below the row */
+.editor__notes-toggle {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--blue, #5aa9ff);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.editor__notes {
+  flex: none;
+  max-height: calc(420 * var(--u));
+  overflow-y: auto;
+  margin-top: calc(-8 * var(--u));
+  padding: calc(18 * var(--u)) calc(26 * var(--u));
+  border: var(--px-black) solid var(--black);
+  border-top: 0;
+  background: var(--panel);
+}
 .editor__kind {
   flex: none;
   width: calc(260 * var(--u));

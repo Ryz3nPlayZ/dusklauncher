@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import DOMPurify from 'dompurify';
-import { marked } from 'marked';
 import PixelGlyph from '../components/px/PixelGlyph';
 import { NavCell, NavLabel, PxBox, PxButton, TT } from '../components/px/Px';
 import { api, isTauri, type ProjectDetails, type ProjectKind, type ProjectVersion } from '../lib/api';
+import { openLink, renderMarkdown } from '../lib/markdown';
 import { fmtCount } from './Browse';
 
 /* ── PROJECT PAGE (Figma frame 5, 187:5) ────────────────────────────────
@@ -24,27 +23,6 @@ const KIND_LABEL: Record<ProjectKind, string> = {
 type Tab = 'DESCRIPTION' | 'VERSIONS' | 'GALLERY';
 
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : '—');
-
-/** open a link in the system browser (the launcher never navigates) */
-async function openLink(url: string) {
-  if (isTauri) {
-    const { openUrl } = await import('@tauri-apps/plugin-opener');
-    await openUrl(url);
-  } else {
-    window.open(url, '_blank', 'noopener');
-  }
-}
-
-/** Modrinth bodies are markdown with a little HTML; sanitize after render
- *  and strip anything that could script or navigate the launcher */
-function renderBody(md: string): string {
-  const html = marked.parse(md, { async: false, gfm: true, breaks: false }) as string;
-  return DOMPurify.sanitize(html, {
-    USE_PROFILES: { html: true },
-    FORBID_TAGS: ['style', 'script', 'iframe', 'form', 'input', 'video', 'audio'],
-    FORBID_ATTR: ['style', 'onerror', 'onload'],
-  });
-}
 
 export default function Project({
   kind,
@@ -105,7 +83,7 @@ export default function Project({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const body = useMemo(() => (project ? renderBody(project.body) : ''), [project]);
+  const body = useMemo(() => (project ? renderMarkdown(project.body) : ''), [project]);
 
   /* the two selects list what this project actually ships for */
   const gameOptions = useMemo(() => {
@@ -219,7 +197,7 @@ export default function Project({
                 {project ? (
                   <div
                     className="md"
-                    // sanitized by DOMPurify in renderBody
+                    // sanitized by DOMPurify in renderMarkdown
                     dangerouslySetInnerHTML={{ __html: body }}
                     onClick={(e) => {
                       const a = (e.target as HTMLElement).closest('a');

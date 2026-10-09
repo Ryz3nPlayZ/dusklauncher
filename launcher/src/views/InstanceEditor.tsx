@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import PixelGlyph from '../components/px/PixelGlyph';
 import { Choice, Row } from '../components/px/Form';
@@ -7,6 +7,7 @@ import InstanceArt from '../components/InstanceArt';
 import BrowseProjects, { fmtCount } from './Browse';
 import Project from './Project';
 import InstallModpack from './InstallModpack';
+import { mdLinkClick, renderMarkdown } from '../lib/markdown';
 import {
   ago,
   api,
@@ -1100,6 +1101,8 @@ function ContentTab({
   /* which Modrinth project each file is, keyed `kind/filename`; files Modrinth
      doesn't know (hand-made packs) have no entry and no VERSIONS button */
   const [projects, setProjects] = useState<Map<string, string>>(() => new Map());
+  /* the row whose update notes are open under it, keyed `kind/filename` */
+  const [notesOpen, setNotesOpen] = useState<string | null>(null);
   /* the rows an UPDATE is running on — their buttons wait */
   const [updating, setUpdating] = useState<Set<string>>(() => new Set());
   /* files are being dragged over the window */
@@ -1447,81 +1450,101 @@ function ContentTab({
           const key = `${fileKind}/${m.filename}`;
           const upd = updates?.get(key);
           const projectId = projects.get(key);
+          const notes = upd?.changelog && notesOpen === key ? upd.changelog : null;
           return (
-            <div key={key} className={['editor__row', m.enabled ? '' : 'is-off'].join(' ')}>
-              {/* the on/off box leads the row — the one control every row has */}
-              <button
-                className="check"
-                title={m.enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
-                onClick={() => void act(() => api.setContentEnabled(profile.id, fileKind, m.filename, !m.enabled))}
-              >
-                <span className={['px px--grey check__box', m.enabled ? 'is-on' : ''].join(' ')}>
-                  <span className="check__tick" />
+            <Fragment key={key}>
+              <div className={['editor__row', m.enabled ? '' : 'is-off'].join(' ')}>
+                {/* the on/off box leads the row — the one control every row has */}
+                <button
+                  className="check"
+                  title={m.enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
+                  onClick={() => void act(() => api.setContentEnabled(profile.id, fileKind, m.filename, !m.enabled))}
+                >
+                  <span className={['px px--grey check__box', m.enabled ? 'is-on' : ''].join(' ')}>
+                    <span className="check__tick" />
+                  </span>
+                </button>
+                {/* 172:640 — the icon square: the jar's own icon, else a glyph */}
+                <span className="editor__row-icon">
+                  {m.icon ? (
+                    <img src={m.icon} alt="" draggable={false} />
+                  ) : (
+                    <PixelGlyph glyph="box" size={40} color="var(--text-3)" />
+                  )}
                 </span>
-              </button>
-              {/* 172:640 — the icon square: the jar's own icon, else a glyph */}
-              <span className="editor__row-icon">
-                {m.icon ? (
-                  <img src={m.icon} alt="" draggable={false} />
-                ) : (
-                  <PixelGlyph glyph="box" size={40} color="var(--text-3)" />
-                )}
-              </span>
-              <span className="editor__file">
-                <TT size={16} tone={m.enabled ? 'plain' : 'dim'}>
-                  {m.name || displayName(m.filename)}
-                </TT>
-                <span className="meta editor__filename">
-                  {m.filename} · {fmtBytes(m.size)}
-                  {upd && ` · ${upd.currentVersion} → ${upd.versionNumber}`}
+                <span className="editor__file">
+                  <TT size={16} tone={m.enabled ? 'plain' : 'dim'}>
+                    {m.name || displayName(m.filename)}
+                  </TT>
+                  <span className="meta editor__filename">
+                    {m.filename} · {fmtBytes(m.size)}
+                    {upd && ` · ${upd.currentVersion} → ${upd.versionNumber}`}
+                  </span>
+                  {upd?.changelog && (
+                    <button
+                      className="editor__notes-toggle meta"
+                      title={`What ${upd.versionNumber} changes`}
+                      onClick={() => setNotesOpen(notesOpen === key ? null : key)}
+                    >
+                      {notesOpen === key ? 'HIDE WHAT’S NEW' : 'WHAT’S NEW'}
+                    </button>
+                  )}
                 </span>
-              </span>
-              {/* type / state column — the Figma note asks for type + source +
-                  version; the backend only knows the type today */}
-              <span className="editor__kind">
-                <TT size={14} tone="sub">
-                  {label}
-                </TT>
-                <span className="meta">{m.enabled ? 'enabled' : 'disabled'}</span>
-              </span>
-              {/* fixed width, so the type column lines up with or without UPDATE */}
-              <span className="editor__actions">
-                {projectId && (
+                {/* type / state column — the Figma note asks for type + source +
+                    version; the backend only knows the type today */}
+                <span className="editor__kind">
+                  <TT size={14} tone="sub">
+                    {label}
+                  </TT>
+                  <span className="meta">{m.enabled ? 'enabled' : 'disabled'}</span>
+                </span>
+                {/* fixed width, so the type column lines up with or without UPDATE */}
+                <span className="editor__actions">
+                  {projectId && (
+                    <PxButton
+                      family="grey"
+                      height="sm"
+                      title="Open on Modrinth — pick a specific version to install"
+                      disabled={updating.has(key)}
+                      onClick={() => onOpenProject(CONTENT_BY_KIND[fileKind], projectId)}
+                    >
+                      <TT size={16}>VERSIONS</TT>
+                    </PxButton>
+                  )}
+                  {upd && (
+                    <PxButton
+                      family="accent"
+                      height="sm"
+                      title={`${upd.currentVersion} → ${upd.versionNumber}`}
+                      disabled={updating.size > 0}
+                      onClick={() => void update([[key, fileKind, upd]])}
+                    >
+                      <TT size={16} tone="accent">
+                        {updating.has(key) ? 'UPDATING…' : 'UPDATE'}
+                      </TT>
+                    </PxButton>
+                  )}
                   <PxButton
-                    family="grey"
+                    family="red"
                     height="sm"
-                    title="Open on Modrinth — pick a specific version to install"
                     disabled={updating.has(key)}
-                    onClick={() => onOpenProject(CONTENT_BY_KIND[fileKind], projectId)}
+                    onClick={() => void act(() => api.removeContent(profile.id, fileKind, m.filename))}
                   >
-                    <TT size={16}>VERSIONS</TT>
-                  </PxButton>
-                )}
-                {upd && (
-                  <PxButton
-                    family="accent"
-                    height="sm"
-                    title={`${upd.currentVersion} → ${upd.versionNumber}`}
-                    disabled={updating.size > 0}
-                    onClick={() => void update([[key, fileKind, upd]])}
-                  >
-                    <TT size={16} tone="accent">
-                      {updating.has(key) ? 'UPDATING…' : 'UPDATE'}
+                    <TT size={16} tone="red">
+                      REMOVE
                     </TT>
                   </PxButton>
-                )}
-                <PxButton
-                  family="red"
-                  height="sm"
-                  disabled={updating.has(key)}
-                  onClick={() => void act(() => api.removeContent(profile.id, fileKind, m.filename))}
-                >
-                  <TT size={16} tone="red">
-                    REMOVE
-                  </TT>
-                </PxButton>
-              </span>
-            </div>
+                </span>
+              </div>
+              {notes && (
+                <div
+                  className="editor__notes md scroll"
+                  // sanitized by DOMPurify in renderMarkdown
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(notes) }}
+                  onClick={mdLinkClick}
+                />
+              )}
+            </Fragment>
           );
         })}
       </div>
