@@ -1482,7 +1482,7 @@ function ContentTab({
                   </span>
                   {upd?.changelog && (
                     <button
-                      className="editor__notes-toggle meta"
+                      className="changelog-toggle meta"
                       title={`What ${upd.versionNumber} changes`}
                       onClick={() => setNotesOpen(notesOpen === key ? null : key)}
                     >
@@ -1538,7 +1538,7 @@ function ContentTab({
               </div>
               {notes && (
                 <div
-                  className="editor__notes md scroll"
+                  className="changelog md scroll"
                   // sanitized by DOMPurify in renderMarkdown
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(notes) }}
                   onClick={mdLinkClick}

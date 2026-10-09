@@ -1231,8 +1231,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* WHAT'S NEW under a file with an update: its changelog opens below the row */
-.editor__notes-toggle {
+/* WHAT'S NEW: a version's changelog opens below its row (a file with an
+   update in the instance editor, a version on a project page) */
+.changelog-toggle {
   align-self: flex-start;
   padding: 0;
   border: 0;
@@ -1241,7 +1242,7 @@
   text-decoration: underline;
   cursor: pointer;
 }
-.editor__notes {
+.changelog {
   flex: none;
   max-height: calc(420 * var(--u));
   overflow-y: auto;

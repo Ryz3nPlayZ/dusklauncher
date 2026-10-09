@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import PixelGlyph from '../components/px/PixelGlyph';
 import { NavCell, NavLabel, PxBox, PxButton, TT } from '../components/px/Px';
 import { api, isTauri, type ProjectDetails, type ProjectKind, type ProjectVersion } from '../lib/api';
-import { openLink, renderMarkdown } from '../lib/markdown';
+import { mdLinkClick, openLink, renderMarkdown } from '../lib/markdown';
 import { fmtCount } from './Browse';
 
 /* ── PROJECT PAGE (Figma frame 5, 187:5) ────────────────────────────────
@@ -58,6 +58,8 @@ export default function Project({
   const [gameFilter, setGameFilter] = useState('');
   const [loaderFilter, setLoaderFilter] = useState('');
   const [lightbox, setLightbox] = useState<number | null>(null);
+  /* the version whose changelog is open under it */
+  const [notesOpen, setNotesOpen] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -199,13 +201,7 @@ export default function Project({
                     className="md"
                     // sanitized by DOMPurify in renderMarkdown
                     dangerouslySetInnerHTML={{ __html: body }}
-                    onClick={(e) => {
-                      const a = (e.target as HTMLElement).closest('a');
-                      if (a?.href) {
-                        e.preventDefault();
-                        void openLink(a.href);
-                      }
-                    }}
+                    onClick={mdLinkClick}
                   />
                 ) : (
                   <TT size={16} tone="dim">
@@ -251,36 +247,55 @@ export default function Project({
                     const done = installed.has(v.id) || current?.versionId === v.id;
                     const swap = !done && !!current;
                     return (
-                      <PxBox key={v.id} family="panel" listing className="project__version">
-                        <span className={['project__vtype', `project__vtype--${v.versionType}`].join(' ')}>
-                          <TT size={11} tone={v.versionType === 'release' ? 'green' : v.versionType === 'beta' ? 'yellow' : 'red'}>
-                            {v.versionType.toUpperCase()}
-                          </TT>
-                        </span>
-                        <span className="project__vtext">
-                          <span className="browse__name">
-                            <TT size={20}>{v.name || v.versionNumber}</TT>
-                            {v.name && v.name !== v.versionNumber && <span className="meta">{v.versionNumber}</span>}
+                      <Fragment key={v.id}>
+                        <PxBox family="panel" listing className="project__version">
+                          <span className={['project__vtype', `project__vtype--${v.versionType}`].join(' ')}>
+                            <TT size={11} tone={v.versionType === 'release' ? 'green' : v.versionType === 'beta' ? 'yellow' : 'red'}>
+                              {v.versionType.toUpperCase()}
+                            </TT>
                           </span>
-                          <span className="meta">
-                            {[v.loaders.join(' / '), v.gameVersions.slice(0, 6).join(', ') + (v.gameVersions.length > 6 ? '…' : ''), `${fmtCount(v.downloads)} downloads`, fmtDate(v.published)]
-                              .filter(Boolean)
-                              .join(' · ')}
+                          <span className="project__vtext">
+                            <span className="browse__name">
+                              <TT size={20}>{v.name || v.versionNumber}</TT>
+                              {v.name && v.name !== v.versionNumber && <span className="meta">{v.versionNumber}</span>}
+                            </span>
+                            <span className="meta">
+                              {[v.loaders.join(' / '), v.gameVersions.slice(0, 6).join(', ') + (v.gameVersions.length > 6 ? '…' : ''), `${fmtCount(v.downloads)} downloads`, fmtDate(v.published)]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </span>
+                            {v.changelog?.trim() && (
+                              <button
+                                className="changelog-toggle meta"
+                                title={`What ${v.versionNumber} changes`}
+                                onClick={() => setNotesOpen(notesOpen === v.id ? null : v.id)}
+                              >
+                                {notesOpen === v.id ? 'HIDE WHAT’S NEW' : 'WHAT’S NEW'}
+                              </button>
+                            )}
                           </span>
-                        </span>
-                        <PxButton
-                          family="moss"
-                          height="sm"
-                          className="project__vinstall"
-                          title={swap ? `Replaces ${current!.versionNumber}` : undefined}
-                          disabled={installing !== null || done}
-                          onClick={() => void run(v.id)}
-                        >
-                          <TT size={16} tone="moss">
-                            {installing === v.id ? 'INSTALLING…' : done ? 'INSTALLED' : swap ? 'SWITCH' : 'INSTALL'}
-                          </TT>
-                        </PxButton>
-                      </PxBox>
+                          <PxButton
+                            family="moss"
+                            height="sm"
+                            className="project__vinstall"
+                            title={swap ? `Replaces ${current!.versionNumber}` : undefined}
+                            disabled={installing !== null || done}
+                            onClick={() => void run(v.id)}
+                          >
+                            <TT size={16} tone="moss">
+                              {installing === v.id ? 'INSTALLING…' : done ? 'INSTALLED' : swap ? 'SWITCH' : 'INSTALL'}
+                            </TT>
+                          </PxButton>
+                        </PxBox>
+                        {notesOpen === v.id && v.changelog?.trim() && (
+                          <div
+                            className="changelog md scroll"
+                            // sanitized by DOMPurify in renderMarkdown
+                            dangerouslySetInnerHTML={{ __html: renderMarkdown(v.changelog) }}
+                            onClick={mdLinkClick}
+                          />
+                        )}
+                      </Fragment>
                     );
                   })}
                   {versions && shown.length === 0 && (
