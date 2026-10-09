@@ -803,6 +803,16 @@ pub async fn install_and_launch(
         if !fabric_api_ok {
             return Err("Hosting needs Fabric API, and it couldn't be downloaded. Check your connection.".into());
         }
+        // a disabled copy in mods/ keeps DuskClient out, and with it the
+        // code that opens the world
+        if crate::cosmetics::client_mod_turned_off(&dirs.mods) {
+            return Err("Hosting runs through DuskClient, which is turned off in this instance's mods. Turn it back on to host.".into());
+        }
+        if !crate::cosmetics::client_mod_in_mods(&dirs.mods)
+            && crate::cosmetics::bundled_client_mod_jar(&app, &state.data_dir, crate::cosmetics::client_mod_jar_for(&profile.game_version).unwrap_or_default()).is_none()
+        {
+            return Err("Hosting runs through DuskClient, and this launcher build has no copy of it. Reinstall the launcher.".into());
+        }
         let mods = dirs.mods.clone();
         let has_own = tokio::task::spawn_blocking(move || crate::mods::fabric_mod_ids(&mods).contains(crate::hosting::E4MC_MOD_ID))
             .await

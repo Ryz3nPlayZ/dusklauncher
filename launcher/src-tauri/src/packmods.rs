@@ -233,7 +233,7 @@ pub fn pack_mods(state: State<AppState>, profile_id: String) -> Result<Vec<PackN
         return Ok(Vec::new());
     }
     let dirs = profile.dirs(&state.data_dir);
-    let client_skies = crate::cosmetics::client_draws_skies(&profile.game_version, &dirs.mods);
+    let client_skies = crate::cosmetics::client_draws_skies(&profile.game_version, profile.loader_version.as_deref(), &dirs.mods);
     Ok(needs(&packs, &dirs.shaderpacks, &dirs.mods, client_skies))
 }
 
@@ -303,9 +303,9 @@ pub async fn install_pack_mods(
     let mods_dir = dirs.mods.clone();
     let scan = {
         let (packs, shaders, mods_dir) = (packs.clone(), dirs.shaderpacks.clone(), mods_dir.clone());
-        let version = profile.game_version.clone();
+        let (version, loader) = (profile.game_version.clone(), profile.loader_version.clone());
         tokio::task::spawn_blocking(move || {
-            let client_skies = crate::cosmetics::client_draws_skies(&version, &mods_dir);
+            let client_skies = crate::cosmetics::client_draws_skies(&version, loader.as_deref(), &mods_dir);
             (needs(&packs, &shaders, &mods_dir, client_skies), mods::fabric_mod_ids(&mods_dir))
         })
     };

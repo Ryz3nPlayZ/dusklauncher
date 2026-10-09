@@ -97,15 +97,20 @@ pub fn client_mod_in_mods(mods_dir: &Path) -> bool {
         .any(|j| mods_dir.join(j).exists() || mods_dir.join(format!("{j}.disabled")).exists())
 }
 
+/// Whether the player turned DuskClient off in `mods_dir`: a disabled copy
+/// and no enabled one. The disabled copy also stops the injected jar.
+pub fn client_mod_turned_off(mods_dir: &Path) -> bool {
+    CLIENT_MOD_JARS.iter().any(|j| mods_dir.join(format!("{j}.disabled")).exists())
+        && !CLIENT_MOD_JARS.iter().any(|j| mods_dir.join(j).exists())
+}
+
 /// Whether DuskClient runs in an instance on `game_version` and draws resource
-/// packs' OptiFine custom skies itself (1.21.11 on). It doesn't when the only
-/// copy in `mods_dir` is turned off: a copy there stops the injected one.
-pub fn client_draws_skies(game_version: &str, mods_dir: &Path) -> bool {
+/// packs' OptiFine custom skies itself (1.21.11 on). It doesn't when the
+/// player turned it off in `mods_dir`, or when the instance pins a Fabric
+/// Loader too old for it (the launch leaves it out).
+pub fn client_draws_skies(game_version: &str, loader_version: Option<&str>, mods_dir: &Path) -> bool {
     let Some(jar) = client_mod_jar_for(game_version) else { return false };
-    let turned_off = CLIENT_MOD_JARS
-        .iter()
-        .any(|j| mods_dir.join(format!("{j}.disabled")).exists() && !mods_dir.join(j).exists());
-    CLIENT_MOD_JARS[6..].contains(&jar) && !turned_off
+    CLIENT_MOD_JARS[6..].contains(&jar) && loader_runs_client(loader_version) && !client_mod_turned_off(mods_dir)
 }
 
 /// Keep a visible DuskClient copy in `mods/` in step with the launcher: a
@@ -495,11 +500,15 @@ mod tests {
     fn the_client_draws_skies_from_1_21_11_unless_turned_off() {
         let tmp = std::env::temp_dir().join(format!("dusk-skies-{}", std::process::id()));
         std::fs::create_dir_all(&tmp).unwrap();
-        assert!(!client_draws_skies("1.21.10", &tmp));
-        assert!(client_draws_skies("1.21.11", &tmp) && client_draws_skies("26.3", &tmp));
-        assert!(!client_draws_skies("26.4", &tmp));
+        assert!(!client_draws_skies("1.21.10", None, &tmp));
+        assert!(client_draws_skies("1.21.11", None, &tmp) && client_draws_skies("26.3", Some("0.19.5"), &tmp));
+        assert!(!client_draws_skies("26.4", None, &tmp));
+        assert!(!client_draws_skies("1.21.11", Some("0.16.14"), &tmp));
         std::fs::write(tmp.join("duskclient-1.21.11.jar.disabled"), b"x").unwrap();
-        assert!(!client_draws_skies("1.21.11", &tmp));
+        assert!(!client_draws_skies("1.21.11", None, &tmp));
+        // an enabled copy beside a stale disabled one still runs
+        std::fs::write(tmp.join("duskclient-26.3.jar"), b"x").unwrap();
+        assert!(client_draws_skies("26.3", None, &tmp));
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
