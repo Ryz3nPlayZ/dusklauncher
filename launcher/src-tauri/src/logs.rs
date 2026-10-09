@@ -192,7 +192,10 @@ fn redact(text: &str, home: Option<&str>) -> String {
         out.push_str(&words.join(" "));
     }
     match home.filter(|h| h.len() > 1) {
-        Some(home) => out.replace(home, "~"),
+        // Windows paths turn up with either slash, and doubled inside JSON
+        Some(home) => [home.to_string(), home.replace('\\', "/"), home.replace('\\', "\\\\")]
+            .iter()
+            .fold(out, |text, h| text.replace(h.as_str(), "~")),
         None => out,
     }
 }
@@ -311,5 +314,7 @@ mod tests {
         assert!(out.contains("auth=<token>;"));
         assert!(out.contains("keep eyJ.short"));
         assert!(!out.contains("sig_abc"));
+        let win = redact("C:/Users/alex/a and C:\\Users\\alex\\b and \"C:\\\\Users\\\\alex\"", Some("C:\\Users\\alex"));
+        assert!(!win.contains("alex"), "{win}");
     }
 }
