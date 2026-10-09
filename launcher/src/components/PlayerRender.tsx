@@ -370,7 +370,9 @@ export default function PlayerRender({
       return;
     }
     const done = viewer.loadEars(ears, { textureType: 'standalone' });
-    if (done instanceof Promise) done.catch((e) => console.error('ears load failed', e));
+    // like the skin: a paused stage shows the ears only once they're drawn
+    if (done instanceof Promise) done.then(still).catch((e) => console.error('ears load failed', e));
+    else still();
   }, [ears, ready]);
 
   useEffect(() => {

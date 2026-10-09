@@ -136,9 +136,10 @@ export default function Home({
               height="xl"
               className="home__play"
               // `starting` with no progress box is the gap between the spawn
-              // and the first event — nothing sensible to click yet
-              disabled={live ? !running : !selected}
-              onClick={() => (live ? running && onStop() : selected && onLaunch(selected.id))}
+              // and the first event — nothing sensible to click yet; with no
+              // instance at all the button does what its label says
+              disabled={live ? !running : false}
+              onClick={() => (live ? running && onStop() : selected ? onLaunch(selected.id) : onManage())}
             >
               {!live && <PixelArrow />}
               <span className="home__play-text">

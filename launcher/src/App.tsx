@@ -257,6 +257,9 @@ export default function App() {
       } catch (e) {
         setProgress(null);
         setError(String(e));
+        // the reason shows on Home; a PLAY from an instance card or the
+        // editor would otherwise just flip back to PLAY NOW with no word why
+        setRoute('home');
         // e.g. "already running": the backend knows what is actually up
         setGame(null);
         void syncGame();

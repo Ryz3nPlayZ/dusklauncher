@@ -34,6 +34,8 @@ type Update = Awaited<ReturnType<Awaited<ReturnType<typeof loadUpdater>>['check'
 export function useUpdater() {
   const [status, setStatus] = useState<UpdateStatus>({ kind: 'idle' });
   const updateRef = useRef<Update>(null);
+  const statusRef = useRef(status);
+  statusRef.current = status;
 
   const check = useCallback(async () => {
     setStatus({ kind: 'checking' });
@@ -109,11 +111,10 @@ export function useUpdater() {
   useEffect(() => {
     void check();
     const t = setInterval(() => {
-      // never interrupt a download or a pending restart
-      setStatus((s) => {
-        if (s.kind === 'idle' || s.kind === 'error') void check();
-        return s;
-      });
+      // never interrupt a download or a pending restart (read through a ref:
+      // a state updater must not start side effects)
+      const s = statusRef.current;
+      if (s.kind === 'idle' || s.kind === 'error') void check();
     }, RECHECK_MS);
     return () => clearInterval(t);
   }, [check]);

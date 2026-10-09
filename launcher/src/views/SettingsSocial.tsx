@@ -139,7 +139,7 @@ export default function SettingsSocial({
           options={[...onOff]}
         />
       </Row>
-      <Row label="CLOCK" hint="How times read in chat and the screenshot gallery.">
+      <Row label="CLOCK" hint="How times read in chat and on the Media page.">
         <Choice
           value={settings.clock24h ? '24' : '12'}
           onPick={(v) => set({ clock24h: v === '24' })}

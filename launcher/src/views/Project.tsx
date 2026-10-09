@@ -22,6 +22,8 @@ const KIND_LABEL: Record<ProjectKind, string> = {
 
 type Tab = 'DESCRIPTION' | 'VERSIONS' | 'GALLERY';
 
+const errText = (e: unknown) => String(e).replace(/^Error: /, '');
+
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : '—');
 
 export default function Project({
@@ -69,7 +71,7 @@ export default function Project({
     api
       .getProject(id)
       .then((p) => !cancelled && setProject(p))
-      .catch((e) => !cancelled && setNote(String(e)));
+      .catch((e) => !cancelled && setNote(errText(e)));
     api
       .listProjectVersions(id)
       .then((v) => {
@@ -78,12 +80,27 @@ export default function Project({
         if (prefer && v.some((x) => x.gameVersions.includes(prefer.gameVersion))) setGameFilter(prefer.gameVersion);
         if (prefer && v.some((x) => x.loaders.includes(prefer.loader))) setLoaderFilter(prefer.loader);
       })
-      .catch((e) => !cancelled && setNote(String(e)));
+      .catch((e) => !cancelled && setNote(errText(e)));
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // the open picture: Escape closes it, ← / → step through the gallery
+  useEffect(() => {
+    if (lightbox === null) return;
+    const count = project?.gallery.length ?? 0;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setLightbox(null);
+      } else if (e.key === 'ArrowLeft' && lightbox > 0) setLightbox(lightbox - 1);
+      else if (e.key === 'ArrowRight' && lightbox < count - 1) setLightbox(lightbox + 1);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [lightbox, project]);
 
   const body = useMemo(() => (project ? renderMarkdown(project.body) : ''), [project]);
 
@@ -116,7 +133,7 @@ export default function Project({
     try {
       if (await install(versionId, project)) setInstalled((s) => new Set(s).add(key));
     } catch (e) {
-      setNote(String(e));
+      setNote(errText(e));
     }
     setInstalling(null);
   };
@@ -126,7 +143,7 @@ export default function Project({
         project.loaders.join(' / ') || null,
         project.gameVersions.length
           ? project.gameVersions.length > 3
-            ? `${project.gameVersions[project.gameVersions.length - 1]} – ${project.gameVersions[0]}`
+            ? `${project.gameVersions[0]} – ${project.gameVersions[project.gameVersions.length - 1]}`
             : project.gameVersions.join(', ')
           : null,
         `${fmtCount(project.downloads)} downloads`,

@@ -127,5 +127,7 @@ pub fn remove_wallpaper(state: State<AppState>, name: String) -> Result<(), Stri
     if !path.starts_with(&dir) || kind_of(&name).is_none() {
         return Err("not a wallpaper file name".into());
     }
-    std::fs::remove_file(&path).map_err(|e| e.to_string())
+    // the red square asks nothing first, so (like screenshots and worlds)
+    // the file goes to the OS trash rather than away for good
+    trash::delete(&path).map_err(|e| format!("Couldn't move {name} to the trash: {e}"))
 }

@@ -12,6 +12,8 @@ import { api, type ModpackFacets, type ModpackHit, type ModpackSearch, type Proj
    moss INSTALL. A row opens the project page (frame 5); INSTALL on the row
    is the quick path — latest compatible version. */
 
+const errText = (e: unknown) => String(e).replace(/^Error: /, '');
+
 export const EMPTY_FACETS: ModpackFacets = { categories: [], versions: [], loaders: [] };
 
 const SORTS = ['relevance', 'downloads', 'follows', 'newest', 'updated'] as const;
@@ -82,12 +84,14 @@ export default function BrowseProjects({
   const [installing, setInstalling] = useState<string | null>(null);
   const [installed, setInstalled] = useState<Set<string>>(() => new Set());
   const reqId = useRef(0);
+  /** the note a failed search left, so the next good one can clear it */
+  const searchErr = useRef<string | null>(null);
 
   useEffect(() => {
     api
       .projectTags(kind)
       .then(setTags)
-      .catch((e) => setNote(String(e)));
+      .catch((e) => setNote(errText(e)));
   }, [kind]);
 
   useEffect(() => {
@@ -99,11 +103,14 @@ export default function BrowseProjects({
           if (reqId.current === id) {
             setResult(r);
             setLoading(false);
+            // a search that went through retires the last one's failure
+            setNote((n) => (n === searchErr.current ? null : n));
           }
         })
         .catch((e) => {
           if (reqId.current === id) {
-            setNote(String(e));
+            searchErr.current = errText(e);
+            setNote(searchErr.current);
             setLoading(false);
           }
         });
@@ -169,7 +176,7 @@ export default function BrowseProjects({
     try {
       if (await install(hit)) setInstalled((s) => new Set(s).add(hit.id));
     } catch (e) {
-      setNote(String(e));
+      setNote(errText(e));
     }
     setInstalling(null);
   };
@@ -260,7 +267,14 @@ export default function BrowseProjects({
         <PxBox family="panel" className="browse__results">
           <div className="browse__toolbar">
             <PxBox family="panel" height="sm" className="browse__select">
-              <select className="input select" value={sort} onChange={(e) => setSort(e.target.value)}>
+              <select
+                className="input select"
+                value={sort}
+                onChange={(e) => {
+                  setPage(0);
+                  setSort(e.target.value);
+                }}
+              >
                 {SORTS.map((s) => (
                   <option key={s} value={s}>
                     {s.charAt(0).toUpperCase() + s.slice(1)}

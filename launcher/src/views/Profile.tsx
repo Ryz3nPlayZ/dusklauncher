@@ -4,6 +4,8 @@ import PlayerHead from '../components/PlayerHead';
 import { PxBox, PxButton, TT } from '../components/px/Px';
 import { api, isTauri, type Account, type AppInfo, type SavedAccount } from '../lib/api';
 
+const errText = (e: unknown) => String(e).replace(/^Error: /, '');
+
 export default function Profile({
   account,
   skin,
@@ -38,7 +40,7 @@ export default function Profile({
       await onChange();
       refreshAccounts();
     } catch (e) {
-      setSwitchErr(String(e));
+      setSwitchErr(errText(e));
     } finally {
       setSwitching(null);
     }
@@ -74,10 +76,17 @@ export default function Profile({
                 disabled={busy}
                 onClick={async () => {
                   setSigningOut(true);
-                  await api.logout();
-                  await onChange();
-                  refreshAccounts();
-                  setSigningOut(false);
+                  setSwitchErr(null);
+                  // a failed sign-out must not leave every button disabled
+                  try {
+                    await api.logout();
+                    await onChange();
+                    refreshAccounts();
+                  } catch (e) {
+                    setSwitchErr(errText(e));
+                  } finally {
+                    setSigningOut(false);
+                  }
                 }}
               >
                 <TT size={22} tone="red">
@@ -92,7 +101,7 @@ export default function Profile({
                 onClick={() => void start()}
               >
                 <TT size={22} tone="blue">
-                  {busy ? 'WAITING…' : 'SIGN IN'}
+                  {signingIn ? 'WAITING…' : 'SIGN IN'}
                 </TT>
               </PxButton>
             )}
@@ -130,7 +139,7 @@ export default function Profile({
                       void api
                         .removeAccount(a.uuid)
                         .then(refreshAccounts)
-                        .catch((e) => setSwitchErr(String(e)))
+                        .catch((e) => setSwitchErr(errText(e)))
                     }
                   >
                     <TT size={16}>REMOVE</TT>
@@ -165,7 +174,7 @@ export default function Profile({
             SESSION
           </TT>
           <span className="meta">
-            {busy
+            {signingIn
               ? 'A browser window is open — finish the Microsoft sign-in there.'
               : account?.authenticated
                 ? 'Session is stored locally and refreshed automatically before each launch.'

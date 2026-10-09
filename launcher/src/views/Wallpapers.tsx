@@ -12,6 +12,7 @@ import { api, isTauri, type Wallpaper } from '../lib/api';
    is the same gesture as picking anything else. */
 
 const FILTERS = ['ALL', 'IMAGES', 'VIDEOS'] as const;
+const errText = (e: unknown) => String(e).replace(/^Error: /, '');
 type Filter = (typeof FILTERS)[number];
 
 /** "34455d9192-minecraft-sunset.3840x2160.mp4" → "MINECRAFT SUNSET" —
@@ -45,7 +46,7 @@ export default function Wallpapers({
       .then(setWalls)
       .catch((e) => {
         setWalls([]);
-        setError(String(e));
+        setError(errText(e));
       });
   }, []);
 
@@ -57,7 +58,7 @@ export default function Wallpapers({
       setWalls((list) => [...(list ?? []).filter((x) => x.name !== w.name), w]);
       onPick(w.name);
     } catch (e) {
-      setError(String(e));
+      setError(errText(e));
     }
   };
 
@@ -68,7 +69,7 @@ export default function Wallpapers({
       setWalls((list) => (list ?? []).filter((x) => x.name !== name));
       if (current === name) onPick('');
     } catch (e) {
-      setError(String(e));
+      setError(errText(e));
     }
   };
 
@@ -182,7 +183,7 @@ function WallCard({
           </TT>
         </PxButton>
         {onDelete && (
-          <PxButton family="red" height="fill" className="card__gear" title="Delete this wallpaper" onClick={onDelete}>
+          <PxButton family="red" height="fill" className="card__gear" title="Move to trash" onClick={onDelete}>
             <PixelGlyph glyph="close" size={16} color="var(--r-co)" />
           </PxButton>
         )}

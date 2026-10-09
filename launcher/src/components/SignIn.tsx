@@ -138,11 +138,6 @@ export function DevicePanel({ auth }: { auth: AuthEvent | null }) {
   );
 }
 
-/**
- * The launch gate: shown while no Microsoft account is signed in (and
- * offline play isn't unlocked). Only in the desktop app — the browser
- * preview has no auth.
- */
 /** The fix the Azure-400 error names: sign in again with Microsoft's
  *  permission screen forced, so a missing Xbox grant can be approved. */
 export function ReconsentButton({ busy, onClick }: { busy: boolean; onClick: () => Promise<void> }) {
@@ -153,6 +148,11 @@ export function ReconsentButton({ busy, onClick }: { busy: boolean; onClick: () 
   );
 }
 
+/**
+ * The launch gate: shown while no Microsoft account is signed in (and
+ * offline play isn't unlocked). Only in the desktop app — the browser
+ * preview has no auth.
+ */
 export default function SignInGate({
   onDone,
   onLater,

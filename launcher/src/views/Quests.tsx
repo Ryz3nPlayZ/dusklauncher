@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { PxBox, PxButton, TT } from '../components/px/Px';
 import { api, isTauri, type Account, type Quest, type Quests as Board } from '../lib/api';
 
+const errText = (e: unknown) => String(e).replace(/^Error: /, '');
+
 /**
  * Quests: the daily streak, the daily and weekly boards, and achievements.
  * The server tracks progress (play time comes from the mod); rewards wait
@@ -16,6 +18,8 @@ export default function Quests({
 }) {
   const [board, setBoard] = useState<Board | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  /* why the board couldn't load; the next good refresh clears it */
+  const [loadErr, setLoadErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   // the browser preview has no account but mocks the board
   const signedIn = !isTauri || !!account?.authenticated || !!account?.offline;
@@ -34,8 +38,12 @@ export default function Quests({
     const load = () =>
       api
         .getQuests()
-        .then((b) => live && take(b))
-        .catch((e) => live && setNote(String(e)));
+        .then((b) => {
+          if (!live) return;
+          take(b);
+          setLoadErr(null);
+        })
+        .catch((e) => live && setLoadErr(errText(e)));
     void load();
     // the reset timers count down and the mod moves progress while you play
     const t = window.setInterval(load, 60_000);
@@ -53,7 +61,7 @@ export default function Quests({
       take(r.quests);
       setNote(r.paid > 0 ? `+${r.paid} coins` : 'Nothing to claim yet.');
     } catch (e) {
-      setNote(String(e));
+      setNote(errText(e));
     } finally {
       setBusy(null);
     }
@@ -66,7 +74,7 @@ export default function Quests({
           <h1 className="page__title">Quests</h1>
         </div>
         <PxBox family="panel" className="stack">
-          <span className="meta">Sign in with Microsoft to earn coins from quests.</span>
+          <span className="meta">Sign in to earn coins from quests.</span>
         </PxBox>
       </div>
     );
@@ -78,7 +86,7 @@ export default function Quests({
       <div className="page__head">
         <h1 className="page__title">Quests</h1>
         <div className="quests__head">
-          {note && <span className="meta">{note}</span>}
+          {(note ?? (board && loadErr)) && <span className="meta">{note ?? loadErr}</span>}
           {board && (
             <TT size={20} tone="yellow">
               {`${board.coins} COINS`}
@@ -99,7 +107,7 @@ export default function Quests({
 
       {!board ? (
         <PxBox family="panel" className="stack">
-          <span className="meta">Loading…</span>
+          <span className="meta">{loadErr ?? 'Loading…'}</span>
         </PxBox>
       ) : (
         <div className="column">

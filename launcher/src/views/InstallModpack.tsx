@@ -14,6 +14,8 @@ export interface InstallTarget {
   versionId?: string;
 }
 
+const errText = (e: unknown) => String(e).replace(/^Error: /, '');
+
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
 
@@ -70,11 +72,23 @@ export default function InstallModpack({
         if (pre) setGameFilter(pre.gameVersions[0] ?? '');
         setPicked((cur) => cur ?? list.find((v) => v.id !== installed)?.id ?? null);
       })
-      .catch((e) => !cancelled && setErr(String(e)));
+      .catch((e) => !cancelled && setErr(errText(e)));
     return () => {
       cancelled = true;
     };
   }, [target.id, target.versionId, installed]);
+
+  // Escape dismisses the dialog like CANCEL, except mid-install
+  useEffect(() => {
+    if (busy) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      onClose();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [busy, onClose]);
 
   const gameOptions = useMemo(() => {
     const seen: string[] = [];
@@ -96,7 +110,7 @@ export default function InstallModpack({
     try {
       await onInstall(chosen.id, name.trim());
     } catch (e) {
-      setErr(String(e));
+      setErr(errText(e));
       setBusy(false);
     }
   };

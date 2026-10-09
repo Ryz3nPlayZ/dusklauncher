@@ -3,7 +3,7 @@
  * pressing STOP: what went wrong and what to do, in plain words, worked out
  * by the backend from the crash report and the end of the log.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { PxBox, PxButton, TT } from './px/Px';
 import { api, type CrashInfo } from '../lib/api';
@@ -19,6 +19,17 @@ export default function CrashDialog({
 }) {
   const [note, setNote] = useState<string | null>(null);
 
+  // Escape is OK, like a click outside
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      onClose();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onClose]);
+
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(`${crash.title}\n\n${crash.details}`);
@@ -33,7 +44,7 @@ export default function CrashDialog({
     try {
       await api.revealCrashReport(crash.profileId, crash.report);
     } catch (e) {
-      setNote(String(e));
+      setNote(String(e).replace(/^Error: /, ''));
     }
   };
 

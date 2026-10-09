@@ -143,16 +143,19 @@ export default function Screenshots({
     void api.revealRecording(r.path).catch((e) => setError(errText(e)));
   };
 
-  // arrow keys step through the open shot, escape closes it
+  // arrow keys step through the open shot, escape closes it (and only it:
+  // caught first, so an open friends pane doesn't close with it)
   useEffect(() => {
     if (!current || sending) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setViewing(null);
-      else if (e.key === 'ArrowLeft' && viewIndex > 0) setViewing(shown[viewIndex - 1].path);
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setViewing(null);
+      } else if (e.key === 'ArrowLeft' && viewIndex > 0) setViewing(shown[viewIndex - 1].path);
       else if (e.key === 'ArrowRight' && viewIndex < shown.length - 1) setViewing(shown[viewIndex + 1].path);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [current, sending, viewIndex, shown]);
 
   return (
@@ -179,6 +182,7 @@ export default function Screenshots({
               onClick={() => {
                 setFilter(f);
                 setNote(null);
+                setError(null);
                 // a fresh look each time: the game may have saved more since
                 if (f === 'CLIPS' || f === 'REPLAYS') setRecordings(null);
               }}
@@ -417,6 +421,18 @@ function SendPicker({ shot, onClose, onSent }: { shot: Screenshot; onClose: () =
   const [friends, setFriends] = useState<Friend[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Escape backs out of the picker to the shot it was opened from
+  useEffect(() => {
+    if (busy) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      onClose();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [busy, onClose]);
 
   useEffect(() => {
     void api
