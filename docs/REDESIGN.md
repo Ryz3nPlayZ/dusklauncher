@@ -5,6 +5,13 @@ modpacks, cosmetics inventory/skins, accounts, store, active-profile state,
 in-game home, mod menu, resource packs). Rule from `DESIGN.md` still holds:
 **every visible element does something real — no ads, no dead chrome.**
 
+> This is the record of that pass, kept as written. Files have moved since:
+> `views/Modpacks.tsx` is now `views/Browse.tsx`, `views/InstanceContent.tsx`
+> is the content tab of `views/InstanceEditor.tsx`, `views/Skins.tsx` is
+> `views/Cosmetics.tsx`, `SkinViewer.tsx` is `components/PlayerRender.tsx`,
+> `home.css` was folded into `design/views.css`, and
+> `mixin/MinecraftClientMixin.java` is the per-version `mixin/TitleRouteMixin.java`.
+
 ## 1. Design system (implemented)
 
 Tokens: `launcher/src/design/tokens.css` (`--btn-*`, type scale).

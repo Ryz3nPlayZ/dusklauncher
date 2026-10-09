@@ -28,11 +28,12 @@ from the layers beneath it. Written against what's already in the tree; every
 
 ### Modules
 
-- **HUD** (`modules/hud/`): Keystrokes, CPS, FPS, Ping, Armor Status, Held Item,
-  Potion Effects, Combo Counter, Reach, Sprint Status,
-  Coordinates, Nether Coordinates, Speed, Biome, Light
-  Level, Clock, Game Time, Day Counter, Weather, Playtime, Entity Count,
-  Memory, Server Address. Each is a `HudElement` with its own settings; the
+There are about 100 modules; every id is listed under "Module ids" in
+`SERVER-API.md`. The groups:
+
+- **HUD** (`modules/hud/`), for example Keystrokes, CPS, FPS, Ping, Armor
+  Status, Potion Effects, Coordinates, Speed, Cooldowns, Looking At, Item
+  Pickups, Stopwatch and Server Lag. Each is a `HudElement` with its own settings; the
   starter set (FPS, CPS, Ping, XYZ, Keystrokes, Armor, Effects, Sprint Status)
   is on by default.
 - **Ported modules.** Modules that recreate a known mod follow that mod's

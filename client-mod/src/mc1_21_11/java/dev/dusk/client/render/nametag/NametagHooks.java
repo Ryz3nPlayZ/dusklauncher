@@ -174,7 +174,7 @@ public final class NametagHooks {
         return originalAlpha >= 1 && originalAlpha <= 32 ? withAlpha(color, Math.min(color >>> 24, originalAlpha)) : color;
     }
 
-    /** "Override text color": drops colour codes and team colours from the name. */
+    /** "Override text colour": drops colour codes and team colours from the name. */
     public static Component text(Component original) {
         Nametags n = Nametags.active();
         return n == null || !n.overrideTextColor.get() ? original : stripColor(original);

@@ -507,8 +507,9 @@ fn merge_config(root: &Path, file: &str, section: &str, key: &str, value: serde_
     }
     sec[key] = value;
     let _ = std::fs::create_dir_all(root.join("config"));
-    if let Ok(s) = serde_json::to_string_pretty(&json) {
-        let _ = std::fs::write(&path, s);
+    if let Ok(s) = serde_json::to_vec_pretty(&json) {
+        // the player's whole Sodium config: never leave it half written
+        let _ = fasterlauncher_core::write_atomic(&path, &s);
     }
 }
 

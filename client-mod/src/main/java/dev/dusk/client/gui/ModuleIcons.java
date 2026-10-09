@@ -21,7 +21,7 @@ final class ModuleIcons {
     private static Map<String, ItemStack> build() {
         Map<String, Item> m = new HashMap<>();
         m.put("armor", Items.IRON_CHESTPLATE);
-        m.put("behindyou", Items.ENDER_EYE);
+        m.put("behindyou", Items.CREEPER_HEAD);
         m.put("biome", Items.GRASS_BLOCK);
         m.put("boatmap", Items.OAK_BOAT);
         m.put("capephysics", Items.ELYTRA);
@@ -30,7 +30,7 @@ final class ModuleIcons {
         m.put("chatheads", Items.SKELETON_SKULL);
         m.put("chatmacros", Items.WRITABLE_BOOK);
         m.put("clock", Items.CLOCK);
-        m.put("stopwatch", Items.REPEATER);
+        m.put("stopwatch", Items.SCULK_SENSOR);
         m.put("resourcepacks", Items.PAINTING);
         m.put("scoreboard", Items.LECTERN);
         m.put("bossbar", Items.DRAGON_HEAD);
@@ -42,7 +42,12 @@ final class ModuleIcons {
         m.put("totems", Items.TOTEM_OF_UNDYING);
         m.put("itemcounter", Items.BUNDLE);
         m.put("itempickups", Items.HOPPER);
-        m.put("scrolltooltips", Items.WRITABLE_BOOK);
+        m.put("scrolltooltips", Items.OAK_HANGING_SIGN);
+        m.put("scrolltransfer", Items.CHEST_MINECART);
+        m.put("itemphysics", Items.DIAMOND);
+        m.put("chatsearch", Items.BRUSH);
+        m.put("customskies", Items.END_CRYSTAL);
+        m.put("lightoverlay", Items.TORCH);
         m.put("bedwarsresources", Items.EMERALD);
         m.put("skyblockstats", Items.NETHER_STAR);
         m.put("hypixel", Items.GOLDEN_SWORD);
@@ -82,7 +87,7 @@ final class ModuleIcons {
         m.put("totempop", Items.FIREWORK_STAR);
         m.put("glintcolor", Items.ENCHANTED_BOOK);
         m.put("cooldowns", Items.CHORUS_FRUIT);
-        m.put("lowshield", Items.SHIELD);
+        m.put("lowshield", Items.IRON_BARS);
         m.put("memory", Items.COMPARATOR);
         m.put("motion_blur", Items.PHANTOM_MEMBRANE);
         m.put("nametags", Items.NAME_TAG);

@@ -400,7 +400,7 @@ pub fn write_loadout_to_instance(data_dir: &Path, instance_root: &Path) -> Resul
     cosmetics.insert("loadout".into(), Value::Object(load_loadout(data_dir)));
     doc.insert("cosmetics".into(), Value::Object(cosmetics));
     std::fs::create_dir_all(&cfg_dir).map_err(|e| e.to_string())?;
-    std::fs::write(&path, serde_json::to_vec_pretty(&doc).unwrap()).map_err(|e| e.to_string())
+    fasterlauncher_core::write_atomic(&path, &serde_json::to_vec_pretty(&doc).unwrap()).map_err(|e| e.to_string())
 }
 
 // ── inventory (the store) ───────────────────────────────────────────────

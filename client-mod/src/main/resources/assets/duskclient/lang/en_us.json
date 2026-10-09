@@ -1,6 +1,6 @@
 {
   "key.categories.duskclient": "DuskClient",
-  "category.duskclient": "DuskClient",
+  "key.category.duskclient.client": "DuskClient",
   "key.duskclient.settings": "Open Dusk Menu",
   "key.duskclient.fullbright": "Toggle Fullbright",
   "key.duskclient.gamma_up": "Increase Gamma",
@@ -15,6 +15,10 @@
   "key.duskclient.friends": "Friends & Chat",
   "key.duskclient.slotlock": "Slot Lock: Lock Hovered Slot",
   "key.duskclient.zoom": "Zoom",
+  "key.duskclient.zoom_in": "Zoom Further",
+  "key.duskclient.zoom_out": "Zoom Back",
+  "key.duskclient.zoom_secondary": "Secondary Zoom",
+  "key.duskclient.shield_self_state": "Shield Statuses: Own Shield Only",
   "key.duskclient.stopwatch": "Stopwatch Start / Pause",
   "key.duskclient.stopwatch_reset": "Stopwatch Reset",
   "key.duskclient.freecam": "Freecam",
@@ -25,7 +29,6 @@
   "key.duskclient.macro_5": "Chat Macro 5",
   "key.duskclient.macro_6": "Chat Macro 6",
   "key.duskclient.freelook": "Freelook",
-  "key.duskclient.freelook_toggle": "Freelook Toggle",
   "key.duskclient.waypoint_add": "Add Waypoint",
   "key.duskclient.waypoint_list": "Waypoints"
 }
