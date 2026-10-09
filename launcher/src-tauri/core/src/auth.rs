@@ -707,7 +707,9 @@ pub fn percent_decode(s: &str) -> String {
     while i < bytes.len() {
         match bytes[i] {
             b'%' if i + 2 < bytes.len() => {
-                let hex = &s[i + 1..i + 3];
+                // bytes, not a str slice: a `%` before a multi-byte character
+                // would cut it in half and panic
+                let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
                 if let Ok(b) = u8::from_str_radix(hex, 16) {
                     out.push(b);
                     i += 3;
@@ -1217,6 +1219,12 @@ pub fn now_millis() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn percent_decode_survives_a_percent_before_multibyte_text() {
+        assert_eq!(percent_decode("%aé"), "%aé");
+        assert_eq!(percent_decode("a%2Fb+c"), "a/b c");
+    }
 
     fn config() -> AuthConfig {
         AuthConfig {

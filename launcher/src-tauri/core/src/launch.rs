@@ -376,7 +376,13 @@ pub async fn launch(spec: &LaunchSpec, env: &LaunchEnv) -> Result<tokio::process
 
     let (java_bin, cmd_args) = command_line(spec, env);
 
-    tracing::info!(java = ?java_bin, "launching: {:?} {}", java_bin, cmd_args.join(" "));
+    // the session token stays out of the log
+    let shown: Vec<&str> = cmd_args
+        .iter()
+        .enumerate()
+        .map(|(i, a)| if i > 0 && cmd_args[i - 1] == "--accessToken" { "<hidden>" } else { a.as_str() })
+        .collect();
+    tracing::info!(java = ?java_bin, "launching: {:?} {}", java_bin, shown.join(" "));
 
     let mut command = tokio::process::Command::new(&java_bin);
     command

@@ -511,6 +511,12 @@ pub async fn download_mrpack(client: &reqwest::Client, ver: &Version) -> Result<
     .await?
     .bytes()
     .await?;
+    if let Some(expected) = file.hashes.get("sha1") {
+        let actual = crate::download::sha1_hex(&bytes);
+        if !actual.eq_ignore_ascii_case(expected) {
+            return Err(crate::Error::Checksum { path: file.url.clone(), expected: expected.clone(), actual });
+        }
+    }
     // the buffer itself, not a copy of it
     Ok(bytes.into())
 }
