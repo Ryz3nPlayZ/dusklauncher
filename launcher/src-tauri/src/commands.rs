@@ -905,52 +905,12 @@ pub async fn install_and_launch(
     let tail = std::sync::Arc::new(std::sync::Mutex::new(std::collections::VecDeque::<String>::new()));
 
     // stream stdout/stderr in batches, supervise exit
-    let mut stdout = child.stdout.take();
-    let mut stderr = child.stderr.take();
     let (tx, mut rx) = tokio::sync::mpsc::channel::<GameLogLine>(512);
-    if let Some(out) = stdout.take() {
-        let tx = tx.clone();
-        tokio::spawn(async move {
-            use tokio::io::{AsyncBufReadExt, BufReader};
-            let mut reader = BufReader::new(out);
-            let mut line = String::new();
-            loop {
-                line.clear();
-                match reader.read_line(&mut line).await {
-                    Ok(0) | Err(_) => break,
-                    Ok(_) => {
-                        let _ = tx
-                            .send(GameLogLine {
-                                line: line.trim_end().to_string(),
-                                stream: "out".into(),
-                            })
-                            .await;
-                    }
-                }
-            }
-        });
+    if let Some(out) = child.stdout.take() {
+        tokio::spawn(pipe_lines(out, tx.clone(), "out"));
     }
-    if let Some(err) = stderr.take() {
-        let tx = tx.clone();
-        tokio::spawn(async move {
-            use tokio::io::{AsyncBufReadExt, BufReader};
-            let mut reader = BufReader::new(err);
-            let mut line = String::new();
-            loop {
-                line.clear();
-                match reader.read_line(&mut line).await {
-                    Ok(0) | Err(_) => break,
-                    Ok(_) => {
-                        let _ = tx
-                            .send(GameLogLine {
-                                line: line.trim_end().to_string(),
-                                stream: "err".into(),
-                            })
-                            .await;
-                    }
-                }
-            }
-        });
+    if let Some(err) = child.stderr.take() {
+        tokio::spawn(pipe_lines(err, tx, "err"));
     }
 
     let app3 = app.clone();
@@ -1001,6 +961,20 @@ pub async fn install_and_launch(
             }
         }
     });
+
+    // running before the exit watcher starts: a JVM that dies at once must
+    // not have its "exited" overwritten by a late "running"
+    *state.activity.lock().unwrap() = Some(crate::appstate::GameActivity {
+        profile_id: profile_id.clone(),
+        profile_name: profile.name.clone(),
+        game_version: profile.game_version.clone(),
+        server: None,
+        hosting: false,
+        started_at: now_millis() / 1000,
+    });
+    let _ = app.emit("game-activity", state.activity.lock().unwrap().clone());
+    crate::discord::refresh(&app);
+    emit_state(&app, &profile_id, "running", None);
 
     // supervisor: wait for exit, run post-exit hook, notify UI
     {
@@ -1079,17 +1053,6 @@ pub async fn install_and_launch(
         });
     }
 
-    *state.activity.lock().unwrap() = Some(crate::appstate::GameActivity {
-        profile_id: profile_id.clone(),
-        profile_name: profile.name.clone(),
-        game_version: profile.game_version.clone(),
-        server: None,
-        hosting: false,
-        started_at: now_millis() / 1000,
-    });
-    let _ = app.emit("game-activity", state.activity.lock().unwrap().clone());
-    crate::discord::refresh(&app);
-    emit_state(&app, &profile_id, "running", None);
     if let Some(w) = app.get_webview_window("main") {
         match state.settings.lock().unwrap().on_play.as_str() {
             "minimize" => drop(w.minimize()),
@@ -1099,6 +1062,30 @@ pub async fn install_and_launch(
     }
     let _ = state.patch_profile(&profile_id, |p| p.last_played = Some(now_millis()));
     Ok(())
+}
+
+/// Forward a game output stream line by line. Bytes, not `read_line`: a
+/// Java writing to a pipe on Windows uses the console code page, so a `§`
+/// in a chat line is one byte that isn't UTF-8, and `read_line` would stop
+/// the log (and the crash tail) right there.
+async fn pipe_lines(
+    stream: impl tokio::io::AsyncRead + Unpin,
+    tx: tokio::sync::mpsc::Sender<GameLogLine>,
+    name: &'static str,
+) {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    let mut reader = BufReader::new(stream);
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        match reader.read_until(b'\n', &mut buf).await {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {
+                let line = String::from_utf8_lossy(&buf).trim_end().to_string();
+                let _ = tx.send(GameLogLine { line, stream: name.into() }).await;
+            }
+        }
+    }
 }
 
 /// What a game log line says about where the player is: `Some(Some(addr))`
