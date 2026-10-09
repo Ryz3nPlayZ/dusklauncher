@@ -127,6 +127,17 @@ pub struct Outfit {
 
 // ── commands ─────────────────────────────────────────────────────────────
 
+/// A player uuid fit to be a path segment of a service URL: hex and dashes
+/// only, so no value can reach a different endpoint with this account's token.
+fn player(uuid: &str) -> Result<&str, String> {
+    let hex = uuid.chars().filter(|c| *c != '-').count();
+    if hex == 32 && uuid.chars().all(|c| c == '-' || c.is_ascii_hexdigit()) {
+        Ok(uuid)
+    } else {
+        Err("That isn't a player id.".into())
+    }
+}
+
 /// The launcher's heartbeat: keeps this account online for its friends,
 /// says which game version it's in (`None` when no game is running), and
 /// returns the pending-request / unread / friends-online counts.
@@ -150,7 +161,7 @@ pub async fn list_friends(state: State<'_, AppState>) -> Result<Vec<Friend>, Str
 
 #[tauri::command]
 pub async fn remove_friend(state: State<'_, AppState>, uuid: String) -> Result<Vec<Friend>, String> {
-    call(&state, reqwest::Method::DELETE, &format!("/v1/friends/{uuid}"), None).await
+    call(&state, reqwest::Method::DELETE, &format!("/v1/friends/{uuid}", uuid = player(&uuid)?), None).await
 }
 
 #[tauri::command]
@@ -180,12 +191,12 @@ pub async fn decline_friend_request(state: State<'_, AppState>, id: i64) -> Resu
 
 #[tauri::command]
 pub async fn get_friend_profile(state: State<'_, AppState>, uuid: String) -> Result<FriendProfile, String> {
-    call(&state, reqwest::Method::GET, &format!("/v1/profile/{uuid}"), None).await
+    call(&state, reqwest::Method::GET, &format!("/v1/profile/{uuid}", uuid = player(&uuid)?), None).await
 }
 
 #[tauri::command]
 pub async fn get_messages(state: State<'_, AppState>, uuid: String, after_id: i64) -> Result<Vec<ChatMessage>, String> {
-    call(&state, reqwest::Method::GET, &format!("/v1/messages/{uuid}?afterId={after_id}"), None).await
+    call(&state, reqwest::Method::GET, &format!("/v1/messages/{uuid}?afterId={after_id}", uuid = player(&uuid)?), None).await
 }
 
 #[tauri::command]
@@ -194,7 +205,7 @@ pub async fn send_message(state: State<'_, AppState>, uuid: String, body: String
     if body.is_empty() {
         return Err("Type a message first.".into());
     }
-    call(&state, reqwest::Method::POST, &format!("/v1/messages/{uuid}"), Some(json!({ "body": body }))).await
+    call(&state, reqwest::Method::POST, &format!("/v1/messages/{uuid}", uuid = player(&uuid)?), Some(json!({ "body": body }))).await
 }
 
 /// Invite a friend to the server this account is on (or any address).
@@ -212,7 +223,7 @@ pub async fn send_invite(
     call(
         &state,
         reqwest::Method::POST,
-        &format!("/v1/messages/{uuid}"),
+        &format!("/v1/messages/{uuid}", uuid = player(&uuid)?),
         Some(json!({ "kind": "invite", "meta": { "server": server, "version": version } })),
     )
     .await
@@ -230,6 +241,7 @@ struct Uploaded {
 /// it back), then posted as an image message.
 #[tauri::command]
 pub async fn send_screenshot(state: State<'_, AppState>, uuid: String, path: String) -> Result<ChatMessage, String> {
+    player(&uuid)?;
     let path = crate::screenshots::resolve(&state, &path)?;
     let len = std::fs::metadata(&path).map_err(|e| e.to_string())?.len();
     if len > IMAGE_MAX_BYTES {
@@ -242,7 +254,7 @@ pub async fn send_screenshot(state: State<'_, AppState>, uuid: String, path: Str
     call(
         &state,
         reqwest::Method::POST,
-        &format!("/v1/messages/{uuid}"),
+        &format!("/v1/messages/{uuid}", uuid = player(&uuid)?),
         Some(json!({ "kind": "image", "meta": { "image": up.id } })),
     )
     .await
@@ -267,10 +279,8 @@ pub async fn get_chat_image(state: State<'_, AppState>, id: String) -> Result<St
                 });
             }
             let b = resp.bytes().await.map_err(|e| e.to_string())?.to_vec();
-            if let Some(dir) = cache.parent() {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            let _ = std::fs::write(&cache, &b);
+            // whole or not at all: a torn file would be served as the image forever
+            let _ = fasterlauncher_core::write_atomic(&cache, &b);
             b
         }
     };
@@ -305,7 +315,7 @@ pub async fn block_player(state: State<'_, AppState>, uuid: String) -> Result<Ve
 
 #[tauri::command]
 pub async fn unblock_player(state: State<'_, AppState>, uuid: String) -> Result<Vec<BlockedPlayer>, String> {
-    call(&state, reqwest::Method::DELETE, &format!("/v1/blocks/{uuid}"), None).await
+    call(&state, reqwest::Method::DELETE, &format!("/v1/blocks/{uuid}", uuid = player(&uuid)?), None).await
 }
 
 // ── gifts & outfits ──────────────────────────────────────────────────────
@@ -392,8 +402,13 @@ async fn public_skin_url(client: &reqwest::Client, uuid: &str) -> Result<Option<
         .send()
         .await
         .map_err(|e| format!("Mojang session server unreachable: {e}"))?;
-    if !resp.status().is_success() {
+    // 204/404: no such player. Anything else (a 429 above all — the session
+    // server limits each IP) is a failure, so a cached skin still shows.
+    if matches!(resp.status().as_u16(), 204 | 404) {
         return Ok(None);
+    }
+    if !resp.status().is_success() {
+        return Err(format!("Mojang session server returned HTTP {}", resp.status().as_u16()));
     }
     let profile: SessionProfile = resp.json().await.map_err(|e| format!("bad Mojang reply: {e}"))?;
     let Some(prop) = profile.properties.into_iter().find(|p| p.name == "textures") else {
@@ -453,14 +468,15 @@ pub async fn get_public_skin(state: State<'_, AppState>, uuid: String) -> Result
             Ok(r) => r,
             Err(e) => return cached.map(|b| Some(png_data_url(&b))).ok_or(e),
         };
-        if !resp.status().is_success() {
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
             let _ = std::fs::remove_file(&png_path);
             return Ok(None);
         }
-        let png = resp.bytes().await.map_err(|e| e.to_string())?;
-        std::fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
-        std::fs::write(&png_path, &png).map_err(|e| e.to_string())?;
-        std::fs::write(&url_path, "dusk").map_err(|e| e.to_string())?;
+        let png = match resp.error_for_status() {
+            Ok(r) => r.bytes().await.map_err(|e| e.to_string())?,
+            Err(e) => return cached.map(|b| Some(png_data_url(&b))).ok_or_else(|| e.to_string()),
+        };
+        save_skin(&png_path, &url_path, &png, "dusk")?;
         return Ok(Some(png_data_url(&png)));
     }
     let skin_url = match public_skin_url(&state.client, &undashed).await {
@@ -480,8 +496,13 @@ pub async fn get_public_skin(state: State<'_, AppState>, uuid: String) -> Result
         Ok(png) => png,
         Err(e) => return cached.map(|b| Some(png_data_url(&b))).ok_or_else(|| e.to_string()),
     };
-    std::fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
-    std::fs::write(&png_path, &png).map_err(|e| e.to_string())?;
-    std::fs::write(&url_path, &skin_url).map_err(|e| e.to_string())?;
+    save_skin(&png_path, &url_path, &png, &skin_url)?;
     Ok(Some(png_data_url(&png)))
+}
+
+/// The PNG, then the marker naming where it came from: a marker beside a
+/// torn PNG would keep serving it as fresh.
+fn save_skin(png_path: &std::path::Path, url_path: &std::path::Path, png: &[u8], source: &str) -> Result<(), String> {
+    fasterlauncher_core::write_atomic(png_path, png).map_err(|e| e.to_string())?;
+    fasterlauncher_core::write_atomic(url_path, source.as_bytes()).map_err(|e| e.to_string())
 }
