@@ -29,6 +29,7 @@ import dev.dusk.client.modules.hud.Distance;
 import dev.dusk.client.modules.hud.EntityCount;
 import dev.dusk.client.modules.hud.FpsDisplay;
 import dev.dusk.client.modules.hud.FullInventory;
+import dev.dusk.client.modules.hud.LowDurability;
 import dev.dusk.client.modules.hud.GameTime;
 import dev.dusk.client.modules.hud.HeldItem;
 import dev.dusk.client.modules.hud.InventoryDisplay;
@@ -174,6 +175,7 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new SprintStatus());
         modules.register(new SneakStatus());
         modules.register(new FullInventory());
+        modules.register(new LowDurability());
         modules.register(new InventoryDisplay());
         modules.register(new TotemCounter());
         modules.register(new ItemCounter());

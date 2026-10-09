@@ -33,17 +33,17 @@ If the server registers `dusk:hello`, the client sends this once per connection:
 {"protocol": 1, "version": "0.2.0", "mc": "1.21.11", "modules": ["keystrokes", "fps", "..."]}
 ```
 
-`modules` lists every module id that this client build knows. Some render modules exist only
+`modules` lists every module id that this client build knows. Some render and chat modules exist only
 on 1.21.11 and later.
 
 ## Module ids
 
 | Category | Ids |
 | --- | --- |
-| HUD | `armor` `biome` `clock` `combo` `compass` `coords` `cps` `day` `direction` `distance` `effects` `entities` `fps` `fullinventory` `gametime` `helditem` `inventorydisplay` `keystrokes` `light` `memory` `nethercoords` `ping` `pitchdisplay` `playtime` `reach` `rotation` `server` `shield` `signreader` `sneakstatus` `speed` `sprintstatus` `tps` `weather` |
+| HUD | `armor` `bedwarsresources` `biome` `clock` `combo` `compass` `cooldowns` `coords` `cps` `day` `distance` `effects` `entities` `fps` `fullinventory` `gametime` `helditem` `inventorydisplay` `itemcounter` `keystrokes` `light` `lookingat` `lowdurability` `memory` `minimap` `nethercoords` `ping` `pitchdisplay` `playtime` `reach` `resourcepacks` `server` `serverlag` `signreader` `skyblockstats` `sneakstatus` `speed` `sprintstatus` `stopwatch` `totems` `tps` `weather` |
 | Movement | `togglesprint` |
-| Render | `behindyou` `colorsaturation` `crosshair` `damagetint` `fogcontrol` `fullbright` `hitbox` `itemscale` `lowfire` `lowshield` `motion_blur` `nametags` `nonightvision` `nopumpkinblur` `particles` `riptideshieldfix` `timechanger` `weatherchanger` |
-| Utility | `boatmap` `gamemodeswitcher` `tntcountdown` |
+| Render | `behindyou` `blockoutline` `bossbar` `capephysics` `colorsaturation` `containerpreview` `crosshair` `damagetint` `fogcontrol` `fovchanger` `freecam` `freelook` `fullbright` `glintcolor` `hitbox` `hungerinfo` `itemscale` `lowfire` `lowshield` `motion_blur` `nametags` `nonightvision` `nopumpkinblur` `particles` `riptideshieldfix` `scoreboard` `shieldstatuses` `skinlayers3d` `tabping` `timechanger` `totempop` `weatherchanger` `zoom` |
+| Utility | `autoreconnect` `backgroundfps` `boatmap` `chatcopy` `chatheads` `chathistory` `chatmacros` `chatmentions` `chattimestamps` `compactchat` `confirmdisconnect` `gamemodeswitcher` `hypixel` `namehider` `slotlock` `statistics` `tntcountdown` `waypoints` |
 
 ## Paper example
 

@@ -100,6 +100,8 @@ final class ModuleIcons {
         m.put("serverlag", Items.COBWEB);
         m.put("containerpreview", Items.SHULKER_BOX);
         m.put("chathistory", Items.BOOK);
+        m.put("chatcopy", Items.WRITTEN_BOOK);
+        m.put("lowdurability", Items.ANVIL);
         m.put("skinlayers3d", Items.PLAYER_HEAD);
         m.put("sneakstatus", Items.LEATHER_BOOTS);
         m.put("speed", Items.SUGAR);
