@@ -89,7 +89,7 @@ and the [Backup Manager](https://modrinth.com/mod/backup-manager) mod.
 |---|---|---|
 | Item Tracker (Lunar), Pickup Notifier mods | **added**: Item Pickups HUD, "+N name" per item, merged and fading | `modules/hud/ItemPickups.java`, `mixin/qol/ItemPickupMixin.java` |
 | Restore a world backup (Backup Manager mod; neither Modrinth App nor Prism does it) | **added**: BACKUPS window lists hand-made and after-session backups; RESTORE adds one beside the original, never over it | `worlds.rs` `list_world_backups` / `restore_world_backup`, `InstanceEditor.tsx` `BackupsWindow` |
-| Export a world to share the map (MultiMC/Prism "Export" on a world; Modrinth App lacks it) | **added**: EXPORT on a world saves it as a zip anywhere, in the layout the game, IMPORT and other launchers read | `worlds.rs` `export_world`, `InstanceEditor.tsx` |
+| Export a world to share the map (the other half of world import) | **added**: EXPORT on a world saves it as a zip anywhere, in the layout the game, IMPORT and other launchers read | `worlds.rs` `export_world`, `InstanceEditor.tsx` |
 | World hosting for friends (Essential, e4mc) | **added**: HOST on a world, relayed by e4mc | `hosting.rs`, `docs/MODPACK.md` (e4mc) |
 | Titles (Lunar) | have | Boss Bar Tweaks |
 | Snaplook (Lunar) | have | Freelook, hold mode |
