@@ -1,12 +1,12 @@
 package dev.dusk.client.modules.hud;
 
 import dev.dusk.client.compat.Input;
+import dev.dusk.client.hud.Fmt;
 import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.hud.TextHud;
 import dev.dusk.client.module.setting.BoolSetting;
 import dev.dusk.client.module.setting.KeySetting;
 
-import java.util.Locale;
 
 /** A stopwatch on the HUD: one key starts and pauses it, another resets it. */
 public class Stopwatch extends TextHud {
@@ -53,12 +53,8 @@ public class Stopwatch extends TextHud {
 
     private String format(long ms) {
         long h = ms / 3_600_000, m = ms / 60_000 % 60, s = ms / 1000 % 60;
-        String frac = hundredths.get()
-                ? String.format(Locale.ROOT, ".%02d", ms / 10 % 100)
-                : String.format(Locale.ROOT, ".%d", ms / 100 % 10);
-        return h > 0
-                ? String.format(Locale.ROOT, "%d:%02d:%02d%s", h, m, s, frac)
-                : String.format(Locale.ROOT, "%d:%02d%s", m, s, frac);
+        StringBuilder sb = new StringBuilder(Fmt.clock(h, m, s)).append('.');
+        return (hundredths.get() ? Fmt.pad2(sb, ms / 10 % 100) : sb.append(ms / 100 % 10)).toString();
     }
 
     @Override

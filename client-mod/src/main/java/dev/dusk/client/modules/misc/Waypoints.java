@@ -256,6 +256,6 @@ public class Waypoints extends Module {
     }
 
     public static String formatDistance(double d) {
-        return d >= 10000 ? String.format(java.util.Locale.ROOT, "%.1fkm", d / 1000) : Math.round(d) + "m";
+        return d >= 10000 ? dev.dusk.client.hud.Fmt.fixed(d / 1000, 1) + "km" : Math.round(d) + "m";
     }
 }

@@ -52,15 +52,31 @@ Physics run only while their module is on, and only once per tick, over the
 player list rather than every entity. The own-nametag check makes one small
 box query per frame, and only in third person with that option on.
 
-Nothing found here needs fixing: every hot hook checks a flag first and
-returns before doing any work.
+Every hot hook checks a flag first and returns before doing any work.
+
+## Per-frame work trimmed (October 2026)
+
+- **Numbers on the HUD and nametags are built by hand.** `Fmt.fixed`,
+  which Speed, Reach, Distance, Compass, Pitch, TPS and Server Lag already
+  used, was a wrapper around `String.format`, which parses its pattern on
+  every call; it now writes the digits itself. Cooldowns, Looking At,
+  Playtime, Stopwatch, Potion Effects, waypoint distances and the hearts on
+  nametags called `String.format` directly and now go through `Fmt`
+  (`fixed`, `clock`, `pad2`) or plain string joins. Checked against `String.format`
+  on 8.5 million values (random, edge and halfway cases, 0–3 decimals,
+  every clock time under 3 hours) with no difference; one call takes
+  about 35 ns instead of 196 ns. Nametag hearts mattered most, since they
+  ran once for every visible player every frame.
+- **Text HUD modules work out their text once per frame.** `TextHud` keeps
+  the text for the frame it was made for, so asking for the width, height
+  and drawing it don't build it three times. Item Pickups does the same
+  for its list, which was rebuilt (and expired entries filtered) four
+  times a frame.
 
 ## Small costs left in on purpose
 
-- HUD text modules (Speed, Playtime, Potion Effects, …) format their text
-  with `String.format` every frame they're shown. That's a few short-lived
-  strings per frame; caching per tick would save little unless a profile
-  shows it.
+- HUD text is still rebuilt each frame it's shown, not once per tick. It's
+  a few short strings per frame; caching per tick would save little.
 - Item Physics calls `getModelBoundingBox()` a second time for items lying
   on the ground (vanilla already calls it once). It's a small calculation
   over the item's model parts.

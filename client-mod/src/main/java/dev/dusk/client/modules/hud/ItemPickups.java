@@ -50,6 +50,9 @@ public class ItemPickups extends TextHud {
             new Entry(new ItemStack(Items.OAK_LOG), "Oak Log", 12, 0),
             new Entry(new ItemStack(Items.DIAMOND), "Diamond", 3, 0));
     private ClientLevel level;
+    /** {@link #shown} for the frame {@link #shownFor} was built for: a frame asks for it four times. */
+    private HudContext shownFor;
+    private List<Entry> shownList = List.of();
 
     public ItemPickups() {
         super("itempickups", "Item Pickups", "Lists the items you just picked up and how many.");
@@ -75,14 +78,18 @@ public class ItemPickups extends TextHud {
                 e.at = now;
                 m.entries.remove(i);
                 m.entries.add(0, e);
+                m.shownFor = null;
                 return;
             }
         }
         m.entries.add(0, new Entry(stack.copyWithCount(1), stack.getHoverName().getString(), amount, now));
         while (m.entries.size() > m.maxLines.get()) m.entries.remove(m.entries.size() - 1);
+        m.shownFor = null;
     }
 
     private List<Entry> shown(HudContext ctx) {
+        if (ctx == shownFor) return shownList;
+        shownFor = ctx;
         if (ctx.level() != level) {
             // a new world or server: the last one's pickups don't carry over
             entries.clear();
@@ -91,7 +98,7 @@ public class ItemPickups extends TextHud {
         long expiry = System.currentTimeMillis() - seconds.get() * 1000L;
         entries.removeIf(e -> e.at < expiry);
         while (entries.size() > maxLines.get()) entries.remove(entries.size() - 1);
-        return entries.isEmpty() && ctx.editing() ? sample : entries;
+        return shownList = entries.isEmpty() && ctx.editing() ? sample : entries;
     }
 
     @Override

@@ -1,10 +1,10 @@
 package dev.dusk.client.modules.hud;
 
+import dev.dusk.client.hud.Fmt;
 import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.hud.TextHud;
 import dev.dusk.client.module.setting.BoolSetting;
 
-import java.util.Locale;
 
 /** Flex-HUD's Playtime: time since the game was launched, "Playtime: 1:02:03". */
 public class Playtime extends TextHud {
@@ -20,7 +20,9 @@ public class Playtime extends TextHud {
     @Override
     protected String text(HudContext ctx) {
         long ms = System.currentTimeMillis() - START;
-        String time = String.format(Locale.ROOT, "%1d:%02d:%02d", ms / 3_600_000, ms / 60_000 % 60, ms / 1000 % 60);
+        // always with the hours, "0:05:12"
+        StringBuilder sb = new StringBuilder(10).append(ms / 3_600_000).append(':');
+        String time = Fmt.pad2(Fmt.pad2(sb, ms / 60_000 % 60).append(':'), ms / 1000 % 60).toString();
         return showPrefix.get() ? "Playtime: " + time : time;
     }
 

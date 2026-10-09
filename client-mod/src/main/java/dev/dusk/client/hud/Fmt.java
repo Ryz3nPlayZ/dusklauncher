@@ -6,8 +6,47 @@ import java.util.Locale;
 public final class Fmt {
     private Fmt() {}
 
+    private static final long[] POW10 = {1, 10, 100, 1_000, 10_000, 100_000, 1_000_000};
+
+    /**
+     * {@code v} with {@code decimals} places, as {@code %.Nf} writes it
+     * (halves round up). HUD text asks for this every frame, and
+     * String.format parses its pattern on each call, so the usual sizes
+     * are built by hand.
+     */
     public static String fixed(double v, int decimals) {
-        return String.format(Locale.ROOT, "%." + decimals + "f", v);
+        if (decimals < 0 || decimals >= POW10.length || !(Math.abs(v) < 1e12)) {
+            return String.format(Locale.ROOT, "%." + Math.max(0, decimals) + "f", v);
+        }
+        long pow = POW10[decimals];
+        double scaled = Math.abs(v) * pow;
+        long whole = (long) scaled;
+        // %f rounds the shortest decimal form, so 0.15 is a half even though its double is a hair under
+        if (scaled - whole >= 0.5 - 1e-9) whole++;
+        StringBuilder sb = new StringBuilder(12);
+        if (v < 0 || v == 0 && 1 / v < 0) sb.append('-');
+        sb.append(whole / pow);
+        if (decimals > 0) {
+            String frac = Long.toString(whole % pow);
+            sb.append('.');
+            for (int i = frac.length(); i < decimals; i++) sb.append('0');
+            sb.append(frac);
+        }
+        return sb.toString();
+    }
+
+    /** {@code n} as at least two digits, like {@code %02d}. */
+    public static StringBuilder pad2(StringBuilder sb, long n) {
+        if (n >= 0 && n < 10) sb.append('0');
+        return sb.append(n);
+    }
+
+    /** "m:ss", or "h:mm:ss" once {@code h} is above zero. */
+    public static String clock(long h, long m, long s) {
+        StringBuilder sb = new StringBuilder(10);
+        if (h > 0) pad2(sb.append(h).append(':'), m);
+        else sb.append(m);
+        return pad2(sb.append(':'), s).toString();
     }
 
     /** "snowy_taiga" -> "Snowy Taiga". */
@@ -22,8 +61,7 @@ public final class Fmt {
     }
 
     public static String duration(long seconds) {
-        long h = seconds / 3600, m = (seconds % 3600) / 60, s = seconds % 60;
-        return h > 0 ? String.format(Locale.ROOT, "%d:%02d:%02d", h, m, s) : String.format(Locale.ROOT, "%d:%02d", m, s);
+        return clock(seconds / 3600, (seconds % 3600) / 60, seconds % 60);
     }
 
     /**

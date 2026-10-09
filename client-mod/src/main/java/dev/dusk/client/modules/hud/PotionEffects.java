@@ -2,6 +2,7 @@ package dev.dusk.client.modules.hud;
 
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.hud.Fmt;
 import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.hud.TextHud;
 import dev.dusk.client.module.setting.ChoiceSetting;
@@ -59,8 +60,10 @@ public class PotionEffects extends TextHud {
     }
 
     private static String duration(int s) {
-        return s < 3600 ? String.format(java.util.Locale.ROOT, "%02d:%02d", s / 60, s % 60)
-                : String.format(java.util.Locale.ROOT, "%02d:%02d:%02d", s / 3600, s % 3600 / 60, s % 60);
+        StringBuilder sb = new StringBuilder(8);
+        if (s >= 3600) Fmt.pad2(sb, s / 3600).append(':');
+        Fmt.pad2(sb, s < 3600 ? s / 60 : s % 3600 / 60).append(':');
+        return Fmt.pad2(sb, s % 60).toString();
     }
 
     private boolean stacked() {

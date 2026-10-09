@@ -1,6 +1,7 @@
 package dev.dusk.client.modules.hud;
 
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.hud.Fmt;
 import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.hud.TextHud;
 import dev.dusk.client.module.setting.BoolSetting;
@@ -14,7 +15,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -112,7 +112,7 @@ public class Cooldowns extends TextHud {
     }
 
     private Entry entry(HudContext ctx, ItemStack icon, float seconds) {
-        String text = tenths.get() ? String.format(Locale.ROOT, "%.1fs", seconds) : (int) Math.ceil(seconds) + "s";
+        String text = tenths.get() ? Fmt.fixed(seconds, 1) + "s" : (int) Math.ceil(seconds) + "s";
         return new Entry(icon, text, ITEM + 1 + ctx.textWidth(text));
     }
 

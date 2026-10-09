@@ -2,6 +2,7 @@ package dev.dusk.client.modules.hud;
 
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.Theme;
+import dev.dusk.client.hud.Fmt;
 import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.hud.HudElement;
 import dev.dusk.client.module.setting.BoolSetting;
@@ -258,7 +259,7 @@ public class LookingAt extends HudElement {
                 double speed = horse.getAttributeValue(Attributes.MOVEMENT_SPEED) * 42.16;
                 double j = horse.getAttributeValue(Attributes.JUMP_STRENGTH);
                 double jump = -0.1817584952 * j * j * j + 3.689713992 * j * j + 2.128599134 * j - 0.343930367;
-                i.add(String.format(Locale.ROOT, "Speed %.1f b/s  Jump %.1f b", speed, jump), INFO);
+                i.add("Speed " + Fmt.fixed(speed, 1) + " b/s  Jump " + Fmt.fixed(jump, 1) + " b", INFO);
             }
         }
         if (modName.get()) mod(i, BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).getNamespace());

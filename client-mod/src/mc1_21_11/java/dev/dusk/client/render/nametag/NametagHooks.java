@@ -101,8 +101,9 @@ public final class NametagHooks {
         float health = living.getHealth() + living.getAbsorptionAmount();
         float fraction = health / Math.max(1F, living.getMaxHealth());
         ChatFormatting color = fraction > 0.5F ? ChatFormatting.GREEN : fraction > 0.25F ? ChatFormatting.GOLD : ChatFormatting.RED;
-        String hearts = String.format(java.util.Locale.ROOT, "%.1f", Math.ceil(health) / 2F);
-        if (hearts.endsWith(".0")) hearts = hearts.substring(0, hearts.length() - 2);
+        // half hearts, "7" or "7.5", built by hand: this runs for every nametag every frame
+        int halves = (int) Math.ceil(health);
+        String hearts = halves % 2 == 0 ? Integer.toString(halves / 2) : halves / 2 + ".5";
         return Component.empty().append(name).append(Component.literal(" " + hearts + "\u2764").withStyle(color));
     }
 
