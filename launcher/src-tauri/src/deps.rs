@@ -48,6 +48,9 @@ fn known(id: &str) -> (String, String) {
     let (label, slug) = match id {
         "fabric" | "fabric-api" => ("Fabric API", "fabric-api"),
         "fabric-language-kotlin" => ("Fabric Language Kotlin", "fabric-language-kotlin"),
+        "fabric-language-scala" => ("Fabric Language Scala", "fabric-language-scala"),
+        // lucko's, not a Fabric API module despite the name
+        "fabric-permissions-api-v0" => ("fabric-permissions-api", "fabric-permissions-api"),
         _ if id.starts_with("fabric-") => ("Fabric API", "fabric-api"),
         "cloth-config" | "cloth-config2" => ("Cloth Config API", "cloth-config"),
         "modmenu" => ("Mod Menu", "modmenu"),
@@ -545,6 +548,7 @@ mod tests {
         assert_eq!(cloth_dep.label, "Cloth Config API");
         // fabric-key-binding-api-v1 isn't in this tiny test Fabric API
         assert!(missing.iter().any(|m| m.project == "fabric-api"));
+        assert_eq!(known("fabric-permissions-api-v0").1, "fabric-permissions-api");
 
         // Fabric API turned off: one entry for it, pointing at the disabled jar
         let jars = [

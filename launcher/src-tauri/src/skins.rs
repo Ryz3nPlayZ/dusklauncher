@@ -160,13 +160,9 @@ pub fn delete_skin(state: State<AppState>, name: String) -> Result<(), String> {
     if !index.skins.iter().any(|s| s.name == name) {
         return Err("skin not found".into());
     }
-    let was_selected = index.skins.iter().any(|s| s.name == name && s.selected);
+    // the account still wears a deleted skin, so no other skin becomes the
+    // applied one in its place
     index.skins.retain(|s| s.name != name);
-    if was_selected {
-        if let Some(first) = index.skins.first_mut() {
-            first.selected = true;
-        }
-    }
     save_index(&state, &index);
     // To the trash, like a deleted world; gone outright where there's none.
     let path = skin_file(&state, &name)?;

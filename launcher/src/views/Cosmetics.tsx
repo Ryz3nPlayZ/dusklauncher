@@ -559,8 +559,9 @@ export default function Cosmetics({
                       if (!picked) return;
                       setNote(null);
                       try {
-                        await api.selectSkin(picked);
+                        // marked applied only once the upload took
                         if (account?.authenticated || account?.offline) await api.uploadSkin(picked, pickedModel);
+                        await api.selectSkin(picked);
                         await load();
                         await onSkinChange();
                       } catch (e) {
