@@ -84,11 +84,17 @@ pub fn expand_arguments(
 fn rules_allow(rules: &[Value], features: &HashMap<String, bool>) -> bool {
     let mut allowed = false;
     for rule in rules {
-        let os_ok = rule
-            .get("os")
+        // `arch` too: the `-Xss1M` entry is gated on `"arch": "x86"`, a
+        // 32-bit Java only, the same way library rules are read
+        let os = rule.get("os");
+        let os_ok = os
             .and_then(|o| o.get("name"))
             .and_then(|n| n.as_str())
-            .is_none_or(|n| n == meta::os_name());
+            .is_none_or(|n| n == meta::os_name())
+            && os
+                .and_then(|o| o.get("arch"))
+                .and_then(|a| a.as_str())
+                .is_none_or(|a| a == std::env::consts::ARCH);
         if !os_ok {
             continue;
         }
@@ -434,6 +440,16 @@ mod tests {
     use super::*;
     use crate::auth::Session;
     use crate::profile::Loader;
+
+    #[test]
+    fn a_32_bit_only_argument_stays_off_a_64_bit_java() {
+        let entries: Vec<Value> = serde_json::from_str(
+            r#"[{"rules":[{"action":"allow","os":{"arch":"x86"}}],"value":"-Xss1M"}, "-Dkept"]"#,
+        )
+        .unwrap();
+        let args = expand_arguments(&entries, &HashMap::new(), &HashMap::new());
+        assert_eq!(args, if std::env::consts::ARCH == "x86" { vec!["-Xss1M", "-Dkept"] } else { vec!["-Dkept"] });
+    }
 
     #[test]
     fn wrapper_runs_java_with_the_game() {

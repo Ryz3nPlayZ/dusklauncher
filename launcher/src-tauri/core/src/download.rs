@@ -251,10 +251,12 @@ pub fn sha1_hex(bytes: &[u8]) -> String {
 /// Hex sha1 of a file on disk — the key Modrinth's `version_files` lookup
 /// answers by.
 pub async fn sha1_file(path: &Path) -> Result<String> {
-    let bytes = tokio::fs::read(path).await?;
-    let mut hasher = Sha1::new();
-    hasher.update(&bytes);
-    Ok(hex::encode(hasher.finalize()))
+    // hashed off the async workers: a content lookup hashes every jar in
+    // the folder, and a big modpack's worth stalls the runtime otherwise
+    let path = path.to_path_buf();
+    Ok(tokio::task::spawn_blocking(move || std::fs::read(path).map(|b| sha1_hex(&b)))
+        .await
+        .map_err(|e| Error::Other(e.to_string()))??)
 }
 
 async fn verify_existing(dl: &Download, cache: Option<&VerifiedCache>) -> Result<bool> {

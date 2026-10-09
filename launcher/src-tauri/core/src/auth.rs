@@ -1068,12 +1068,10 @@ pub async fn refresh(client: &reqwest::Client, config: &AuthConfig, refresh_toke
     let body = raw.text().await.unwrap_or_default();
     let resp: MsaTokenResponse = serde_json::from_str(&body)
         .map_err(|e| Error::Auth(format!("Microsoft returned an unreadable token response: {e}")))?;
-    let refresh = resp.refresh_token.ok_or_else(|| {
-        Error::Auth(
-            "Microsoft did not return a refresh token (the offline_access permission was not \
-             consented) — sign in again and approve the permissions.".into(),
-        )
-    })?;
+    // RFC 6749 §6: the server MAY rotate the refresh token; when it sends
+    // none, the one just used stays good — asking for a fresh sign-in then
+    // would log the player out for nothing
+    let refresh = resp.refresh_token.unwrap_or_else(|| refresh_token.to_string());
     Ok((resp.access_token, refresh))
 }
 

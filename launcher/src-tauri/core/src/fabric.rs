@@ -208,7 +208,8 @@ pub async fn latest_loader_version(client: &reqwest::Client) -> Result<String> {
         .find(|v| v.get("loader").and_then(|l| l.get("stable")).and_then(|s| s.as_bool()).unwrap_or(false))
         .and_then(|v| v.get("loader").and_then(|l| l.get("version")).and_then(|s| s.as_str()))
         .map(str::to_owned);
-    Ok(stable.unwrap_or_else(|| "0.17.0".into()))
+    // no made-up fallback: the form would show a loader the install won't use
+    stable.ok_or_else(|| crate::Error::Other("Fabric lists no stable loader".into()))
 }
 
 #[cfg(test)]
