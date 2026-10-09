@@ -3,6 +3,7 @@
   "package": "dev.dusk.client.mixin",
   "compatibilityLevel": "${java_level}",
   "client": [
+    "sound.SoundChangerMixin",
     "namehider.NameHiderMixin",
     "WorldProjectionMixin",
     "skinlayers.SkinLayersAddMixin",

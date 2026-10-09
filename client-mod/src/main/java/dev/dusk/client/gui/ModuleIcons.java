@@ -37,6 +37,7 @@ final class ModuleIcons {
         m.put("tabping", Items.REDSTONE_TORCH);
         m.put("blockoutline", Items.TINTED_GLASS);
         m.put("backgroundfps", Items.BLUE_ICE);
+        m.put("soundchanger", Items.JUKEBOX);
         m.put("fovchanger", Items.GLASS_PANE);
         m.put("totems", Items.TOTEM_OF_UNDYING);
         m.put("itemcounter", Items.BUNDLE);
