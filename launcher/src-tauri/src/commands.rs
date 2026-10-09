@@ -1812,9 +1812,12 @@ pub(crate) async fn ensure_play_session(state: &AppState) -> Result<Session, Str
                 auth_store::save_session(&state.data_dir, &fresh);
                 Ok(fresh)
             }
-            // no connection (not a rejected login): play offline as the
-            // saved account. Singleplayer works; servers need a fresh login.
-            Err(fasterlauncher_core::Error::Http(e)) if !e.is_status() => {
+            // no connection, or Minecraft's services down or rate limiting
+            // (not a rejected login): play offline as the saved account.
+            // Singleplayer works; servers need a fresh login.
+            Err(fasterlauncher_core::Error::Http(e))
+                if e.status().is_none_or(|s| s.is_server_error() || s == reqwest::StatusCode::TOO_MANY_REQUESTS) =>
+            {
                 tracing::warn!("could not refresh the session ({e}); launching offline");
                 Ok(session)
             }

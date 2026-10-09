@@ -149,9 +149,14 @@ impl AppState {
                 }
             }
         }
-        let m = VersionManifest::fetch(client).await.map_err(|e| e.to_string())?;
-        *self.manifest.write().await = Some((Instant::now(), m.clone()));
-        Ok(m)
+        match VersionManifest::fetch(client).await {
+            Ok(m) => {
+                *self.manifest.write().await = Some((Instant::now(), m.clone()));
+                Ok(m)
+            }
+            // an older copy beats none when the network blips
+            Err(e) => self.manifest.read().await.as_ref().map(|(_, m)| m.clone()).ok_or_else(|| e.to_string()),
+        }
     }
 
     pub fn patch_profile(&self, id: &str, patch: impl FnOnce(&mut Profile)) -> Option<Profile> {
