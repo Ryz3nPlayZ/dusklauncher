@@ -119,6 +119,112 @@ fn prune_backups(dir: &Path, world: &str, keep: usize) {
     }
 }
 
+/// One zip in an instance's `backups/` (made by hand) or `backups/auto/`
+/// (made after a session).
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WorldBackup {
+    /// where it is under `backups/`: `<zip>` or `auto/<zip>`
+    pub file: String,
+    /// the world it was made from, read off its name
+    pub world: String,
+    /// when it was written, ms since the epoch
+    pub made: u64,
+    pub size: u64,
+    pub auto: bool,
+}
+
+/// The instance's world backups, newest first.
+#[tauri::command]
+pub fn list_world_backups(state: State<AppState>, profile_id: String) -> Result<Vec<WorldBackup>, String> {
+    Ok(read_backups(&crate::servers::profile_root(&state, &profile_id)?.join("backups")))
+}
+
+fn read_backups(dir: &Path) -> Vec<WorldBackup> {
+    let mut out = Vec::new();
+    for auto in [false, true] {
+        let Ok(entries) = std::fs::read_dir(if auto { dir.join(AUTO_BACKUPS) } else { dir.to_path_buf() }) else { continue };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let Ok(meta) = entry.metadata() else { continue };
+            if !meta.is_file() || name.starts_with('.') || !name.to_ascii_lowercase().ends_with(".zip") {
+                continue;
+            }
+            out.push(WorldBackup {
+                file: if auto { format!("{AUTO_BACKUPS}/{name}") } else { name.clone() },
+                world: world_name("", &name[..name.len() - 4]),
+                made: meta
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map_or(0, |d| d.as_millis() as u64),
+                size: meta.len(),
+                auto,
+            });
+        }
+    }
+    out.sort_by(|a, b| b.made.cmp(&a.made).then_with(|| b.file.cmp(&a.file)));
+    out
+}
+
+/// Unzip a backup into `saves/` as a world of its own, listed as
+/// "<name> (backup <date>)". The world it was made from is left as it is,
+/// so restoring never loses anything. Resolves to the new world's folder.
+#[tauri::command]
+pub async fn restore_world_backup(state: State<'_, AppState>, profile_id: String, file: String) -> Result<String, String> {
+    let root = crate::servers::profile_root(&state, &profile_id)?;
+    ensure_closed(&state, &profile_id).await?;
+    let zip = backup_path(&root, &file)?;
+    let saves = root.join("saves");
+    let folder = tokio::task::spawn_blocking(move || restore_into(&zip, &saves))
+        .await
+        .map_err(|e| e.to_string())??;
+    tracing::info!(backup = %file, world = %folder, "world backup restored");
+    Ok(folder)
+}
+
+/// A file name from [`list_world_backups`], found inside `backups/`: a zip
+/// directly in it or in `auto/`, never anywhere else.
+fn backup_path(root: &Path, file: &str) -> Result<PathBuf, String> {
+    let (sub, name) = match file.split_once('/') {
+        Some((AUTO_BACKUPS, name)) => (Some(AUTO_BACKUPS), name),
+        Some(_) => return Err("That isn't one of this instance's backups.".into()),
+        None => (None, file),
+    };
+    if name.is_empty() || name.starts_with('.') || name.contains(['/', '\\']) || !name.to_ascii_lowercase().ends_with(".zip") {
+        return Err("That isn't one of this instance's backups.".into());
+    }
+    let mut path = root.join("backups");
+    if let Some(sub) = sub {
+        path.push(sub);
+    }
+    path.push(name);
+    if !path.is_file() {
+        return Err("That backup isn't there any more.".into());
+    }
+    Ok(path)
+}
+
+fn restore_into(zip: &Path, saves: &Path) -> Result<String, String> {
+    std::fs::create_dir_all(saves).map_err(|e| e.to_string())?;
+    let folder = unzip_world(zip, saves)?.ok_or("That backup has no world in it.")?;
+    // named apart from the world it was made from, which the game lists too
+    let dir = saves.join(&folder);
+    if let Some(level) = level_info(&dir.join("level.dat")).level_name {
+        let stem = zip.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let label = match backup_stamp(&stem) {
+            Some(t) => format!("{level} (backup {} {})", &t[..10], t[11..16].replace('-', ":")),
+            None => format!("{level} (backup)"),
+        };
+        if let Ok(label) = clean_level_name(&label) {
+            if let Err(e) = write_level_name(&dir, &label) {
+                tracing::warn!(world = %folder, "restored, but couldn't rename it: {e}");
+            }
+        }
+    }
+    Ok(folder)
+}
+
 fn write_zip(dir: &Path, name: &str, out: &Path) -> Result<(), String> {
     let file = std::fs::File::create(out).map_err(|e| format!("Couldn't write the backup: {e}"))?;
     let mut zip = zip::ZipWriter::new(file);
@@ -436,16 +542,22 @@ fn world_name(prefix: &str, file_stem: &str) -> String {
     if !folder.is_empty() {
         return clean_name(folder);
     }
-    let stamp = file_stem.as_bytes();
-    let backup = stamp.len() > 20
-        && stamp[19] == b'_'
-        && stamp[..19].iter().enumerate().all(|(i, c)| match i {
+    clean_name(if backup_stamp(file_stem).is_some() { &file_stem[20..] } else { file_stem })
+}
+
+/// The `yyyy-MM-dd_HH-mm-ss` a backup's name starts with, when it is one of
+/// ours (or the game's): the stamp, an `_`, then the world.
+fn backup_stamp(file_stem: &str) -> Option<&str> {
+    let b = file_stem.as_bytes();
+    let stamped = b.len() > 20
+        && b[19] == b'_'
+        && b[..19].iter().enumerate().all(|(i, c)| match i {
             4 | 7 => *c == b'-',
             10 => *c == b'_',
             13 | 16 => *c == b'-',
             _ => c.is_ascii_digit(),
         });
-    clean_name(if backup { &file_stem[20..] } else { file_stem })
+    stamped.then(|| &file_stem[..19])
 }
 
 fn unzip_world(zip_path: &Path, dest: &Path) -> Result<Option<String>, String> {
@@ -940,6 +1052,56 @@ mod tests {
         assert!(!saves.join(".importing-Copy_ 1").exists());
         assert_eq!(duplicate_into(&world, &saves, "Copy: 1").unwrap(), "Copy_ 1 (1)");
         assert!(clean_level_name("  \0 ").is_err());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn a_backup_restores_beside_its_world_under_its_own_name() {
+        let tmp = std::env::temp_dir().join(format!("dusk-restore-{}", std::process::id()));
+        let root = tmp.join("instance");
+        let saves = root.join("saves");
+        let world = saves.join("My World");
+        std::fs::create_dir_all(world.join("region")).unwrap();
+        let mut nbt = vec![10, 0, 0, 10, 0, 4];
+        nbt.extend_from_slice(b"Data");
+        nbt.extend_from_slice(&[8, 0, 9]);
+        nbt.extend_from_slice(b"LevelName");
+        nbt.extend_from_slice(&[0, 8]);
+        nbt.extend_from_slice(b"My World");
+        nbt.extend_from_slice(&[0, 0]);
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gz.write_all(&nbt).unwrap();
+        std::fs::write(world.join("level.dat"), gz.finish().unwrap()).unwrap();
+        std::fs::write(world.join("region").join("r.0.0.mca"), b"chunks").unwrap();
+        let backups = root.join("backups");
+        std::fs::create_dir_all(backups.join(AUTO_BACKUPS)).unwrap();
+        write_zip(&world, "My World", &backups.join("2026-10-09_14-03-27_My World.zip")).unwrap();
+        write_zip(&world, "My World", &backups.join(AUTO_BACKUPS).join("2026-10-08_09-00-00_My World.zip")).unwrap();
+        std::fs::write(backups.join("notes.txt"), b"not a backup").unwrap();
+
+        let list = read_backups(&backups);
+        let mut files: Vec<&str> = list.iter().map(|b| b.file.as_str()).collect();
+        files.sort();
+        assert_eq!(files, ["2026-10-09_14-03-27_My World.zip", "auto/2026-10-08_09-00-00_My World.zip"]);
+        assert!(list.iter().all(|b| b.world == "My World" && b.size > 0));
+        assert_eq!(list.iter().filter(|b| b.auto).count(), 1);
+
+        let zip = backup_path(&root, "2026-10-09_14-03-27_My World.zip").unwrap();
+        let folder = restore_into(&zip, &saves).unwrap();
+        assert_eq!(folder, "My World (1)");
+        let restored = saves.join(&folder);
+        assert_eq!(level_info(&restored.join("level.dat")).level_name.as_deref(), Some("My World (backup 2026-10-09 14:03)"));
+        assert_eq!(std::fs::read(restored.join("region").join("r.0.0.mca")).unwrap(), b"chunks");
+        // the original stays as it was
+        assert_eq!(level_info(&world.join("level.dat")).level_name.as_deref(), Some("My World"));
+        assert!(backup_path(&root, "auto/2026-10-08_09-00-00_My World.zip").is_ok());
+
+        // only zips inside backups/ and backups/auto/
+        for bad in ["../saves/My World/level.dat", "auto/../../x.zip", "other/x.zip", "notes.txt", ".hidden.zip", "", "missing.zip"] {
+            assert!(backup_path(&root, bad).is_err(), "{bad}");
+        }
+        assert_eq!(backup_stamp("2026-10-09_14-03-27_My World"), Some("2026-10-09_14-03-27"));
+        assert_eq!(backup_stamp("My World"), None);
         let _ = std::fs::remove_dir_all(&tmp);
     }
 

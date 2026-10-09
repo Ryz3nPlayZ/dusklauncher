@@ -595,6 +595,18 @@ export interface ModHit {
   loaders: string[];
 }
 
+/** a zip in the instance's backups/ (or backups/auto/, made after a session) */
+export interface WorldBackup {
+  /** `<zip>` or `auto/<zip>`, what RESTORE passes back */
+  file: string;
+  /** the world it was made from */
+  world: string;
+  /** when it was written, ms */
+  made: number;
+  size: number;
+  auto: boolean;
+}
+
 export interface World {
   name: string;
   modified: number;
@@ -2155,6 +2167,12 @@ export const api = {
   recentPlays: (limit?: number) => invoke<RecentPlay[]>('recent_plays', { limit }),
   /** zip a world into the instance's backups/ folder; resolves to the zip's name */
   backupWorld: (profileId: string, name: string) => invoke<string>('backup_world', { profileId, name }),
+  /** the instance's world backups, newest first */
+  listWorldBackups: (profileId: string) => invoke<WorldBackup[]>('list_world_backups', { profileId }),
+  /** unzip a backup into saves/ beside the world it came from (never over it); resolves to the new folder.
+   *  Waits for the instance's game to close. */
+  restoreWorldBackup: (profileId: string, file: string) =>
+    invoke<string>('restore_world_backup', { profileId, file }),
   /** move a world to the OS trash */
   deleteWorld: (profileId: string, name: string) => invoke<void>('delete_world', { profileId, name }),
   listContent: (profileId: string, kind: ContentKind) =>

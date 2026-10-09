@@ -38,6 +38,7 @@ import {
   type Settings,
   type WindowMode,
   type SavedServer,
+  type WorldBackup,
   type ServerStatus,
   type Version,
   type World,
@@ -1586,6 +1587,7 @@ function WorldsTab({
   const [importing, setImporting] = useState(false);
   /* the world whose DATAPACKS window is open; drops go to it meanwhile */
   const [packsOf, setPacksOf] = useState<World | null>(null);
+  const [backupsOpen, setBackupsOpen] = useState(false);
   const packsOpen = useRef(false);
   packsOpen.current = packsOf !== null;
 
@@ -1786,11 +1788,14 @@ function WorldsTab({
             <TT size={16}>REFRESH</TT>
           </PxButton>
         )}
-        {worlds && worlds.length > 0 && (
-          <PxButton family="grey" height="sm" onClick={() => void api.openProfileFolder(profile.id, 'backups')}>
-            <TT size={16}>BACKUPS</TT>
-          </PxButton>
-        )}
+        <PxButton
+          family="grey"
+          height="sm"
+          title="World backups made here or after a session, and putting one back"
+          onClick={() => setBackupsOpen(true)}
+        >
+          <TT size={16}>BACKUPS</TT>
+        </PxButton>
         <span className="meta browse__count">
           {worlds && servers ? `${servers.length} SERVERS · ${worlds.length} WORLDS` : '…'}
         </span>
@@ -2146,6 +2151,17 @@ function WorldsTab({
         </div>
       )}
       {packsOf && <DatapacksWindow profile={profile} world={packsOf} busy={busy} onClose={() => setPacksOf(null)} />}
+      {backupsOpen && (
+        <BackupsWindow
+          profile={profile}
+          busy={busy}
+          onRestored={(folder) => {
+            setNote(`Restored to saves/${folder}, next to the world it was made from.`);
+            void api.listWorlds(profile.id).then(setWorlds);
+          }}
+          onClose={() => setBackupsOpen(false)}
+        />
+      )}
       {trashing && (
         <div className="modal-scrim" onClick={() => setTrashing(null)}>
           <PxBox family="red" className="px--window modal" onClick={(e) => e.stopPropagation()}>
@@ -2390,6 +2406,94 @@ function DatapacksWindow({
             }}
           >
             <TT size={20}>{finding ? 'IN THIS WORLD' : 'FIND ON MODRINTH'}</TT>
+          </PxButton>
+          <PxButton family="grey" height="md" onClick={onClose}>
+            <TT size={20}>DONE</TT>
+          </PxButton>
+        </div>
+      </PxBox>
+    </div>
+  );
+}
+
+/** The instance's world backups (BACK UP and the after-session ones in
+ *  backups/auto/), newest first. RESTORE unzips one into saves/ as a world
+ *  of its own, "<name> (backup <date>)", so the world it came from is never
+ *  overwritten; keep whichever one you want. */
+function BackupsWindow({
+  profile,
+  busy,
+  onRestored,
+  onClose,
+}: {
+  profile: Profile;
+  busy: boolean;
+  onRestored: (folder: string) => void;
+  onClose: () => void;
+}) {
+  const [backups, setBackups] = useState<WorldBackup[] | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [working, setWorking] = useState<string | null>(null);
+
+  useEffect(() => {
+    void api
+      .listWorldBackups(profile.id)
+      .then(setBackups)
+      .catch((e) => (setBackups([]), setNote(String(e))));
+  }, [profile.id]);
+
+  const restore = async (b: WorldBackup) => {
+    setWorking(b.file);
+    setNote(null);
+    try {
+      const folder = await api.restoreWorldBackup(profile.id, b.file);
+      setNote(`Restored to saves/${folder}.`);
+      onRestored(folder);
+    } catch (e) {
+      setNote(String(e));
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <PxBox family="red" className="px--window modal extimport" onClick={(e) => e.stopPropagation()}>
+        <TT size={22}>BACKUPS</TT>
+        <span className="meta">
+          RESTORE adds the backup as its own world beside the one it came from, so nothing gets overwritten.
+        </span>
+        {note && <span className="meta">{note}</span>}
+        <div className="extimport__list">
+          {backups === null && <span className="meta">Reading backups…</span>}
+          {backups?.length === 0 && (
+            <span className="meta">No backups yet. BACK UP on a world makes one; so does auto backup after a session.</span>
+          )}
+          {backups?.map((b) => (
+            <div key={b.file} className="extimport__row">
+              <span className="extimport__info">
+                <TT size={16}>{b.world}</TT>
+                <span className="meta" title={`backups/${b.file}`}>
+                  {[ago(b.made), b.auto ? 'auto, after a session' : 'made by hand', fmtBytes(b.size)].join(' · ')}
+                </span>
+              </span>
+              <PxButton
+                family="accent"
+                height="sm"
+                disabled={busy || working !== null}
+                title={busy ? 'Close the game first' : 'Add it to saves/ as a world of its own'}
+                onClick={() => void restore(b)}
+              >
+                <TT size={16} tone="accent">
+                  {working === b.file ? 'RESTORING…' : 'RESTORE'}
+                </TT>
+              </PxButton>
+            </div>
+          ))}
+        </div>
+        <div className="modal__row modal__row--tall">
+          <PxButton family="grey" height="md" onClick={() => void api.openProfileFolder(profile.id, 'backups')}>
+            <TT size={20}>OPEN FOLDER</TT>
           </PxButton>
           <PxButton family="grey" height="md" onClick={onClose}>
             <TT size={20}>DONE</TT>

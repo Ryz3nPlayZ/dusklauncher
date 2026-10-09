@@ -131,6 +131,8 @@ pub fn run() {
             servers::edit_server,
             carry::copy_instance_settings,
             worlds::backup_world,
+            worlds::list_world_backups,
+            worlds::restore_world_backup,
             worlds::delete_world,
             worlds::rename_world,
             worlds::duplicate_world,
