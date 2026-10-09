@@ -1145,7 +1145,7 @@ checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 
 [[package]]
 name = "fasterlauncher"
-version = "0.6.8"
+version = "0.7.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -1178,7 +1178,7 @@ dependencies = [
 
 [[package]]
 name = "fasterlauncher-core"
-version = "0.6.8"
+version = "0.7.0"
 dependencies = [
  "base64 0.22.1",
  "dirs",
