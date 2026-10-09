@@ -1554,7 +1554,11 @@ fn compose_message(db: &Connection, from: &str, payload: &SendMessage) -> Result
         "image" => {
             let id = field("image").ok_or_else(|| bad("image message needs an image id"))?;
             let mine: bool = db
-                .query_row("SELECT 1 FROM images WHERE id = ?1 AND owner = ?2", params![id, from], |_| Ok(true))
+                .query_row(
+                    "SELECT 1 FROM images WHERE id = ?1 AND owner = ?2 AND created_at >= ?3",
+                    params![id, from, now() - IMAGE_TTL],
+                    |_| Ok(true),
+                )
                 .optional()?
                 .unwrap_or(false);
             if !mine {
@@ -2567,8 +2571,11 @@ mod tests {
 
         let image = SendMessage { body: String::new(), kind: Some("image".into()), meta: Some(json!({ "image": "abc" })) };
         assert!(compose_message(&db, A, &image).is_err(), "not uploaded");
-        db.execute("INSERT INTO images (id, owner, mime, bytes, created_at) VALUES ('abc', ?1, 'image/png', x'00', 0)", params![A]).unwrap();
+        db.execute("INSERT INTO images (id, owner, mime, bytes, created_at) VALUES ('abc', ?1, 'image/png', x'00', ?2)", params![A, now()]).unwrap();
         assert!(compose_message(&db, B, &image).is_err(), "someone else's image");
+        db.execute("INSERT INTO images (id, owner, mime, bytes, created_at) VALUES ('old', ?1, 'image/png', x'00', 0)", params![A]).unwrap();
+        let expired = SendMessage { body: String::new(), kind: Some("image".into()), meta: Some(json!({ "image": "old" })) };
+        assert!(compose_message(&db, A, &expired).is_err(), "past its 90 days");
         let (_, kind, meta) = compose_message(&db, A, &image).unwrap();
         insert_message(&db, A, B, "Sent a screenshot", &kind, meta.as_ref()).unwrap();
         let shared: bool = db
