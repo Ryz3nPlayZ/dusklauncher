@@ -49,6 +49,8 @@ export default function Screenshots({
   const [note, setNote] = useState<string | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const [sending, setSending] = useState<Screenshot | null>(null);
+  /** the shot COPY last tried, and whether it worked: the button says so for a moment */
+  const [copied, setCopied] = useState<{ path: string; ok: boolean } | null>(null);
 
   const refresh = useCallback(() => {
     void api
@@ -99,6 +101,25 @@ export default function Screenshots({
     } catch (e) {
       setError(errText(e));
     }
+  };
+
+  /* the picture itself onto the clipboard, to paste into a chat or an editor;
+     the blob goes in as a promise so the click still counts as the gesture */
+  const copy = async (s: Screenshot) => {
+    let ok = true;
+    try {
+      const png = fetch(srcOf(s))
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.blob();
+        })
+        .then((b) => (b.type === 'image/png' ? b : new Blob([b], { type: 'image/png' })));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+    } catch {
+      ok = false;
+    }
+    setCopied({ path: s.path, ok });
+    window.setTimeout(() => setCopied((c) => (c?.path === s.path ? null : c)), 1600);
   };
 
   const reveal = (s: Screenshot) => {
@@ -307,6 +328,9 @@ export default function Screenshots({
                 </PxButton>
                 <PxButton family="grey" height="md" disabled={!isTauri} onClick={() => reveal(current)}>
                   <TT size={16}>SHOW IN FOLDER</TT>
+                </PxButton>
+                <PxButton family="grey" height="md" title="Copy the picture, to paste anywhere" onClick={() => void copy(current)}>
+                  <TT size={16}>{copied?.path !== current.path ? 'COPY' : copied.ok ? 'COPIED' : 'COULDN’T COPY'}</TT>
                 </PxButton>
                 <PxButton family="blue" height="md" onClick={() => setSending(current)}>
                   <TT size={16} tone="blue">
