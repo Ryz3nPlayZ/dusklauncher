@@ -1427,9 +1427,12 @@ async fn install_profile(
             .and_then(|o| o.as_object())
             .ok_or("bad asset index")?;
         let mut asset_downloads = Vec::new();
+        let mut hashes = std::collections::HashSet::new();
         for (_name, obj) in objects {
             let hash = obj.get("hash").and_then(|h| h.as_str()).unwrap_or_default().to_string();
-            if hash.len() < 2 {
+            // several names can share one object: fetch and count it once;
+            // and a hash is only ever hex, so it can't name a path outside objects/
+            if hash.len() != 40 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) || !hashes.insert(hash.clone()) {
                 continue;
             }
             let size = obj.get("size").and_then(|s| s.as_u64()).unwrap_or(0);

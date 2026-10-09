@@ -43,10 +43,18 @@ pub async fn install_natives(
         return Ok(0);
     }
     download::download_all(client, downloads, 8, |_| {}).await?;
-    tokio::fs::create_dir_all(natives_dir).await?;
+    // unpacked beside the real directory and moved in whole: the launcher
+    // only extracts into an empty one, so a half-filled one would stay
+    let mut staging = natives_dir.as_os_str().to_owned();
+    staging.push(".part");
+    let staging = PathBuf::from(staging);
+    let _ = tokio::fs::remove_dir_all(&staging).await;
+    tokio::fs::create_dir_all(&staging).await?;
     for jar in &jars {
-        extract_zip(jar, natives_dir).await?;
+        extract_zip(jar, &staging).await?;
     }
+    let _ = tokio::fs::remove_dir_all(natives_dir).await;
+    tokio::fs::rename(&staging, natives_dir).await?;
     Ok(jars.len())
 }
 

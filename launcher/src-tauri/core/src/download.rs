@@ -99,11 +99,13 @@ pub async fn download_all_cached(
     cache: Option<Arc<VerifiedCache>>,
     mut on_progress: impl FnMut(ProgressEvent),
 ) -> Result<usize> {
+    // one file per destination: two workers fetching the same path (an asset
+    // index names some identical files twice) would share its .part file
+    let mut seen = std::collections::HashSet::new();
+    let downloads: std::collections::VecDeque<_> = downloads.into_iter().filter(|d| seen.insert(d.dest.clone())).collect();
     on_progress(ProgressEvent::Started { total: downloads.len() });
     let client = Arc::new(client.clone());
-    let queue = Arc::new(tokio::sync::Mutex::new(
-        downloads.into_iter().collect::<std::collections::VecDeque<_>>(),
-    ));
+    let queue = Arc::new(tokio::sync::Mutex::new(downloads));
     let mut failed: Vec<(String, String)> = Vec::new();
 
     // each finished file is reported as it lands, not when its worker
@@ -216,7 +218,7 @@ async fn fetch_and_write(client: &reqwest::Client, dl: &Download) -> Result<()> 
         drop(file);
         if let Some(expected) = &dl.sha1 {
             let actual = hex::encode(hasher.finalize());
-            if &actual != expected {
+            if !actual.eq_ignore_ascii_case(expected) {
                 return Err(Error::Checksum {
                     path: dl.dest.display().to_string(),
                     expected: expected.clone(),
@@ -272,7 +274,7 @@ async fn verify_existing(dl: &Download, cache: Option<&VerifiedCache>) -> Result
         let bytes = std::fs::read(&path)?;
         let mut hasher = Sha1::new();
         hasher.update(&bytes);
-        Ok(hex::encode(hasher.finalize()) == expected)
+        Ok(hex::encode(hasher.finalize()).eq_ignore_ascii_case(&expected))
     })
     .await
     .map_err(|e| Error::Other(e.to_string()))??;

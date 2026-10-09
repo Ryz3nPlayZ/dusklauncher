@@ -76,9 +76,16 @@ pub fn runtime_dir(runtimes_root: &std::path::Path, component: &str) -> PathBuf 
     runtimes_root.join(component)
 }
 
-/// True if the runtime appears already provisioned (contains a java binary).
+/// Written once every file of a runtime is in place. A java binary alone
+/// doesn't prove that: an install cut off part way leaves one next to
+/// missing libraries, and the game would then fail to start every time.
+const COMPLETE_MARKER: &str = ".dusk-complete";
+
+/// True once the runtime finished provisioning. One installed before the
+/// marker existed is checked again (already-present files are only hashed,
+/// not fetched) and marked then.
 pub fn is_provisioned(dir: &std::path::Path) -> bool {
-    java_candidates(dir).iter().any(|p| p.exists())
+    dir.join(COMPLETE_MARKER).is_file() && java_candidates(dir).iter().any(|p| p.exists())
 }
 
 fn java_candidates(dir: &std::path::Path) -> Vec<PathBuf> {
@@ -105,6 +112,24 @@ pub async fn provision(
     if is_provisioned(&dir) {
         return Ok(dir);
     }
+    // an older install without the marker still starts the game offline,
+    // as it did before the marker existed
+    let had_java = java_candidates(&dir).iter().any(|p| p.exists());
+    match provision_files(client, component, &dir, on_progress).await {
+        Err(e) if had_java => {
+            tracing::warn!("couldn't re-check the {component} runtime, using it as it is: {e}");
+            Ok(dir)
+        }
+        r => r,
+    }
+}
+
+async fn provision_files(
+    client: &reqwest::Client,
+    component: &str,
+    dir: &std::path::Path,
+    on_progress: impl FnMut(crate::download::ProgressEvent) + Send,
+) -> Result<PathBuf> {
     let manifest_url = runtime_manifest_url(client, component).await?;
     #[derive(Deserialize)]
     struct FileManifest {
@@ -201,7 +226,8 @@ pub async fn provision(
             let _ = tokio::fs::set_permissions(dir.join(rel), std::fs::Permissions::from_mode(mode)).await;
         }
     }
-    Ok(dir)
+    tokio::fs::write(dir.join(COMPLETE_MARKER), b"").await?;
+    Ok(dir.to_path_buf())
 }
 
 pub fn java_executable(dir: &std::path::Path) -> PathBuf {
