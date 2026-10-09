@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PxBox, PxButton, TT } from '../components/px/Px';
 import { Choice, Row } from '../components/px/Form';
 import { api, type AppInfo, type BlockedPlayer, type Privacy, type Settings } from '../lib/api';
@@ -29,11 +29,19 @@ export default function SettingsSocial({
   const [privacy, setPrivacy] = useState<Privacy | null>(null);
   const [blocked, setBlocked] = useState<BlockedPlayer[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** what the service last confirmed, and which save is the newest: an older
+   *  answer (or failure) landing late mustn't undo a later pick */
+  const saved = useRef<Privacy | null>(null);
+  const saveSeq = useRef(0);
+  const savedSeq = useRef(0);
 
   useEffect(() => {
     void api
       .getPrivacy()
-      .then(setPrivacy)
+      .then((p) => {
+        saved.current = p;
+        setPrivacy(p);
+      })
       .catch((e) => setError(errText(e)));
     void api
       .listBlocked()
@@ -46,11 +54,19 @@ export default function SettingsSocial({
     const next = { ...privacy, ...patch };
     setPrivacy(next);
     setError(null);
+    const seq = ++saveSeq.current;
     api
       .setPrivacy(next)
-      .then(setPrivacy)
+      .then((p) => {
+        if (seq > savedSeq.current) {
+          savedSeq.current = seq;
+          saved.current = p;
+        }
+        if (seq === saveSeq.current) setPrivacy(p);
+      })
       .catch((e) => {
-        setPrivacy(privacy);
+        if (seq !== saveSeq.current) return;
+        setPrivacy(saved.current);
         setError(errText(e));
       });
   };

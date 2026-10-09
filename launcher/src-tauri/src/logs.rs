@@ -185,6 +185,9 @@ fn redact(text: &str, home: Option<&str>) -> String {
             }
             if word == "--accessToken" {
                 hide_next = true;
+            } else if let Some(i) = word.find("--accessToken=").filter(|_| !word.ends_with('=')) {
+                words.push(format!("{}--accessToken=<hidden>", &word[..i]));
+                continue;
             }
             words.push(redact_jwts(word));
         }
@@ -316,5 +319,6 @@ mod tests {
         assert!(!out.contains("sig_abc"));
         let win = redact("C:/Users/alex/a and C:\\Users\\alex\\b and \"C:\\\\Users\\\\alex\"", Some("C:\\Users\\alex"));
         assert!(!win.contains("alex"), "{win}");
+        assert_eq!(redact("args [--accessToken=abc123, --uuid]", None), "args [--accessToken=<hidden> --uuid]");
     }
 }

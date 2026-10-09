@@ -74,12 +74,23 @@ fn prefs_file(instance_root: &Path) -> PathBuf {
     instance_root.join("config").join("duskclient.json")
 }
 
-fn read_object(path: &Path) -> Map<String, Value> {
-    std::fs::read(path)
-        .ok()
-        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
-        .and_then(|v| v.as_object().cloned())
-        .unwrap_or_default()
+/// A config file as a JSON object, empty when there is none. One that is
+/// there but doesn't read as an object (a hand edit gone wrong) is kept
+/// beside it as `<name>.broken` first, since the caller writes over it.
+pub(crate) fn read_object(path: &Path) -> Map<String, Value> {
+    let Ok(bytes) = std::fs::read(path) else { return Map::new() };
+    match serde_json::from_slice::<Value>(&bytes) {
+        Ok(Value::Object(doc)) => doc,
+        _ if bytes.iter().all(u8::is_ascii_whitespace) => Map::new(),
+        _ => {
+            let mut keep = path.as_os_str().to_owned();
+            keep.push(".broken");
+            if let Err(e) = std::fs::copy(path, &keep) {
+                tracing::warn!("couldn't keep unreadable {}: {e}", path.display());
+            }
+            Map::new()
+        }
+    }
 }
 
 fn write_object(path: &Path, doc: &Map<String, Value>) -> Result<(), String> {
@@ -141,6 +152,7 @@ pub fn apply_to_instance(data_dir: &Path, instance_root: &Path) -> Result<Snapsh
 /// Fold what the player changed in the instance since `snap` into the
 /// master. Returns whether anything changed.
 pub fn collect_from_instance(data_dir: &Path, instance_root: &Path, snap: &Snapshot) -> Result<bool, String> {
+    let _file = MASTER_FILE.lock().unwrap_or_else(|e| e.into_inner());
     let mut master = load(data_dir);
     let mut changed = false;
 
@@ -219,6 +231,11 @@ async fn push(state: &AppState, master: &mut Master) -> Result<(), String> {
     Ok(())
 }
 
+/// Held across each load-change-save of the master file: two games exiting
+/// together would otherwise each save the copy they loaded, dropping the
+/// other's changes.
+static MASTER_FILE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// One sync at a time: two instances starting or stopping together would
 /// otherwise each save the copy they loaded.
 static SYNC: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -238,8 +255,11 @@ pub async fn sync(state: &AppState) {
         }
         // a game that exited meanwhile folded its changes in (and marked the
         // copy dirty): keep those; the sync that exit starts pushes them
-        if touched && load(&state.data_dir) == loaded {
-            save(&state.data_dir, &master)?;
+        if touched {
+            let _file = MASTER_FILE.lock().unwrap_or_else(|e| e.into_inner());
+            if load(&state.data_dir) == loaded {
+                save(&state.data_dir, &master)?;
+            }
         }
         Ok::<_, String>(())
     };

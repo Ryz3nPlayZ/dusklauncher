@@ -542,7 +542,9 @@ export function featuredVersions(versions: Version[], max = 4): Version[] {
  *  26.3.x, i.e. every release from 1.21 through 26.3; launch skips the mod
  *  elsewhere). */
 export const clientModSupports = (gameVersion: string) => {
-  const [major, minor, patch] = gameVersion.split(/[.-]/);
+  // pre-releases, release candidates and snapshots fall outside every jar's range
+  if (gameVersion.includes('-')) return false;
+  const [major, minor, patch] = gameVersion.split('.');
   if (major === '1' && minor === '21') return (Number.parseInt(patch ?? '', 10) || 0) <= 11;
   return major === '26' && (minor === '1' || minor === '2' || minor === '3');
 };

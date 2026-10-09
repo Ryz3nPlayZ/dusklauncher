@@ -538,22 +538,10 @@ async fn install_mrpack_bytes(
         .ok_or("modpack does not declare a minecraft version")?;
     let (loader, loader_version) = pack_loader(&index)?;
 
-    // unique name from what the user typed, else the pack title
     let base_name = name
         .map(|n| n.trim().to_string())
         .filter(|n| !n.is_empty())
         .unwrap_or_else(|| index.name.to_uppercase());
-    let name = {
-        let store = state.profiles.lock().unwrap();
-        let mut n = base_name.clone();
-        let mut i = 2;
-        while store.profiles.iter().any(|p| p.name == n) {
-            n = format!("{base_name} {i}");
-            i += 1;
-        }
-        n
-    };
-
     let jvm_args = {
         let settings = state.settings.lock().unwrap();
         let parsed: Vec<String> = settings
@@ -564,9 +552,9 @@ async fn install_mrpack_bytes(
         if parsed.is_empty() { default_jvm_args() } else { parsed }
     };
 
-    let profile = Profile {
-        id: format!("p{}", now_millis()),
-        name: name.clone(),
+    let mut profile = Profile {
+        id: crate::commands::new_profile_id(),
+        name: base_name.clone(),
         game_version: mc_version,
         loader,
         loader_version,
@@ -594,11 +582,22 @@ async fn install_mrpack_bytes(
         fullscreen: None,
     };
     let dirs = profile.dirs(&state.data_dir);
-    {
+    // a unique name from what the user typed, else the pack title — picked
+    // under the same lock as the push, so two installs of one pack at once
+    // can't both take it
+    let name = {
         let mut store = state.profiles.lock().unwrap();
+        let mut n = base_name.clone();
+        let mut i = 2;
+        while store.profiles.iter().any(|p| p.name == n) {
+            n = format!("{base_name} {i}");
+            i += 1;
+        }
+        profile.name = n.clone();
         store.profiles.push(profile.clone());
         state.save_profiles(&store);
-    }
+        n
+    };
 
     let filled = fill_pack_instance(&app, &state, &profile, Arc::new(bytes), &index, dep_versions, dusk, link).await;
     if let Err(e) = filled {

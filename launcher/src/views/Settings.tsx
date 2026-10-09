@@ -108,7 +108,8 @@ export default function SettingsView({
   };
 
   useEffect(() => {
-    void api.getAppInfo().then(setInfo);
+    // without it the version line just stays blank
+    void api.getAppInfo().then(setInfo).catch(() => undefined);
     void api
       .getReferral()
       .then(setReferral)

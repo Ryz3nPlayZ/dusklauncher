@@ -46,7 +46,13 @@ pub const CLIENT_MOD_GAME_VERSIONS: &str = "1.21 through 26.3";
 /// The bundled jar to inject into a `game_version`, or `None` when this
 /// build has nothing compiled for it.
 pub fn client_mod_jar_for(game_version: &str) -> Option<&'static str> {
-    let mut parts = game_version.split(['.', '-']);
+    // a pre-release, release candidate or snapshot (1.21.11-pre1, 26.1-snapshot-1)
+    // sorts below its release, outside every jar's `minecraft` range: Fabric
+    // would stop the game at mod resolution
+    if game_version.contains('-') {
+        return None;
+    }
+    let mut parts = game_version.split('.');
     let major = parts.next();
     let minor = parts.next();
     let patch = parts.next().and_then(|p| p.parse::<u32>().ok()).unwrap_or(0);
@@ -393,11 +399,7 @@ pub fn save_loadout(data_dir: &Path, loadout: &Loadout) -> Result<(), String> {
 pub fn write_loadout_to_instance(data_dir: &Path, instance_root: &Path) -> Result<(), String> {
     let cfg_dir = instance_root.join("config");
     let path = cfg_dir.join("duskclient.json");
-    let mut doc: Map<String, Value> = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
-        .and_then(|v| v.as_object().cloned())
-        .unwrap_or_default();
+    let mut doc = crate::client_settings::read_object(&path);
     let mut cosmetics = doc
         .get("cosmetics")
         .and_then(|v| v.as_object().cloned())
@@ -494,6 +496,10 @@ mod tests {
         assert_eq!(client_mod_jar_for("26.4"), None);
         assert_eq!(client_mod_jar_for("1.20.1"), None);
         assert_eq!(client_mod_jar_for("1.8.9"), None);
+        // below their release, so outside the jar's range
+        assert_eq!(client_mod_jar_for("1.21.11-pre1"), None);
+        assert_eq!(client_mod_jar_for("1.21-rc1"), None);
+        assert_eq!(client_mod_jar_for("26.1-snapshot-1"), None);
     }
 
     #[test]

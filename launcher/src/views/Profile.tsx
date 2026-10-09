@@ -28,7 +28,8 @@ export default function Profile({
   const busy = signingIn || signingOut || switching !== null;
 
   useEffect(() => {
-    void api.getAppInfo().then(setInfo);
+    // without it the version line just stays blank
+    void api.getAppInfo().then(setInfo).catch(() => undefined);
     refreshAccounts();
   }, []);
 

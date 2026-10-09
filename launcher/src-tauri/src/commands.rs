@@ -172,6 +172,17 @@ fn now_millis() -> u64 {
         .unwrap_or(0)
 }
 
+/// A new instance's id, which is also its folder under `profiles/`: the
+/// clock in milliseconds, but never the same twice, so two instances made in
+/// the same millisecond (two pack installs, an import) can't share a folder.
+pub(crate) fn new_profile_id() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static LAST: AtomicU64 = AtomicU64::new(0);
+    let now = now_millis();
+    let prev = LAST.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |last| Some(now.max(last + 1))).unwrap();
+    format!("p{}", now.max(prev + 1))
+}
+
 /// Emit progress at most ~15×/s per stage; the UI smooths the rest.
 struct ProgressEmitter {
     app: AppHandle,
@@ -260,7 +271,7 @@ pub(crate) fn new_profile(state: &AppState, name: String, game_version: String, 
         if parsed.is_empty() { default_jvm_args() } else { parsed }
     };
     Profile {
-        id: format!("p{}", now_millis()),
+        id: new_profile_id(),
         name,
         game_version,
         loader,
@@ -416,7 +427,7 @@ pub async fn duplicate_profile(state: State<'_, AppState>, id: String) -> Result
         }
         let from = src.dirs(&state.data_dir).root;
         let copy = Profile {
-            id: format!("p{}", now_millis()),
+            id: new_profile_id(),
             name,
             created_at: now_millis(),
             last_played: None,
