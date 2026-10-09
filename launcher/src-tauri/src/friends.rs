@@ -29,6 +29,9 @@ pub struct Friend {
     pub last_seen: i64,
     #[serde(default)]
     pub unread: i64,
+    /// a cracked (offline-mode) account; the friends list tags it
+    #[serde(default)]
+    pub offline: bool,
 }
 
 /// `POST /v1/me/presence`'s answer: what the status pill badges.
@@ -73,6 +76,9 @@ pub struct FriendProfile {
     /// achievements they've claimed
     #[serde(default)]
     pub badges: Vec<String>,
+    /// a cracked (offline-mode) account
+    #[serde(default)]
+    pub offline: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
