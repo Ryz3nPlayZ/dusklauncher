@@ -363,11 +363,13 @@ async fn wait_for_code(
             .map_err(|_| "Login timed out waiting for the browser — try again.".to_string())?
             .map_err(|e| format!("auth listener failed: {e}"))?;
 
+        // browsers open spare connections ahead of time and may never write
+        // to them: a silent or broken one is skipped, not the end of the login
         let mut buf = vec![0u8; 8192];
-        let n = tokio::time::timeout(Duration::from_secs(30), stream.read(&mut buf))
-            .await
-            .map_err(|_| "Login timed out reading the browser response.".to_string())?
-            .map_err(|e| format!("auth listener read failed: {e}"))?;
+        let n = match tokio::time::timeout(Duration::from_secs(5), stream.read(&mut buf)).await {
+            Ok(Ok(n)) if n > 0 => n,
+            _ => continue,
+        };
         let req = String::from_utf8_lossy(&buf[..n]);
         let target = req
             .lines()

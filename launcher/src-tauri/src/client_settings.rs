@@ -83,10 +83,7 @@ fn read_object(path: &Path) -> Map<String, Value> {
 }
 
 fn write_object(path: &Path, doc: &Map<String, Value>) -> Result<(), String> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    }
-    std::fs::write(path, serde_json::to_vec_pretty(doc).unwrap()).map_err(|e| e.to_string())
+    fasterlauncher_core::write_atomic(path, &serde_json::to_vec_pretty(doc).unwrap()).map_err(|e| e.to_string())
 }
 
 /// Gson writes every number it read back as a double: `30` and `30.0` are
@@ -222,18 +219,26 @@ async fn push(state: &AppState, master: &mut Master) -> Result<(), String> {
     Ok(())
 }
 
+/// One sync at a time: two instances starting or stopping together would
+/// otherwise each save the copy they loaded.
+static SYNC: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Pull a newer remote copy, then push unpushed local changes. Bounded so
 /// an unreachable service never holds up a launch.
 pub async fn sync(state: &AppState) {
     let work = async {
+        let _turn = SYNC.lock().await;
         let mut master = load(&state.data_dir);
+        let loaded = master.clone();
         let remote: Remote = crate::dusk::call(state, reqwest::Method::GET, "/v1/me/settings", None).await?;
         let mut touched = adopt_remote(&mut master, &remote);
         if master.dirty && !master.is_empty() {
             push(state, &mut master).await?;
             touched = true;
         }
-        if touched {
+        // a game that exited meanwhile folded its changes in (and marked the
+        // copy dirty): keep those; the sync that exit starts pushes them
+        if touched && load(&state.data_dir) == loaded {
             save(&state.data_dir, &master)?;
         }
         Ok::<_, String>(())

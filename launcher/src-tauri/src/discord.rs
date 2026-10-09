@@ -122,7 +122,10 @@ impl Conn {
         for i in 0..10 {
             if let Some(stream) = connect(i) {
                 let mut conn = Conn { stream, nonce: 0 };
-                if conn.frame(0, &json!({ "v": 1, "client_id": app_id })).is_ok() && conn.read().is_ok() {
+                // op 1 is READY; op 2 is Discord refusing (an unknown application id)
+                if conn.frame(0, &json!({ "v": 1, "client_id": app_id })).is_ok()
+                    && conn.read().is_ok_and(|(op, _)| op == 1)
+                {
                     return Some(conn);
                 }
             }

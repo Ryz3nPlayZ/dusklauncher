@@ -91,25 +91,34 @@ pub async fn import_skin(app: tauri::AppHandle, state: State<'_, AppState>) -> R
         }
     }
 
-    let name = path
-        .file_stem()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "skin".into());
-    let dir = skins_dir(&state);
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join(format!("{name}.png")), &bytes).map_err(|e| e.to_string())?;
-
+    let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
     let mut index = load_index(&state);
+    // a second steve.png is "steve (2)", not a silent overwrite of the first
+    let name = import_name(&stem, &index);
+    fasterlauncher_core::write_atomic(&skin_file(&state, &name)?, &bytes).map_err(|e| e.to_string())?;
+
     let dto = SkinDto {
-        name: name.clone(),
+        name,
         added_at: now_millis(),
         selected: false,
         model: None,
     };
-    index.skins.retain(|s| s.name != name);
     index.skins.push(dto.clone());
     save_index(&state, &index);
     Ok(Some(dto))
+}
+
+/// A wardrobe name for an imported file: the rules a rename keeps (no dots,
+/// at most 48 characters), and free in the wardrobe, ignoring case as the
+/// macOS and Windows file systems do.
+fn import_name(stem: &str, index: &SkinIndex) -> String {
+    let cleaned: String = stem.replace(['.', '/', '\\'], " ").trim().chars().take(40).collect();
+    let base = if cleaned.trim().is_empty() { "skin".to_string() } else { cleaned.trim().to_string() };
+    let taken = |n: &str| index.skins.iter().any(|s| s.name.eq_ignore_ascii_case(n));
+    if !taken(&base) {
+        return base;
+    }
+    (2..).map(|n| format!("{base} ({n})")).find(|n| !taken(n)).unwrap()
 }
 
 /// Rename a skin (file + index entry). Names are display names too, so this
@@ -127,7 +136,9 @@ pub fn rename_skin(state: State<'_, AppState>, old_name: String, new_name: Strin
     if !index.skins.iter().any(|s| s.name == old_name) {
         return Err("skin not found".into());
     }
-    if index.skins.iter().any(|s| s.name == new_name) {
+    // case alone may change; another skin's name in other case may not, as
+    // the two files would be one on a case-insensitive disk
+    if index.skins.iter().any(|s| s.name != old_name && s.name.eq_ignore_ascii_case(&new_name)) {
         return Err("a skin with that name already exists".into());
     }
     let dir = skins_dir(&state);
@@ -347,8 +358,7 @@ fn remember_offline_model(state: &AppState, model: &str) {
     if model.is_empty() {
         let _ = std::fs::remove_file(path);
     } else if std::fs::read_to_string(&path).ok().as_deref() != Some(model) {
-        let _ = std::fs::create_dir_all(state.data_dir.join("cache"));
-        let _ = std::fs::write(path, model);
+        let _ = fasterlauncher_core::write_atomic(&path, model.as_bytes());
     }
 }
 
@@ -383,20 +393,29 @@ pub async fn list_account_capes(state: State<'_, AppState>) -> Result<Vec<Accoun
     let profile = fasterlauncher_core::auth::fetch_profile(&state.client, &session.access_token)
         .await
         .map_err(|e| e.to_string())?;
-    let mut out = Vec::with_capacity(profile.capes.len());
-    for c in profile.capes {
-        let texture = match fasterlauncher_core::auth::fetch_skin_png(&state.client, &c.url).await {
-            Ok(png) => format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)),
-            Err(_) => String::new(),
-        };
-        out.push(AccountCapeDto {
+    // the textures come down side by side: an account can own a dozen capes
+    let mut fetches = tokio::task::JoinSet::new();
+    for (i, c) in profile.capes.iter().enumerate() {
+        let (client, url) = (state.client.clone(), c.url.clone());
+        fetches.spawn(async move { (i, fasterlauncher_core::auth::fetch_skin_png(&client, &url).await) });
+    }
+    let mut textures = vec![String::new(); profile.capes.len()];
+    while let Some(Ok((i, png))) = fetches.join_next().await {
+        if let Ok(png) = png {
+            textures[i] = format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png));
+        }
+    }
+    Ok(profile
+        .capes
+        .into_iter()
+        .zip(textures)
+        .map(|(c, texture)| AccountCapeDto {
             name: c.alias.clone().unwrap_or_else(|| "Cape".into()),
             active: c.state.eq_ignore_ascii_case("ACTIVE"),
             id: c.id,
             texture,
-        });
-    }
-    Ok(out)
+        })
+        .collect())
 }
 
 /// Show a Mojang cape on the account (`id`), or hide it (`null`).
@@ -424,15 +443,19 @@ async fn account_skin_data_url(state: &AppState, skin_url: &str) -> Result<Strin
     let png_path = cache_dir.join("account-skin.png");
     let url_path = cache_dir.join("account-skin.url");
     let cached_url = std::fs::read_to_string(&url_path).unwrap_or_default();
-    if cached_url != skin_url || !png_path.exists() {
-        let png = fasterlauncher_core::auth::fetch_skin_png(&state.client, skin_url)
-            .await
-            .map_err(|e| e.to_string())?;
-        std::fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
-        std::fs::write(&png_path, &png).map_err(|e| e.to_string())?;
-        std::fs::write(&url_path, skin_url).map_err(|e| e.to_string())?;
-    }
-    let bytes = std::fs::read(&png_path).map_err(|e| e.to_string())?;
+    let cached = if cached_url == skin_url { std::fs::read(&png_path).ok() } else { None };
+    let bytes = match cached {
+        Some(bytes) => bytes,
+        None => {
+            let png = fasterlauncher_core::auth::fetch_skin_png(&state.client, skin_url)
+                .await
+                .map_err(|e| e.to_string())?;
+            // the PNG first: a URL saved beside a torn PNG would keep it
+            fasterlauncher_core::write_atomic(&png_path, &png).map_err(|e| e.to_string())?;
+            fasterlauncher_core::write_atomic(&url_path, skin_url.as_bytes()).map_err(|e| e.to_string())?;
+            png
+        }
+    };
     let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
     Ok(format!("data:image/png;base64,{b64}"))
 }
@@ -458,5 +481,16 @@ mod tests {
         index.skins[0].model = Some("slim".into());
         let back: SkinIndex = serde_json::from_str(&serde_json::to_string(&index).unwrap()).unwrap();
         assert_eq!(back.skins[0].model.as_deref(), Some("slim"));
+    }
+
+    #[test]
+    fn an_import_never_takes_another_skins_name_or_breaks_the_rename_rules() {
+        let index: SkinIndex = serde_json::from_str(r#"{"skins":[{"name":"Steve","addedAt":1,"selected":true},{"name":"steve (2)","addedAt":2,"selected":false}]}"#).unwrap();
+        assert_eq!(import_name("steve", &index), "steve (3)");
+        assert_eq!(import_name("alex", &index), "alex");
+        assert_eq!(import_name("my.cool.skin", &index), "my cool skin");
+        assert_eq!(import_name(".png", &index), "png");
+        assert_eq!(import_name("...", &index), "skin");
+        assert_eq!(import_name(&"x".repeat(80), &index).len(), 40);
     }
 }

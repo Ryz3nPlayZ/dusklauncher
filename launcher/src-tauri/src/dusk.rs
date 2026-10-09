@@ -86,7 +86,9 @@ fn device_key(data_dir: &Path) -> Result<String, String> {
         }
     }
     let k = hex::encode(rand::random::<[u8; 32]>());
-    std::fs::write(device_key_path(data_dir), &k).map_err(|e| format!("couldn't save the Dusk device key: {e}"))?;
+    // the key is what holds the offline name: a torn write would lose it
+    fasterlauncher_core::write_atomic(&device_key_path(data_dir), k.as_bytes())
+        .map_err(|e| format!("couldn't save the Dusk device key: {e}"))?;
     Ok(k)
 }
 
