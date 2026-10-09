@@ -39,7 +39,12 @@ fn write_session(path: &Path, key: &str, session: &Session) {
         let _ = fasterlauncher_core::write_atomic(path, text.as_bytes());
     }
     if let Ok(entry) = keyring::Entry::new(SERVICE, key) {
-        let _ = entry.set_password(&session.refresh_token);
+        // the keychain copy wins on read: one left holding the previous token
+        // (Microsoft retires it once a new one is issued) would sign the
+        // player out, so a copy that can't be updated goes, and the file's is used
+        if entry.set_password(&session.refresh_token).is_err() {
+            let _ = entry.delete_credential();
+        }
     }
 }
 

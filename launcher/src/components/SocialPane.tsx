@@ -159,9 +159,11 @@ function LinkText({ text, onLink }: { text: string; onLink: (url: string) => voi
 }
 
 /* skins are shared across rows, the chat header and the profile, and the
-   rows remount every time the pane opens — one fetch per friend per half
-   hour instead of one per mount (the backend caches on disk too) */
-const SKIN_TTL_MS = 30 * 60_000;
+   rows remount every time the pane opens — one ask per friend every few
+   minutes instead of one per mount. Short, because the backend already keeps
+   each skin on disk for half an hour (and only then asks Mojang): stacking a
+   second half hour here left a changed skin up to an hour old */
+const SKIN_TTL_MS = 5 * 60_000;
 const skinCache = new Map<string, { at: number; skin: Promise<string | null> }>();
 function loadSkin(uuid: string): Promise<string | null> {
   const hit = skinCache.get(uuid);
