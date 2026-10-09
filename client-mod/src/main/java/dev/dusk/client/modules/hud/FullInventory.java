@@ -23,7 +23,10 @@ public class FullInventory extends TextHud {
     @Override
     public void tick() {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null) return;
+        if (mc.player == null) {
+            full = false;
+            return;
+        }
 
         for (int i = 0; i < 36; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);

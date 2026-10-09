@@ -19,6 +19,7 @@ public class CpsCounter extends TextHud {
 
     @Override
     protected String text(HudContext ctx) {
+        if (!showLeft.get() && !showRight.get()) return null;
         String text = "";
         if (showLeft.get()) text = String.valueOf(ClickTracker.leftCps());
         if (showLeft.get() && showRight.get()) text += " | ";
@@ -29,6 +30,7 @@ public class CpsCounter extends TextHud {
 
     @Override
     protected String sample() {
-        return text(null);
+        String text = text(null);
+        return text == null ? name() : text; // both sides off: still something to grab in the editor
     }
 }

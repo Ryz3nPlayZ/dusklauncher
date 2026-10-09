@@ -9,7 +9,7 @@ import net.minecraft.network.chat.MutableComponent;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -32,7 +32,14 @@ public class CompactChat extends Module {
     private final BoolSetting onlyConsecutive = add(new BoolSetting("onlyCompactConsecutiveMessages", "Only consecutive messages", false));
     private final BoolSetting ignoreSeparators = add(new BoolSetting("ignoreCommonSeparators", "Ignore separator lines", true));
 
-    private final Map<String, Integer> occurrences = new HashMap<>();
+    /** Chat history keeps at most this many messages, so a count for anything older has nothing left to merge into. */
+    private static final int REMEMBERED = 10_000;
+    private final Map<String, Integer> occurrences = new LinkedHashMap<>(16, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, Integer> eldest) {
+            return size() > REMEMBERED;
+        }
+    };
     // the " (n)" counters this module appended, so they can be left out when comparing
     private final Set<Component> counters = Collections.newSetFromMap(new WeakHashMap<>());
     @Nullable private String previousMessage;
@@ -56,7 +63,8 @@ public class CompactChat extends Module {
         boolean ignore = m.shouldIgnore(text, message);
         m.previousMessage = message;
         if (ignore) {
-            m.occurrences.putIfAbsent(message, 1);
+            // a repeat that isn't consecutive starts its count over, rather than carrying on from an older run
+            m.occurrences.put(message, 1);
             return text;
         }
         int count = m.occurrences.merge(message, 1, (a, b) -> Math.min(a + b, m.maximumOccurrences.get()));

@@ -83,7 +83,19 @@ public class Cooldowns extends TextHud {
         });
     }
 
+    /** Entries for the frame {@link #entriesFor} was built for: width, height, clamping and drawing each ask. */
+    private HudContext entriesFor;
+    private List<Entry> entriesCache;
+
     private List<Entry> entries(HudContext ctx) {
+        if (entriesFor != ctx) {
+            entriesCache = buildEntries(ctx);
+            entriesFor = ctx;
+        }
+        return entriesCache;
+    }
+
+    private List<Entry> buildEntries(HudContext ctx) {
         List<Entry> out = new ArrayList<>();
         if (ctx.editing() && (ctx.player() == null || active.isEmpty())) {
             out.add(entry(ctx, new ItemStack(Items.ENDER_PEARL), 0.8f));

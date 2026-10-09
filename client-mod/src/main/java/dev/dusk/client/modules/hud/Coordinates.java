@@ -88,8 +88,8 @@ public class Coordinates extends TextHud {
         if (showY.get()) out.add(new Line(y, 0, row += 10));
         out.add(new Line(z, 0, row += 10));
         if (showDirection.get()) {
-            int widest = Math.max(ctx.textWidth(x), ctx.textWidth(y));
-            if (showY.get()) widest = Math.max(widest, ctx.textWidth(z));
+            int widest = Math.max(ctx.textWidth(x), ctx.textWidth(z));
+            if (showY.get()) widest = Math.max(widest, ctx.textWidth(y));
             int dx = 24 + widest;
             out.add(new Line(AXIS_X[h], dx, 0));
             if (showY.get()) {
