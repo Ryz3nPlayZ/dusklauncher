@@ -400,8 +400,9 @@ async fn auth_dev(State(app): State<Shared>, Json(body): Json<DevAuth>) -> ApiRe
         return Err(ApiError(StatusCode::NOT_FOUND, "not found".into()));
     }
     let uuid = dashed_uuid(&body.uuid).ok_or_else(|| bad("bad uuid"))?;
-    let token = issue_token(&app.db.lock().unwrap(), &uuid, body.username.trim())?;
-    Ok(Json(AuthOk { token, uuid, username: body.username }))
+    let username = body.username.trim().to_string();
+    let token = issue_token(&app.db.lock().unwrap(), &uuid, &username)?;
+    Ok(Json(AuthOk { token, uuid, username }))
 }
 
 // ── offline (cracked) accounts ─────────────────────────────────────────────
