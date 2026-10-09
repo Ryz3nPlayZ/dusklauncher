@@ -389,7 +389,11 @@ fn scan_vanilla(mc: &Path) -> Vec<ExternalInstanceDto> {
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default();
     let mut out = Vec::new();
-    for p in profiles["profiles"].as_object().into_iter().flat_map(|m| m.values()) {
+    // profiles without their own gameDir share one folder, and only one entry
+    // per folder is kept: the one last played, which is what's in it
+    let mut listed: Vec<&Value> = profiles["profiles"].as_object().into_iter().flat_map(|m| m.values()).collect();
+    listed.sort_by(|a, b| b["lastUsed"].as_str().unwrap_or("").cmp(a["lastUsed"].as_str().unwrap_or("")));
+    for p in listed {
         let Some(id) = p["lastVersionId"].as_str() else { continue };
         let dir = p["gameDir"].as_str().map(PathBuf::from).unwrap_or_else(|| mc.to_path_buf());
         if !dir.is_dir() {
@@ -545,6 +549,23 @@ mod tests {
         assert_eq!(parse_curseforge(&cf), (Some("1.21.1".into()), "neoforge".into(), Some("21.1.77".into())));
         let cf: Value = serde_json::from_str(r#"{"name":"x","gameVersion":"1.21.11","baseModLoader":{"name":"fabric-0.16.10-1.21.11"}}"#).unwrap();
         assert_eq!(parse_curseforge(&cf).2, Some("0.16.10".into()));
+    }
+
+    #[test]
+    fn profiles_sharing_the_game_folder_list_the_one_last_played() {
+        let mc = std::env::temp_dir().join(format!("dusk-import-vanilla-{}", std::process::id()));
+        std::fs::create_dir_all(&mc).unwrap();
+        std::fs::write(
+            mc.join("launcher_profiles.json"),
+            r#"{"profiles":{"a":{"name":"","type":"latest-release","lastVersionId":"latest-release","lastUsed":"2026-01-01T00:00:00.000Z"},
+                "b":{"name":"fabric","lastVersionId":"fabric-loader-0.16.10-1.21.11","lastUsed":"2026-05-01T00:00:00.000Z"}}}"#,
+        )
+        .unwrap();
+        let mut seen = std::collections::HashSet::new();
+        let kept: Vec<_> = scan_vanilla(&mc).into_iter().filter(|f| seen.insert(f.path.clone())).collect();
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].loader, "fabric");
+        let _ = std::fs::remove_dir_all(&mc);
     }
 
     #[test]
