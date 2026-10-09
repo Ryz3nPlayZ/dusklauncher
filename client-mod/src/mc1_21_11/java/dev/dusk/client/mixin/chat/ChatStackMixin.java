@@ -3,6 +3,7 @@ package dev.dusk.client.mixin.chat;
 import dev.dusk.client.modules.misc.ChatCopy;
 import dev.dusk.client.modules.misc.ChatHeads;
 import dev.dusk.client.modules.misc.ChatMentions;
+import dev.dusk.client.modules.misc.ChatSearch;
 import dev.dusk.client.modules.misc.ChatTimestamps;
 import dev.dusk.client.modules.misc.CompactChat;
 import net.minecraft.client.GuiMessage;
@@ -22,7 +23,8 @@ import java.util.List;
 /**
  * Chat hooks for {@link ChatMentions}, {@link CompactChat} (Compact Chat's
  * ChatHudMixin, applied as late as it is there), {@link ChatHeads} and
- * {@link ChatTimestamps} (Plague's MixinChatComponent).
+ * {@link ChatTimestamps} (Plague's MixinChatComponent), and the filter
+ * {@link ChatSearch} lays chat out through.
  */
 @Mixin(value = ChatComponent.class, priority = Integer.MAX_VALUE)
 public abstract class ChatStackMixin {
@@ -43,8 +45,19 @@ public abstract class ChatStackMixin {
         CompactChat.clear();
     }
 
+    @Inject(method = "<init>", at = @At("TAIL"))
+    private void duskclient$bindSearch(CallbackInfo ci) {
+        ChatSearch.bind(this::refreshTrimmedMessages);
+    }
+
+    @Inject(method = "addMessageToDisplayQueue", at = @At("HEAD"), cancellable = true)
+    private void duskclient$search(GuiMessage message, CallbackInfo ci) {
+        if (ChatSearch.hides(message.content())) ci.cancel();
+    }
+
     @ModifyVariable(method = "addMessageToDisplayQueue", at = @At("HEAD"), argsOnly = true)
     private GuiMessage duskclient$timestamp(GuiMessage message) {
+        if (ChatSearch.hides(message.content())) return message; // left out, so not laid out for Chat Copy either
         ChatCopy.laying(message.content());
         Component content = ChatTimestamps.decorate(ChatHeads.decorate(message.content()), Minecraft.getInstance().gui.getGuiTicks() - message.addedTime());
         if (content == message.content()) return message;

@@ -38,6 +38,7 @@ import dev.dusk.client.modules.hud.LightLevel;
 import dev.dusk.client.modules.hud.LookingAt;
 import dev.dusk.client.modules.hud.ServerLag;
 import dev.dusk.client.modules.misc.BackgroundFps;
+import dev.dusk.client.modules.misc.ChatSearch;
 import dev.dusk.client.modules.misc.SoundChanger;
 import dev.dusk.client.modules.misc.NameHider;
 import dev.dusk.client.modules.render.BlockOutline;
@@ -270,6 +271,8 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new ConfirmDisconnect());
         modules.register(new Statistics());
         modules.register(new ChatHistory());
+        modules.register(new ChatSearch());
+        ChatSearch.register();
         if (Compat.MODERN_CLIENT_HOOKS) modules.register(new ChatCopy());
         ChatMacros chatMacros = new ChatMacros();
         modules.register(chatMacros);

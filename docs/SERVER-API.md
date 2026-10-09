@@ -43,7 +43,7 @@ on 1.21.11 and later.
 | HUD | `armor` `bedwarsresources` `biome` `clock` `combo` `compass` `cooldowns` `coords` `cps` `day` `distance` `effects` `entities` `fps` `fullinventory` `gametime` `helditem` `inventorydisplay` `itemcounter` `keystrokes` `light` `lookingat` `lowdurability` `memory` `minimap` `nethercoords` `ping` `pitchdisplay` `playtime` `reach` `resourcepacks` `server` `serverlag` `signreader` `skyblockstats` `sneakstatus` `speed` `sprintstatus` `stopwatch` `totems` `tps` `weather` |
 | Movement | `togglesprint` |
 | Render | `behindyou` `blockoutline` `bossbar` `capephysics` `colorsaturation` `containerpreview` `crosshair` `damagetint` `fogcontrol` `fovchanger` `freecam` `freelook` `fullbright` `glintcolor` `hitbox` `hungerinfo` `itemscale` `lightoverlay` `lowfire` `lowshield` `motion_blur` `nametags` `nonightvision` `nopumpkinblur` `particles` `riptideshieldfix` `scoreboard` `shieldstatuses` `skinlayers3d` `tabping` `timechanger` `totempop` `weatherchanger` `zoom` |
-| Utility | `autoreconnect` `backgroundfps` `boatmap` `chatcopy` `chatheads` `chathistory` `chatmacros` `chatmentions` `chattimestamps` `compactchat` `confirmdisconnect` `gamemodeswitcher` `hypixel` `namehider` `slotlock` `soundchanger` `statistics` `tntcountdown` `waypoints` |
+| Utility | `autoreconnect` `backgroundfps` `boatmap` `chatcopy` `chatheads` `chathistory` `chatmacros` `chatmentions` `chatsearch` `chattimestamps` `compactchat` `confirmdisconnect` `gamemodeswitcher` `hypixel` `namehider` `slotlock` `soundchanger` `statistics` `tntcountdown` `waypoints` |
 
 ## Paper example
 
