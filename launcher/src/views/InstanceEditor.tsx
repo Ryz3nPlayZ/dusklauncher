@@ -2215,6 +2215,8 @@ function DatapacksWindow({
 
   useEffect(() => {
     if (!finding) return;
+    // the old results aren't what was typed; show Searching… until the new ones
+    setHits(null);
     let cancelled = false;
     const t = setTimeout(() => {
       api

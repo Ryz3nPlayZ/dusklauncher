@@ -23,7 +23,8 @@ export default function PixelArrow({ size = '1.35em' }: { size?: string }) {
       style={{ height: size, width: 'auto', flex: 'none' }}
     >
       <defs>
-        <linearGradient id="px-arrow" x1="0" y1="0" x2="0" y2="1">
+        {/* in the arrow's own units: every step splits at the arrow's midline, not its own */}
+        <linearGradient id="px-arrow" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="27">
           <stop offset="0.5" stopColor="var(--accent-up)" />
           <stop offset="0.5" stopColor="var(--accent-lo)" />
         </linearGradient>
