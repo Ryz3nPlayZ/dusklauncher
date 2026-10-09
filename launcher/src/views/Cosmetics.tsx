@@ -215,6 +215,16 @@ export default function Cosmetics({
       setNote(String(e));
     }
   };
+  const resetSkin = async () => {
+    setNote(null);
+    try {
+      await api.resetSkin();
+      await load();
+      await onSkinChange();
+    } catch (e) {
+      setNote(String(e));
+    }
+  };
   const wornCape = equippedCape(loadout);
   const wornAcc = useMemo(() => equippedAccessories(loadout), [loadout]);
   const lookDirty = pickedCape !== wornCape || !sameIds(pickedAcc, wornAcc);
@@ -590,6 +600,13 @@ export default function Cosmetics({
                         onClick={() => setTrashing(pickedSkin.name)}
                       />
                     </>
+                  )}
+                  {isTauri && (account?.authenticated || account?.offline) && (
+                    <NavCell
+                      label="DEFAULT SKIN"
+                      title="Take the custom skin off the account: it wears a default one until you apply a skin again"
+                      onClick={() => void resetSkin()}
+                    />
                   )}
                   <div className="win__fill" />
                   <NavLabel label={`${skins.length} SKIN${skins.length === 1 ? '' : 'S'}`} />

@@ -246,7 +246,8 @@ pub async fn upload_skin(
     Ok(())
 }
 
-/// Reset the account's skin to the default (unapply any custom skin).
+/// Reset the account's skin to the default (unapply any custom skin); no
+/// wardrobe skin stays marked as the applied one.
 #[tauri::command]
 pub async fn reset_skin(state: State<'_, AppState>) -> Result<(), String> {
     if crate::commands::offline_session(&state).is_some() {
@@ -255,6 +256,7 @@ pub async fn reset_skin(state: State<'_, AppState>) -> Result<(), String> {
             return Err(format!("Dusk service returned HTTP {}", resp.status().as_u16()));
         }
         remember_offline_model(&state, "");
+        unselect_skins(&state);
         return Ok(());
     }
     let mut session = crate::auth_store::load_session(&state.data_dir)
@@ -265,7 +267,16 @@ pub async fn reset_skin(state: State<'_, AppState>) -> Result<(), String> {
     session.skin_url = String::new();
     session.skin_variant = String::new();
     crate::auth_store::save_session(&state.data_dir, &session);
+    unselect_skins(&state);
     Ok(())
+}
+
+fn unselect_skins(state: &AppState) {
+    let mut index = load_index(state);
+    if index.skins.iter().any(|s| s.selected) {
+        index.skins.iter_mut().for_each(|s| s.selected = false);
+        save_index(state, &index);
+    }
 }
 
 /// The account's active skin as a PNG data URL (for the Home avatar), or

@@ -1340,6 +1340,7 @@ const sideEffects = new Set([
   'begin_code_login',
   'begin_reconsent_login',
   'upload_skin',
+  'reset_skin',
   'import_skin',
   'show_in_folder',
   'open_data_dir',
@@ -2266,6 +2267,8 @@ export const api = {
     invoke<void>('upload_skin', { name, variant }),
   /** pin a wardrobe skin's arm model; null goes back to auto-detect */
   setSkinModel: (name: string, model: SkinModel | null) => invoke<void>('set_skin_model', { name, model }),
+  /** Takes the custom skin off the account (Microsoft or Dusk offline): back to a default one. */
+  resetSkin: () => invoke<void>('reset_skin'),
   accountSkin: () => invoke<string | null>('get_account_skin'),
 
   listCosmetics: () => invoke<CosmeticsCatalog>('list_cosmetics'),
