@@ -965,6 +965,9 @@ pub async fn install_and_launch(
                         set_activity_server(&app3, server, false);
                     } else if let Some(address) = crate::hosting::relay_address(&line.line) {
                         set_activity_server(&app3, Some(address), true);
+                    } else if let Some(opened) = crate::hosting::host_state(&line.line) {
+                        // open but no address yet: the friends pane says it's on its way
+                        set_activity_server(&app3, None, opened);
                     }
                     {
                         let mut tail = tail2.lock().unwrap();

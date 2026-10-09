@@ -75,6 +75,21 @@ pub fn relay_address(line: &str) -> Option<String> {
     crate::servers::valid_address(&domain).then_some(domain)
 }
 
+/// What DuskClient's `WorldHost` logs as it opens a world: `Some(true)`
+/// once it's open and e4mc is fetching its address, `Some(false)` when it
+/// couldn't be opened at all.
+pub fn host_state(line: &str) -> Option<bool> {
+    let i = line.find("[DuskHost] ")?;
+    let rest = &line[i + "[DuskHost] ".len()..];
+    if rest.starts_with("open on port") {
+        Some(true)
+    } else if rest.starts_with("could not open") {
+        Some(false)
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,5 +102,12 @@ mod tests {
         );
         assert_eq!(relay_address("[12:00:01] [Render thread/INFO]: Domain assigned: "), None);
         assert_eq!(relay_address("Connecting to example.org, 25565"), None);
+    }
+
+    #[test]
+    fn reads_whether_the_world_opened() {
+        assert_eq!(host_state("[12:00:00] [Server thread/INFO] (DuskClient) [DuskHost] open on port 51234"), Some(true));
+        assert_eq!(host_state("[DuskHost] could not open the world to other players"), Some(false));
+        assert_eq!(host_state("[DuskPresence] singleplayer"), None);
     }
 }

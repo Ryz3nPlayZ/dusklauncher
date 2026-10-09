@@ -500,6 +500,11 @@ export default function SocialPane({
               </div>
 
               <div className="win__body social__body scroll">
+                {activity?.hosting && !activity.server && (
+                  <PxBox family="accent" height="md" className="social__notice" role="status">
+                    <span className="meta">Opening your world to friends — its address shows here in a few seconds.</span>
+                  </PxBox>
+                )}
                 {activity?.hosting && activity.server && (
                   <PxBox family="accent" height="md" className="social__notice" role="status">
                     <span className="meta">
@@ -1050,7 +1055,11 @@ function ChatView({
 
   const invite = () => {
     if (!activity?.server) {
-      setError('Join a server or HOST a world first — then INVITE sends them its address.');
+      setError(
+        activity?.hosting
+          ? 'Your world is still opening — INVITE once its address shows.'
+          : 'Join a server or HOST a world first — then INVITE sends them its address.',
+      );
       return;
     }
     setError(null);

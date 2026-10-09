@@ -1,8 +1,10 @@
 package dev.dusk.client.social;
 
 import dev.dusk.client.compat.Compat;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.server.IntegratedServer;
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.HttpUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +30,11 @@ public final class WorldHost {
         if (server == null || server.isPublished()) return;
         int port = HttpUtil.getAvailablePort();
         if (Compat.publishLan(server, port)) LOGGER.info("[DuskHost] open on port {}", port);
-        else LOGGER.warn("[DuskHost] could not open the world to other players");
+        else {
+            LOGGER.warn("[DuskHost] could not open the world to other players");
+            if (mc.player != null) {
+                Compat.actionBar(mc.player, Component.literal("Couldn't open this world to friends").withStyle(ChatFormatting.RED));
+            }
+        }
     }
 }

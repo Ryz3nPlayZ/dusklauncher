@@ -383,7 +383,8 @@ export interface GameActivity {
   /** the multiplayer server, from the game log; null in singleplayer / menus.
    *  While hosting, the public address friends join the world at. */
   server: string | null;
-  /** `server` is this player's own world, opened to friends (HOST) */
+  /** `server` is this player's own world, opened to friends (HOST); with
+   *  `server` still null, the world is open and its address is on its way */
   hosting: boolean;
   /** unix seconds */
   startedAt: number;

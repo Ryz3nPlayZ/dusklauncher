@@ -55,7 +55,7 @@ pub fn refresh(app: &AppHandle) {
             // a hosted world's address would let anyone who sees the
             // status walk in: friends get it through the launcher instead
             activity["state"] = json!(match &a.server {
-                Some(_) if a.hosting => "Hosting a world".to_string(),
+                _ if a.hosting => "Hosting a world".to_string(),
                 Some(server) => format!("On {server}"),
                 None => "Singleplayer".to_string(),
             });
