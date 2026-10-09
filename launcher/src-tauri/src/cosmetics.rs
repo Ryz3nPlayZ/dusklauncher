@@ -97,6 +97,17 @@ pub fn client_mod_in_mods(mods_dir: &Path) -> bool {
         .any(|j| mods_dir.join(j).exists() || mods_dir.join(format!("{j}.disabled")).exists())
 }
 
+/// Whether DuskClient runs in an instance on `game_version` and draws resource
+/// packs' OptiFine custom skies itself (1.21.11 on). It doesn't when the only
+/// copy in `mods_dir` is turned off: a copy there stops the injected one.
+pub fn client_draws_skies(game_version: &str, mods_dir: &Path) -> bool {
+    let Some(jar) = client_mod_jar_for(game_version) else { return false };
+    let turned_off = CLIENT_MOD_JARS
+        .iter()
+        .any(|j| mods_dir.join(format!("{j}.disabled")).exists() && !mods_dir.join(j).exists());
+    CLIENT_MOD_JARS[6..].contains(&jar) && !turned_off
+}
+
 /// Keep a visible DuskClient copy in `mods/` in step with the launcher: a
 /// copy is made once and the launcher updates under it, and an instance moved
 /// to another game version still holds the old line's jar, which the loader
@@ -478,6 +489,18 @@ mod tests {
         assert_eq!(client_mod_jar_for("26.4"), None);
         assert_eq!(client_mod_jar_for("1.20.1"), None);
         assert_eq!(client_mod_jar_for("1.8.9"), None);
+    }
+
+    #[test]
+    fn the_client_draws_skies_from_1_21_11_unless_turned_off() {
+        let tmp = std::env::temp_dir().join(format!("dusk-skies-{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        assert!(!client_draws_skies("1.21.10", &tmp));
+        assert!(client_draws_skies("1.21.11", &tmp) && client_draws_skies("26.3", &tmp));
+        assert!(!client_draws_skies("26.4", &tmp));
+        std::fs::write(tmp.join("duskclient-1.21.11.jar.disabled"), b"x").unwrap();
+        assert!(!client_draws_skies("1.21.11", &tmp));
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]

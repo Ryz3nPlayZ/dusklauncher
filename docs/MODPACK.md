@@ -126,7 +126,7 @@ default set: ETF/EMF cost frames, and most players' packs don't need them.
 
 | Pack folder | Feature | Mods (Modrinth) | License |
 |---|---|---|---|
-| `sky/` | custom skies | nuit-interop + nuit | MIT |
+| `sky/` | custom skies | none on 1.21.11+ (DuskClient draws them); nuit-interop + nuit before that | MIT |
 | `ctm/` | connected textures | continuity | LGPL-3.0 |
 | `random/`, `mob/`, `emissive.properties` | random / glowing mob textures | entitytexturefeatures | LGPL-3.0 |
 | `cem/` | custom mob models | entity-model-features (+ ETF) | LGPL-3.0 |

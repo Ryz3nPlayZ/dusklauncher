@@ -40,7 +40,8 @@ const FEATURES: &[Feature] = &[
         label: "custom skies",
         dirs: &["sky"],
         files: &[],
-        // Nuit draws skies; Nuit Interop reads OptiFine's format into it
+        // Nuit draws skies; Nuit Interop reads OptiFine's format into it.
+        // DuskClient draws them itself on 1.21.11 on (see `needs`).
         mods: &[("nuit-interop", "nuit_interop", "Nuit Interop"), ("nuit", "nuit", "Nuit")],
     },
     Feature {
@@ -190,8 +191,9 @@ fn shader_packs(dir: &Path) -> Vec<String> {
 }
 
 /// The pack features in `packs_dir` that `mods_dir` has no mod for yet, and
-/// the shaders in `shaders_dir` when nothing runs them.
-fn needs(packs_dir: &Path, shaders_dir: &Path, mods_dir: &Path) -> Vec<PackNeed> {
+/// the shaders in `shaders_dir` when nothing runs them. `client_skies`: the
+/// injected client draws custom skies, so they need no mod.
+fn needs(packs_dir: &Path, shaders_dir: &Path, mods_dir: &Path, client_skies: bool) -> Vec<PackNeed> {
     let mut packs = scan_packs(packs_dir);
     let shaders = shader_packs(shaders_dir);
     if !shaders.is_empty() {
@@ -209,7 +211,7 @@ fn needs(packs_dir: &Path, shaders_dir: &Path, mods_dir: &Path) -> Vec<PackNeed>
             let having: Vec<String> =
                 packs.iter().filter(|(_, found)| found.contains(f.id)).map(|(n, _)| n.clone()).collect();
             // Sodium alone doesn't run shaders: Iris is what's missing
-            if f.id == SHADERS && held.contains("iris") {
+            if f.id == SHADERS && held.contains("iris") || f.id == "sky" && client_skies {
                 return None;
             }
             (!missing.is_empty() && !having.is_empty()).then(|| PackNeed {
@@ -231,7 +233,8 @@ pub fn pack_mods(state: State<AppState>, profile_id: String) -> Result<Vec<PackN
         return Ok(Vec::new());
     }
     let dirs = profile.dirs(&state.data_dir);
-    Ok(needs(&packs, &dirs.shaderpacks, &dirs.mods))
+    let client_skies = crate::cosmetics::client_draws_skies(&profile.game_version, &dirs.mods);
+    Ok(needs(&packs, &dirs.shaderpacks, &dirs.mods, client_skies))
 }
 
 /// A dependency a fabric.mod.json pins to one exact version (`"nuit":
@@ -300,7 +303,11 @@ pub async fn install_pack_mods(
     let mods_dir = dirs.mods.clone();
     let scan = {
         let (packs, shaders, mods_dir) = (packs.clone(), dirs.shaderpacks.clone(), mods_dir.clone());
-        tokio::task::spawn_blocking(move || (needs(&packs, &shaders, &mods_dir), mods::fabric_mod_ids(&mods_dir)))
+        let version = profile.game_version.clone();
+        tokio::task::spawn_blocking(move || {
+            let client_skies = crate::cosmetics::client_draws_skies(&version, &mods_dir);
+            (needs(&packs, &shaders, &mods_dir, client_skies), mods::fabric_mod_ids(&mods_dir))
+        })
     };
     let (needs, mut held) = scan.await.map_err(|e| e.to_string())?;
     let mut wanted: Vec<FabricMod> = Vec::new();
@@ -391,7 +398,7 @@ mod tests {
         // Nuit is in, Nuit Interop isn't
         zip(&mods_dir.join("nuit.jar"), &[("fabric.mod.json", br#"{"id":"nuit","version":"1.0.0-beta.5"}"#)]);
 
-        let got = needs(&packs, &shaders, &mods_dir);
+        let got = needs(&packs, &shaders, &mods_dir, false);
         assert_eq!(
             got,
             [
@@ -415,7 +422,7 @@ mod tests {
         std::fs::write(shaders.join("Complementary.zip"), b"zip").unwrap();
         std::fs::write(shaders.join("Complementary.zip.txt"), b"x").unwrap();
         zip(&mods_dir.join("sodium.jar"), &[("fabric.mod.json", br#"{"id":"sodium","version":"0.6.13"}"#)]);
-        let got = needs(&packs, &shaders, &mods_dir);
+        let got = needs(&packs, &shaders, &mods_dir, false);
         assert_eq!(
             got.last(),
             Some(&PackNeed {
@@ -426,7 +433,9 @@ mod tests {
             })
         );
         zip(&mods_dir.join("iris.jar"), &[("fabric.mod.json", br#"{"id":"iris","version":"1.9.0"}"#)]);
-        assert!(needs(&packs, &shaders, &mods_dir).iter().all(|n| n.feature != "shaders"));
+        assert!(needs(&packs, &shaders, &mods_dir, false).iter().all(|n| n.feature != "shaders"));
+        // the injected client draws the skies itself
+        assert!(needs(&packs, &shaders, &mods_dir, true).iter().all(|n| n.feature != "sky"));
         let _ = std::fs::remove_dir_all(&tmp);
     }
 

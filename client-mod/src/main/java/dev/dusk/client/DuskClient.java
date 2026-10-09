@@ -79,6 +79,7 @@ import dev.dusk.client.modules.render.ContainerPreview;
 import dev.dusk.client.modules.render.DamageTint;
 import dev.dusk.client.modules.render.FogControl;
 import dev.dusk.client.modules.render.Fullbright;
+import dev.dusk.client.modules.render.CustomSkies;
 import dev.dusk.client.modules.render.LightOverlay;
 import dev.dusk.client.modules.render.Hitbox;
 import dev.dusk.client.modules.render.ItemScale;
@@ -248,6 +249,8 @@ public class DuskClient implements ClientModInitializer {
             if (!FabricLoader.getInstance().isModLoaded("betterpingdisplay")) modules.register(new TabPing());
             modules.register(new BlockOutline());
             if (!FabricLoader.getInstance().isModLoaded("dynamic_fps")) modules.register(new BackgroundFps());
+            // drawn by Nuit when it is installed (its interop reads the same packs)
+            if (!FabricLoader.getInstance().isModLoaded("nuit") && !FabricLoader.getInstance().isModLoaded("nuit_interop")) modules.register(new CustomSkies());
         }
         BehindYou behindYou = new BehindYou();
         modules.register(behindYou);

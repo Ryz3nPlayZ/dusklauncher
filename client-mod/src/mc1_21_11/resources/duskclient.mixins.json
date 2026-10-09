@@ -90,6 +90,8 @@
     "WeatherSkyMixin",
     "WeatherTickMixin",
     "RenderPipelinesAccessor",
+    "SkyPipelinesAccessor",
+    "CustomSkyMixin",
     "PostChainAccessor",
     "PostPassAccessor",
     "cosmetics.AbstractClientPlayerMixin",

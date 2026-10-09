@@ -205,3 +205,17 @@ out on purpose):
 - Wurst Client — https://github.com/Wurst-Imperium/Wurst7
   GPL-3.0 (Wurst-Imperium). Followed from its feature list: Reconnect and
   InfiniChat, the same two ideas as above.
+
+Custom Skies (modules/render/CustomSkies.java, render/sky/ and
+mixin/CustomSkyMixin.java) draws resource packs' OptiFine-format skies the
+way these mods read and draw them:
+
+- Nuit — https://github.com/FlashyReese/nuit
+- Nuit Interop — https://github.com/FlashyReese/nuit-interop
+  MIT, Copyright (c) FlashyReese. Replicated: how Nuit Interop reads
+  optifine/sky and mcpatcher/sky properties (texture paths, fade times,
+  blend names, rotation speed and axis, weather, biomes, heights, days and
+  the transition easing), the per-blend colour modulators, and Nuit's
+  assignment of the sky pipelines to Iris's textured-sky program. The
+  layering, time and cube-face conventions are OptiFine's. No source files
+  were copied.

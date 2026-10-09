@@ -1173,7 +1173,6 @@ const fixtures: Record<string, unknown> = {
     clashes: [{ name: 'Sodium', file: 'sodium-fabric-0.6.13+mc1.21.11.jar', other: 'Iris', otherVersion: '1.8.0+1.21.11', otherFile: 'iris-fabric-1.8.0+mc1.21.11.jar' }],
   } satisfies ModProblems,
   pack_mods: [
-    { feature: 'sky', label: 'custom skies', packs: ['FreshAnimations Skies', 'Stay True'], mods: ['Nuit Interop', 'Nuit'] },
     { feature: 'ctm', label: 'connected textures', packs: ['Stay True'], mods: ['Continuity'] },
     { feature: 'shaders', label: 'shaders', packs: ['BSL Shaders'], mods: ['Iris'] },
   ] satisfies PackNeed[],
