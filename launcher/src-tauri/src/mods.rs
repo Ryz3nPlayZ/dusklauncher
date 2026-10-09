@@ -915,17 +915,18 @@ pub(crate) async fn install_version_file(
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let dest = dir.join(&filename);
     let total = file.size;
-    fasterlauncher_core::download::download_one(
-        &state.client,
-        &fasterlauncher_core::download::Download {
-            url: file.url,
-            dest: dest.clone(),
-            sha1: file.hashes.get("sha1").cloned(),
-            size: Some(file.size),
-        },
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    let dl = fasterlauncher_core::download::Download {
+        url: file.url,
+        dest: dest.clone(),
+        sha1: file.hashes.get("sha1").cloned(),
+        size: Some(file.size),
+    };
+    // a jar another instance already has is linked, not fetched again
+    let pool = state.content_pool();
+    let (p, d) = (pool.clone(), [dl.clone()]);
+    let _ = tokio::task::spawn_blocking(move || fasterlauncher_core::pool::fill_from(&p, &d)).await;
+    fasterlauncher_core::download::download_one(&state.client, &dl).await.map_err(|e| e.to_string())?;
+    let _ = tokio::task::spawn_blocking(move || fasterlauncher_core::pool::add_from(&pool, &[dl])).await;
     let _ = app.emit(
         "launch-progress",
         ProgressPayload {

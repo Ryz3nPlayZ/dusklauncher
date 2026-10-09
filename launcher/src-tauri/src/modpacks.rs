@@ -657,7 +657,7 @@ async fn fill_pack_instance(
     let total = downloads.len() as u64;
     let profile_id = profile.id.clone();
     let app2 = app.clone();
-    mr::download_files(&state.client, downloads, move |done, _| {
+    mr::download_files(&state.client, downloads, Some(&state.content_pool()), move |done, _| {
         let _ = app2.emit(
             "launch-progress",
             crate::commands::ProgressPayload {
@@ -787,7 +787,7 @@ pub async fn update_modpack(
     downloads.retain(|d| !Path::new(&format!("{}.disabled", d.dest.display())).exists());
     let total = downloads.len() as u64;
     let (app2, id2) = (app.clone(), profile_id.clone());
-    mr::download_files(&state.client, downloads, move |done, _| {
+    mr::download_files(&state.client, downloads, Some(&state.content_pool()), move |done, _| {
         let _ = app2.emit(
             "launch-progress",
             crate::commands::ProgressPayload {

@@ -130,6 +130,11 @@ impl AppState {
         let _ = settings.save(&self.data_dir.join("settings.json"));
     }
 
+    /// Mod and pack files shared between instances by hash (core `pool`).
+    pub fn content_pool(&self) -> std::path::PathBuf {
+        self.data_dir.join("cache").join("content")
+    }
+
     pub async fn manifest(&self, client: &reqwest::Client) -> Result<VersionManifest, String> {
         {
             let cache = self.manifest.read().await;

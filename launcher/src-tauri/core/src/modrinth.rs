@@ -642,15 +642,31 @@ pub fn dependency_downloads(versions: &[Version], profile_root: &Path) -> Vec<Do
 }
 
 /// Download a batch, reporting per-file progress.
+/// Fetch a pack's files. With `shared`, the content pool (see `pool`),
+/// files another instance already has are linked from it first and the
+/// ones fetched here go into it after.
 pub async fn download_files(
     client: &reqwest::Client,
     downloads: Vec<Download>,
+    shared: Option<&Path>,
     on_progress: impl Fn(u64, u64),
 ) -> Result<u64> {
     let total = downloads.len() as u64;
     let mut done = 0u64;
-    // one pool for the whole pack: chunking it made each batch wait on its
-    // slowest file before the next started
+    let pooled = match shared {
+        Some(pool) => {
+            let (pool, list) = (pool.to_path_buf(), downloads.clone());
+            tokio::task::spawn_blocking(move || {
+                crate::pool::fill_from(&pool, &list);
+                (pool, list)
+            })
+            .await
+            .ok()
+        }
+        None => None,
+    };
+    // one worker pool for the whole pack: chunking it made each batch wait
+    // on its slowest file before the next started
     download::download_all(client, downloads, 10, |ev| {
         if let download::ProgressEvent::FileDone { .. } = ev {
             done += 1;
@@ -658,6 +674,9 @@ pub async fn download_files(
         }
     })
     .await?;
+    if let Some((pool, list)) = pooled {
+        let _ = tokio::task::spawn_blocking(move || crate::pool::add_from(&pool, &list)).await;
+    }
     Ok(total)
 }
 
