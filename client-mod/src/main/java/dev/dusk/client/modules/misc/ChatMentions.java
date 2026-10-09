@@ -92,11 +92,13 @@ public class ChatMentions extends Module {
     /** Whole words, any case: your name and the extra words; null when there's nothing to look for. */
     @Nullable
     private Pattern pattern() {
-        String key = ownName.get() + "|" + words.get();
+        // the name is part of the key: an account switch mid-session looks for the new one
+        String own = ownName.get() ? Minecraft.getInstance().getUser().getName() : "";
+        String key = own + "|" + words.get();
         if (!key.equals(patternFor)) {
             patternFor = key;
             List<String> alts = new ArrayList<>();
-            if (ownName.get()) alts.add(Pattern.quote(Minecraft.getInstance().getUser().getName()));
+            if (!own.isEmpty()) alts.add(Pattern.quote(own));
             for (String w : words.get().split(",")) {
                 if (!w.isBlank()) alts.add(Pattern.quote(w.trim()));
             }

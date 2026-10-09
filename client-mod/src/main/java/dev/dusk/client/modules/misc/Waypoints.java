@@ -106,12 +106,23 @@ public class Waypoints extends Module {
         List<Waypoint> list = WaypointStore.current();
         int n = 0;
         for (Waypoint w : list) if (!w.death) n++;
-        Waypoint w = new Waypoint(name != null ? name : "Waypoint " + (n + 1),
+        if (name == null) {
+            // past any number already taken, so deleting "Waypoint 1" doesn't make the next one a second "Waypoint 2"
+            int k = n + 1;
+            while (named(list, "Waypoint " + k)) k++;
+            name = "Waypoint " + k;
+        }
+        Waypoint w = new Waypoint(name,
                 Mth.floor(player.getX()), Mth.floor(player.getY()), Mth.floor(player.getZ()),
                 dimension(), PALETTE[n % PALETTE.length]);
         list.add(w);
         WaypointStore.save();
         return w;
+    }
+
+    private static boolean named(List<Waypoint> list, String name) {
+        for (Waypoint w : list) if (w.name.equalsIgnoreCase(name)) return true;
+        return false;
     }
 
     private void markDeath(LocalPlayer player) {

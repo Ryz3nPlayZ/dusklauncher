@@ -98,6 +98,7 @@ public class SlotLock extends Module {
         SlotLock m = active();
         if (m == null) return false;
         var held = player.getMainHandItem();
+        if (held.isEmpty()) return false; // nothing to drop; and every empty slot holds the same EMPTY, so the match below can't tell them apart
         var inv = player.getInventory();
         for (int i = 0; i < 9; i++) if (inv.getItem(i) == held) return m.isLocked(i);
         return false;
