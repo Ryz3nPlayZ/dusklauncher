@@ -112,7 +112,8 @@ pub async fn search_projects(
         query,
         facets: groups,
         index,
-        offset: page.saturating_mul(page_size) as u64,
+        // the clamped size, so pages neither skip nor repeat hits
+        offset: (page as u64).saturating_mul(limit),
         limit,
     };
     let resp = mr::search(&state.client, &params).await.map_err(|e| e.to_string())?;
@@ -218,8 +219,13 @@ pub async fn install_modpack(
     let versions = mr::project_versions(&state.client, &id)
         .await
         .map_err(|e| e.to_string())?;
+    // the newest release Dusk can run, before an alpha or a Forge build
+    let runs = |v: &&mr::Version| v.loaders.iter().any(|l| l == "fabric" || l == "neoforge");
     let version = versions
-        .first()
+        .iter()
+        .find(|v| v.version_type == "release" && runs(v))
+        .or_else(|| versions.iter().find(runs))
+        .or_else(|| versions.first())
         .ok_or_else(|| "modpack has no versions".to_string())?;
     install_version_inner(app, state, version, None, false).await
 }
