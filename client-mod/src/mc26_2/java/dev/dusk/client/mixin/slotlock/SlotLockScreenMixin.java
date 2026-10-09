@@ -20,7 +20,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class SlotLockScreenMixin {
     @Shadow protected Slot hoveredSlot;
 
-    @Inject(method = "slotClicked", at = @At("HEAD"), cancellable = true)
+    // by descriptor: 26.3 adds a MouseButtonEvent overload that forwards here
+    @Inject(method = "slotClicked(Lnet/minecraft/world/inventory/Slot;IILnet/minecraft/world/inventory/ContainerInput;)V", at = @At("HEAD"), cancellable = true)
     private void dusk$lockedClick(Slot slot, int slotId, int button, ContainerInput type, CallbackInfo ci) {
         if (SlotLock.blocks(slot, button, type.name())) ci.cancel();
     }

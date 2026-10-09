@@ -46,9 +46,8 @@ public class ItemPickups extends TextHud {
 
     /** Newest first. Only touched on the client thread: the packet hook and the HUD both run there. */
     private final List<Entry> entries = new ArrayList<>();
-    private final List<Entry> sample = List.of(
-            new Entry(new ItemStack(Items.OAK_LOG), "Oak Log", 12, 0),
-            new Entry(new ItemStack(Items.DIAMOND), "Diamond", 3, 0));
+    /** The editor's preview, built on first use: items can't be made while the game is still starting. */
+    private List<Entry> preview;
     private ClientLevel level;
     /** {@link #shown} for the frame {@link #shownFor} was built for: a frame asks for it four times. */
     private HudContext shownFor;
@@ -98,7 +97,16 @@ public class ItemPickups extends TextHud {
         long expiry = System.currentTimeMillis() - seconds.get() * 1000L;
         entries.removeIf(e -> e.at < expiry);
         while (entries.size() > maxLines.get()) entries.remove(entries.size() - 1);
-        return shownList = entries.isEmpty() && ctx.editing() ? sample : entries;
+        return shownList = entries.isEmpty() && ctx.editing() ? preview() : entries;
+    }
+
+    private List<Entry> preview() {
+        if (preview == null) {
+            preview = List.of(
+                    new Entry(new ItemStack(Items.OAK_LOG), "Oak Log", 12, 0),
+                    new Entry(new ItemStack(Items.DIAMOND), "Diamond", 3, 0));
+        }
+        return preview;
     }
 
     @Override
