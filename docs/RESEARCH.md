@@ -73,3 +73,30 @@ The market's biggest clients share documented weaknesses that define our opportu
 4. **Don't serve ads**. Cosmetics are the accepted monetization; every player in the space pivoted there.
 5. **Server integration is the moat**: Lunar's Apollo/ServerMappings, Badlion's ModAPI, Dawn's MCPVP matchmaking. Design an open server-integration API early.
 6. **PvP mod essentials** (must-have list): keystrokes, CPS counter, FPS display, toggle-sprint/sneak, hit-delay fix, animations toggles, zoom, freelook/perspective, armor status, combo display, custom scoreboard, nametags, HUD layout editor.
+
+## Feature gap check (October 2026)
+
+What Lunar, Feather and the common utility mods have, checked against Dusk's
+modules and launcher. Sources: BisectHosting's
+[Lunar mods list](https://www.bisecthosting.com/blog/lunar-client-mods-list),
+holy.gg's [Lunar default-on/off list](https://www.holy.gg/en/post/lunar-client-mods-default-active-inactive-list),
+Lunar's [April 2026 recap](https://www.lunarclient.com/news/lunar-client-monthly-recap-april-2026),
+Moddex's [Feather Client pack](https://moddex.gg/modpack/feather-client),
+Space-Node's [Modrinth App vs Prism](https://space-node.net/blog/modrinth-app-vs-prism-launcher-2026)
+and the [Backup Manager](https://modrinth.com/mod/backup-manager) mod.
+
+| Feature (who has it) | Dusk | Where |
+|---|---|---|
+| Item Tracker (Lunar), Pickup Notifier mods | **added**: Item Pickups HUD, "+N name" per item, merged and fading | `modules/hud/ItemPickups.java`, `mixin/qol/ItemPickupMixin.java` |
+| Restore a world backup (Backup Manager mod; neither Modrinth App nor Prism does it) | **added**: BACKUPS window lists hand-made and after-session backups; RESTORE adds one beside the original, never over it | `worlds.rs` `list_world_backups` / `restore_world_backup`, `InstanceEditor.tsx` `BackupsWindow` |
+| World hosting for friends (Essential, e4mc) | **added**: HOST on a world, relayed by e4mc | `hosting.rs`, `docs/MODPACK.md` (e4mc) |
+| Titles (Lunar) | have | Boss Bar Tweaks |
+| Snaplook (Lunar) | have | Freelook, hold mode |
+| Pack Display (Lunar) | have | Resource Packs HUD |
+| Death waypoint (Lunar) | have | Waypoints |
+| Health on nametags (Lunar) | have | Nametags |
+| Item Physics, Scroll Transfer (Feather; Mouse Tweaks) | **added** in this pass | `ItemPhysics.java`, `ScrollTransfer.java` |
+| Playtime, instance groups, Discord status, log upload (Modrinth App, Prism) | have | launcher |
+| Scrollable Tooltips (Lunar) | **not yet** | tooltip drawing differs across the ten builds, and it would fight Scroll Transfer for the wheel |
+| Hurt Cam, Chunk Borders, Menu Blur (Lunar) | left out | the game already has them (Damage Tilt, F3+G, menu blur) |
+| 1.7 Visuals, Mumble link, WorldEdit CUI (Lunar) | left out | niche; WorldEdit CUI can go in a modpack as a normal mod |

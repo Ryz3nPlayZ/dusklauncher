@@ -29,7 +29,7 @@ It adds an app-menu entry and a `dusklauncher` command, and the launcher's UPDAT
 ## Layout
 
 - `launcher/` — Tauri 2 desktop app. Rust core (`src-tauri/core`: meta, download, auth, fabric, modrinth, natives, java, profile, launch) + React/TS pixel-art UI (animated parallax scenes, live 3D player render, Modrinth modpacks, local skins).
-- `client-mod/` — Fabric mod ("DuskClient", ten builds covering every release from 1.21 through 26.3, force-injected into every Fabric instance the launcher starts): module framework, 42 HUD elements (keystrokes, CPS, FPS, ping, TPS, armor, effects, shield, combo, reach, coords, clock, …), render modules (custom crosshair, hitboxes, nametags, particles, motion blur, fullbright, colour grading, low fire/shield, time and weather changers, …), Toggle Sprint, cosmetics, clips and replays, and an in-game HUD editor (Right Shift) with a single centred module window. See `docs/IN-GAME-GUI.md`.
+- `client-mod/` — Fabric mod ("DuskClient", ten builds covering every release from 1.21 through 26.3, force-injected into every Fabric instance the launcher starts): module framework, 43 HUD elements (keystrokes, CPS, FPS, ping, TPS, armor, effects, shield, combo, reach, coords, clock, item pickups, …), render modules (custom crosshair, hitboxes, nametags, particles, motion blur, fullbright, colour grading, low fire/shield, time and weather changers, …), Toggle Sprint, cosmetics, clips and replays, and an in-game HUD editor (Right Shift) with a single centred module window. See `docs/IN-GAME-GUI.md`.
 
 ## Development
 
