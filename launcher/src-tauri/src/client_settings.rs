@@ -63,7 +63,7 @@ pub fn load(data_dir: &Path) -> Master {
 
 fn save(data_dir: &Path, m: &Master) -> Result<(), String> {
     let bytes = serde_json::to_vec_pretty(m).map_err(|e| e.to_string())?;
-    std::fs::write(master_path(data_dir), bytes).map_err(|e| e.to_string())
+    fasterlauncher_core::write_atomic(&master_path(data_dir), &bytes).map_err(|e| e.to_string())
 }
 
 fn hud_file(instance_root: &Path) -> PathBuf {

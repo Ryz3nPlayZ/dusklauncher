@@ -35,11 +35,8 @@ pub fn save_session(data_dir: &Path, session: &Session) {
 }
 
 fn write_session(path: &Path, key: &str, session: &Session) {
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     if let Ok(text) = serde_json::to_string_pretty(session) {
-        let _ = std::fs::write(path, text);
+        let _ = fasterlauncher_core::write_atomic(path, text.as_bytes());
     }
     if let Ok(entry) = keyring::Entry::new(SERVICE, key) {
         let _ = entry.set_password(&session.refresh_token);

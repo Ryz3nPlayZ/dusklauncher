@@ -46,7 +46,7 @@ fn load_favorites(data_dir: &Path) -> BTreeSet<String> {
 
 fn save_favorites(data_dir: &Path, favs: &BTreeSet<String>) -> Result<(), String> {
     let bytes = serde_json::to_vec_pretty(favs).map_err(|e| e.to_string())?;
-    std::fs::write(favorites_path(data_dir), bytes).map_err(|e| e.to_string())
+    fasterlauncher_core::write_atomic(&favorites_path(data_dir), &bytes).map_err(|e| e.to_string())
 }
 
 /// `path` checked to be an image file directly inside an instance's

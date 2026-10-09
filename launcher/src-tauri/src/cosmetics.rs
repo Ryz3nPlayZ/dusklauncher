@@ -368,10 +368,7 @@ pub async fn set_loadout(state: State<'_, AppState>, loadout: Loadout) -> Result
 
 pub fn save_loadout(data_dir: &Path, loadout: &Loadout) -> Result<(), String> {
     let path = loadout_path(data_dir);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    std::fs::write(&path, serde_json::to_vec_pretty(loadout).unwrap()).map_err(|e| e.to_string())
+    fasterlauncher_core::write_atomic(&path, &serde_json::to_vec_pretty(loadout).unwrap()).map_err(|e| e.to_string())
 }
 
 /// Merge the current loadout into an instance's `config/duskclient.json`
@@ -431,10 +428,7 @@ pub fn load_inventory(data_dir: &Path) -> Inventory {
 
 pub fn save_inventory(data_dir: &Path, inv: &Inventory) -> Result<(), String> {
     let path = inventory_path(data_dir);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    std::fs::write(&path, serde_json::to_vec_pretty(inv).unwrap()).map_err(|e| e.to_string())
+    fasterlauncher_core::write_atomic(&path, &serde_json::to_vec_pretty(inv).unwrap()).map_err(|e| e.to_string())
 }
 
 /// The cached inventory, refreshed from the service when it can be reached

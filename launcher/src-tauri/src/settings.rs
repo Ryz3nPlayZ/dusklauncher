@@ -153,11 +153,7 @@ impl Settings {
     }
 
     pub fn save(&self, path: &std::path::Path) -> std::io::Result<()> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(path, serde_json::to_vec_pretty(self)?)?;
-        Ok(())
+        fasterlauncher_core::write_atomic(path, &serde_json::to_vec_pretty(self)?)
     }
 
     /// The env_vars field as KEY=VALUE pairs; see [`parse_env`].

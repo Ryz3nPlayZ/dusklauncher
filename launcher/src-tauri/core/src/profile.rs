@@ -1,7 +1,7 @@
 //! User profiles: a named combination of MC version, loader, mods, and JVM args.
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Default JVM args: G1, the collector Mojang's own launcher and Prism run
 /// the game on. (Non-generational ZGC on Java 21 plus AlwaysPreTouch cost
@@ -179,7 +179,7 @@ pub struct ProfileStore {
 }
 
 impl ProfileStore {
-    pub fn load(path: &PathBuf) -> std::io::Result<Self> {
+    pub fn load(path: &Path) -> std::io::Result<Self> {
         if path.exists() {
             Ok(serde_json::from_slice(&std::fs::read(path)?)?)
         } else {
@@ -187,12 +187,8 @@ impl ProfileStore {
         }
     }
 
-    pub fn save(&self, path: &PathBuf) -> std::io::Result<()> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(path, serde_json::to_vec_pretty(self)?)?;
-        Ok(())
+    pub fn save(&self, path: &Path) -> std::io::Result<()> {
+        crate::write_atomic(path, &serde_json::to_vec_pretty(self)?)
     }
 }
 

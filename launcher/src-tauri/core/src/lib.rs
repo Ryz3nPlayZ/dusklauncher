@@ -31,3 +31,30 @@ pub enum Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// Write `bytes` to `path` through a temporary file beside it, so a crash or
+/// a full disk mid-write leaves the old file instead of half of the new one.
+pub fn write_atomic(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    let tmp = std::path::PathBuf::from(tmp);
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, path)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn write_atomic_replaces_the_file_and_leaves_no_temp() {
+        let dir = std::env::temp_dir().join(format!("fl-atomic-{}", std::process::id()));
+        let path = dir.join("nested").join("profiles.json");
+        super::write_atomic(&path, b"one").unwrap();
+        super::write_atomic(&path, b"two").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"two");
+        assert!(!dir.join("nested").join("profiles.json.tmp").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

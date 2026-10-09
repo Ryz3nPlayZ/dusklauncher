@@ -51,7 +51,7 @@ fn load_token(data_dir: &Path) -> Option<StoredToken> {
 
 fn save_token(data_dir: &Path, t: &StoredToken) {
     if let Ok(bytes) = serde_json::to_vec_pretty(t) {
-        let _ = std::fs::write(token_path(data_dir), bytes);
+        let _ = fasterlauncher_core::write_atomic(&token_path(data_dir), &bytes);
     }
 }
 

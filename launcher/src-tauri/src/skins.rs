@@ -51,8 +51,7 @@ fn load_index(state: &AppState) -> SkinIndex {
 
 fn save_index(state: &AppState, index: &SkinIndex) {
     let dir = skins_dir(state);
-    let _ = std::fs::create_dir_all(&dir);
-    let _ = std::fs::write(dir.join("skins.json"), serde_json::to_vec_pretty(index).unwrap());
+    let _ = fasterlauncher_core::write_atomic(&dir.join("skins.json"), &serde_json::to_vec_pretty(index).unwrap());
 }
 
 /// PNG IHDR dimensions without an image crate.
