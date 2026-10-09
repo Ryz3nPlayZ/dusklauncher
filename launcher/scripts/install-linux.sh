@@ -69,7 +69,8 @@ trap 'rm -rf "$TMP"' EXIT INT TERM
 
 url=$(curl -fsSL "https://github.com/$REPO/releases/latest/download/latest.json" | grep -o 'https://[^"]*_amd64\.deb' | head -n 1) ||
     die "couldn't read the latest release from GitHub"
-[ -n "$url" ] || die "the latest release has no Linux package"
+# (sh has no pipefail: a failed curl shows up here as an empty url)
+[ -n "$url" ] || die "couldn't find a Linux package in the latest release on GitHub"
 version=$(printf '%s' "$url" | sed 's|.*/DuskLauncher_\(.*\)_amd64\.deb|\1|')
 
 say "Downloading DuskLauncher $version..."

@@ -26,7 +26,7 @@ for arg in "${@:2}"; do
   esac
 done
 if [[ ! "$tag" =~ ^v[0-9] ]]; then
-  echo "usage: scripts/publish.sh vX.Y.Z [--check]" >&2
+  echo "usage: scripts/publish.sh vX.Y.Z [--check] [--skip-gametest]" >&2
   exit 2
 fi
 
@@ -136,8 +136,9 @@ gh release view "$tag" --json url -q .url
 # what the release actually carries.
 version="${tag#v}"
 dl="https://github.com/$REPO/releases/download/$tag"
-sha_arm="$(curl -sSL "$dl/DuskLauncher_${version}_aarch64.dmg" | shasum -a 256 | cut -d' ' -f1)"
-sha_x64="$(curl -sSL "$dl/DuskLauncher_${version}_x64.dmg" | shasum -a 256 | cut -d' ' -f1)"
+# -f: a missing DMG must stop here, not hash GitHub's error page into the cask
+sha_arm="$(curl -fsSL "$dl/DuskLauncher_${version}_aarch64.dmg" | shasum -a 256 | cut -d' ' -f1)"
+sha_x64="$(curl -fsSL "$dl/DuskLauncher_${version}_x64.dmg" | shasum -a 256 | cut -d' ' -f1)"
 work="$(mktemp -d)"
 gh repo clone "$TAP_REPO" "$work/tap" -- -q --depth 1
 mkdir -p "$work/tap/Casks"
