@@ -4,7 +4,7 @@ import PixelGlyph from '../components/px/PixelGlyph';
 import { Choice, Row } from '../components/px/Form';
 import { NavCell, PxBox, PxButton, TT } from '../components/px/Px';
 import InstanceArt from '../components/InstanceArt';
-import BrowseProjects from './Browse';
+import BrowseProjects, { fmtCount } from './Browse';
 import Project from './Project';
 import InstallModpack from './InstallModpack';
 import {
@@ -30,6 +30,7 @@ import {
   releaseNewer,
   type LaunchTarget,
   type InstanceHooks,
+  type ModHit,
   type Profile,
   type ProfileFolder,
   type ProfileMod,
@@ -2168,6 +2169,25 @@ function DatapacksWindow({
   const [note, setNote] = useState<string | null>(null);
   const [working, setWorking] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  /* FIND ON MODRINTH: the search typed, and what Modrinth has for it */
+  const [finding, setFinding] = useState(false);
+  const [query, setQuery] = useState('');
+  const [hits, setHits] = useState<ModHit[] | null>(null);
+
+  useEffect(() => {
+    if (!finding) return;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      api
+        .searchDatapacks(query.trim(), profile.gameVersion)
+        .then((h) => !cancelled && setHits(h))
+        .catch((e) => !cancelled && (setHits([]), setNote(String(e))));
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [finding, query, profile.gameVersion]);
 
   const load = () =>
     api
@@ -2230,7 +2250,54 @@ function DatapacksWindow({
             : 'Changes take effect the next time the world opens. Drop pack zips or folders here to add them.'}
         </span>
         {note && <span className="meta">{note}</span>}
-        <div className="extimport__list">
+        {finding && (
+          <div className="extimport__list">
+            <PxBox family="panel" height="md">
+              <input
+                className="input"
+                autoFocus
+                placeholder={`Search Modrinth's datapacks for ${profile.gameVersion}`}
+                value={query}
+                spellCheck={false}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </PxBox>
+            {hits === null && <span className="meta">Searching…</span>}
+            {hits?.length === 0 && <span className="meta">{`No datapacks for ${profile.gameVersion} match that.`}</span>}
+            {hits?.map((h) => (
+                <div key={h.id} className="extimport__row">
+                  <span className="editor__row-icon packs__icon">
+                    {h.iconUrl ? (
+                      <img src={h.iconUrl} alt="" draggable={false} />
+                    ) : (
+                      <PixelGlyph glyph="box" size={28} color="var(--text-3)" />
+                    )}
+                  </span>
+                  <span className="extimport__info">
+                    <TT size={16}>{h.title}</TT>
+                    <span className="meta" title={h.description}>
+                      {`by ${h.author} · ${fmtCount(h.downloads)} downloads · ${h.description}`}
+                    </span>
+                  </span>
+                  <PxButton
+                    family="accent"
+                    height="sm"
+                    disabled={working !== null}
+                    title="Download its newest version for this game into the world"
+                    onClick={() =>
+                      void run(h.id, async () => setNote(`Added ${await api.installDatapack(profile.id, world.name, h.id)}`))
+                    }
+                  >
+                    <TT size={16} tone="accent">
+                      {working === h.id ? 'ADDING…' : 'ADD'}
+                    </TT>
+                  </PxButton>
+                </div>
+            ))}
+          </div>
+        )}
+        {/* kept mounted under FIND so the list doesn't re-read on the way back */}
+        <div className="extimport__list" style={finding ? { display: 'none' } : undefined}>
           {packs?.length === 0 && <span className="meta">No datapacks in this world yet.</span>}
           {packs === null && <span className="meta">Reading the world’s datapacks…</span>}
           {packs?.map((p) => (
@@ -2290,6 +2357,17 @@ function DatapacksWindow({
               </TT>
             </PxButton>
           )}
+          <PxButton
+            family="grey"
+            height="md"
+            title={finding ? 'Back to the packs in this world' : 'Datapacks on Modrinth for this version'}
+            onClick={() => {
+              setFinding(!finding);
+              setNote(null);
+            }}
+          >
+            <TT size={20}>{finding ? 'IN THIS WORLD' : 'FIND ON MODRINTH'}</TT>
+          </PxButton>
           <PxButton family="grey" height="md" onClick={onClose}>
             <TT size={20}>DONE</TT>
           </PxButton>

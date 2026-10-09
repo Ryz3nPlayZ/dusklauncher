@@ -138,6 +138,7 @@ pub fn run() {
             worlds::import_world_paths,
             worlds::list_datapacks,
             worlds::set_datapack_enabled,
+            worlds::install_datapack,
             worlds::remove_datapack,
             worlds::add_datapacks,
             worlds::add_datapack_paths,

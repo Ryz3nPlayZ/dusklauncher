@@ -800,6 +800,43 @@ pub async fn add_datapack_paths(
     tokio::task::spawn_blocking(move || add_packs(&dir, paths)).await.map_err(|e| e.to_string())?
 }
 
+/// Download a Modrinth datapack's newest file for the instance's game
+/// version into a world. Resolves to the file name it was saved as.
+#[tauri::command]
+pub async fn install_datapack(
+    state: State<'_, AppState>,
+    profile_id: String,
+    world: String,
+    project_id: String,
+) -> Result<String, String> {
+    use fasterlauncher_core::modrinth as mr;
+    let dir = datapacks_dir(&state, &profile_id, &world)?;
+    let game = {
+        let store = state.profiles.lock().unwrap();
+        store.profiles.iter().find(|p| p.id == profile_id).ok_or("profile not found")?.game_version.clone()
+    };
+    let ver = mr::project_version_for_loader(&state.client, &project_id, &game, Some("datapack"))
+        .await
+        .map_err(|_| format!("It has no datapack for Minecraft {game}."))?;
+    let file = ver.files.iter().find(|f| f.primary).or_else(|| ver.files.first()).ok_or("That version has no files.")?;
+    let name = crate::mods::sanitize_filename(&file.filename)?;
+    if !name.to_ascii_lowercase().ends_with(".zip") {
+        return Err("That version isn't a datapack zip.".into());
+    }
+    if dir.join(format!("{name}.disabled")).exists() {
+        return Err(format!("{name} is in this world already, turned off."));
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let dl = fasterlauncher_core::download::Download {
+        url: file.url.clone(),
+        dest: dir.join(&name),
+        sha1: file.hashes.get("sha1").cloned(),
+        size: Some(file.size),
+    };
+    fasterlauncher_core::download::download_one(&state.client, &dl).await.map_err(|e| e.to_string())?;
+    Ok(name)
+}
+
 /// Pick datapack zips and add them to a world. Empty when the picker is cancelled.
 #[tauri::command]
 pub async fn add_datapacks(

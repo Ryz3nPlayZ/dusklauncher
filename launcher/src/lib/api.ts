@@ -1351,6 +1351,7 @@ const sideEffects = new Set([
   'remove_datapack',
   'add_datapacks',
   'add_datapack_paths',
+  'install_datapack',
   'install_content_to_profile',
   'import_mrpack',
   'import_shared_instance',
@@ -2190,6 +2191,12 @@ export const api = {
   addDatapacks: (profileId: string, world: string) => invoke<ImportedWorlds>('add_datapacks', { profileId, world }),
   addDatapackPaths: (profileId: string, world: string, paths: string[]) =>
     invoke<ImportedWorlds>('add_datapack_paths', { profileId, world, paths }),
+  /** Modrinth datapacks made for this game version */
+  searchDatapacks: (query: string, gameVersion: string, limit = 12) =>
+    invoke<ModHit[]>('search_content', { kind: 'datapack', query, gameVersion, loader: '', limit }),
+  /** the project's newest datapack for the instance's version, into the world; resolves to its file name */
+  installDatapack: (profileId: string, world: string, projectId: string) =>
+    invoke<string>('install_datapack', { profileId, world, projectId }),
   /** native file picker (several at once) → copies .jar mods / .zip packs
    *  into the kind's folder; empty if cancelled */
   importLocalContent: (profileId: string, kind: ContentKind) =>

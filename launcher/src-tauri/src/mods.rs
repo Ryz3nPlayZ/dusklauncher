@@ -554,7 +554,8 @@ pub async fn search_content(
     limit: u32,
     kind: String,
 ) -> Result<Vec<ModHitDto>, String> {
-    let kind = content_kind(&kind)?;
+    // datapacks go into a world, not the instance, but are found the same way
+    let kind = if kind == "datapack" { "datapack" } else { content_kind(&kind)? };
     let mut facets: Vec<Vec<String>> = vec![vec![format!("project_type:{kind}")]];
     if !game_version.trim().is_empty() {
         facets.push(vec![format!("versions:{game_version}")]);
