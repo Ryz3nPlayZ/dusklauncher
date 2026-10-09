@@ -80,7 +80,9 @@ export default function App() {
   const refreshAccount = useCallback(async () => {
     setAccount(await api.getAccount());
     setAccountKnown(true);
-    setSkin(await api.accountSkin());
+    // offline with nothing cached the download fails; the last skin stands
+    const s = await api.accountSkin().catch(() => undefined);
+    if (s !== undefined) setSkin(s);
     // reading the skin learns its arm model (Mojang's, or the Dusk service's offline)
     setAccount(await api.getAccount());
   }, []);

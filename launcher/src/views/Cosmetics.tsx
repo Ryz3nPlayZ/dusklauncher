@@ -314,6 +314,7 @@ export default function Cosmetics({
                 <div className="viewer__stage">
                   <PlayerRender
                     skin={current ? data[current.name] : null}
+                    model={modelOf(current ?? undefined) ?? 'auto'}
                     cape={pickedCape === null ? null : capeData[pickedCape]?.cape}
                     capeFrameMs={pickedCape === null ? 100 : (capes.find((c) => c.id === pickedCape)?.frameMs ?? 100)}
                     ears={pickedCape === null ? null : capeData[pickedCape]?.ears}

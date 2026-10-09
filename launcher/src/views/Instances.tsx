@@ -159,7 +159,7 @@ export default function Instances({
     return (
       <Screenshots
         clock24h={clock24h}
-        gameBusy={game !== null}
+        gameBusy={!!live}
         onWatch={onWatch}
         onBack={() => setGallery(false)}
       />
