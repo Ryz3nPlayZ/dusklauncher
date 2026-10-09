@@ -59,8 +59,8 @@ public class PotionEffects extends TextHud {
     }
 
     private static String duration(int s) {
-        return s < 3600 ? String.format("%02d:%02d", s / 60, s % 60)
-                : String.format("%02d:%02d:%02d", s / 3600, s % 3600 / 60, s % 60);
+        return s < 3600 ? String.format(java.util.Locale.ROOT, "%02d:%02d", s / 60, s % 60)
+                : String.format(java.util.Locale.ROOT, "%02d:%02d:%02d", s / 3600, s % 3600 / 60, s % 60);
     }
 
     private boolean stacked() {

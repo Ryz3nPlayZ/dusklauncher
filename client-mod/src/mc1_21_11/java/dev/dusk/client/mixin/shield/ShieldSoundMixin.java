@@ -20,7 +20,7 @@ public abstract class ShieldSoundMixin {
             target = "Lnet/minecraft/network/protocol/PacketUtils;ensureRunningOnSameThread(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketListener;Lnet/minecraft/network/PacketProcessor;)V",
             shift = At.Shift.AFTER))
     private void dusk$shieldBreak(ClientboundSoundPacket packet, CallbackInfo ci) {
-        if (ShieldStatuses.active() && packet.getSound().getRegisteredName().toLowerCase().contains("shield.break")) {
+        if (ShieldStatuses.active() && packet.getSound().getRegisteredName().toLowerCase(java.util.Locale.ROOT).contains("shield.break")) {
             ShieldStateTracker.handleSoundPacket(packet.getX(), packet.getY(), packet.getZ());
         }
     }

@@ -55,7 +55,7 @@ public final class CapeRegistry {
 
         static Attachment parse(String s) {
             try {
-                return valueOf(s.trim().toUpperCase().replace('-', '_'));
+                return valueOf(s.trim().toUpperCase(java.util.Locale.ROOT).replace('-', '_'));
             } catch (IllegalArgumentException e) {
                 return BODY;
             }

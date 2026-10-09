@@ -34,7 +34,7 @@ public class TntCountdown extends Module {
             int seconds = tnt.getFuse() / 20;
             int hundredth = (tnt.getFuse() % 20) * 5;
 
-            MutableComponent text = Component.literal(seconds + String.format(".%02d", hundredth));
+            MutableComponent text = Component.literal(seconds + (hundredth < 10 ? ".0" : ".") + hundredth);
             switch (seconds) {
                 case 2 -> text.withStyle(ChatFormatting.YELLOW);
                 case 1 -> text.withStyle(ChatFormatting.GOLD);

@@ -68,6 +68,6 @@ public final class GpuBufferUtil {
 
     public static boolean isClosedBufferException(RuntimeException e) {
         String message = e.getMessage();
-        return message != null && message.toLowerCase().contains("closed");
+        return message != null && message.toLowerCase(java.util.Locale.ROOT).contains("closed");
     }
 }

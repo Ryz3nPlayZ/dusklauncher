@@ -1,6 +1,7 @@
 package dev.dusk.client.modules.hud;
 
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.hud.Fmt;
 import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.hud.TextHud;
 import dev.dusk.client.module.setting.BoolSetting;
@@ -68,7 +69,7 @@ public class Compass extends TextHud {
         c.unscissor();
 
         if (showDegrees.get()) {
-            String degrees = String.format("%." + degreesDecimals.get() + "f", yaw);
+            String degrees = Fmt.fixed(yaw, degreesDecimals.get());
             c.push();
             c.translate((STRIP_WIDTH / 2.0f) - (c.textWidth(degrees) / 2.0f) * 0.75f, 1);
             c.scale(0.75f, 0.75f);

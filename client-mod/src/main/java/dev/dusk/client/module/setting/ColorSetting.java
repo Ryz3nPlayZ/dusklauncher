@@ -8,7 +8,7 @@ public class ColorSetting extends Setting<Integer> {
 
     public int argb() { return get(); }
 
-    public String hex() { return String.format("%08X", get()); }
+    public String hex() { return String.format(java.util.Locale.ROOT, "%08X", get()); }
 
     /** Accepts RRGGBB or AARRGGBB, with or without '#'. */
     public boolean setHex(String hex) {

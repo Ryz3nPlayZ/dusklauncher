@@ -1,6 +1,7 @@
 package dev.dusk.client.modules.hud;
 
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.hud.Fmt;
 import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.hud.TextHud;
 import dev.dusk.client.module.setting.BoolSetting;
@@ -29,7 +30,7 @@ public class PitchDisplay extends TextHud {
     private String pitchText(HudContext ctx) {
         LocalPlayer player = ctx.player();
         float pitch = player == null || ctx.editing() ? 0.0f : -player.getXRot();
-        return String.format("%." + degreesDecimals.get() + "f", pitch);
+        return Fmt.fixed(pitch, degreesDecimals.get());
     }
 
     @Override
