@@ -10,7 +10,7 @@ A mod with no build for that version is skipped. Required dependencies
 instance gets the tuned video defaults (`modpacks::seed_dusk_defaults`).
 
 The DuskClient jar is **not** part of the set — the launcher force-loads it
-into every Fabric profile at launch wherever a build exists (1.21 – 26.2).
+into every Fabric profile at launch wherever a build exists (1.21 – 26.3).
 
 ## Offline fallback
 
