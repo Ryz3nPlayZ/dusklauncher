@@ -77,7 +77,7 @@ java/dev/dusk/client/mixin/qol/ItemCooldownsMixin.java
 
 # Chat copy hit-tests through 1.21.11's ActiveTextCollector and GuiMessage.splitLines.
 java/dev/dusk/client/mixin/chat/ChatCopy*.java
-java/dev/dusk/client/mixin/chat/ChatLineFinder.java
+java/dev/dusk/client/modules/misc/ChatLineFinder.java
 
 # Custom skies draw through 1.21.11's SkyRenderer render state and GPU passes.
 java/dev/dusk/client/render/sky/**
