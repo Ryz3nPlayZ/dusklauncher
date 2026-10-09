@@ -139,7 +139,7 @@ public class Particles extends Module {
 
     public Particles() {
         super("particles", "Particles", Category.RENDER,
-                "OverflowParticles: per-particle colour, size, fade and multiplier");
+                "Turn any particle off, or change its colour, size, fade and how many appear.");
         instance = this;
         for (Setting<?> s : settings()) s.setGroup("General");
         for (String key : PRIORITY) addEntry(key);
