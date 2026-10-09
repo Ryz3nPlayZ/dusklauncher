@@ -52,11 +52,23 @@ fn parse(bytes: &[u8]) -> Option<Vec<ReleaseArt>> {
             .filter_map(|e| {
                 let url = e.image?.url;
                 let image_url = if url.starts_with("http") { url } else { format!("{CONTENT_BASE}{url}") };
-                let blurb = e.short_text.split(['.', '!']).next().unwrap_or("").trim().to_string();
+                let blurb = first_sentence(&e.short_text).to_string();
                 Some(ReleaseArt { version: e.version, kind: e.kind, image_url, blurb })
             })
             .collect(),
     )
+}
+
+/// Up to the first full stop or exclamation that ends a sentence — not the
+/// dots inside a version number ("1.21.4 is out now!").
+fn first_sentence(text: &str) -> &str {
+    let mut chars = text.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        if matches!(c, '.' | '!' | '?') && chars.peek().is_none_or(|(_, n)| n.is_whitespace()) {
+            return text[..i].trim();
+        }
+    }
+    text.trim()
 }
 
 /// Every patch-notes entry that has a picture, newest first. A failed fetch
@@ -96,5 +108,7 @@ mod tests {
         assert_eq!(art.len(), 1);
         assert_eq!(art[0].image_url, "https://launchercontent.mojang.com/v2/images/a.jpg");
         assert_eq!(art[0].blurb, "Wilderness Bound is out now");
+        assert_eq!(super::first_sentence("Java Edition 1.21.4 is out. More soon"), "Java Edition 1.21.4 is out");
+        assert_eq!(super::first_sentence("No full stop at all"), "No full stop at all");
     }
 }

@@ -106,7 +106,8 @@ pub async fn import_wallpaper(
         n += 1;
         dest = dir.join(format!("{stem}-{n}.{ext}"));
     }
-    std::fs::copy(&path, &dest).map_err(|e| e.to_string())?;
+    // a live wallpaper can be hundreds of MB: copy without holding up a runtime thread
+    tokio::fs::copy(&path, &dest).await.map_err(|e| e.to_string())?;
 
     Ok(Some(WallpaperDto {
         name: dest.file_name().unwrap().to_string_lossy().to_string(),

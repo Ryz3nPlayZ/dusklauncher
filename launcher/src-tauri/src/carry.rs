@@ -21,7 +21,8 @@ fn data_version(text: &str) -> Option<i64> {
 /// is the older of the two, so the game upgrades whatever was written for
 /// an older one — keybinds included — instead of misreading it.
 fn merge_options(from: &str, into: Option<&str>) -> String {
-    let Some(into) = into else { return from.to_string() };
+    // nothing there yet: theirs, still without their packs
+    let into = into.unwrap_or("");
     let theirs: Vec<(&str, &str)> = from.lines().filter_map(|l| Some((key(l)?, l))).collect();
     let version = match (data_version(from), data_version(into)) {
         (Some(a), Some(b)) => Some(a.min(b)),
@@ -120,7 +121,10 @@ mod tests {
         // a newer target keeps the older data version, so the game upgrades what came over
         let ours = "version:4700\nfov:0.0\n";
         assert!(merge_options(theirs, Some(ours)).starts_with("version:4671\n"));
-        // nothing there yet: theirs as it is
-        assert_eq!(merge_options(theirs, None), theirs);
+        // nothing there yet: theirs, but not their resource packs
+        assert_eq!(
+            merge_options(theirs, None),
+            "version:4671\nfov:1.0\nkey_key.jump:key.keyboard.v\nguiScale:2\n"
+        );
     }
 }
