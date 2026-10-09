@@ -73,6 +73,32 @@ Every hot hook checks a flag first and returns before doing any work.
   for its list, which was rebuilt (and expired entries filtered) four
   times a frame.
 
+## Hook audit (October 2026)
+
+Every hook that runs per particle, per entity or per tick was read for work
+done while its module is off. Nothing new needed fixing; this is what was
+checked, so the next pass can start from it.
+
+- **Per particle, per frame** (`SingleQuadParticleMixin`,
+  `ParticleLightMixin`, `ParticleMixin`): `ParticleHooks.of` checks
+  `Particles.active()` before anything else and resolves a particle type's
+  settings once into an identity map, so with the module off the six reads
+  per particle are a flag check each.
+- **Per entity, per frame**: damage tint (`DamageOverlayMixin`), cape shape
+  (`CapeExtractMixin` → `CapeSim.shape`), nametag filter, health and badge
+  (`NametagStateMixin` → `NametagHooks`) each return on their module's flag
+  first. The cape simulation map is pruned every tick, so players who leave
+  don't pile up.
+- **Per tick** (`DuskClient` end-of-tick handler): modules tick only while
+  on, the cosmetics loadout file is checked once a second, the shared ray
+  cast runs only while Distance or Sign Reader is on, and Hypixel Tweaks'
+  handler returns at once with no GG pending.
+- **Instance defaults**: Dusk Essentials' Sodium tuning (two frames queued
+  ahead instead of three, lower resolution on Retina screens) is written when
+  Sodium arrives with it. Running Essentials again on an instance that
+  already had Sodium used to write them over the player's own choices; it
+  no longer does.
+
 ## Small costs left in on purpose
 
 - HUD text is still rebuilt each frame it's shown, not once per tick. It's
