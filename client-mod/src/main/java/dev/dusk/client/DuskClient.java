@@ -78,6 +78,7 @@ import dev.dusk.client.modules.render.ContainerPreview;
 import dev.dusk.client.modules.render.DamageTint;
 import dev.dusk.client.modules.render.FogControl;
 import dev.dusk.client.modules.render.Fullbright;
+import dev.dusk.client.modules.render.LightOverlay;
 import dev.dusk.client.modules.render.Hitbox;
 import dev.dusk.client.modules.render.ItemScale;
 import dev.dusk.client.modules.render.LowFire;
@@ -261,6 +262,7 @@ public class DuskClient implements ClientModInitializer {
         if (!fabric.isModLoaded("shulkerboxtooltip")) modules.register(new ContainerPreview());
         if (!fabric.isModLoaded("skinlayers3d")) modules.register(new SkinLayers3D());
         if (!fabric.isModLoaded("waveycapes")) modules.register(new CapePhysics());
+        if (!fabric.isModLoaded("lightoverlay")) modules.register(new LightOverlay());
         modules.register(new CompactChat()); // Compact Chat
         modules.register(new ChatTimestamps()); // Plague's Chat Timestamps
         modules.register(new ChatMentions());

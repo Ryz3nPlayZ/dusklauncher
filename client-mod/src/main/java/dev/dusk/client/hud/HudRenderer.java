@@ -5,6 +5,7 @@ import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.media.MediaBackend;
 import dev.dusk.client.module.ModuleManager;
 import dev.dusk.client.modules.misc.Waypoints;
+import dev.dusk.client.modules.render.LightOverlay;
 import dev.dusk.client.modules.render.Zoom;
 import dev.dusk.client.social.SocialNotifier;
 
@@ -17,6 +18,7 @@ public final class HudRenderer {
         if (modules == null) return;
         if (!ctx.editing()) {
             Zoom.drawOverlay(c, ctx);
+            LightOverlay.draw(c, ctx);
             Waypoints.drawMarkers(c, ctx);
         }
         boolean f3 = !ctx.editing() && ctx.mc().getDebugOverlay().showDebugScreen();

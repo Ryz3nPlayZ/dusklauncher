@@ -214,22 +214,11 @@ public class Waypoints extends Module {
         boolean have = WorldProjection.project(x, y0, z, ctx.width(), ctx.height(), beamA);
         for (int i = 1; i <= BEAM_SEGMENTS; i++) {
             boolean next = WorldProjection.project(x, y0 + i * step, z, ctx.width(), ctx.height(), beamB);
-            if (have && next) line(c, beamA[0], beamA[1], beamB[0], beamB[1], 2, color);
+            if (have && next) c.line(beamA[0], beamA[1], beamB[0], beamB[1], 2, color);
             beamA[0] = beamB[0];
             beamA[1] = beamB[1];
             have = next;
         }
-    }
-
-    private static void line(Canvas c, float x0, float y0, float x1, float y1, int width, int color) {
-        float dx = x1 - x0, dy = y1 - y0;
-        int len = Math.round((float) Math.sqrt(dx * dx + dy * dy));
-        if (len <= 0 || len > 4000) return;
-        c.push();
-        c.translate(x0, y0);
-        c.rotate((float) Math.atan2(dy, dx));
-        c.fill(0, -width / 2, len, width - width / 2, color);
-        c.pop();
     }
 
     private void drawMarker(Canvas c, Marker mk, float s, boolean showName) {

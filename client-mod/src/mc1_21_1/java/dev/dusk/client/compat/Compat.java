@@ -60,6 +60,11 @@ public final class Compat {
         player.displayClientMessage(text, true);
     }
 
+    /** The monster Light Overlay tests spawn spots for (EntityType moved its constants to EntityTypes in 26.2). */
+    public static net.minecraft.world.entity.EntityType<?> spawnTestMob() {
+        return net.minecraft.world.entity.EntityType.ZOMBIE;
+    }
+
     /** A key mapping's Controls category as shown on screen (a translation key before 1.21.9). */
     public static String keyCategoryLabel(KeyMapping key) {
         return net.minecraft.client.resources.language.I18n.get(key.getCategory());

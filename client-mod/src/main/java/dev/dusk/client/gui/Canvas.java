@@ -89,6 +89,18 @@ public interface Canvas {
         fill(x, Math.min(y0, y1), x + 1, Math.max(y0, y1) + 1, argb);
     }
 
+    /** A straight line of any angle, {@code width} pixels thick. */
+    default void line(float x0, float y0, float x1, float y1, int width, int argb) {
+        float dx = x1 - x0, dy = y1 - y0;
+        int len = Math.round((float) Math.sqrt(dx * dx + dy * dy));
+        if (len <= 0 || len > 4000) return;
+        push();
+        translate(x0, y0);
+        rotate((float) Math.atan2(dy, dx));
+        fill(0, -width / 2, len, width - width / 2, argb);
+        pop();
+    }
+
     /**
      * Draws what follows above everything drawn so far, items included
      * (popups over lists). Pair with {@link #endLayer}.
