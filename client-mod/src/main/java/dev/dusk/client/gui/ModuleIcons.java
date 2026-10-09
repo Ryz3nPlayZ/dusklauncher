@@ -41,6 +41,7 @@ final class ModuleIcons {
         m.put("fovchanger", Items.GLASS_PANE);
         m.put("totems", Items.TOTEM_OF_UNDYING);
         m.put("itemcounter", Items.BUNDLE);
+        m.put("itempickups", Items.HOPPER);
         m.put("bedwarsresources", Items.EMERALD);
         m.put("skyblockstats", Items.NETHER_STAR);
         m.put("hypixel", Items.GOLDEN_SWORD);

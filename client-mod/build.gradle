@@ -1,5 +1,5 @@
-// One source tree, nine Minecraft targets (1.21.1, 1.21.3, 1.21.4, 1.21.5,
-// 1.21.8, 1.21.10, 1.21.11, 26.1, 26.2 — see gradle.properties for which
+// One source tree, ten Minecraft targets (1.21.1, 1.21.3, 1.21.4, 1.21.5,
+// 1.21.8, 1.21.10, 1.21.11, 26.1, 26.2, 26.3 — see gradle.properties for which
 // game versions each one covers). `gradle build -Pmc=<target>` drops a
 // duskclient-<target>.jar into the launcher resources; the launcher injects
 // whichever matches the profile's version (cosmetics::client_mod_jar_for).

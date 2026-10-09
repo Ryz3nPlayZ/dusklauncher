@@ -103,6 +103,7 @@ import dev.dusk.client.modules.render.SkinLayers3D;
 import dev.dusk.client.modules.render.FovChanger;
 import dev.dusk.client.modules.hud.TotemCounter;
 import dev.dusk.client.modules.hud.ItemCounter;
+import dev.dusk.client.modules.hud.ItemPickups;
 import dev.dusk.client.modules.hud.BedwarsResources;
 import dev.dusk.client.modules.hud.SkyblockStats;
 import dev.dusk.client.modules.misc.HypixelTweaks;
@@ -185,6 +186,7 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new InventoryDisplay());
         modules.register(new TotemCounter());
         modules.register(new ItemCounter());
+        modules.register(new ItemPickups());
         // Info HUD
         modules.register(new Coordinates());
         modules.register(new NetherCoordinates());
