@@ -19,6 +19,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
@@ -88,6 +89,21 @@ public final class NametagHooks {
         if (!(entity instanceof Player) || !Nametags.showsDuskBadge()
                 || !CosmeticsManager.isDuskUser(entity.getUUID())) return name;
         return Component.empty().append(DUSK_BADGE).append(" ").append(name);
+    }
+
+    /**
+     * "Show health": the health after the name, in hearts with absorption
+     * counted, green down to half, then gold, then red.
+     */
+    public static Component withHealth(Entity entity, Component name) {
+        Nametags n = Nametags.active();
+        if (n == null || !n.showHealth.get() || !(entity instanceof LivingEntity living)) return name;
+        float health = living.getHealth() + living.getAbsorptionAmount();
+        float fraction = health / Math.max(1F, living.getMaxHealth());
+        ChatFormatting color = fraction > 0.5F ? ChatFormatting.GREEN : fraction > 0.25F ? ChatFormatting.GOLD : ChatFormatting.RED;
+        String hearts = String.format(java.util.Locale.ROOT, "%.1f", Math.ceil(health) / 2F);
+        if (hearts.endsWith(".0")) hearts = hearts.substring(0, hearts.length() - 2);
+        return Component.empty().append(name).append(Component.literal(" " + hearts + "\u2764").withStyle(color));
     }
 
     /** The F1 rule for an entity's kind: true hides its nametag. */

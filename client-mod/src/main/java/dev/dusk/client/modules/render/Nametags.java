@@ -21,6 +21,7 @@ public class Nametags extends Module {
     public final BoolSetting showOwn = add(new BoolSetting("showOwnNametag", "Show own nametag", true), "General");
     public final BoolSetting showInInventory = add(new BoolSetting("showInInventory", "Show in inventory", false), "General");
     public final BoolSetting duskBadge = add(new BoolSetting("duskBadge", "Dusk badge", true), "General");
+    public final BoolSetting showHealth = add(new BoolSetting("showHealth", "Show health", false), "General");
 
     public final BoolSetting hideEntitiesF1 = add(new BoolSetting("hideEntityF1", "Hide entity nametags when HUD hidden", true), "Hidden HUD");
     public final BoolSetting hidePlayersF1 = add(new BoolSetting("hidePlayerF1", "Hide player nametags when HUD hidden", true), "Hidden HUD");
