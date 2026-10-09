@@ -15,8 +15,11 @@ into every Fabric profile at launch wherever a build exists (1.21 – 26.3).
 ## Offline fallback
 
 `launcher/src-tauri/resources/modpacks/dusk-essentials.mrpack` is the same
-lineup pinned to **1.21.11**, used only when first run can't reach Modrinth.
-Rebuild it whenever the lineup changes:
+lineup pinned to **1.21.11**, used only when first run can't resolve the
+lineup through Modrinth's API. It holds the list and file hashes, not the
+jars: the files still download from Modrinth's CDN, so it covers an API
+outage, not a machine with no internet. Rebuild it whenever the lineup
+changes or the mods update (last rebuilt October 2026):
 
 ```
 node tools/build-default-pack.mjs
@@ -58,8 +61,8 @@ that DuskClient doesn't cover.
 | Mod | License | Role |
 |---|---|---|
 | modmenu | MIT | Mod list + config screens. |
-| betterf3 | MIT | Replacement F3 screen (no 26.3 build yet — skipped there). |
-| chat-heads | MPL-2.0 | Player heads in chat. |
+| betterf3 | MIT | Replacement F3 screen. |
+| chat-heads | MPL-2.0 | Player heads in chat. DuskClient's Chat Heads module only covers 1.21.9+ and steps aside when this mod is present, so the mod stays for every version. |
 | held-item-info | LGPL-3.0 | Held-item tooltip. |
 
 ### Dropped in v2 (DuskClient covers them)
