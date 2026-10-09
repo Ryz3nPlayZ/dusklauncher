@@ -57,6 +57,7 @@ import dev.dusk.client.modules.hud.Speed;
 import dev.dusk.client.modules.hud.SprintStatus;
 import dev.dusk.client.modules.hud.Tps;
 import dev.dusk.client.modules.hud.Weather;
+import dev.dusk.client.modules.misc.ChatCopy;
 import dev.dusk.client.modules.misc.ChatHeads;
 import dev.dusk.client.modules.misc.ChatMentions;
 import dev.dusk.client.modules.misc.ChatTimestamps;
@@ -264,6 +265,7 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new ConfirmDisconnect());
         modules.register(new Statistics());
         modules.register(new ChatHistory());
+        if (Compat.MODERN_CLIENT_HOOKS) modules.register(new ChatCopy());
         ChatMacros chatMacros = new ChatMacros();
         modules.register(chatMacros);
         modules.register(new AutoReconnect());

@@ -16,6 +16,8 @@
     "capes.CapeStateMixin",
     "chat.ChatStackMixin",
     "chat.ChatHistoryMixin",
+    "chat.ChatCopyMixin",
+    "chat.ChatCopyLinesMixin",
     "combo.ComboAttackMixin",
     "combo.ComboPacketMixin",
     "hunger.FoodDataAccessor",

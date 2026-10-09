@@ -1,5 +1,6 @@
 package dev.dusk.client.mixin.chat;
 
+import dev.dusk.client.modules.misc.ChatCopy;
 import dev.dusk.client.modules.misc.ChatHeads;
 import dev.dusk.client.modules.misc.ChatMentions;
 import dev.dusk.client.modules.misc.ChatTimestamps;
@@ -44,6 +45,7 @@ public abstract class ChatStackMixin {
 
     @ModifyVariable(method = "addMessageToDisplayQueue", at = @At("HEAD"), argsOnly = true)
     private GuiMessage duskclient$timestamp(GuiMessage message) {
+        ChatCopy.laying(message.content());
         Component content = ChatTimestamps.decorate(ChatHeads.decorate(message.content()), Minecraft.getInstance().gui.hud.getGuiTicks() - message.addedTime());
         if (content == message.content()) return message;
         return new GuiMessage(message.addedTime(), content, message.signature(), message.source(), message.tag());
