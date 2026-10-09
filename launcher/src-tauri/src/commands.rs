@@ -41,6 +41,8 @@ pub struct ProfileDto {
     /// the Modrinth pack it was installed from; null = not from one
     pub pack: Option<PackDto>,
     pub hooks: InstanceHooks,
+    /// null = as the game last left it
+    pub fullscreen: Option<bool>,
 }
 
 #[derive(Serialize, Clone)]
@@ -76,6 +78,7 @@ pub fn dto(p: &Profile, data_dir: &std::path::Path) -> ProfileDto {
             version_number: l.version_number.clone(),
         }),
         hooks: p.hooks.clone(),
+        fullscreen: p.fullscreen,
     }
 }
 
@@ -107,6 +110,8 @@ pub struct ProfilePatch {
     pub group: Option<String>,
     /// the instance's own hooks and environment, whole
     pub hooks: Option<InstanceHooks>,
+    /// "fullscreen", "windowed", or "" for as the game last left it
+    pub window: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -276,6 +281,7 @@ pub(crate) fn new_profile(state: &AppState, name: String, game_version: String, 
         icon: None,
         pack: None,
         hooks: Default::default(),
+        fullscreen: None,
     }
 }
 
@@ -318,6 +324,13 @@ pub fn update_profile(state: State<'_, AppState>, id: String, patch: ProfilePatc
             }
             if let Some(group) = &patch.group {
                 p.group = Some(group.trim().chars().take(32).collect::<String>()).filter(|s| !s.is_empty());
+            }
+            if let Some(w) = &patch.window {
+                p.fullscreen = match w.as_str() {
+                    "fullscreen" => Some(true),
+                    "windowed" => Some(false),
+                    _ => None,
+                };
             }
             if let Some(path) = &patch.java_path {
                 p.java_path = Some(path.trim().to_string()).filter(|s| !s.is_empty());
@@ -871,6 +884,10 @@ pub async fn install_and_launch(
         None
     };
     seed_instance_config(&dirs.root);
+    // a windowed start needs no file: the game opens windowed without one
+    if let Some(full) = profile.fullscreen.filter(|f| *f || dirs.root.join("options.txt").exists()) {
+        set_game_option(&dirs.root, "fullscreen", if full { "true" } else { "false" });
+    }
     let spec = launch::build_launch_spec(&java_bin, &version, &profile, &dirs, &natives_dir, &session, &env);
     let mut child = launch::launch(&spec, &env).await.map_err(|e| e.to_string())?;
     let started = std::time::SystemTime::now();
@@ -1492,6 +1509,36 @@ fn seed_instance_config(root: &std::path::Path) {
     }
 }
 
+/// Set one `key:value` line of the instance's options.txt, keeping the
+/// rest. The game reads it as it starts, so a fullscreen chosen here holds
+/// even after F11 left the game the other way last time.
+fn set_game_option(root: &std::path::Path, key: &str, value: &str) {
+    let path = root.join("options.txt");
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let line = format!("{key}:{value}");
+    let mut found = false;
+    let mut out: Vec<&str> = text
+        .lines()
+        .map(|l| match l.split_once(':') {
+            Some((k, _)) if k == key => {
+                found = true;
+                line.as_str()
+            }
+            _ => l,
+        })
+        .collect();
+    if !found {
+        out.push(&line);
+    }
+    let new = out.join("\n") + "\n";
+    if new != text {
+        let tmp = root.join("options.txt.tmp");
+        if std::fs::write(&tmp, new).is_ok() && std::fs::rename(&tmp, &path).is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+    }
+}
+
 #[tauri::command(async)]
 pub fn set_settings(app: AppHandle, state: State<'_, AppState>, mut settings: Settings) -> Result<Settings, String> {
     {
@@ -1885,6 +1932,27 @@ mod presence_tests {
         );
         assert_eq!(presence_from_log("[Render thread/INFO] Connecting to the database"), None);
         assert_eq!(presence_from_log("Loading 12 mods"), None);
+    }
+}
+
+#[cfg(test)]
+mod option_tests {
+    use super::set_game_option;
+
+    #[test]
+    fn sets_one_option_and_keeps_the_rest() {
+        let root = std::env::temp_dir().join(format!("dusk-options-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("options.txt");
+        std::fs::write(&path, "version:4325\nfullscreen:false\nfov:0.25\n").unwrap();
+        set_game_option(&root, "fullscreen", "true");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "version:4325\nfullscreen:true\nfov:0.25\n");
+        // a key whose name another starts with isn't touched
+        std::fs::write(&path, "fullscreenResolution:x\n").unwrap();
+        set_game_option(&root, "fullscreen", "true");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "fullscreenResolution:x\nfullscreen:true\n");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
 

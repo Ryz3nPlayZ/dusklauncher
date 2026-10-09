@@ -482,6 +482,7 @@ mod tests {
             icon: None,
             pack: None,
             hooks: Default::default(),
+            fullscreen: None,
         }
     }
 

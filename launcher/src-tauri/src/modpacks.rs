@@ -584,6 +584,7 @@ async fn install_mrpack_bytes(
         icon: None,
         pack: None,
         hooks: Default::default(),
+        fullscreen: None,
     };
     let dirs = profile.dirs(&state.data_dir);
     {

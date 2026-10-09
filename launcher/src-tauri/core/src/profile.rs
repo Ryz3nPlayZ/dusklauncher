@@ -115,6 +115,10 @@ pub struct Profile {
     pub pack: Option<PackLink>,
     #[serde(default)]
     pub hooks: InstanceHooks,
+    /// open the game fullscreen (true) or in a window (false); None = as
+    /// the game last left it
+    #[serde(default)]
+    pub fullscreen: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

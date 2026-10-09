@@ -48,6 +48,8 @@ export interface Profile {
   /** the Modrinth pack it was installed from; null = not from one */
   pack: PackLink | null;
   hooks: InstanceHooks;
+  /** open fullscreen (true) or windowed (false); null = as the game last left it */
+  fullscreen: boolean | null;
 }
 
 /** an instance's own launch hooks and environment (core InstanceHooks):
@@ -84,7 +86,11 @@ export interface ProfilePatch {
   /** "" ungroups */
   group?: string;
   hooks?: InstanceHooks;
+  /** '' = as the game last left it */
+  window?: WindowMode;
 }
+
+export type WindowMode = 'fullscreen' | 'windowed' | '';
 
 export interface Account {
   username: string;
@@ -935,6 +941,7 @@ const fixtures: Record<string, unknown> = {
       icon: null,
       pack: { projectId: 'm-fabu', versionId: 'v-3', versionNumber: '7.1.3' },
       hooks: noHooks(),
+      fullscreen: null,
     },
     {
       id: 'p-vanilla',
@@ -956,6 +963,7 @@ const fixtures: Record<string, unknown> = {
       icon: null,
       pack: null,
       hooks: noHooks(),
+      fullscreen: null,
     },
   ] satisfies Profile[],
   get_current_account: null,
@@ -1739,6 +1747,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     if (patch.memoryMb !== undefined) p.memoryMb = patch.memoryMb > 0 ? patch.memoryMb : null;
     if (patch.javaPath !== undefined) p.javaPath = patch.javaPath.trim() || null;
     if (patch.group !== undefined) p.group = patch.group.trim().slice(0, 32) || null;
+    if (patch.window !== undefined) p.fullscreen = patch.window === '' ? null : patch.window === 'fullscreen';
     if (patch.hooks) {
       const h = patch.hooks;
       p.hooks = { envVars: h.envVars.trim(), prelaunchHook: h.prelaunchHook.trim(), wrapperHook: h.wrapperHook.trim(), postExitHook: h.postExitHook.trim() };
@@ -2002,6 +2011,9 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
       javaPath: null,
       group: null,
       icon: null,
+      pack: null,
+      hooks: noHooks(),
+      fullscreen: null,
     } as T;
   }
   return undefined as T;

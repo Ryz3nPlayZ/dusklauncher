@@ -34,6 +34,7 @@ import {
   type ProfileFolder,
   type ProfileMod,
   type Settings,
+  type WindowMode,
   type SavedServer,
   type ServerStatus,
   type Version,
@@ -342,6 +343,11 @@ function fabricPin(p: Profile): string {
   return p.loader === 'fabric' ? (p.loaderVersion ?? '') : '';
 }
 
+/** How the instance opens its window, as the WINDOW row picks it. */
+function windowOf(p: Profile): WindowMode {
+  return p.fullscreen === null ? '' : p.fullscreen ? 'fullscreen' : 'windowed';
+}
+
 /** `v` (dotted, a `-beta.1` tail ignored) is below `min`; unreadable counts as not. */
 function olderThan(v: string, min: number[]): boolean {
   const parts = v.split(/[-+]/)[0].split('.').map(Number);
@@ -380,6 +386,7 @@ function SettingsTab({
   const [server, setServer] = useState(profile.server ?? '');
   const [group, setGroup] = useState(profile.group ?? '');
   const [hooks, setHooks] = useState(profile.hooks);
+  const [windowMode, setWindowMode] = useState(windowOf(profile));
   /* the launcher's own hooks, shown where the instance leaves its empty */
   const [launcher, setLauncher] = useState<Settings | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
@@ -449,6 +456,7 @@ function SettingsTab({
     setServer(profile.server ?? '');
     setGroup(profile.group ?? '');
     setHooks(profile.hooks);
+    setWindowMode(windowOf(profile));
   }, [profile]);
 
   const w = Number(width);
@@ -461,6 +469,7 @@ function SettingsTab({
     (loader === 'fabric' && loaderVersion.trim() !== fabricPin(profile)) ||
     w !== profile.resolution[0] ||
     h !== profile.resolution[1] ||
+    windowMode !== windowOf(profile) ||
     jvm.trim() !== jvmText(profile) ||
     mb !== (profile.memoryMb ?? 0) ||
     javaPath.trim() !== (profile.javaPath ?? '') ||
@@ -491,6 +500,7 @@ function SettingsTab({
         // the heap lives in MEMORY now; a -Xmx typed here would be overridden
         jvmArgs: jvm.trim() ? jvm.trim().split(/\s+/).filter((a) => !isHeapFlag(a)) : [],
         resolution: [Math.round(w), Math.round(h)],
+        window: windowMode,
         server: server.trim(),
         memoryMb: mb,
         javaPath: javaPath.trim(),
@@ -751,6 +761,24 @@ function SettingsTab({
             onChange={(e) => setHeight(e.target.value)}
           />
         </PxBox>
+      </Row>
+      <Row
+        label="WINDOW"
+        hint={
+          windowMode === ''
+            ? 'Opens the way the game last closed: F11 in game decides.'
+            : `Always opens ${windowMode}, whatever F11 left it as last time.`
+        }
+      >
+        <Choice
+          value={windowMode}
+          options={[
+            { value: '', label: 'AS LAST LEFT' },
+            { value: 'windowed', label: 'WINDOWED' },
+            { value: 'fullscreen', label: 'FULLSCREEN' },
+          ]}
+          onPick={setWindowMode}
+        />
       </Row>
       <Row
         label="MEMORY"

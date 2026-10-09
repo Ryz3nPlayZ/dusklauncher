@@ -86,6 +86,7 @@ async fn boot_to_menu() {
         icon: None,
         pack: None,
         hooks: Default::default(),
+        fullscreen: None,
         resolution: (1280, 720),
         mod_filenames: vec![],
         server: None,
