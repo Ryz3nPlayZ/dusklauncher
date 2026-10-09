@@ -60,6 +60,22 @@ export default function SettingsView({
     else if (!nameOk) setOfflineName(settings.offlineName);
   };
 
+  /* the default window size: edited locally, saved once it's a size the game
+     can open (the instance editor asks the same 320×240 minimum) */
+  const [width, setWidth] = useState(String(settings.width));
+  const [height, setHeight] = useState(String(settings.height));
+  useEffect(() => setWidth(String(settings.width)), [settings.width]);
+  useEffect(() => setHeight(String(settings.height)), [settings.height]);
+  const sizeOk = Number.isInteger(Number(width)) && Number(width) >= 320 && Number.isInteger(Number(height)) && Number(height) >= 240;
+  const saveSize = () => {
+    if (!sizeOk) {
+      setWidth(String(settings.width));
+      setHeight(String(settings.height));
+    } else if (Number(width) !== settings.width || Number(height) !== settings.height) {
+      set({ width: Number(width), height: Number(height) });
+    }
+  };
+
   /* referrals: your code to share, and (new accounts, once) who invited you */
   const [referral, setReferral] = useState<Referral | null>(null);
   const [referralErr, setReferralErr] = useState<string | null>(null);
@@ -189,6 +205,16 @@ export default function SettingsView({
                   ]}
                 />
               </Row>
+              <Row label="SIGN-IN METHOD" hint="Official uses the Minecraft launcher's identity; Azure uses our own registration.">
+                <Choice
+                  value={settings.authMode}
+                  onPick={(authMode) => set({ authMode })}
+                  options={[
+                    { value: 'official', label: 'OFFICIAL' },
+                    { value: 'azure', label: 'AZURE' },
+                  ]}
+                />
+              </Row>
               <Row label="REDUCE MOTION" hint="Freezes the scene and the player animation.">
                 <Choice
                   value={settings.reduceMotion ? 'on' : 'off'}
@@ -306,8 +332,8 @@ export default function SettingsView({
                       ? referral.referralPaid
                         ? `${referral.referredBy} invited you. The bonus is paid.`
                         : `${referral.referredBy} invited you. You both get paid when you first launch the game.`
-                      : referralErr && referral
-                      ? referralErr
+                      : referralErr
+                        ? referralErr
                       : `Got a code from a friend? You get ${referral.refereeReward} coins after your first launch. New accounts only.`
                   }
                   controlClassName="srow__control--wrap"
@@ -407,33 +433,32 @@ export default function SettingsView({
 
           {tab === 'DISPLAY' && (
             <>
-              <Row label="RESOLUTION" hint="Default window size for new instances.">
+              <Row
+                label="RESOLUTION"
+                hint={sizeOk ? 'Default window size for new instances.' : 'At least 320 × 240.'}
+              >
                 <PxBox family="panel" height="md">
                   <input
                     className="input"
                     type="number"
-                    value={settings.width}
-                    onChange={(e) => set({ width: Number(e.target.value) })}
+                    min={320}
+                    value={width}
+                    onChange={(e) => setWidth(e.target.value)}
+                    onBlur={saveSize}
+                    onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                   />
                 </PxBox>
                 <PxBox family="panel" height="md">
                   <input
                     className="input"
                     type="number"
-                    value={settings.height}
-                    onChange={(e) => set({ height: Number(e.target.value) })}
+                    min={240}
+                    value={height}
+                    onChange={(e) => setHeight(e.target.value)}
+                    onBlur={saveSize}
+                    onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                   />
                 </PxBox>
-              </Row>
-              <Row label="SIGN-IN METHOD" hint="Official uses the Minecraft launcher's identity; Azure uses our own registration.">
-                <Choice
-                  value={settings.authMode}
-                  onPick={(authMode) => set({ authMode })}
-                  options={[
-                    { value: 'official', label: 'OFFICIAL' },
-                    { value: 'azure', label: 'AZURE' },
-                  ]}
-                />
               </Row>
             </>
           )}

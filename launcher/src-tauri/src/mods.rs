@@ -403,8 +403,18 @@ pub fn remove_profile_content(
     let kind = content_kind(&kind)?;
     let filename = sanitize_filename(&filename)?;
     let (_, dir) = profile_and_content(&state, &profile_id, kind)?;
-    let _ = std::fs::remove_file(dir.join(format!("{filename}.disabled")));
-    std::fs::remove_file(dir.join(&filename)).map_err(|e| e.to_string())?;
+    // a turned-off file exists only as `.disabled`; either copy goes to the
+    // trash (REMOVE asks nothing first), and only both missing is an error
+    let copies: Vec<_> = [dir.join(&filename), dir.join(format!("{filename}.disabled"))]
+        .into_iter()
+        .filter(|p| p.exists())
+        .collect();
+    if copies.is_empty() {
+        return Err(format!("{filename} is already gone."));
+    }
+    for p in copies {
+        trash::delete(&p).map_err(|e| format!("Couldn't move {filename} to the trash: {e}"))?;
+    }
     if kind == "mod" {
         let _ = state.patch_profile(&profile_id, |p| {
             p.mod_filenames.retain(|f| f != &filename);

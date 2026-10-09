@@ -188,6 +188,23 @@ function useSkin(uuid: string | null) {
   return skin;
 }
 
+/** a dialog on top of the pane takes Escape before the pane's own handler
+    (on document, bubbling), which would close everything at once */
+function useEscape(active: boolean, close: () => void) {
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      closeRef.current();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [active]);
+}
+
 function FriendHead({ uuid, online, size }: { uuid: string; online?: boolean; size: number }) {
   const skin = useSkin(uuid);
   return (
@@ -1295,6 +1312,7 @@ function ChatImage({ id }: { id: string }) {
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [zoom, setZoom] = useState(false);
+  useEscape(zoom, () => setZoom(false));
   useEffect(() => {
     let live = true;
     let hit = imageCache.get(id);
@@ -1341,6 +1359,7 @@ function ShotPicker({
   onClose: () => void;
 }) {
   const [shots, setShots] = useState<Screenshot[] | null>(null);
+  useEscape(true, onClose);
   useEffect(() => {
     void api
       .listScreenshots()
@@ -1439,19 +1458,8 @@ function ProfileView({
     .map((id) => catalog?.accessories.find((a) => a.id === id)?.name)
     .filter((n): n is string => !!n);
 
-  // the confirm dialog takes the first Escape; the pane's own handler (on
-  // document, bubbling) would otherwise close everything at once
-  useEffect(() => {
-    if (!confirming) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.stopPropagation();
-      if (busy) return;
-      setConfirming(null);
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [confirming, busy]);
+  // the confirm dialog takes the first Escape, not while it's working
+  useEscape(confirming !== null, () => !busy && setConfirming(null));
 
   const act = () => {
     const blocking = confirming === 'block';

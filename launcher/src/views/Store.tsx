@@ -392,7 +392,9 @@ export default function Store({
                     disabled={!picked || busy || !signedIn || !canAfford}
                     title={
                       !signedIn
-                        ? 'Sign in with a Microsoft account to buy cosmetics'
+                        ? account?.authenticated || account?.offline
+                          ? 'The Dusk service didn’t answer — try again in a moment'
+                          : 'Sign in to buy cosmetics'
                         : canAfford
                           ? 'Spend Dusk coins on this; it lands in your wardrobe'
                           : 'Not enough coins — redeem a code under Settings → General'
@@ -403,7 +405,9 @@ export default function Store({
                       {pickedPrice === null
                         ? 'BUY'
                         : !signedIn
-                          ? 'SIGN IN TO BUY'
+                          ? account?.authenticated || account?.offline
+                            ? 'STORE OFFLINE'
+                            : 'SIGN IN TO BUY'
                           : canAfford
                             ? `BUY · ${pickedPrice}`
                             : `NEED ${pickedPrice - (coins ?? 0)} MORE COINS`}

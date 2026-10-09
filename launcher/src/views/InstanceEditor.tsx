@@ -1648,7 +1648,7 @@ function WorldsTab({
     try {
       await api.deleteWorld(profile.id, w.name);
       setWorlds((list) => (list ?? []).filter((x) => x.name !== w.name));
-      setNote(`${w.name} moved to the trash.`);
+      setNote(`${plain(w.levelName ?? w.name)} moved to the trash.`);
     } catch (e) {
       setNote(String(e));
     }
@@ -2169,7 +2169,7 @@ function WorldsTab({
               DELETE WORLD?
             </TT>
             <span className="meta">
-              “{trashing.name}” ({fmtBytes(trashing.size)}) moves to the trash. Restore it from there if you change
+              “{plain(trashing.levelName ?? trashing.name)}” ({fmtBytes(trashing.size)}) moves to the trash. Restore it from there if you change
               your mind.
             </span>
             <div className="modal__row modal__row--tall">
