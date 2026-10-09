@@ -6,7 +6,7 @@ channels. Each carries a bare UTF-8 JSON body with no length prefix, so a Paper 
 send it with `Player#sendPluginMessage` and needs no extra library.
 
 Protocol version: **1**. It is supported on every Minecraft target the client builds for
-(1.21.1 to 26.2).
+(1.21 to 26.3).
 
 ## `dusk:rules` (server → client)
 

@@ -1,8 +1,8 @@
 # Custom in-game GUI — implementation guide
 
-How custom GUI works in DuskClient (MC **1.21 through 26.2** from one source
-tree: nine build targets — `1.21.1 1.21.3 1.21.4 1.21.5 1.21.8 1.21.10 1.21.11
-26.1 26.2`, each declared for a run of API-compatible releases in
+How custom GUI works in DuskClient (MC **1.21 through 26.3** from one source
+tree: ten build targets — `1.21.1 1.21.3 1.21.4 1.21.5 1.21.8 1.21.10 1.21.11
+26.1 26.2 26.3`, each declared for a run of API-compatible releases in
 `gradle.properties` — **Mojang mappings**; the 2D draw class is `GuiGraphics`,
 ids are `net.minecraft.resources.Identifier` on 1.21.11+ and
 `ResourceLocation` below, hidden behind `Compat`). `src/main` is shared;
@@ -75,11 +75,11 @@ from the layers beneath it. Written against what's already in the tree; every
 2. Declare settings with `add(new BoolSetting/IntSetting/ChoiceSetting/ColorSetting(...))`; the module window builds its widgets from them.
 3. `modules.register(new X())` in `DuskClient.onInitializeClient`. Persistence, the editor and the window pick it up automatically.
 
-Version-specific Minecraft calls go through `compat/Compat.java` (`currentScreen`, `setScreen`, `dayTime`, …); everything under `src/main` must compile against all nine targets (anything that differs per version belongs in a `src/mc*` layer).
+Version-specific Minecraft calls go through `compat/Compat.java` (`currentScreen`, `setScreen`, `dayTime`, …); everything under `src/main` must compile against all ten targets (anything that differs per version belongs in a `src/mc*` layer).
 
 ### Verifying
 
-`gradle build -Pmc=<mc>` for each of the nine targets (JDK 21 for 1.21.x, JDK
+`gradle build -Pmc=<mc>` for each of the ten targets (JDK 21 for 1.21.x, JDK
 25 for 26.x). `gradle runClientGameTest -Pmc=<mc>` runs `HudGameTest` on the
 targets that have a gametest harness (`mc_<key>_gametest` is `false` for
 1.21.1 and 1.21.3, whose Fabric API lacks the client gametest module): it

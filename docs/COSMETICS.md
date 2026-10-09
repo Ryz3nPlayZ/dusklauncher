@@ -205,7 +205,7 @@ Ported files keep the Apache-2.0 header + a `NOTICE` entry (cosmetica-core: Isai
 
 The launcher and the client mod are separate deliverables, but every Fabric instance the launcher starts gets the mod whether or not the user installed it:
 
-- `client-mod` builds once per game line (`gradle build -Pmc=<target>` for `1.21.1 1.21.3 1.21.4 1.21.5 1.21.8 1.21.10 1.21.11 26.1 26.2`; `gradle.properties` maps each target to the release range its jar declares); each build's `installToLauncher` copies `remapJar` to `launcher/src-tauri/resources/duskclient-<mc>.jar`. `tauri.conf.json` bundles `resources/`, so all nine jars ship inside the app and `cosmetics::client_mod_jar_for` picks the one for the profile's version:
+- `client-mod` builds once per game line (`gradle build -Pmc=<target>` for `1.21.1 1.21.3 1.21.4 1.21.5 1.21.8 1.21.10 1.21.11 26.1 26.2 26.3`; `gradle.properties` maps each target to the release range its jar declares); each build's `installToLauncher` copies `remapJar` to `launcher/src-tauri/resources/duskclient-<mc>.jar`. `tauri.conf.json` bundles `resources/`, so all ten jars ship inside the app and `cosmetics::client_mod_jar_for` picks the one for the profile's version:
 
   | Instance version | Jar |
   |---|---|
@@ -217,7 +217,8 @@ The launcher and the client mod are separate deliverables, but every Fabric inst
   | 1.21.9, 1.21.10 | `duskclient-1.21.10.jar` |
   | 1.21.11 | `duskclient-1.21.11.jar` |
   | 26.1.x | `duskclient-26.1.jar` |
-  | 26.2 | `duskclient-26.2.jar` |
+  | 26.2.x | `duskclient-26.2.jar` |
+  | 26.3.x | `duskclient-26.3.jar` |
 
   Any other version launches without the mod (`clientModSupports` in `api.ts` mirrors the mapping for the instance list). Per-era cosmetics flavours, oldest first: **1.21–1.21.1** has no render states and no `post_effect` pipeline — `PlayerRendererMixin` adds `AccessoriesLayer` from the `PlayerRenderer` ctor, `UpsideDownMixin` injects into the static `LivingEntityRenderer.isEntityUpsideDown`, the cape/ears layers wrap `PlayerModel.renderCloak`/`renderEars`, and motion blur drives the legacy `PostChain` with a code-added pass (its program JSON/fsh must live under `assets/minecraft/shaders/program/duskclient_motion_blur.*` because `EffectInstance` only resolves the `minecraft` namespace). **1.21.2–1.21.4** get `PlayerRenderState` + `CompiledShaderProgram`; **1.21.5** the `RenderPass` consumer; **1.21.6–1.21.10** uniform blocks and `GpuBuffer`; **1.21.11+** the `Avatar*` render states and `SubmitNodeCollector` described above. The 26.1 flavour is the 26.2 render/GUI code with screens still owned by `Minecraft` (26.2 moved them to `Gui`) and `getClientLevel()` in the gametest harness.
 - At launch, for any profile whose loader is Fabric, `launch.rs` appends `-Dfabric.addMods=<path to the bundled jar>` to the JVM args. Fabric Loader treats that exactly like a jar in `mods/`, so nothing is copied into the instance and updating the launcher updates the mod. Vanilla/other-loader profiles are untouched.
