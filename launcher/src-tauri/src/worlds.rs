@@ -65,6 +65,42 @@ pub async fn backup_world(state: State<'_, AppState>, profile_id: String, name: 
     Ok(file_name)
 }
 
+/// Save a world as a zip wherever the player picks, to hand a map to someone
+/// else: the same layout as a backup (the world folder at the root), so the
+/// game, this launcher's IMPORT and other launchers all take it. Resolves to
+/// the saved path, or `None` when the dialog was cancelled.
+#[tauri::command]
+pub async fn export_world(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    profile_id: String,
+    name: String,
+) -> Result<Option<String>, String> {
+    let (_, dir) = world_dir(&state, &profile_id, &name)?;
+    ensure_closed(&state, &profile_id).await?;
+    let picked = app
+        .dialog()
+        .file()
+        .add_filter("World", &["zip"])
+        .set_file_name(format!("{name}.zip"))
+        .blocking_save_file();
+    let Some(file) = picked else { return Ok(None) };
+    let out = file.into_path().map_err(|e| e.to_string())?;
+    let shown = out.display().to_string();
+    tokio::task::spawn_blocking(move || {
+        let result = write_zip(&dir, &name, &out);
+        if result.is_err() {
+            // half a zip is no world
+            let _ = std::fs::remove_file(&out);
+        }
+        result
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    tracing::info!(world = %shown, "world exported");
+    Ok(Some(shown))
+}
+
 /// Backups the launcher makes on its own go in `backups/auto/`, apart from
 /// the ones made by hand, so pruning only ever deletes its own.
 const AUTO_BACKUPS: &str = "auto";

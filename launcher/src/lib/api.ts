@@ -2169,6 +2169,8 @@ export const api = {
   recentPlays: (limit?: number) => invoke<RecentPlay[]>('recent_plays', { limit }),
   /** zip a world into the instance's backups/ folder; resolves to the zip's name */
   backupWorld: (profileId: string, name: string) => invoke<string>('backup_world', { profileId, name }),
+  /** zip a world wherever the player picks; null when the dialog was cancelled */
+  exportWorld: (profileId: string, name: string) => invoke<string | null>('export_world', { profileId, name }),
   /** the instance's world backups, newest first */
   listWorldBackups: (profileId: string) => invoke<WorldBackup[]>('list_world_backups', { profileId }),
   /** unzip a backup into saves/ beside the world it came from (never over it); resolves to the new folder.

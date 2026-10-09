@@ -1574,6 +1574,8 @@ function WorldsTab({
   const [note, setNote] = useState<string | null>(null);
   /* world being zipped right now */
   const [backing, setBacking] = useState<string | null>(null);
+  /** the zip `backing` names goes where the player picks, not to backups/ */
+  const [exporting, setExporting] = useState(false);
   const [trashing, setTrashing] = useState<World | null>(null);
   /* the RENAME dialog, open when set */
   /** the RENAME WORLD form, or COPY WORLD when `copy` is set */
@@ -1640,6 +1642,21 @@ function WorldsTab({
       setNote(String(e));
     } finally {
       setBacking(null);
+    }
+  };
+
+  const exportWorld = async (w: World) => {
+    setBacking(w.name);
+    setExporting(true);
+    setNote(null);
+    try {
+      const path = await api.exportWorld(profile.id, w.name);
+      if (path) setNote(`Saved ${plain(w.levelName ?? w.name)} to ${path}`);
+    } catch (e) {
+      setNote(String(e));
+    } finally {
+      setBacking(null);
+      setExporting(false);
     }
   };
 
@@ -1960,7 +1977,16 @@ function WorldsTab({
                 title={busy ? 'Close the game first' : 'Zip it into the backups folder'}
                 onClick={() => void backup(w)}
               >
-                <TT size={16}>{backing === w.name ? 'BACKING UP…' : 'BACKUP'}</TT>
+                <TT size={16}>{backing === w.name && !exporting ? 'BACKING UP…' : 'BACKUP'}</TT>
+              </PxButton>
+              <PxButton
+                family="grey"
+                height="sm"
+                disabled={busy || backing !== null}
+                title={busy ? 'Close the game first' : 'Save it as a zip anywhere, to give the map to someone'}
+                onClick={() => void exportWorld(w)}
+              >
+                <TT size={16}>{backing === w.name && exporting ? 'SAVING…' : 'EXPORT'}</TT>
               </PxButton>
               <PxButton
                 family="grey"
