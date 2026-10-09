@@ -7,6 +7,7 @@ use fasterlauncher_core::profile::{default_jvm_args, Loader, PackLink, Profile};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -361,16 +362,16 @@ async fn install_version_inner(
     name: Option<String>,
     dusk: bool,
 ) -> Result<ProfileDto, String> {
-    let bytes = mr::download_mrpack(&state.client, version)
-        .await
-        .map_err(|e| e.to_string())?;
-    let dep_versions = required_deps(&state, version).await;
-    let installed = install_mrpack_bytes(app, state.clone(), &bytes, &dep_versions, name, dusk, link_to(version)).await?;
+    // the pack, its listed dependencies and its icon, fetched side by side
+    let (bytes, dep_versions, project) = tokio::join!(
+        mr::download_mrpack(&state.client, version),
+        required_deps(&state, version),
+        mr::project(&state.client, &version.project_id),
+    );
+    let bytes = bytes.map_err(|e| e.to_string())?;
+    let installed = install_mrpack_bytes(app, state.clone(), bytes, &dep_versions, name, dusk, link_to(version)).await?;
     // the pack's Modrinth icon becomes the instance's picture
-    let icon = match mr::project(&state.client, &version.project_id).await {
-        Ok(project) => project.icon_url,
-        Err(_) => None,
-    };
+    let icon = project.ok().and_then(|p| p.icon_url);
     let Some(url) = icon.filter(|_| !version.project_id.is_empty()) else { return Ok(installed) };
     crate::icons::fetch_pack_icon(&state, &installed.id, &url).await;
     let store = state.profiles.lock().unwrap();
@@ -427,7 +428,7 @@ pub async fn import_mrpack(
         Ok(found) => found.get(&sha1).and_then(link_to),
         Err(_) => None,
     };
-    install_mrpack_bytes(app, state, &bytes, &[], None, false, link).await.map(Some)
+    install_mrpack_bytes(app, state, bytes, &[], None, false, link).await.map(Some)
 }
 
 /// Where a pack shipped inside the app bundle lives
@@ -459,7 +460,7 @@ pub async fn install_bundled_pack(
     let path = bundled_pack_path(&app, &state.data_dir, &pack)
         .ok_or_else(|| format!("bundled pack \"{pack}\" is not packaged in this build"))?;
     let bytes = tokio::fs::read(&path).await.map_err(|e| e.to_string())?;
-    install_mrpack_bytes(app, state, &bytes, &[], None, pack == "dusk-essentials", None).await
+    install_mrpack_bytes(app, state, bytes, &[], None, pack == "dusk-essentials", None).await
 }
 
 /// Video settings the launcher's own instance starts with, tuned like a
@@ -516,13 +517,13 @@ fn merge_config(root: &Path, file: &str, section: &str, key: &str, value: serde_
 async fn install_mrpack_bytes(
     app: AppHandle,
     state: State<'_, AppState>,
-    bytes: &[u8],
+    bytes: Vec<u8>,
     dep_versions: &[mr::Version],
     name: Option<String>,
     dusk: bool,
     link: Option<PackLink>,
 ) -> Result<ProfileDto, String> {
-    let index = mr::parse_mrpack_index(bytes).map_err(|e| e.to_string())?;
+    let index = mr::parse_mrpack_index(&bytes).map_err(|e| e.to_string())?;
 
     let mc_version = index
         .minecraft_version()
@@ -591,7 +592,7 @@ async fn install_mrpack_bytes(
         state.save_profiles(&store);
     }
 
-    let filled = fill_pack_instance(&app, &state, &profile, bytes, &index, dep_versions, dusk, link).await;
+    let filled = fill_pack_instance(&app, &state, &profile, Arc::new(bytes), &index, dep_versions, dusk, link).await;
     if let Err(e) = filled {
         // half a pack is no instance: take it back out rather than leave one
         // that's missing mods with nothing saying so
@@ -617,7 +618,7 @@ async fn fill_pack_instance(
     app: &AppHandle,
     state: &AppState,
     profile: &Profile,
-    bytes: &[u8],
+    bytes: Arc<Vec<u8>>,
     index: &mr::MrpackIndex,
     dep_versions: &[mr::Version],
     dusk: bool,
@@ -628,7 +629,8 @@ async fn fill_pack_instance(
     // exported from here or Prism, the mods themselves)
     std::fs::create_dir_all(&dirs.root).map_err(|e| e.to_string())?;
     let overrides = {
-        let (pack, root) = (bytes.to_vec(), dirs.root.clone());
+        // shared with the unpacking thread, not copied: a pack can be large
+        let (pack, root) = (bytes, dirs.root.clone());
         tokio::task::spawn_blocking(move || mr::extract_overrides(&pack, &root, |_| true))
             .await
             .map_err(|e| e.to_string())?
@@ -773,7 +775,7 @@ pub async fn update_modpack(
     let new_listed = pack_files(&index, &deps, Vec::new());
 
     let overrides = {
-        let (root, old, new, bytes) = (root.clone(), old.clone(), new_listed.clone(), bytes.clone());
+        let (root, old, new) = (root.clone(), old.clone(), new_listed.clone());
         tokio::task::spawn_blocking(move || swap_pack_files(&root, &old, &new, &bytes))
             .await
             .map_err(|e| e.to_string())?
@@ -1018,7 +1020,7 @@ pub async fn import_shared_instance(app: AppHandle, state: State<'_, AppState>, 
         return Err(crate::dusk::parse::<serde_json::Value>(resp).await.unwrap_err());
     }
     let bytes = resp.bytes().await.map_err(|e| format!("Couldn't download the instance: {e}"))?;
-    install_mrpack_bytes(app, state, &bytes, &[], None, false, None).await
+    install_mrpack_bytes(app, state, bytes.into(), &[], None, false, None).await
 }
 
 /// Never worth shipping: the OS's folder litter.

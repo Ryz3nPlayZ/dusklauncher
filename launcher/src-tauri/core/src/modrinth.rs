@@ -511,7 +511,8 @@ pub async fn download_mrpack(client: &reqwest::Client, ver: &Version) -> Result<
     .await?
     .bytes()
     .await?;
-    Ok(bytes.to_vec())
+    // the buffer itself, not a copy of it
+    Ok(bytes.into())
 }
 
 /// Parse `modrinth.index.json` out of an .mrpack (zip) in memory.

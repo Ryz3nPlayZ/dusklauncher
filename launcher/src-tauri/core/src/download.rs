@@ -197,29 +197,48 @@ fn is_transient(e: &Error) -> bool {
 }
 
 async fn fetch_and_write(client: &reqwest::Client, dl: &Download) -> Result<()> {
-    let response = client.get(&dl.url).send().await?.error_for_status()?;
-    let bytes = response.bytes().await?;
-
-    if let Some(expected) = &dl.sha1 {
-        let mut hasher = Sha1::new();
-        hasher.update(&bytes);
-        let actual = hex::encode(hasher.finalize());
-        if &actual != expected {
-            return Err(Error::Checksum {
-                path: dl.dest.display().to_string(),
-                expected: expected.clone(),
-                actual,
-            });
-        }
-    }
-
+    let mut response = client.get(&dl.url).send().await?.error_for_status()?;
     if let Some(parent) = dl.dest.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
-    let mut file = tokio::fs::File::create(&dl.dest).await?;
-    file.write_all(&bytes).await?;
-    file.flush().await?;
-    Ok(())
+    // Streamed into a side file and hashed as it arrives, then renamed into
+    // place only once it's whole and matches: a big jar is never held in
+    // memory, and a cut-off download never sits where an install trusts it.
+    let part = part_path(&dl.dest);
+    let written = async {
+        let mut file = tokio::io::BufWriter::new(tokio::fs::File::create(&part).await?);
+        let mut hasher = Sha1::new();
+        while let Some(chunk) = response.chunk().await? {
+            hasher.update(&chunk);
+            file.write_all(&chunk).await?;
+        }
+        file.flush().await?;
+        drop(file);
+        if let Some(expected) = &dl.sha1 {
+            let actual = hex::encode(hasher.finalize());
+            if &actual != expected {
+                return Err(Error::Checksum {
+                    path: dl.dest.display().to_string(),
+                    expected: expected.clone(),
+                    actual,
+                });
+            }
+        }
+        tokio::fs::rename(&part, &dl.dest).await?;
+        Ok(())
+    }
+    .await;
+    if written.is_err() {
+        let _ = tokio::fs::remove_file(&part).await;
+    }
+    written
+}
+
+/// Where a download is written before it's known to be whole.
+fn part_path(dest: &Path) -> PathBuf {
+    let mut name = dest.as_os_str().to_owned();
+    name.push(".part");
+    PathBuf::from(name)
 }
 
 /// Hex sha1 of some bytes.
@@ -290,6 +309,40 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(20));
         std::fs::write(&dest, b"jello").unwrap();
         assert!(!verify_existing(&dl, Some(&cache)).await.unwrap());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn a_download_lands_whole_or_not_at_all() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            while let Ok((mut sock, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 1024];
+                    let _ = tokio::io::AsyncReadExt::read(&mut sock, &mut buf).await;
+                    let _ = sock
+                        .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 5\r\nconnection: close\r\n\r\nhello")
+                        .await;
+                });
+            }
+        });
+        let dir = std::env::temp_dir().join(format!("dusk-fetch-{}", std::process::id()));
+        let dest = dir.join("mods").join("a.jar");
+        let dl = |sha1: &str| Download {
+            url: format!("http://{addr}/a.jar"),
+            dest: dest.clone(),
+            sha1: Some(sha1.into()),
+            size: None,
+        };
+        let client = reqwest::Client::new();
+        // a body that doesn't match leaves nothing behind
+        let bad = fetch_and_write(&client, &dl("0000000000000000000000000000000000000000")).await;
+        assert!(matches!(bad, Err(Error::Checksum { .. })), "{bad:?}");
+        assert!(!dest.exists() && !part_path(&dest).exists());
+        fetch_and_write(&client, &dl("aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d")).await.unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), b"hello");
+        assert!(!part_path(&dest).exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

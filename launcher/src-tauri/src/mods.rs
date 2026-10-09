@@ -732,22 +732,35 @@ pub(crate) fn fabric_mod_ids(dir: &std::path::Path) -> std::collections::HashSet
         if path.extension().and_then(|e| e.to_str()) != Some("jar") {
             continue;
         }
-        let Some(raw) = std::fs::File::open(&path)
-            .ok()
-            .and_then(|f| zip::ZipArchive::new(f).ok())
-            .and_then(|mut zip| read_zip_entry(&mut zip, "fabric.mod.json", 256 * 1024))
-        else {
-            continue;
-        };
-        let Ok(meta) = serde_json::from_slice::<serde_json::Value>(&raw) else { continue };
-        if let Some(id) = meta.get("id").and_then(|v| v.as_str()) {
-            ids.insert(id.to_string());
-        }
-        for id in meta.get("provides").and_then(|v| v.as_array()).into_iter().flatten() {
-            if let Some(id) = id.as_str() {
-                ids.insert(id.to_string());
+        ids.extend(jar_mod_ids(&path));
+    }
+    ids
+}
+
+/// The ids a jar's fabric.mod.json declares (its own and what it provides).
+/// Remembered while the jar's size and modified time hold, so a launch only
+/// opens the jars that changed since the last one, not a whole pack's worth.
+fn jar_mod_ids(path: &std::path::Path) -> Vec<String> {
+    type Seen = std::collections::HashMap<PathBuf, ((u64, std::time::SystemTime), Vec<String>)>;
+    static SEEN: std::sync::OnceLock<std::sync::Mutex<Seen>> = std::sync::OnceLock::new();
+    let stamp = std::fs::metadata(path).ok().and_then(|m| Some((m.len(), m.modified().ok()?)));
+    let seen = SEEN.get_or_init(Default::default);
+    if let Some(stamp) = stamp {
+        if let Some((held, ids)) = seen.lock().unwrap().get(path) {
+            if *held == stamp {
+                return ids.clone();
             }
         }
+    }
+    let meta = fabric_meta(path);
+    let mut ids: Vec<String> = meta.as_ref().and_then(|m| m.get("id")).and_then(|v| v.as_str()).map(str::to_string).into_iter().collect();
+    for id in meta.as_ref().and_then(|m| m.get("provides")).and_then(|v| v.as_array()).into_iter().flatten() {
+        if let Some(id) = id.as_str() {
+            ids.push(id.to_string());
+        }
+    }
+    if let Some(stamp) = stamp {
+        seen.lock().unwrap().insert(path.to_path_buf(), (stamp, ids.clone()));
     }
     ids
 }
@@ -935,6 +948,29 @@ pub(crate) async fn install_version_file(
 #[cfg(test)]
 mod tests {
     use super::toml_string;
+
+    #[test]
+    fn reads_mod_ids_again_only_when_a_jar_changes() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("dusk-modids-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let jar = |json: &str| {
+            let mut z = zip::ZipWriter::new(std::fs::File::create(dir.join("a.jar")).unwrap());
+            z.start_file("fabric.mod.json", zip::write::SimpleFileOptions::default()).unwrap();
+            z.write_all(json.as_bytes()).unwrap();
+            z.finish().unwrap();
+        };
+        jar(r#"{"id":"fabric-api","provides":["fabric"]}"#);
+        std::fs::write(dir.join("notes.txt"), "not a jar").unwrap();
+        let ids = super::fabric_mod_ids(&dir);
+        assert!(ids.contains("fabric-api") && ids.contains("fabric") && ids.len() == 2, "{ids:?}");
+        // a different jar under the same name is read again
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        jar(r#"{"id":"sodium-but-longer"}"#);
+        let ids = super::fabric_mod_ids(&dir);
+        assert!(ids.contains("sodium-but-longer") && ids.len() == 1, "{ids:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn reads_the_first_mods_toml_value() {
