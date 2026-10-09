@@ -76,6 +76,16 @@ tasks.register('layerSources', Sync) {
     }
     into layeredDir
     duplicatesStrategy = DuplicatesStrategy.INCLUDE // later layers win
+    // Mixin refuses to load any non-mixin class from the mixin package, and only when the
+    // game first touches it (a 1.21.11 helper there crashed on the first Ctrl-click in chat)
+    def srcMain = file('src/main/java')
+    doLast {
+        def strays = [srcMain, layeredDir.get().dir('java').asFile].collectMany { root ->
+            def pkg = new File(root, 'dev/dusk/client/mixin')
+            pkg.exists() ? fileTree(pkg).matching { include '**/*.java' }.files.findAll { !it.text.contains('@Mixin') } : []
+        }
+        if (strays) throw new GradleException("non-mixin classes in the mixin package (move them out): ${strays*.name}")
+    }
 }
 sourceSets.main.java.srcDir layeredDir.map { it.dir('java') }
 sourceSets.main.resources.srcDir layeredDir.map { it.dir('resources') }

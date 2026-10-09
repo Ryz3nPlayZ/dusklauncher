@@ -1,4 +1,4 @@
-package dev.dusk.client.mixin.chat;
+package dev.dusk.client.modules.misc;
 
 import net.minecraft.client.gui.ActiveTextCollector;
 import net.minecraft.client.gui.Font;
@@ -9,8 +9,8 @@ import org.joml.Vector2f;
 
 /**
  * Vanilla's clickable-style finder that also notes which chat line is under
- * the cursor, for {@link dev.dusk.client.modules.misc.ChatCopy}. Chat hands
- * every visible line through here when the chat screen hit-tests a click.
+ * the cursor, for {@link ChatCopy}. Chat hands every visible line through
+ * here when the chat screen hit-tests a click.
  */
 public class ChatLineFinder extends ActiveTextCollector.ClickableStyleFinder {
     private final Font font;

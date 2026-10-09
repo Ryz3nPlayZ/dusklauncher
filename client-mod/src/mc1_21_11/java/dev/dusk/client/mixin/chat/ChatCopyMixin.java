@@ -3,6 +3,7 @@ package dev.dusk.client.mixin.chat;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.dusk.client.modules.misc.ChatCopy;
+import dev.dusk.client.modules.misc.ChatLineFinder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ActiveTextCollector;
 import net.minecraft.client.gui.screens.ChatScreen;

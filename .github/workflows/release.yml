@@ -77,6 +77,8 @@ jobs:
   # failed here. 1.21.1/1.21.3 have no client gametest API.
   client-gametest:
     runs-on: ubuntu-latest
+    # a game that can't open its window hangs instead of failing
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
