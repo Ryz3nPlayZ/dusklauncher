@@ -1257,7 +1257,8 @@ fn save_last_install(
 ) {
     let last = LastInstall { key: install_key(profile), version: version.clone(), natives: natives.clone() };
     if let Ok(json) = serde_json::to_vec(&last) {
-        let _ = std::fs::write(dirs.root.join(LAST_INSTALL_FILE), json);
+        // what an offline launch falls back on: never leave it half written
+        let _ = fasterlauncher_core::write_atomic(&dirs.root.join(LAST_INSTALL_FILE), &json);
     }
 }
 

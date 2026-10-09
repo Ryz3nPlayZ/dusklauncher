@@ -76,7 +76,7 @@ fn absorb(root: &Path) -> Vec<Entry> {
     history.truncate(KEEP);
     if history != before {
         if let Ok(json) = serde_json::to_vec_pretty(&history) {
-            let _ = std::fs::write(&history_path, json);
+            let _ = fasterlauncher_core::write_atomic(&history_path, &json);
         }
     }
     history
