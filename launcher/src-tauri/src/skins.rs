@@ -34,6 +34,14 @@ fn skins_dir(state: &AppState) -> PathBuf {
     state.data_dir.join("skins")
 }
 
+/// `<name>.png` in the wardrobe, for a name that can only mean a file there.
+fn skin_file(state: &AppState, name: &str) -> Result<PathBuf, String> {
+    if name.is_empty() || name.starts_with('.') || name.contains(['/', '\\']) {
+        return Err("skin not found".into());
+    }
+    Ok(skins_dir(state).join(format!("{name}.png")))
+}
+
 fn load_index(state: &AppState) -> SkinIndex {
     std::fs::read(skins_dir(state).join("skins.json"))
         .ok()
@@ -151,7 +159,7 @@ pub fn delete_skin(state: State<AppState>, name: String) -> Result<(), String> {
     }
     save_index(&state, &index);
     // To the trash, like a deleted world; gone outright where there's none.
-    let path = skins_dir(&state).join(format!("{name}.png"));
+    let path = skin_file(&state, &name)?;
     if trash::delete(&path).is_err() {
         let _ = std::fs::remove_file(&path);
     }
@@ -190,7 +198,7 @@ pub fn set_skin_model(state: State<'_, AppState>, name: String, model: Option<St
 /// Return the selected skin PNG as a data URL (skins are a few KB).
 #[tauri::command(async)]
 pub fn read_skin(state: State<'_, AppState>, name: String) -> Result<String, String> {
-    let bytes = std::fs::read(skins_dir(&state).join(format!("{name}.png"))).map_err(|e| e.to_string())?;
+    let bytes = std::fs::read(skin_file(&state, &name)?).map_err(|e| e.to_string())?;
     use base64::Engine;
     let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
     Ok(format!("data:image/png;base64,{b64}"))
@@ -209,7 +217,7 @@ pub async fn upload_skin(
     if variant != "classic" && variant != "slim" {
         return Err("variant must be \"classic\" or \"slim\"".into());
     }
-    let png = std::fs::read(skins_dir(&state).join(format!("{name}.png")))
+    let png = std::fs::read(skin_file(&state, &name)?)
         .map_err(|e| format!("skin \"{name}\" not readable: {e}"))?;
     if crate::commands::offline_session(&state).is_some() {
         let path = format!("/v1/me/skin?model={variant}");
