@@ -873,8 +873,12 @@ pub async fn install_dusk_essentials(
         return Err("Couldn't reach Modrinth for Dusk Essentials.".into());
     }
     install_required_deps(&app, &state, &profile, &dir, deps).await;
-    if let Some(root) = dir.parent() {
-        crate::modpacks::seed_dusk_defaults(root);
+    // the tuned Sodium settings come with Sodium: run again on an instance
+    // that already had it, it leaves the player's own settings alone
+    if !held.contains("sodium") {
+        if let Some(root) = dir.parent() {
+            crate::modpacks::seed_dusk_defaults(root);
+        }
     }
     Ok(added)
 }
