@@ -107,6 +107,7 @@ import dev.dusk.client.modules.hud.BedwarsResources;
 import dev.dusk.client.modules.hud.SkyblockStats;
 import dev.dusk.client.modules.misc.HypixelTweaks;
 import dev.dusk.client.modules.misc.ScrollTransfer;
+import dev.dusk.client.modules.render.ItemPhysics;
 import dev.dusk.client.modules.misc.SlotLock;
 import dev.dusk.client.modules.render.NoNightVision;
 import dev.dusk.client.modules.render.NoPumpkinBlur;
@@ -235,6 +236,7 @@ public class DuskClient implements ClientModInitializer {
             modules.register(new RiptideShieldFix());
             modules.register(new ShieldStatuses()); // Walksy's Shield Statuses
             modules.register(new ItemScale());
+            modules.register(new ItemPhysics());
             modules.register(new FogControl());
             modules.register(new BoatMap());
             modules.register(new GameModeSwitcher());

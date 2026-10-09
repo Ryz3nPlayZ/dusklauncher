@@ -62,6 +62,8 @@
     "TotemPopMixin",
     "GlintShaderMixin",
     "GlintColorMixin",
+    "itemphysics.ItemPhysicsStateMixin",
+    "itemphysics.ItemPhysicsRendererMixin",
     "HitboxMixin",
     "HitboxRenderMixin",
     "StuckArrowMixin",
