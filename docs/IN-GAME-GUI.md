@@ -18,7 +18,7 @@ from the layers beneath it. Written against what's already in the tree; every
 | Custom title screen (vanilla widgets + fill/drawString) | `gui/DuskTitleScreen.java` |
 | In-game settings screen (background path, non-HUD toggles, "Modules & HUD Editor" button) | `gui/DuskSettingsScreen.java` |
 | **HUD editor** — Right Shift in game; drag/scroll/arrow-nudge elements, right-click for settings | `gui/HudEditorScreen.java` |
-| **Module window** — the single centred, bound window (list ↔ settings, minimise, scroll) | `gui/ModuleWindow.java`, `gui/widget/*` (toggle, slider, cycle, colour hex field) |
+| **Dusk menu** — the menu key opens it; pages for the module list, a module's settings and the HUD editor, Esc goes back a page | `gui/DuskMenuScreen.java`, `gui/MenuScreen.java`, `gui/ConfigScreen.java`, `gui/PanelScreen.java`, `gui/widget/*` (toggle, slider, dropdown, colour picker, keybind, text field) |
 | Module system: id, category, description, enabled, x/y, typed settings, Gson persistence (`config/duskclient-hud.json`) | `module/Module.java`, `module/ModuleManager.java`, `module/setting/*` |
 | HUD element base classes + renderer | `hud/HudElement.java` (scale/background settings), `hud/TextHud.java` ("Label: value"), `hud/HudRenderer.java` |
 | HUD layer registration + crosshair replacement (per-MC) | `src/mc*/java/.../hud/HudHooks.java` |

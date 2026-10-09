@@ -51,8 +51,8 @@ cd server && cargo test
 # Browser-only UI dev (mock backend, no Rust needed)
 cd launcher && npm run dev
 
-# Regenerate bundled pixel art (avatar, default skin, app icon)
-cd launcher && node scripts/gen-art.mjs
+# Regenerate the bundled default skin
+cd launcher && node scripts/gen-default-skin.mjs
 
 # Release build (.app + .dmg on macOS; regenerates icons via `npx tauri icon`)
 cd launcher && npm run tauri build

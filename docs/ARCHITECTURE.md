@@ -31,7 +31,7 @@ fasterlauncher/
 │   │   │       ├── profile.rs     # user profiles (version, mods, JVM args)
 │   │   │       └── launch.rs      # classpath/args builder, process spawn
 │   │   └── src/          # Tauri commands/events: commands, modpacks, settings, skins
-│   ├── scripts/          # gen-art.mjs (original pixel art PNG generator)
+│   ├── scripts/          # release.sh, publish.sh, install-linux.sh, gen-default-skin.mjs
 │   └── src/              # React + TypeScript UI (design/, background/, player/, views/, stores/)
 │       └── views: Home, Profiles, Mods (Modrinth), Settings, Skins
 └── client-mod/           # Fabric mod: the in-game PvP client
@@ -93,7 +93,7 @@ Chain (see [minecraft.wiki/w/Microsoft_authentication](https://minecraft.wiki/w/
 ### UI / rendering (implemented)
 - Frameless window with custom pixel titlebar; the full design system lives in
   `docs/DESIGN.md` and `launcher/src/design/`.
-- **IPC contract** (`launcher/src/lib/tauri.ts` ↔ `src-tauri/src/`): commands
+- **IPC contract** (`launcher/src/lib/api.ts` ↔ `src-tauri/src/`): commands
   `list_profiles`, `create_profile`, `update_profile`, `delete_profile`,
   `list_versions`, `install_and_launch`, `stop_game`, `begin_login`,
   `begin_reconsent_login` (same flow with `prompt=consent`, the repair path
