@@ -1963,12 +1963,17 @@ async fn upload_image(State(app): State<Shared>, headers: HeaderMap, body: axum:
     Ok(Json(Uploaded { id }))
 }
 
-/// An image, for its uploader and whoever it was sent to in chat.
+/// An image, for its uploader and whoever it was sent to in chat, until it
+/// expires (expired rows are only swept when someone uploads).
 async fn get_image(State(app): State<Shared>, headers: HeaderMap, Path(id): Path<String>) -> Result<Response, ApiError> {
     let uuid = authed(&app, &headers)?;
     let db = app.db.lock().unwrap();
     let row: Option<(String, String, Vec<u8>)> = db
-        .query_row("SELECT owner, mime, bytes FROM images WHERE id = ?1", params![id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .query_row(
+            "SELECT owner, mime, bytes FROM images WHERE id = ?1 AND created_at >= ?2",
+            params![id, now() - IMAGE_TTL],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
         .optional()?;
     let gone = || ApiError(StatusCode::NOT_FOUND, "That image has expired.".into());
     let (owner, mime, bytes) = row.ok_or_else(gone)?;
