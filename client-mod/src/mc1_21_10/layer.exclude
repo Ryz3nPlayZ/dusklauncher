@@ -87,3 +87,9 @@ java/dev/dusk/client/mixin/SkyPipelinesAccessor.java
 # Totem Counter's text-display suffix and coloured XP bar hook 1.21.11+ renderers.
 java/dev/dusk/client/mixin/totem/TotemTextDisplayMixin.java
 java/dev/dusk/client/mixin/totem/TotemXpBarMixin.java
+
+# Block Highlight draws through 1.21.11+ render events and pipelines; this
+# layer carries a HighlightPlatform stub, so older targets keep vanilla's outline.
+java/dev/dusk/client/render/highlight/**
+java/dev/dusk/client/mixin/VoxelShapeInvoker.java
+java/dev/dusk/client/mixin/RenderTypeInvoker.java

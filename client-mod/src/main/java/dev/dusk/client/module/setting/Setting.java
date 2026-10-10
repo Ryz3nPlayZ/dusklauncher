@@ -11,6 +11,7 @@ public abstract class Setting<T> {
     private final T defaultValue;
     protected T value;
     private String group;
+    private java.util.function.BooleanSupplier visibleWhen;
 
     protected Setting(String id, String name, T defaultValue) {
         this.id = id;
@@ -30,6 +31,15 @@ public abstract class Setting<T> {
     public String group() { return group; }
 
     public void setGroup(String group) { this.group = group; }
+
+    /** Hides the setting's row while {@code when} is false (options that don't apply right now). */
+    @SuppressWarnings("unchecked")
+    public <S extends Setting<T>> S visibleWhen(java.util.function.BooleanSupplier when) {
+        this.visibleWhen = when;
+        return (S) this;
+    }
+
+    public boolean visible() { return visibleWhen == null || visibleWhen.getAsBoolean(); }
 
     public T defaultValue() { return defaultValue; }
     public void set(T value) { this.value = value; }

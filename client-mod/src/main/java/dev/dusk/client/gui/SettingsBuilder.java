@@ -1,5 +1,6 @@
 package dev.dusk.client.gui;
 
+import dev.dusk.client.gui.widget.ActionWidget;
 import dev.dusk.client.gui.widget.ColorWidget;
 import dev.dusk.client.gui.widget.CrosshairWidget;
 import dev.dusk.client.gui.widget.DropdownWidget;
@@ -12,6 +13,7 @@ import dev.dusk.client.gui.widget.SliderWidget;
 import dev.dusk.client.gui.widget.TextWidget;
 import dev.dusk.client.gui.widget.ToggleWidget;
 import dev.dusk.client.module.Module;
+import dev.dusk.client.module.setting.ActionSetting;
 import dev.dusk.client.module.setting.BoolSetting;
 import dev.dusk.client.module.setting.ChoiceSetting;
 import dev.dusk.client.module.setting.ColorSetting;
@@ -52,6 +54,7 @@ public final class SettingsBuilder {
         String currentGroup = null;
         GroupHeaderWidget header = null;
         boolean firstGroup = true;
+        List<Setting<?>> members = new ArrayList<>();
         for (Setting<?> s : settings) {
             SettingRow row = rowFor(m, s, host, onChange);
             if (row == null) continue;
@@ -59,13 +62,18 @@ public final class SettingsBuilder {
             if (g != null && !Objects.equals(g, currentGroup)) {
                 currentGroup = g;
                 header = new GroupHeaderWidget(m.id() + "/" + g, g, !expandAll && !firstGroup, () -> {});
+                // the heading goes too once nothing under it applies
+                List<Setting<?>> inGroup = members = new ArrayList<>();
+                header.visible = () -> inGroup.stream().anyMatch(Setting::visible);
                 pane.add(header, 22);
                 firstGroup = false;
             } else if (g == null) {
                 currentGroup = null;
                 header = null;
             }
+            if (header != null) members.add(s);
             row.group = header;
+            row.visible = s::visible;
             pane.add(row, ROW_H);
         }
     }
@@ -74,6 +82,7 @@ public final class SettingsBuilder {
         if (s instanceof BoolSetting b) {
             return new ToggleWidget(b.name(), b::get, v -> { b.set(v); onChange.run(); }).resets(s, onChange);
         }
+        if (s instanceof ActionSetting a) return new ActionWidget(a, onChange);
         if (s instanceof IntSetting i) return new SliderWidget(i, onChange).resets(s, onChange);
         if (s instanceof ChoiceSetting c) return new DropdownWidget(c, onChange, host).resets(s, onChange);
         if (s instanceof KeySetting k) return new KeybindWidget(k.name(), k::mapping).resets(s, onChange);

@@ -12,9 +12,15 @@ public abstract class Widget {
     protected boolean focused;
     /** The collapsible section this widget sits in, if any; hidden while it is folded. */
     public GroupHeaderWidget group;
+    /** Shown only while this holds, when set (a setting that doesn't apply right now). */
+    public java.util.function.BooleanSupplier visible;
+
+    public boolean shown() {
+        return visible == null || visible.getAsBoolean();
+    }
 
     public boolean hidden() {
-        return group != null && group.collapsed();
+        return !shown() || group != null && (group.collapsed() || group.hidden());
     }
 
     public void setBounds(int x, int y, int w, int h) {

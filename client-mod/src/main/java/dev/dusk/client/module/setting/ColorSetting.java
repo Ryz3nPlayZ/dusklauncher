@@ -2,8 +2,23 @@ package dev.dusk.client.module.setting;
 
 /** ARGB colour, persisted as "#AARRGGBB" so the file stays hand-editable. */
 public class ColorSetting extends Setting<Integer> {
+    private boolean opaque;
+
     public ColorSetting(String id, String name, int argb) {
         super(id, name, argb);
+    }
+
+    /** Keeps the colour fully opaque and drops the picker's alpha bar, for colours with a separate opacity. */
+    public ColorSetting opaque() {
+        this.opaque = true;
+        return this;
+    }
+
+    public boolean isOpaque() { return opaque; }
+
+    @Override
+    public void set(Integer argb) {
+        super.set(opaque ? argb | 0xFF000000 : argb);
     }
 
     public int argb() { return get(); }

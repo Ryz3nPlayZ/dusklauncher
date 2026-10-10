@@ -12,11 +12,13 @@ import dev.dusk.client.module.setting.ColorSetting;
  */
 public class ColorPickerPopup implements Popup {
     private static final int PAD = 3, SV = 80, BAR = 8, FIELD_H = 16;
-    private static final int W = PAD + SV + PAD + BAR + PAD + BAR + PAD, H = PAD + SV + PAD + FIELD_H + PAD;
+    private static final int H = PAD + SV + PAD + FIELD_H + PAD;
 
     private final int ax, ay, as;
     private final ColorSetting setting;
     private final Runnable onChange;
+    /** No alpha bar for colours whose opacity is set elsewhere. */
+    private final int W;
     private float hue, sat, val;
     private int alpha;
     private int x, y, dragging; // 1 square, 2 hue, 3 alpha
@@ -29,6 +31,7 @@ public class ColorPickerPopup implements Popup {
         this.as = anchorSize;
         this.setting = setting;
         this.onChange = onChange;
+        this.W = PAD + SV + PAD + BAR + PAD + (setting.isOpaque() ? 0 : BAR + PAD);
         int argb = setting.argb();
         float[] hsv = toHsv(argb);
         hue = hsv[0];
@@ -77,10 +80,12 @@ public class ColorPickerPopup implements Popup {
         }
         marker(c, hx, sy + Math.round(hue * (SV - 1)));
 
-        int alx = alphaX(), rgb = hsv(hue, sat, val);
-        ColorWidget.checker(c, alx, sy, BAR, SV);
-        c.fillGradient(alx, sy, alx + BAR, sy + SV, 0xFF000000 | rgb, rgb);
-        marker(c, alx, sy + Math.round((1 - alpha / 255f) * (SV - 1)));
+        if (!setting.isOpaque()) {
+            int alx = alphaX(), rgb = hsv(hue, sat, val);
+            ColorWidget.checker(c, alx, sy, BAR, SV);
+            c.fillGradient(alx, sy, alx + BAR, sy + SV, 0xFF000000 | rgb, rgb);
+            marker(c, alx, sy + Math.round((1 - alpha / 255f) * (SV - 1)));
+        }
 
         int fy = fieldY(), fw = W - 2 * PAD - FIELD_H - PAD;
         Px.field(c, sx, fy, fw, FIELD_H, editing);
@@ -107,7 +112,7 @@ public class ColorPickerPopup implements Popup {
         if (inField) buffer = setting.hex();
         if (Vanilla.inside(mx, my, svX(), svY(), SV, SV)) dragging = 1;
         else if (Vanilla.inside(mx, my, hueX() - 1, svY(), BAR + 2, SV)) dragging = 2;
-        else if (Vanilla.inside(mx, my, alphaX() - 1, svY(), BAR + 2, SV)) dragging = 3;
+        else if (!setting.isOpaque() && Vanilla.inside(mx, my, alphaX() - 1, svY(), BAR + 2, SV)) dragging = 3;
         drag(mx, my);
     }
 
@@ -129,7 +134,7 @@ public class ColorPickerPopup implements Popup {
     }
 
     private void apply() {
-        int argb = alpha << 24 | hsv(hue, sat, val);
+        int argb = (setting.isOpaque() ? 0xFF : alpha) << 24 | hsv(hue, sat, val);
         if (argb == setting.argb()) return;
         setting.set(argb);
         onChange.run();

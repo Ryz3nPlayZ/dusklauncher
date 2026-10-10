@@ -41,7 +41,7 @@ import dev.dusk.client.modules.misc.BackgroundFps;
 import dev.dusk.client.modules.misc.ChatSearch;
 import dev.dusk.client.modules.misc.SoundChanger;
 import dev.dusk.client.modules.misc.NameHider;
-import dev.dusk.client.modules.render.BlockOutline;
+import dev.dusk.client.modules.render.BlockHighlight;
 import dev.dusk.client.modules.render.BossBarTweaks;
 import dev.dusk.client.modules.render.ScoreboardTweaks;
 import dev.dusk.client.modules.render.TabPing;
@@ -124,6 +124,7 @@ import dev.dusk.client.gui.QuestsScreen;
 import dev.dusk.client.gui.DuskStatsScreen;
 import dev.dusk.client.gui.SocialScreen;
 import dev.dusk.client.compat.ScreenWidgets;
+import dev.dusk.client.render.highlight.HighlightPlatform;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
@@ -260,7 +261,10 @@ public class DuskClient implements ClientModInitializer {
             modules.register(new BossBarTweaks());
             // both step aside for the standalone mods the default pack already ships
             if (!FabricLoader.getInstance().isModLoaded("betterpingdisplay")) modules.register(new TabPing());
-            modules.register(new BlockOutline());
+            if (!FabricLoader.getInstance().isModLoaded("custom-block-highlight")) {
+                modules.register(new BlockHighlight());
+                HighlightPlatform.register();
+            }
             if (!FabricLoader.getInstance().isModLoaded("dynamic_fps")) modules.register(new BackgroundFps());
             // drawn by Nuit when it is installed (its interop reads the same packs)
             if (!FabricLoader.getInstance().isModLoaded("nuit") && !FabricLoader.getInstance().isModLoaded("nuit_interop")) modules.register(new CustomSkies());

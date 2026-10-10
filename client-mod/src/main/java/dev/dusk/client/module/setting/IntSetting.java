@@ -5,6 +5,8 @@ public class IntSetting extends Setting<Integer> {
     private final int min, max, step;
     private final String suffix;
     private int decimals;
+    private java.util.function.IntFunction<String> format;
+    private Runnable onSet;
 
     public IntSetting(String id, String name, int defaultValue, int min, int max) {
         this(id, name, defaultValue, min, max, 1, "");
@@ -29,17 +31,42 @@ public class IntSetting extends Setting<Integer> {
         return this;
     }
 
+    /** Prints the stored value its own way instead of number + suffix. */
+    public IntSetting format(java.util.function.IntFunction<String> format) {
+        this.format = format;
+        return this;
+    }
+
+    /** The value with its decimals applied: 125 with 2 decimals is 1.25. */
+    public float asFloat() {
+        return (float) (get() / Math.pow(10, decimals));
+    }
+
+    /** Sets from a real number, rounded to this setting's decimals. */
+    public void setFloat(double v) {
+        set((int) Math.round(v * Math.pow(10, decimals)));
+    }
+
     /** The value as the settings UI prints it, including the suffix. */
     public String display() {
         int v = get();
+        if (format != null) return format.apply(v);
         if (decimals == 0) return v + suffix;
         return java.math.BigDecimal.valueOf(v, decimals).stripTrailingZeros().toPlainString() + suffix;
+    }
+
+    /** Runs after the value changes (from the UI or a loaded config). */
+    public IntSetting onSet(Runnable onSet) {
+        this.onSet = onSet;
+        return this;
     }
 
     @Override
     public void set(Integer v) {
         int snapped = Math.round((v - min) / (float) step) * step + min;
+        int before = value;
         super.set(Math.max(min, Math.min(max, snapped)));
+        if (onSet != null && value != before) onSet.run();
     }
 
     public void setFraction(double f) {

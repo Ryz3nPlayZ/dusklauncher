@@ -218,6 +218,16 @@ out on purpose):
   GPL-3.0 (Wurst-Imperium). Followed from its feature list: Reconnect and
   InfiniChat, the same two ideas as above.
 
+Block Highlight (modules/render/BlockHighlight.java, render/highlight/)
+reproduces the behaviour and options of:
+
+- Custom Block Highlight — https://github.com/Tektonikal/CustomBlockHighlight
+  GPL-3.0 (tektonikal). Replicated: the three outline layers and the fill,
+  their shapes, face and depth modes, colours and rainbow, the easing, fade,
+  scale, line-width and rotation animations, connected blocks, the crystal
+  helper and the show-on conditions. No source files were copied; this
+  module is written independently.
+
 Custom Skies (modules/render/CustomSkies.java, render/sky/ and
 mixin/CustomSkyMixin.java) draws resource packs' OptiFine-format skies the
 way these mods read and draw them:

@@ -35,7 +35,7 @@ final class ModuleIcons {
         m.put("scoreboard", Items.LECTERN);
         m.put("bossbar", Items.DRAGON_HEAD);
         m.put("tabping", Items.REDSTONE_TORCH);
-        m.put("blockoutline", Items.TINTED_GLASS);
+        m.put("blockhighlight", Items.TINTED_GLASS);
         m.put("backgroundfps", Items.BLUE_ICE);
         m.put("soundchanger", Items.JUKEBOX);
         m.put("fovchanger", Items.GLASS_PANE);
