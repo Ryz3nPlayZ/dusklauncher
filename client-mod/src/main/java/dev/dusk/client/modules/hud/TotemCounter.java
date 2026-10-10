@@ -52,11 +52,17 @@ public class TotemCounter extends TextHud {
     private static final byte TOTEM_EVENT = 35;
     private static final List<String> ROUND_END = List.of(
             "Winners:", "has won the round.", "has won the game!", "Winner: NONE!", "Match Complete");
-    private static final ItemStack TOTEM = new ItemStack(Items.TOTEM_OF_UNDYING);
+    /** Made on first draw: on 26.x an item stack can't exist before the game has bound item components. */
+    private static ItemStack totem;
     private static final int ICON = 16;
 
     private static final Map<UUID, Integer> POPS = new HashMap<>();
     private static TotemCounter instance;
+
+    private static ItemStack totem() {
+        if (totem == null) totem = new ItemStack(Items.TOTEM_OF_UNDYING);
+        return totem;
+    }
 
     private final BoolSetting display = add(new BoolSetting("display", "Show your totem count", true));
     private final BoolSetting aboveHotbar = add(new BoolSetting("aboveHotbar", "Keep it above the hotbar (dragging it turns this off)", true));
@@ -362,13 +368,13 @@ public class TotemCounter extends TextHud {
         int color = ctx.editing() && text(ctx) == null ? countColor(2) : countColor(count(ctx.player()));
         if (centred()) {
             int w = width(ctx);
-            c.item(TOTEM, (w - ICON) / 2, 0);
+            c.item(totem(), (w - ICON) / 2, 0);
             c.text(v, (w - textW) / 2, ICON + 2 - 9, color, shadow.get());
         } else if (x() + screenWidth(ctx) / 2 > ctx.width() / 2) {
             c.text(v, 0, ICON / 2 - 4, color, shadow.get());
-            c.item(TOTEM, textW + 2, 0);
+            c.item(totem(), textW + 2, 0);
         } else {
-            c.item(TOTEM, 0, 0);
+            c.item(totem(), 0, 0);
             c.text(v, ICON + 2, ICON / 2 - 4, color, shadow.get());
         }
     }
