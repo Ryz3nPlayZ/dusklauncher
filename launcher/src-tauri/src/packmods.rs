@@ -233,6 +233,8 @@ pub fn pack_mods(state: State<AppState>, profile_id: String) -> Result<Vec<PackN
         return Ok(Vec::new());
     }
     let dirs = profile.dirs(&state.data_dir);
+    crate::packfix::repair_dir(&packs);
+    crate::packfix::repair_dir(&dirs.shaderpacks);
     let client_skies = crate::cosmetics::client_draws_skies(&profile.game_version, profile.loader_version.as_deref(), &dirs.mods);
     Ok(needs(&packs, &dirs.shaderpacks, &dirs.mods, client_skies))
 }

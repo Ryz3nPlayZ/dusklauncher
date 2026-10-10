@@ -17,6 +17,7 @@ mod javas;
 mod logs;
 mod modpacks;
 mod mods;
+mod packfix;
 mod packmods;
 mod recordings;
 mod quickplay;

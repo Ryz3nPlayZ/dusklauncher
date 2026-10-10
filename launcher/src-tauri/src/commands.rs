@@ -791,6 +791,15 @@ pub async fn install_and_launch(
     // mod twice. The mod reads other players' loadouts from the Dusk service.
     // DuskClient needs Fabric API; fetch it if missing, and if that can't
     // happen (offline, no copy) leave DuskClient out so the game still starts.
+    // packs put in by hand that were zipped inside their own folder, which the game skips
+    {
+        let (packs, shaders) = (dirs.resourcepacks.clone(), dirs.shaderpacks.clone());
+        let _ = tokio::task::spawn_blocking(move || {
+            crate::packfix::repair_dir(&packs);
+            crate::packfix::repair_dir(&shaders);
+        })
+        .await;
+    }
     if profile.loader == Loader::Fabric {
         let (app, data, mods, game) = (app.clone(), state.data_dir.clone(), dirs.mods.clone(), profile.game_version.clone());
         let _ = tokio::task::spawn_blocking(move || crate::cosmetics::refresh_client_mod_copy(&app, &data, &mods, &game)).await;

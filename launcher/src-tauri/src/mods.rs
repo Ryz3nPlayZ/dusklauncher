@@ -197,6 +197,9 @@ pub fn list_profile_content(
 ) -> Result<Vec<ProfileModDto>, String> {
     let kind = content_kind(&kind)?;
     let (_, dir) = profile_and_content(&state, &profile_id, kind)?;
+    if kind != "mod" {
+        crate::packfix::repair_dir(&dir);
+    }
     let mut out: Vec<ProfileModDto> = content_files(&dir, kind)
         .into_iter()
         .map(|(filename, path, enabled)| dto_for(&path, filename, enabled))
@@ -457,7 +460,11 @@ fn copy_in(state: &AppState, profile_id: &str, kind: &'static str, path: &std::p
     let (_, dir) = profile_and_content(state, profile_id, kind)?;
     let filename = sanitize_filename(path.file_name().and_then(|s| s.to_str()).unwrap_or(""))?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::fs::copy(path, dir.join(&filename)).map_err(|e| e.to_string())?;
+    if kind == "mod" {
+        std::fs::copy(path, dir.join(&filename)).map_err(|e| e.to_string())?;
+    } else {
+        crate::packfix::copy_pack(path, &dir.join(&filename))?;
+    }
     if kind == "mod" {
         let _ = state.patch_profile(profile_id, |p| {
             if !p.mod_filenames.contains(&filename) {
@@ -479,7 +486,8 @@ fn infer_kind(path: &std::path::Path) -> Option<&'static str> {
             if crate::worlds::zip_holds_world(&zip) {
                 return Some("world");
             }
-            let shaders = zip.file_names().any(|n| n.starts_with("shaders/"));
+            let root = crate::packfix::nested_root(&zip).unwrap_or_default();
+            let shaders = zip.file_names().any(|n| n.strip_prefix(root.as_str()).is_some_and(|n| n.starts_with("shaders/")));
             Some(if shaders { "shader" } else { "resourcepack" })
         }
         _ => None,
