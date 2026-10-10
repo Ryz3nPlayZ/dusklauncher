@@ -45,6 +45,9 @@ public abstract class HudElement extends Module {
 
     public boolean hideInF3() { return hideInF3.get(); }
 
+    /** Runs before each draw, for elements that move themselves (Totem Counter above the hotbar). */
+    public void beforeDraw(HudContext ctx) {}
+
     /** Unscaled box size; may depend on live data (text width). */
     public abstract int width(HudContext ctx);
 

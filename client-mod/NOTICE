@@ -122,9 +122,21 @@ Chat and HUD modules ported from MIT-licensed mods:
   MIT, Copyright (c) 2026 Eymistaken. Ported: ComboTracker's server-confirmed
   hit counting, received combos and combo rules, and the combo display
   (modules/hud/ComboTracker.java, ComboDisplay.java and mixin/combo).
+- Totem Counter — https://github.com/uku3lig/totemcounter
+  MIT, Copyright (c) 2022 uku. Ported: the totem count above the hotbar and
+  its colour scale, the per-player pop counter in names, the tab list and
+  text displays, the round-end reset, /resetcounter and /showpops, and the
+  coloured XP bar with its white bar texture (modules/hud/TotemCounter.java,
+  mixin/totem and textures/hud/totem_xp_bar.png).
 
-  All three are distributed under the MIT licence quoted above for Shield
+  All four are distributed under the MIT licence quoted above for Shield
   Statuses.
+
+Crosshair Indicator — https://modrinth.com/mod/crosshair-indicator
+  CC0 1.0 (SwimmingDog1 and MGC8). Reimplemented: the corner brackets drawn
+  around the crosshair while it is on a player in reach
+  (modules/render/CrosshairIndicator.java). No copyright is claimed on it,
+  but credit is given here anyway.
 
 Movement and camera modules ported from permissively licensed mods:
 

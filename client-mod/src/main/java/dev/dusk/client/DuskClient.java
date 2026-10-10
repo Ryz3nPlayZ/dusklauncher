@@ -74,6 +74,7 @@ import dev.dusk.client.modules.misc.Statistics;
 import dev.dusk.client.modules.misc.GameModeSwitcher;
 import dev.dusk.client.modules.misc.TntCountdown;
 import dev.dusk.client.modules.render.CustomCrosshair;
+import dev.dusk.client.modules.render.CrosshairIndicator;
 import dev.dusk.client.modules.render.ColorSaturation;
 import dev.dusk.client.modules.render.ContainerPreview;
 import dev.dusk.client.modules.render.DamageTint;
@@ -185,7 +186,10 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new FullInventory());
         modules.register(new LowDurability());
         modules.register(new InventoryDisplay());
-        modules.register(new TotemCounter());
+        TotemCounter totemCounter = new TotemCounter();
+        modules.register(totemCounter);
+        TotemCounter.register();
+        ClientCommandRegistrationCallback.EVENT.register(TotemCounter::registerCommands);
         modules.register(new ItemCounter());
         modules.register(new ItemPickups());
         // Info HUD
@@ -214,6 +218,7 @@ public class DuskClient implements ClientModInitializer {
         // Movement / render
         modules.register(new ToggleSprint());
         modules.register(new CustomCrosshair());
+        modules.register(new CrosshairIndicator());
         modules.register(new Fullbright());
         modules.register(new MotionBlur());
         modules.register(new TntCountdown());
@@ -357,6 +362,7 @@ public class DuskClient implements ClientModInitializer {
             if (freecam != null) freecam.tickKeys();
             chatMacros.tickKeys();
             waypoints.tickKeys();
+            totemCounter.tickKeys();
             if (modules.get(Distance.class).enabled() || modules.get(SignReader.class).enabled()) {
                 Raycast.tick(client);
             }

@@ -35,6 +35,7 @@ public final class HudRenderer {
     }
 
     public static void draw(Canvas c, HudElement e, HudContext ctx) {
+        e.beforeDraw(ctx);
         clampToScreen(e, ctx);
         float s = e.scale();
         int pad = e.background() ? HudElement.PAD : 0;

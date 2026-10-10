@@ -232,7 +232,7 @@ public final class SocialNotifier {
         add(new Toast(uuid, null, title, body, System.currentTimeMillis()));
     }
 
-    private static void toast(Icons icon, String title, String body) {
+    public static void toast(Icons icon, String title, String body) {
         add(new Toast(null, icon, title, body, System.currentTimeMillis()));
     }
 

@@ -83,3 +83,7 @@ java/dev/dusk/client/modules/misc/ChatLineFinder.java
 java/dev/dusk/client/render/sky/**
 java/dev/dusk/client/mixin/CustomSkyMixin.java
 java/dev/dusk/client/mixin/SkyPipelinesAccessor.java
+
+# Totem Counter's text-display suffix and coloured XP bar hook 1.21.11+ renderers.
+java/dev/dusk/client/mixin/totem/TotemTextDisplayMixin.java
+java/dev/dusk/client/mixin/totem/TotemXpBarMixin.java

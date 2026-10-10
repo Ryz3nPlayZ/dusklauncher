@@ -5,3 +5,7 @@ invtweaks.ScrollTransferMouseMixin
 qol.ItemPickupMixin
 # Scrollable Tooltips; 26.x layers have their own copy of the class
 qol.TooltipScrollMixin
+# Totem Counter pop tracking and name suffixes, on every version
+totem.TotemPopCountMixin
+totem.TotemNameMixin
+totem.TotemTabMixin

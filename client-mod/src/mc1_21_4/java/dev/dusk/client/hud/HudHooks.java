@@ -3,6 +3,7 @@ package dev.dusk.client.hud;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.gui.GraphicsCanvas;
 import dev.dusk.client.gui.HudEditorScreen;
+import dev.dusk.client.modules.render.CrosshairIndicator;
 import dev.dusk.client.modules.render.CustomCrosshair;
 import net.fabricmc.fabric.api.client.rendering.v1.HudLayerRegistrationCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.IdentifiedLayer;
@@ -31,9 +32,13 @@ public final class HudHooks {
                 Minecraft mc = Minecraft.getInstance();
                 CustomCrosshair crosshair = CustomCrosshair.instance();
                 if (crosshair != null && crosshair.shouldDraw(mc)) {
-                    crosshair.render(new GraphicsCanvas(graphics, mc.font), graphics.guiWidth() / 2, graphics.guiHeight() / 2, mc);
+                    crosshair.render(new GraphicsCanvas(graphics, mc.font), CustomCrosshair.centre(graphics.guiWidth()), CustomCrosshair.centre(graphics.guiHeight()), mc);
                 } else {
                     vanilla.render(graphics, tick);
+                }
+                CrosshairIndicator indicator = CrosshairIndicator.active(mc);
+                if (indicator != null) {
+                    indicator.render(new GraphicsCanvas(graphics, mc.font), CustomCrosshair.centre(graphics.guiWidth()), CustomCrosshair.centre(graphics.guiHeight()), mc);
                 }
             }));
         });

@@ -29,8 +29,9 @@ public class CrosshairGuiMixin {
         CustomCrosshair crosshair = CustomCrosshair.instance();
         if (crosshair != null && crosshair.shouldDraw(Minecraft.getInstance())) {
             CrosshairRenderer.render(graphics);
-            return;
+        } else {
+            original.call(graphics, pipeline, sprite, x, y, width, height);
         }
-        original.call(graphics, pipeline, sprite, x, y, width, height);
+        CrosshairRenderer.indicator(graphics);
     }
 }

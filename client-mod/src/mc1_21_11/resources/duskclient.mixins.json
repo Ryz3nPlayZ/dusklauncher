@@ -60,6 +60,8 @@
     "NightVisionMixin",
     "ScreenEffectMixin",
     "TotemPopMixin",
+    "totem.TotemTextDisplayMixin",
+    "totem.TotemXpBarMixin",
     "GlintShaderMixin",
     "GlintColorMixin",
     "itemphysics.ItemPhysicsStateMixin",

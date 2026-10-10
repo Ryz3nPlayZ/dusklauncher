@@ -63,6 +63,7 @@ final class ModuleIcons {
         m.put("coords", Items.MAP);
         m.put("cps", Items.STONE_BUTTON);
         m.put("crosshair", Items.TARGET);
+        m.put("crosshairindicator", Items.SPYGLASS);
         m.put("damagetint", Items.REDSTONE);
         m.put("day", Items.CAKE);
         m.put("distance", Items.LEAD);

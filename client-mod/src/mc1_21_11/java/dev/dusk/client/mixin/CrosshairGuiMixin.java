@@ -15,7 +15,8 @@ import org.spongepowered.asm.mixin.injection.At;
 /**
  * Swaps the vanilla crosshair sprite for the custom texture. Only the
  * sprite blit is replaced, so the attack indicator and every other part of
- * renderCrosshair keeps running.
+ * renderCrosshair keeps running. Crosshair Indicator's brackets go on top
+ * of whichever crosshair was drawn.
  */
 @Mixin(Gui.class)
 public class CrosshairGuiMixin {
@@ -29,8 +30,9 @@ public class CrosshairGuiMixin {
         CustomCrosshair crosshair = CustomCrosshair.instance();
         if (crosshair != null && crosshair.shouldDraw(Minecraft.getInstance())) {
             CrosshairRenderer.render(graphics);
-            return;
+        } else {
+            original.call(graphics, pipeline, sprite, x, y, width, height);
         }
-        original.call(graphics, pipeline, sprite, x, y, width, height);
+        CrosshairRenderer.indicator(graphics);
     }
 }

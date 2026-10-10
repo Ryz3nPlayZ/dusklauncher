@@ -12,8 +12,8 @@ import net.minecraft.client.Minecraft;
 
 /**
  * Flex-HUD's crosshair: a 15x15 pixel texture you paint yourself, drawn
- * exactly on the centre of the screen. It replaces only the vanilla
- * crosshair sprite, so the attack indicator keeps working.
+ * where vanilla's sits. It replaces only the vanilla crosshair sprite, so
+ * the attack indicator keeps working.
  */
 public class CustomCrosshair extends Module {
     public static final int SIZE = CrosshairPresets.SIZE;
@@ -51,6 +51,15 @@ public class CustomCrosshair extends Module {
         System.arraycopy(CrosshairPresets.NAMES, 0, options, 0, CrosshairPresets.NAMES.length);
         options[options.length - 1] = CUSTOM;
         return options;
+    }
+
+    /**
+     * The middle of the crosshair along a screen side of {@code guiSize}:
+     * vanilla's whole-pixel spot, not the exact centre, which falls between
+     * pixels and drew it half a pixel right and down of every other crosshair.
+     */
+    public static float centre(int guiSize) {
+        return (guiSize - SIZE) / 2 + SIZE / 2f;
     }
 
     public PixelGridSetting pixels() { return pixels; }
@@ -124,9 +133,9 @@ public class CustomCrosshair extends Module {
 
     /**
      * Canvas fallback for the versions without a blit hook, and for the
-     * editor preview. (cx, cy) is the exact centre of the screen.
+     * editor preview. (cx, cy) is where its middle goes: {@link #centre}.
      */
-    public void render(Canvas c, int cx, int cy, Minecraft mc) {
+    public void render(Canvas c, float cx, float cy, Minecraft mc) {
         float s = scaleFactor();
         c.push();
         c.translate(cx, cy);
