@@ -80,6 +80,20 @@ public abstract class Module {
         return add(setting);
     }
 
+    /** Moves these settings to the top of the settings page, in this order. */
+    protected void moveToFront(Setting<?>... first) {
+        List<Setting<?>> moved = List.of(first);
+        settings.removeAll(moved);
+        settings.addAll(0, moved);
+    }
+
+    /** Moves these settings to the bottom of the settings page, in this order. */
+    protected void moveToBack(Setting<?>... last) {
+        List<Setting<?>> moved = List.of(last);
+        settings.removeAll(moved);
+        settings.addAll(moved);
+    }
+
     public List<Setting<?>> settings() {
         return Collections.unmodifiableList(settings);
     }

@@ -43,23 +43,30 @@ public class BlockHighlight extends Module {
 
     /** Every setting that goes into the shared config format, with how it's written there. */
     private final List<Setting<?>> shared = new ArrayList<>();
+    private final List<Paint> paints = new ArrayList<>();
+    /** Set while a look, a paste or the saved config is being applied, so that doesn't count as an edit. */
+    private boolean applying;
 
-    public final BoolSetting enableModRendering = keep(add(new BoolSetting("enableModRendering", "Custom highlight", true), "General"));
-    public final BoolSetting drawVanillaOutline = keep(add(new BoolSetting("drawVanillaOutline", "Vanilla outline as well", false), "General"));
+    /** The looks, in the dropdown's order; picking one sets everything else. */
+    private static final String[] LOOKS = {"Clean", "Outline only", "Vanilla", "PvP", "Classic", "Fancy", "Trans flag", "Custom"};
+    public final ChoiceSetting look = add(new ChoiceSetting("look", "Look", "Clean", LOOKS), "Look");
 
-    public final Layer primary = new Layer("primary", "Outline", 128, false, 1f, 25, 5, 99, 100, 100);
-    public final Layer secondary = new Layer("secondary", "Second outline", 255, true, 0.75f, 50, 10, 95, 50, 200);
-    public final Layer tertiary = new Layer("tertiary", "Third outline", 255, false, 1f, 25, 10, 95, 100, 100);
+    public final BoolSetting enableModRendering = keep(add(new BoolSetting("enableModRendering", "Custom highlight", true), "Misc"));
+    public final BoolSetting drawVanillaOutline = keep(add(new BoolSetting("drawVanillaOutline", "Vanilla outline as well", false), "Misc"));
+
+    public final Layer primary = new Layer("primary", "Outline", 0xFFFFFFFF, 0xFFFFFFFF, 200, false, 1f, 25, 5, 99, 100, 100, Depth.NORMAL, 0);
+    public final Layer secondary = new Layer("secondary", "Second outline", 0xFF000000, 0xFF000000, 255, true, 0.75f, 50, 10, 95, 50, 200, Depth.ALWAYS_PASS, 25);
+    public final Layer tertiary = new Layer("tertiary", "Third outline", 0xFF000000, 0xFFFFFFFF, 255, false, 1f, 25, 10, 95, 100, 100, Depth.ALWAYS_PASS, 25);
 
     private final BooleanSupplier on = this::customOn;
 
-    public final BoolSetting fillEnabled = keep(add(new BoolSetting("fillEnabled", "Enabled", true), "Fill")).visibleWhen(on);
+    public final BoolSetting fillEnabled = keep(add(new BoolSetting("fillEnabled", "Fill", true), "Fill")).visibleWhen(on);
     private final BooleanSupplier fillOn = () -> customOn() && fillEnabled.get();
     public final Pick<Faces> fillType = keep(add(faces("fillType", Faces.ALL), "Fill")).visibleWhen(fillOn);
-    public final Pick<Depth> fillDepthTest = keep(add(depth("fillDepthTest", Depth.HIDDEN_ONLY), "Fill")).visibleWhen(fillOn);
+    public final Pick<Depth> fillDepthTest = keep(add(depth("fillDepthTest", Depth.NORMAL), "Fill")).visibleWhen(fillOn);
     public final IntSetting fillExpandBlocks = keep(add(expandBlocks("fillExpandBlocks"), "Fill")).visibleWhen(fillOn);
     public final IntSetting fillExpandPercent = keep(add(percent("fillExpandPercent", "Grow (percent)", 100, 0, 200, 1), "Fill")).visibleWhen(fillOn);
-    public final Paint fillCol = new Paint("fillCol", "Fill colour", 0xFF00FFFF, 0xFF0000FF, 39, 1, false, 1f, fillOn);
+    public final Paint fillCol = new Paint("fillCol", "Fill colour", "Fill", 0xFFFFFFFF, 0xFFFFFFFF, 40, 1, false, 1f, fillOn);
 
     public final BoolSetting doEasing = extra(new BoolSetting("doEasing", "Glide between blocks", true), "Animation", on);
     public final IntSetting easeSpeed = extra(speed("easeSpeed", "Glide speed", 350, 50, 1000, 5), "Animation", () -> customOn() && doEasing.get());
@@ -91,18 +98,45 @@ public class BlockHighlight extends Module {
 
     public BlockHighlight() {
         super("blockhighlight", "Block Highlight", Category.RENDER,
-                "Custom Block Highlight's outlines: layered, gradient or rainbow, filled, animated.");
+                "Outlines and fills the block you're looking at, gliding between blocks. Pick a look, then adjust it.");
         instance = this;
-        String presets = "Presets and sharing";
-        add(new ActionSetting("presetVanilla", "Preset: plain, like vanilla", "Apply", () -> applyPreset(VANILLA)), presets);
-        add(new ActionSetting("presetSweat", "Preset: PvP", "Apply", () -> applyPreset(SWEAT)), presets);
-        add(new ActionSetting("presetTrans", "Preset: trans flag", "Apply", () -> applyPreset(TRANS)), presets);
-        add(new ActionSetting("presetClassic", "Preset: classic CBH", "Apply", () -> applyPreset(CLASSIC)), presets);
-        add(new ActionSetting("presetFancy", "Preset: everything on", "Apply", () -> applyPreset(Map.of())), presets);
-        add(new ActionSetting("copy", "Copy settings (works in CBH too)", "Copy",
-                () -> Minecraft.getInstance().keyboardHandler.setClipboard(exportJson())), presets);
-        add(new ActionSetting("paste", "Paste settings from the clipboard", "Paste",
-                () -> importJson(Minecraft.getInstance().keyboardHandler.getClipboard())), presets);
+        ActionSetting copy = add(new ActionSetting("copy", "Copy settings (works in CBH too)", "Copy",
+                () -> Minecraft.getInstance().keyboardHandler.setClipboard(exportJson())), "Sharing");
+        ActionSetting paste = add(new ActionSetting("paste", "Paste settings from the clipboard", "Paste",
+                () -> importJson(Minecraft.getInstance().keyboardHandler.getClipboard())), "Sharing");
+
+        // the few settings most people want go first; the rest stay folded
+        Setting<?>[] quick = {look, primary.enabled, primary.color.col1, primary.color.alpha, primary.lineWidth,
+                primary.lineDepthTest, fillEnabled, fillCol.col1, fillCol.alpha};
+        for (Setting<?> s : quick) s.setGroup("Look");
+        moveToFront(quick);
+        moveToBack(enableModRendering, drawVanillaOutline, connectedBlocks, updateWhenUnfocused, rotations, rotationSpeed, copy, paste);
+        look.visibleWhen(on);
+
+        look.onChange(() -> {
+            if (!applying && !look.is("Custom")) applyLook(look.get());
+        });
+        // changing anything by hand makes it a custom look
+        for (Setting<?> s : shared) s.onChange(this::edited);
+    }
+
+    private void edited() {
+        if (applying) return;
+        applying = true;
+        look.set("Custom");
+        applying = false;
+    }
+
+    @Override
+    public void loadState(Map<String, Object> m) {
+        applying = true;
+        try {
+            super.loadState(m);
+        } finally {
+            applying = false;
+        }
+        // saved before there were looks: start from the default one
+        if (!(m.get("settings") instanceof Map<?, ?> saved) || !saved.containsKey(look.id())) applyLook(look.defaultValue());
     }
 
     /** The module while it is on, else null. */
@@ -135,21 +169,21 @@ public class BlockHighlight extends Module {
         public final Pick<Faces> outlineType;
         public final Pick<Shape> shapeStyle;
 
-        Layer(String key, String title, int alpha, boolean rainbow, float brightness,
-              int width, int minWidth, int maxCut, int inner, int outer) {
+        Layer(String key, String title, int c1, int c2, int alpha, boolean rainbow, float brightness,
+              int width, int minWidth, int maxCut, int inner, int outer, Depth depthDefault, int cutCenter) {
             boolean isPrimary = key.equals("primary");
             BooleanSupplier shown = isPrimary ? BlockHighlight.this::customOn : () -> customOn() && primary.enabled.get();
             BooleanSupplier active = () -> shown.getAsBoolean() && on();
-            enabled = keep(add(new BoolSetting(key + ".enabled", "Enabled", !key.equals("tertiary")), title)).visibleWhen(shown);
+            enabled = keep(add(new BoolSetting(key + ".enabled", isPrimary ? "Outline" : "Enabled", isPrimary), title)).visibleWhen(shown);
             shapeStyle = keep(add(new Pick<>(key + ".shapeStyle", "Shape", Shape.COLLISION_SHAPE,
                     "Bounding box", "Collision shape", "Model shape (beta)"), title)).visibleWhen(active);
             outlineType = keep(add(BlockHighlight.faces(key + ".outlineType", Faces.ALL), title))
                     .visibleWhen(() -> active.getAsBoolean() && shapeStyle.value() == Shape.CLASSIC_BOX);
-            lineDepthTest = keep(add(BlockHighlight.depth(key + ".lineDepthTest", Depth.ALWAYS_PASS), title)).visibleWhen(active);
-            lineWidth = keep(add(new IntSetting(key + ".lineWidth", "Line width", width, minWidth, 150, 1, "").decimals(1)
+            lineDepthTest = keep(add(BlockHighlight.depth(key + ".lineDepthTest", depthDefault), title)).visibleWhen(active);
+            lineWidth = keep(add(new IntSetting(key + ".lineWidth", isPrimary ? "Outline width" : "Line width", width, minWidth, 150, 1, "").decimals(1)
                     .format(v -> String.format(Locale.ROOT, "%.1f px", v / 10f)), title)).visibleWhen(active);
 
-            color = new Paint(key + ".color", title + " colour", 0xFF000000, key.equals("tertiary") ? 0xFFFFFFFF : 0xFF000000,
+            color = new Paint(key + ".color", title + " colour", isPrimary ? "Outline" : null, c1, c2,
                     alpha, 0, rainbow, brightness, active);
 
             String sizes = title + " size and gaps";
@@ -157,7 +191,7 @@ public class BlockHighlight extends Module {
             lineExpandPercentage = keep(add(percent(key + ".lineExpandPercentage", "Grow (percent)", 100, 0, 200, 1), sizes)).visibleWhen(active);
             cutFromCorner = keep(add(percent(key + ".cutFromCorner", "Gap at the corners", 0, 0, maxCut, 1), sizes)).visibleWhen(active);
             outerThicknessMult = keep(add(percent(key + ".outerThicknessMult", "Thickness at the corners", outer, 0, 200, 5), sizes)).visibleWhen(active);
-            cutFromCenter = keep(add(percent(key + ".cutFromCenter", "Gap in the middle", 25, 0, maxCut, 1), sizes)).visibleWhen(active);
+            cutFromCenter = keep(add(percent(key + ".cutFromCenter", "Gap in the middle", cutCenter, 0, maxCut, 1), sizes)).visibleWhen(active);
             innerThicknessMult = keep(add(percent(key + ".innerThicknessMult", "Thickness in the middle", inner, 0, 200, 5), sizes)).visibleWhen(active);
             // the two gaps share the line: changing one shrinks the other to keep them under 95%
             cutFromCorner.onSet(() -> limitGap(cutFromCorner, cutFromCenter));
@@ -189,15 +223,18 @@ public class BlockHighlight extends Module {
     public final class Paint {
         public final ColorSetting col1, col2;
         public final IntSetting alpha, delay, speed, saturation, brightness;
-        public final BoolSetting rainbow;
+        public final BoolSetting rainbow, gradient;
 
-        Paint(String key, String group, int c1, int c2, int alphaDefault, int alphaMin,
+        /** {@code what} names the colour and opacity rows when they sit among other settings ("Outline", "Fill"). */
+        Paint(String key, String group, String what, int c1, int c2, int alphaDefault, int alphaMin,
               boolean rainbowOn, float bri, BooleanSupplier active) {
+            paints.add(this);
             BooleanSupplier plain = () -> active.getAsBoolean() && !rainbow();
             BooleanSupplier cycling = () -> active.getAsBoolean() && rainbow();
-            col1 = keep(add(new ColorSetting(key + ".col1", "Colour", c1).opaque(), group)).visibleWhen(plain);
-            col2 = keep(add(new ColorSetting(key + ".col2", "Fades into", c2).opaque(), group)).visibleWhen(plain);
-            alpha = keep(add(new IntSetting(key + ".alpha", "Opacity", alphaDefault, alphaMin, 255)
+            col1 = keep(add(new ColorSetting(key + ".col1", what == null ? "Colour" : what + " colour", c1).opaque(), group)).visibleWhen(plain);
+            gradient = keep(add(new BoolSetting(key + ".gradient", "Gradient", c1 != c2), group)).visibleWhen(plain);
+            col2 = keep(add(new ColorSetting(key + ".col2", "Fades into", c2).opaque(), group)).visibleWhen(() -> plain.getAsBoolean() && gradient());
+            alpha = keep(add(new IntSetting(key + ".alpha", what == null ? "Opacity" : what + " opacity", alphaDefault, alphaMin, 255)
                     .format(v -> v * 100 / 255 + "%"), group)).visibleWhen(active);
             rainbow = keep(add(new BoolSetting(key + ".rainbowSettings.enabled", "Rainbow", rainbowOn), group)).visibleWhen(active);
             speed = keep(add(new IntSetting(key + ".rainbowSettings.speed", "Rainbow speed", 50, 10, 100, 1, "").decimals(1)
@@ -208,7 +245,8 @@ public class BlockHighlight extends Module {
         }
 
         public int rgb1() { return col1.argb() & 0xFFFFFF; }
-        public int rgb2() { return col2.argb() & 0xFFFFFF; }
+        public int rgb2() { return gradient() ? col2.argb() & 0xFFFFFF : rgb1(); }
+        public boolean gradient() { return gradient.get(); }
         public int alpha() { return alpha.get(); }
         public boolean rainbow() { return rainbow.get(); }
         public float speed() { return speed.asFloat(); }
@@ -247,7 +285,7 @@ public class BlockHighlight extends Module {
     }
 
     private static Pick<Depth> depth(String id, Depth def) {
-        return new Pick<>(id, "Depth test", def, "Normal", "Show through blocks", "Only behind blocks");
+        return new Pick<>(id, "Through blocks", def, "No, like vanilla", "Yes", "Only behind blocks");
     }
 
     private static IntSetting percent(String id, String name, int def, int min, int max, int step) {
@@ -290,7 +328,11 @@ public class BlockHighlight extends Module {
                 if (!at.has(path[i])) at.add(path[i], new JsonObject());
                 at = at.getAsJsonObject(path[i]);
             }
-            at.add(path[path.length - 1], write(s));
+            JsonElement v = write(s);
+            for (Paint p : paints) {
+                if (s == p.col2 && !p.gradient()) v = new JsonPrimitive(p.col1.argb()); // a solid colour is col1 twice in CBH
+            }
+            at.add(path[path.length - 1], v);
         }
         return GSON.toJson(root);
     }
@@ -314,7 +356,19 @@ public class BlockHighlight extends Module {
             return false;
         }
         if (!flat.containsKey("primary.enabled")) return false;
-        apply(flat);
+        applying = true;
+        try {
+            apply(flat);
+            // CBH has no gradient switch: two different colours are a gradient
+            for (Paint p : paints) {
+                if (!flat.containsKey(p.gradient.id()) && (flat.containsKey(p.col1.id()) || flat.containsKey(p.col2.id()))) {
+                    p.gradient.set(p.col1.argb() != p.col2.argb());
+                }
+            }
+            look.set("Custom");
+        } finally {
+            applying = false;
+        }
         return true;
     }
 
@@ -348,7 +402,13 @@ public class BlockHighlight extends Module {
         }
     }
 
-    // ---- presets: CBH's five, each the "everything on" set with changes ----
+    // ---- looks: Clean is our defaults; the rest are CBH's five presets, each its "everything on" set with changes ----
+
+    /** CBH's own defaults, as changes from ours. */
+    private static final Map<String, Object> CBH_DEFAULTS = map(
+            "primary.color.col1", 0xFF000000, "primary.color.col2", 0xFF000000, "primary.color.alpha", 128,
+            "primary.lineDepthTest", "ALWAYS_PASS", "primary.cutFromCenter", 0.25, "secondary.enabled", true,
+            "fillCol.col1", 0xFF00FFFF, "fillCol.col2", 0xFF0000FF, "fillCol.alpha", 39, "fillDepthTest", "HIDDEN_ONLY");
 
     /** "Everything on", as changes from the defaults. */
     private static final Map<String, Object> FANCY = map(
@@ -419,9 +479,29 @@ public class BlockHighlight extends Module {
         return m;
     }
 
-    private void applyPreset(Map<String, Object> changes) {
-        for (Setting<?> s : shared) s.reset();
-        apply(FANCY);
-        apply(changes);
+    private void applyLook(String name) {
+        applying = true;
+        try {
+            for (Setting<?> s : shared) s.reset();
+            switch (name) {
+                case "Clean" -> {}
+                case "Outline only" -> fillEnabled.set(false);
+                default -> {
+                    apply(CBH_DEFAULTS);
+                    apply(FANCY);
+                    apply(switch (name) {
+                        case "Vanilla" -> VANILLA;
+                        case "PvP" -> SWEAT;
+                        case "Classic" -> CLASSIC;
+                        case "Trans flag" -> TRANS;
+                        default -> Map.<String, Object>of();
+                    });
+                    for (Paint p : paints) p.gradient.set(p.col1.argb() != p.col2.argb());
+                }
+            }
+            look.set(name);
+        } finally {
+            applying = false;
+        }
     }
 }

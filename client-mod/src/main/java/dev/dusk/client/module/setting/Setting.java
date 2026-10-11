@@ -12,6 +12,7 @@ public abstract class Setting<T> {
     protected T value;
     private String group;
     private java.util.function.BooleanSupplier visibleWhen;
+    private Runnable onChange;
 
     protected Setting(String id, String name, T defaultValue) {
         this.id = id;
@@ -41,8 +42,15 @@ public abstract class Setting<T> {
 
     public boolean visible() { return visibleWhen == null || visibleWhen.getAsBoolean(); }
 
+    /** Runs whenever {@link #set} changes the value (not on load or reset). */
+    public void onChange(Runnable onChange) { this.onChange = onChange; }
+
     public T defaultValue() { return defaultValue; }
-    public void set(T value) { this.value = value; }
+    public void set(T value) {
+        T before = this.value;
+        this.value = value;
+        if (onChange != null && !java.util.Objects.equals(before, value)) onChange.run();
+    }
     public void reset() { this.value = defaultValue; }
 
     /** JSON-serialisable form (Gson primitives/strings). */
