@@ -122,6 +122,24 @@ public abstract class Module {
         return m;
     }
 
+    /**
+     * Ids this module was saved under before it was renamed or merged into;
+     * their saved state is read when the config has none under {@link #id()}.
+     */
+    public java.util.List<String> formerIds() {
+        return java.util.List.of();
+    }
+
+    /**
+     * Takes over one former module's saved state; returns whether that leaves
+     * this module on. By default its settings carry over and it counts as on
+     * if the old module was.
+     */
+    public boolean loadFormerState(String formerId, Map<String, Object> state) {
+        loadState(state);
+        return enabled;
+    }
+
     public void loadState(Map<String, Object> m) {
         setEnabled(Boolean.TRUE.equals(m.get("enabled")));
         if (m.get("x") instanceof Number n) this.x = n.intValue();

@@ -18,7 +18,7 @@
   "key.duskclient.zoom_in": "Zoom Further",
   "key.duskclient.zoom_out": "Zoom Back",
   "key.duskclient.zoom_secondary": "Secondary Zoom",
-  "key.duskclient.shield_self_state": "Shield Statuses: Own Shield Only",
+  "key.duskclient.shield_self_state": "Shield Tweaks: Only Tint Own Shield",
   "key.duskclient.stopwatch": "Stopwatch Start / Pause",
   "key.duskclient.stopwatch_reset": "Stopwatch Reset",
   "key.duskclient.freecam": "Freecam",

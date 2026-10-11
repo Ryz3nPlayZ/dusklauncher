@@ -3,3 +3,5 @@ FirstPersonHandsTickMixin
 # Dropping the held item moved from the player to the game mode
 -slotlock.SlotLockDropMixin
 slotlock.SlotLockGameModeMixin
+# Totem Tweaks pop length; the pop timer moved to ItemActivation
+ItemActivationMixin

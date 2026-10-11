@@ -22,7 +22,7 @@ public class DropdownWidget extends SettingRow {
     @Override
     protected void renderControl(Canvas c, int mouseX, int mouseY) {
         boolean shown = open != null && !open.closed();
-        drawButton(c, setting.get(), controlX(), top(), controlWidth(), SQUARE, shown || inControl(mouseX, mouseY));
+        drawButton(c, setting.label(setting.get()), controlX(), top(), controlWidth(), SQUARE, shown || inControl(mouseX, mouseY));
     }
 
     /** The closed dropdown: value on the left, arrow on the right. Shared with the module list's filter. */
@@ -36,7 +36,8 @@ public class DropdownWidget extends SettingRow {
     @Override
     protected boolean clickControl(double mx, double my, int button) {
         if (button != 0 || !inControl(mx, my)) return false;
-        open = new DropdownPopup(controlX(), top(), controlWidth(), SQUARE, setting.options(), setting.index(), i -> {
+        open = new DropdownPopup(controlX(), top(), controlWidth(), SQUARE,
+                setting.options().stream().map(setting::label).toList(), setting.index(), i -> {
             setting.set(setting.options().get(i));
             onChange.run();
         });

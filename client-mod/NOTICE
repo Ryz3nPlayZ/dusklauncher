@@ -79,8 +79,8 @@ mixin/GlintColorMixin.java) is a port of:
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
 
-Shield Statuses (modules/render/ShieldStatuses.java, render/shield and
-mixin/shield) is a port of:
+Shield Tweaks (modules/render/ShieldTweaks.java, render/shield and
+mixin/shield) ports:
 
 - Shield Statuses — https://github.com/Walksy/ShieldStatus
   MIT, Copyright (c) 2025 Walksy. Ported: the colour rules and options of
@@ -88,8 +88,22 @@ mixin/shield) is a port of:
 - WalksyLib — https://github.com/Walksy/WalksyLib
   MIT, Copyright (c) 2026 Walksy. Ported: WalksyLibShieldStateManager, the
   raise/disable tracking for every player, and the hooks that feed it.
+- Shield Fixes — https://github.com/Walksy/ShieldFixes
+  MIT, Copyright (c) 2026 Walksy. Ported: syncRemoteShieldUse, which gives
+  other players seen raising a shield that shield as their item in use
+  (ShieldStateTracker.syncRemoteUse, mixin/shield/ShieldUseSyncMixin.java).
+- ShieldDisruptor — https://github.com/MightyKnight/ShieldDisruptor
+  MIT, Copyright (c) 2022 MightyKnight. Ported: not drawing the off-hand
+  shield in first person while no item is in use (ShieldTweaks.hideIdle and
+  the hand renderer mixins).
 
-  Both are distributed under this licence:
+Totem Tweaks (modules/render/TotemTweaks.java) ports from:
+
+- TotemTweaker — https://github.com/Stanislasfdggfgdf/TotemTweaker
+  MIT, Copyright (c) 2026 test. Ported: the held totem size and hiding the
+  pop particles.
+
+  All five are distributed under this licence:
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -130,7 +144,7 @@ Chat and HUD modules ported from MIT-licensed mods:
   mixin/totem and textures/hud/totem_xp_bar.png).
 
   All four are distributed under the MIT licence quoted above for Shield
-  Statuses.
+  Tweaks.
 
 Crosshair Indicator — https://modrinth.com/mod/crosshair-indicator
   CC0 1.0 (SwimmingDog1 and MGC8). Reimplemented: the corner brackets drawn

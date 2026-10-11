@@ -100,7 +100,19 @@ public class ModuleManager {
             if (data == null) return;
             for (Module m : modules) {
                 Map<String, Object> state = data.get(m.id());
-                if (state != null) m.loadState(state);
+                if (state != null) {
+                    m.loadState(state);
+                    continue;
+                }
+                // a renamed or merged module: read each old module's settings, on if any was on
+                boolean on = false, found = false;
+                for (String old : m.formerIds()) {
+                    Map<String, Object> former = data.get(old);
+                    if (former == null) continue;
+                    on |= m.loadFormerState(old, former);
+                    found = true;
+                }
+                if (found) m.setEnabled(on);
             }
         } catch (Exception e) {
             // corrupt or incompatible config: start fresh rather than crash

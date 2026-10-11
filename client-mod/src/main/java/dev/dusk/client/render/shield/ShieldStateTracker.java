@@ -27,6 +27,8 @@ public final class ShieldStateTracker {
     private static final byte SHIELD_DISABLE_STATUS = 30;
     private static final int DISABLE_TICKS = 100;
     private static final ItemStack SHIELD = new ItemStack(Items.SHIELD);
+    /** The use time vanilla gives a shield, which it counts down while raised. */
+    private static final int IDLE_USE_TIME = 72000;
 
     private static final Map<Player, Integer> shieldUseTicks = new HashMap<>();
     private static final Map<Player, AttackEntry> attackedPlayerEntries = new HashMap<>();
@@ -37,6 +39,11 @@ public final class ShieldStateTracker {
     private static Level lastLevel;
 
     private ShieldStateTracker() {}
+
+    /** Implemented on LivingEntity by a mixin: the item it is using and the ticks it has left. */
+    public interface UseSync {
+        void dusk$setUse(ItemStack stack, int remaining);
+    }
 
     private record AttackEntry(Vec3 attackPos, Vec3 targetPos, long time, boolean wasBlocking) {}
 
@@ -91,6 +98,22 @@ public final class ShieldStateTracker {
             int left = e.getValue() - 1;
             if (left <= 0) it.remove();
             else e.setValue(left);
+        }
+    }
+
+    /**
+     * Shield Fixes' syncRemoteShieldUse: every other player seen raising a
+     * shield gets that shield as their item in use, with the use time counted
+     * from when we saw it go up, so the game draws and treats their block the
+     * way it does for you. Run after {@link #tick()}.
+     */
+    public static void syncRemoteUse() {
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null) return;
+        for (Player player : client.level.players()) {
+            int ticks = shieldUseTicks.getOrDefault(player, 0);
+            if (player == client.player || ticks <= 0) continue;
+            ((UseSync) player).dusk$setUse(player.getItemInHand(player.getUsedItemHand()), IDLE_USE_TIME - ticks);
         }
     }
 

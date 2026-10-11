@@ -81,7 +81,9 @@ public class DropdownPopup implements Popup {
 
     @Override
     public void scroll(double mx, double my, double amount) {
-        scroll = Math.max(0, Math.min(options.size() - visible(), scroll - (int) Math.signum(amount)));
+        // long lists (Particles' ninety entries) move three rows a notch
+        int step = options.size() > 24 ? 3 : 1;
+        scroll = Math.max(0, Math.min(options.size() - visible(), scroll - (int) Math.signum(amount) * step));
     }
 
     @Override

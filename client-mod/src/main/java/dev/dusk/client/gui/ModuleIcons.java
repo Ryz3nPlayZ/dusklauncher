@@ -85,10 +85,9 @@ final class ModuleIcons {
         m.put("keystrokes", Items.LEVER);
         m.put("light", Items.LANTERN);
         m.put("lowfire", Items.FLINT_AND_STEEL);
-        m.put("totempop", Items.FIREWORK_STAR);
+        m.put("totemtweaks", Items.FIREWORK_STAR);
         m.put("glintcolor", Items.ENCHANTED_BOOK);
         m.put("cooldowns", Items.CHORUS_FRUIT);
-        m.put("lowshield", Items.IRON_BARS);
         m.put("memory", Items.COMPARATOR);
         m.put("motion_blur", Items.PHANTOM_MEMBRANE);
         m.put("nametags", Items.NAME_TAG);
@@ -100,9 +99,8 @@ final class ModuleIcons {
         m.put("pitchdisplay", Items.LADDER);
         m.put("playtime", Items.EXPERIENCE_BOTTLE);
         m.put("reach", Items.FISHING_ROD);
-        m.put("riptideshieldfix", Items.TRIDENT);
         m.put("server", Items.BEACON);
-        m.put("shieldstatuses", Items.SHIELD);
+        m.put("shieldtweaks", Items.SHIELD);
         m.put("signreader", Items.OAK_SIGN);
         m.put("lookingat", Items.GLOW_ITEM_FRAME);
         m.put("autoreconnect", Items.RECOVERY_COMPASS);

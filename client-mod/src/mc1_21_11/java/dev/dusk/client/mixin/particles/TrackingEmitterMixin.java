@@ -2,10 +2,12 @@ package dev.dusk.client.mixin.particles;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dev.dusk.client.modules.render.Particles;
+import dev.dusk.client.modules.render.TotemTweaks;
 import dev.dusk.client.render.particles.ParticleHooks;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.TrackingEmitter;
 import net.minecraft.core.particles.ParticleOptions;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -30,6 +32,7 @@ public class TrackingEmitterMixin {
 
     @ModifyExpressionValue(method = "tick", at = @At(value = "CONSTANT", args = "intValue=16"))
     private int duskclient$multiplier(int constant) {
+        if (this.particleType.getType() == ParticleTypes.TOTEM_OF_UNDYING) return TotemTweaks.amount(constant);
         return ParticleHooks.scaleCount(ParticleHooks.of(this.particleType.getType()), constant);
     }
 

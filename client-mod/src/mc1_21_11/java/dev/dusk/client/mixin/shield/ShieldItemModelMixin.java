@@ -1,6 +1,6 @@
 package dev.dusk.client.mixin.shield;
 
-import dev.dusk.client.modules.render.ShieldStatuses;
+import dev.dusk.client.modules.render.ShieldTweaks;
 import dev.dusk.client.render.shield.ShieldTint;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -35,13 +35,13 @@ public abstract class ShieldItemModelMixin {
     @Inject(method = "update", at = @At("TAIL"))
     private void dusk$shieldTint(ItemStackRenderState output, ItemStack stack, ItemModelResolver resolver,
                                  ItemDisplayContext context, ClientLevel level, ItemOwner owner, int seed, CallbackInfo ci) {
-        if (!ShieldStatuses.active() || !(specialRenderer instanceof ShieldSpecialRenderer)) return;
+        if (!ShieldTweaks.tintActive() || !(specialRenderer instanceof ShieldSpecialRenderer)) return;
         LivingEntity holder = owner == null ? null : owner.asLivingEntity();
         Player player;
         if (holder == null) player = Minecraft.getInstance().player;
         else if (holder instanceof Player p) player = p;
         else return; // armour stands and mobs have no shield state
-        int tint = ShieldStatuses.colorFor(player);
+        int tint = ShieldTweaks.colorFor(player);
         if (tint == ShieldTint.NONE) return;
         ((ShieldTint.Holder) output).dusk$setShieldTint(tint);
         output.appendModelIdentityElement(tint);

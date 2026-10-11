@@ -5,7 +5,7 @@ import dev.dusk.client.compat.Compat;
 import dev.dusk.client.gui.ConfigScreen;
 import dev.dusk.client.gui.HudEditorScreen;
 import dev.dusk.client.modules.hud.HeldItem;
-import dev.dusk.client.modules.render.ShieldStatuses;
+import dev.dusk.client.modules.render.ShieldTweaks;
 import dev.dusk.client.modules.render.CustomCrosshair;
 import dev.dusk.client.modules.render.Fullbright;
 import dev.dusk.client.modules.render.MotionBlur;
@@ -37,7 +37,7 @@ public final class HudGameTest implements FabricClientGameTest {
             Fullbright.instance().setEnabled(true);
             MotionBlur.instance().setEnabled(true);
             // only registered where its hooks exist (1.21.11+)
-            if (Compat.MODERN_CLIENT_HOOKS) DuskClient.modules().get(ShieldStatuses.class).setEnabled(true);
+            if (Compat.MODERN_CLIENT_HOOKS) DuskClient.modules().get(ShieldTweaks.class).setEnabled(true);
             DuskClient.modules().get(HeldItem.class).setEnabled(true);
             client.options.setCameraType(CameraType.FIRST_PERSON);
         });

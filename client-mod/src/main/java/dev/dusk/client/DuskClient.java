@@ -85,10 +85,9 @@ import dev.dusk.client.modules.render.LightOverlay;
 import dev.dusk.client.modules.render.Hitbox;
 import dev.dusk.client.modules.render.ItemScale;
 import dev.dusk.client.modules.render.LowFire;
-import dev.dusk.client.modules.render.TotemPop;
+import dev.dusk.client.modules.render.TotemTweaks;
 import dev.dusk.client.modules.render.GlintColor;
-import dev.dusk.client.modules.render.LowShield;
-import dev.dusk.client.modules.render.ShieldStatuses;
+import dev.dusk.client.modules.render.ShieldTweaks;
 import dev.dusk.client.modules.misc.Waypoints;
 import dev.dusk.client.waypoints.WaypointCommands;
 import dev.dusk.client.modules.render.MotionBlur;
@@ -114,7 +113,6 @@ import dev.dusk.client.modules.render.ItemPhysics;
 import dev.dusk.client.modules.misc.SlotLock;
 import dev.dusk.client.modules.render.NoNightVision;
 import dev.dusk.client.modules.render.NoPumpkinBlur;
-import dev.dusk.client.modules.render.RiptideShieldFix;
 import dev.dusk.client.modules.render.TimeChanger;
 import dev.dusk.client.modules.render.WeatherChanger;
 import dev.dusk.client.modules.toggle.ToggleSprint;
@@ -238,13 +236,11 @@ public class DuskClient implements ClientModInitializer {
             // BactroMod ports; they hook client internals only 1.21.11+ has
             modules.register(new NoPumpkinBlur());
             modules.register(new LowFire());
-            modules.register(new TotemPop());
+            modules.register(new TotemTweaks());
             modules.register(new GlintColor());
             modules.register(new Cooldowns());
-            modules.register(new LowShield());
             modules.register(new NoNightVision());
-            modules.register(new RiptideShieldFix());
-            modules.register(new ShieldStatuses()); // Walksy's Shield Statuses
+            modules.register(new ShieldTweaks());
             modules.register(new ItemScale());
             modules.register(new ItemPhysics());
             modules.register(new FogControl());
@@ -352,7 +348,7 @@ public class DuskClient implements ClientModInitializer {
             boolean changed = Fullbright.instance().tickKeys();
             changed |= modules.get(ToggleSprint.class).tickKeys();
             if (TimeChanger.instance() != null) changed |= TimeChanger.instance().tickKeys();
-            changed |= ShieldStatuses.tickKeys();
+            changed |= ShieldTweaks.tickKeys();
             changed |= modules.tickToggleKeys(client);
             if (changed) modules.saveConfig();
             while (clipKey.consumeClick()) MediaBackend.saveClip();
