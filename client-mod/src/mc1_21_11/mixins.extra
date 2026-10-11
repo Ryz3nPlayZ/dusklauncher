@@ -9,3 +9,5 @@ qol.TooltipScrollMixin
 totem.TotemPopCountMixin
 totem.TotemNameMixin
 totem.TotemTabMixin
+# Styles: the picked style packs load on top, on every version
+styles.StylePacksMixin

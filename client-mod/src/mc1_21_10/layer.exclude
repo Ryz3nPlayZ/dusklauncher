@@ -93,3 +93,5 @@ java/dev/dusk/client/mixin/totem/TotemXpBarMixin.java
 java/dev/dusk/client/render/highlight/**
 java/dev/dusk/client/mixin/VoxelShapeInvoker.java
 java/dev/dusk/client/mixin/RenderTypeInvoker.java
+# Styles see-through crystals hook 1.21.11 render types; older lines draw crystals cut out
+java/dev/dusk/client/mixin/styles/CrystalSeeThroughMixin.java

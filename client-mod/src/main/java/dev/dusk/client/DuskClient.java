@@ -44,6 +44,7 @@ import dev.dusk.client.modules.misc.NameHider;
 import dev.dusk.client.modules.render.BlockHighlight;
 import dev.dusk.client.modules.render.BossBarTweaks;
 import dev.dusk.client.modules.render.ScoreboardTweaks;
+import dev.dusk.client.modules.render.Styles;
 import dev.dusk.client.modules.render.TabPing;
 import dev.dusk.client.modules.hud.Memory;
 import dev.dusk.client.modules.hud.Minimap;
@@ -214,6 +215,8 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new ServerLag());
         modules.register(new Stopwatch());
         modules.register(new ResourcePacks());
+        Styles styles = new Styles();
+        modules.register(styles);
         // Movement / render
         modules.register(new ToggleSprint());
         modules.register(new CustomCrosshair());
@@ -362,6 +365,7 @@ public class DuskClient implements ClientModInitializer {
             if (freecam != null) freecam.tickKeys();
             chatMacros.tickKeys();
             waypoints.tickKeys();
+            styles.tickKey();
             totemCounter.tickKeys();
             if (modules.get(Distance.class).enabled() || modules.get(SignReader.class).enabled()) {
                 Raycast.tick(client);

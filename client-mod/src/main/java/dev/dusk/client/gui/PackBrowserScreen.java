@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.dusk.client.account.Http;
+import dev.dusk.client.compat.Compat;
 import dev.dusk.client.gui.widget.TextFieldWidget;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -180,7 +181,7 @@ public class PackBrowserScreen extends PanelScreen {
         });
     }
 
-    private static void openFolder(Path dir) {
+    static void openFolder(Path dir) {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         String cmd = os.contains("win") ? "explorer" : os.contains("mac") ? "open" : "xdg-open";
         try {
@@ -228,6 +229,7 @@ public class PackBrowserScreen extends PanelScreen {
         List<Tool> t = new ArrayList<>();
         t.add(new Tool("close", Icons.CLOSE, "", "Close"));
         t.add(new Tool("folder", null, "OPEN FOLDER", "Open the " + (tab == SHADERS ? "shaderpacks" : "resourcepacks") + " folder"));
+        if (tab != SHADERS) t.add(new Tool("styles", null, "STYLES", "Pick crystal, anchor, sword and other looks from your styles folder"));
         return t;
     }
 
@@ -240,6 +242,8 @@ public class PackBrowserScreen extends PanelScreen {
             } catch (IOException ignored) {
             }
             openFolder(dir);
+        } else if (id.equals("styles")) {
+            Compat.setScreen(Minecraft.getInstance(), new StylesScreen(this));
         } else {
             super.onTool(id);
         }

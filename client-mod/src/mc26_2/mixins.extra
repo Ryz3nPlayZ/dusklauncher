@@ -1,0 +1,2 @@
+# Styles see-through crystals: 26.x builds the crystal render type from the model, not a field
+-styles.CrystalSeeThroughMixin
