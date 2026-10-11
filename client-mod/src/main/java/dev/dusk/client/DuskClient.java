@@ -122,6 +122,7 @@ import dev.dusk.client.social.SocialNotifier;
 import dev.dusk.client.gui.QuestsScreen;
 import dev.dusk.client.gui.DuskStatsScreen;
 import dev.dusk.client.gui.SocialScreen;
+import dev.dusk.client.gui.StylesScreen;
 import dev.dusk.client.compat.ScreenWidgets;
 import dev.dusk.client.render.highlight.HighlightPlatform;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -406,10 +407,12 @@ public class DuskClient implements ClientModInitializer {
         int n = SocialNotifier.badge(), q = SocialNotifier.ready();
         String label = n > 0 ? "Friends & Chat (" + n + ")" : "Friends & Chat";
         String quests = q > 0 ? "Quests (" + q + ")" : "Quests";
-        int left = screen.width / 2 - width / 2, y = Math.min(bottom + 4, screen.height - 24), half = (width - 4) / 2;
+        int left = screen.width / 2 - width / 2, y = Math.min(bottom + 4, screen.height - 48), half = (width - 4) / 2;
         widgets.add(Button.builder(Component.literal(label), b -> SocialScreen.show(screen))
                 .bounds(left, y, half, 20).build());
         widgets.add(Button.builder(Component.literal(quests), b -> QuestsScreen.show(screen))
                 .bounds(left + width - half, y, half, 20).build());
+        widgets.add(Button.builder(Component.literal("Styles"), b -> Compat.setScreen(net.minecraft.client.Minecraft.getInstance(), new StylesScreen(screen)))
+                .bounds(left, y + 24, width, 20).build());
     }
 }
