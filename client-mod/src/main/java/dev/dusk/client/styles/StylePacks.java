@@ -50,6 +50,7 @@ public final class StylePacks {
 
     public static final String OTHER = "other";
     public static final List<Category> CATEGORIES = List.of(
+            new Category("sky", "Sky", Items.SUNFLOWER),
             new Category("crystal", "Crystal", Items.END_CRYSTAL),
             new Category("anchor", "Anchor", Items.RESPAWN_ANCHOR),
             new Category("totem", "Totem", Items.TOTEM_OF_UNDYING),
@@ -69,6 +70,7 @@ public final class StylePacks {
     // Checked in this order for each file under assets/minecraft/, first match wins
     // (deepslate ores are deepslate, not stone; snowy grass is snow, not grass).
     private static final String[][] RULES = {
+            {"sky", "^(optifine|mcpatcher)/sky/"},
             {"crystal", "entity/end_crystal/|item/end_crystal"},
             {"anchor", "respawn_anchor"},
             {"totem", "totem_of_undying"},
@@ -181,9 +183,11 @@ public final class StylePacks {
     private static void count(String path, Map<String, Integer> textures, Map<String, Integer> models) {
         if (!path.startsWith("assets/minecraft/")) return;
         String rel = path.substring("assets/minecraft/".length());
-        boolean texture = rel.startsWith("textures/"), model = rel.startsWith("models/");
+        // OptiFine skies (optifine/sky/world0/sky1.properties and its images) count as textures
+        boolean model = rel.startsWith("models/");
+        boolean texture = rel.startsWith("textures/") || rel.startsWith("optifine/") || rel.startsWith("mcpatcher/");
         if (!texture && !model) return;
-        if (!rel.endsWith(".png") && !rel.endsWith(".json")) return;
+        if (!rel.endsWith(".png") && !rel.endsWith(".json") && !rel.endsWith(".properties")) return;
         for (int i = 0; i < RULES.length; i++) {
             if (PATTERNS[i].matcher(rel).find()) {
                 (texture ? textures : models).merge(RULES[i][0], 1, Integer::sum);

@@ -21,8 +21,9 @@ import java.util.concurrent.Executors;
 
 /**
  * The Styles page: categories down the left, the packs for the chosen one
- * on the right. Clicking a pack picks it for that category and reloads the
- * game's resources with it on top; "Default" goes back to the normal look.
+ * on the right. Clicking a pack picks it for that category; "Default" goes
+ * back to the normal look. The game's resources reload once, with the picks
+ * on top, when the page closes, so trying several packs costs one reload.
  * Add-ons (packs that only add to a category, like an anchor glow) toggle
  * on and off on their own. See {@link StylePacks}.
  */
@@ -42,6 +43,9 @@ public class StylesScreen extends PanelScreen {
 
     private List<Style> styles = List.of();
     private boolean loading;
+    /** Something was clicked since the page opened; reload on close if the picks differ from {@link #before}. */
+    private boolean changed;
+    private final List<String> before;
     private String category = lastCategory;
     private final List<Category> shown = new ArrayList<>();
     private final List<Cell> cells = new ArrayList<>();
@@ -50,6 +54,8 @@ public class StylesScreen extends PanelScreen {
 
     public StylesScreen(@Nullable Screen parent) {
         super(Component.literal("Styles"), parent);
+        Styles m = Styles.active();
+        before = m == null ? List.of() : m.pickedFiles();
         refresh();
     }
 
@@ -92,8 +98,7 @@ public class StylesScreen extends PanelScreen {
         else if (s != null && s.file().equals(m.pick(category))) return;
         else m.setPick(category, s == null ? null : s.file());
         saveModules();
-        if (m.enabled()) StylePacks.apply();
-        else m.setEnabled(true); // turning it on applies the picks
+        changed = true;
     }
 
     private boolean picked(Style s) {
@@ -265,7 +270,8 @@ public class StylesScreen extends PanelScreen {
         c.text(name, listX, headerY + 2, Theme.TEXT, false);
         Style pick = m == null ? null : byFile(m.pick(category));
         String now = pick != null ? "Using " + pick.name() : "Using the default look";
-        if (m != null && !m.enabled()) now = "Styles is off; picking one turns it on";
+        if (changed) now = "Shows when you close this";
+        else if (m != null && !m.enabled()) now = "Styles is off; picking one turns it on";
         int nx = listX + c.textWidth(name) + 8;
         int right = listX + listW;
         int[] st = seeThroughBox();
@@ -355,6 +361,16 @@ public class StylesScreen extends PanelScreen {
     @Override
     public void removed() {
         super.removed();
+        Styles m = Styles.get();
+        if (changed && m != null) {
+            changed = false;
+            if (!m.enabled()) {
+                m.setEnabled(true); // turning it on applies the picks
+                saveModules();
+            } else if (!m.pickedFiles().equals(before)) {
+                StylePacks.apply();
+            }
+        }
         icons.releaseAll();
         worker.shutdown();
     }

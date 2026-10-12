@@ -42,7 +42,6 @@ public class Styles extends Module {
                 "Pick a look for crystals, anchors, swords, fire and more from packs in the instance's styles folder. One per category, kept apart from your resource packs.");
         instance = this;
         setEnabled(true);
-        seeThrough.onChange(StylePacks::apply);
     }
 
     @Nullable
@@ -60,7 +59,7 @@ public class Styles extends Module {
         return seeThrough.get();
     }
 
-    /** Auto, On, Off, round again; reloads like changing it in settings. */
+    /** Auto, On, Off, round again. Takes effect on the next frame; no reload needed. */
     public void cycleSeeThrough() {
         seeThrough.next();
     }
