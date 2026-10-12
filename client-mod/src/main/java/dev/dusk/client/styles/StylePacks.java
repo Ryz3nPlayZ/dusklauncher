@@ -22,11 +22,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -57,41 +57,25 @@ public final class StylePacks {
             new Category("shield", "Shield", Items.SHIELD),
             new Category("armor", "Armour", Items.DIAMOND_CHESTPLATE),
             new Category("sword", "Sword", Items.DIAMOND_SWORD),
+            new Category("axe", "Axe", Items.DIAMOND_AXE),
             new Category("pickaxe", "Pickaxe", Items.DIAMOND_PICKAXE),
+            new Category("mace", "Mace", Items.MACE),
+            new Category("trident", "Trident", Items.TRIDENT),
+            new Category("pearl", "Ender Pearl", Items.ENDER_PEARL),
+            new Category("gap", "Golden Apple", Items.GOLDEN_APPLE),
+            new Category("obsidian", "Obsidian", Items.OBSIDIAN),
+            new Category("cobweb", "Cobweb", Items.COBWEB),
             new Category("fire", "Fire", Items.FLINT_AND_STEEL),
             new Category("glowstone", "Glowstone", Items.GLOWSTONE),
             new Category("deepslate", "Deepslate", Items.DEEPSLATE),
             new Category("snow", "Snow", Items.SNOW_BLOCK),
             new Category("grass", "Grass", Items.GRASS_BLOCK),
             new Category("stone", "Stone", Items.STONE),
+            new Category("hotbar", "Hotbar", Items.ITEM_FRAME),
             new Category("inventory", "Inventory", Items.CHEST),
             new Category(OTHER, "Other", Items.PAINTING));
 
-    // Checked in this order for each file under assets/minecraft/, first match wins
-    // (deepslate ores are deepslate, not stone; snowy grass is snow, not grass).
-    private static final String[][] RULES = {
-            {"sky", "^(optifine|mcpatcher)/sky/"},
-            {"crystal", "entity/end_crystal/|item/end_crystal"},
-            {"anchor", "respawn_anchor"},
-            {"totem", "totem_of_undying"},
-            {"shield", "entity/shield|item/shield"},
-            {"armor", "entity/equipment/humanoid|models/armor/|item/\\w+_(helmet|chestplate|leggings|boots)\\b|empty_armor_slot"},
-            {"sword", "item/\\w+_sword\\b"},
-            {"pickaxe", "item/\\w+_pickaxe\\b"},
-            {"fire", "block/(soul_)?fire_\\d"},
-            {"glowstone", "block/glowstone"},
-            {"deepslate", "deepslate"},
-            {"snow", "block/(snow|powder_snow|grass_block_snow)\\b"},
-            {"grass", "colormap/(grass|foliage)|block/(grass_block|short_grass|tall_grass)"},
-            {"stone", "block/(stone|cobblestone|smooth_stone|stone_bricks)\\b|block/\\w+_ore\\b"},
-            {"inventory", "textures/gui/"},
-    };
-    private static final Pattern[] PATTERNS = new Pattern[RULES.length];
     private static final String CRYSTAL_TEXTURE = "assets/minecraft/textures/entity/end_crystal/end_crystal.png";
-
-    static {
-        for (int i = 0; i < RULES.length; i++) PATTERNS[i] = Pattern.compile(RULES[i][1]);
-    }
 
     private static boolean ready;
     private static volatile boolean crystalSeeThrough;
@@ -132,7 +116,7 @@ public final class StylePacks {
     private static Style read(Path p) {
         String file = p.getFileName().toString();
         if (file.startsWith(".")) return null;
-        Map<String, Integer> textures = new HashMap<>(), models = new HashMap<>();
+        StyleFiles.Tally tally = new StyleFiles.Tally();
         byte[] icon = null;
         try {
             if (Files.isDirectory(p)) {
@@ -141,7 +125,7 @@ public final class StylePacks {
                 if (Files.isDirectory(assets)) {
                     try (Stream<Path> walk = Files.walk(assets)) {
                         for (Path f : walk.filter(Files::isRegularFile).toList()) {
-                            count("assets/minecraft/" + assets.relativize(f).toString().replace('\\', '/'), textures, models);
+                            count("assets/minecraft/" + assets.relativize(f).toString().replace('\\', '/'), tally);
                         }
                     }
                 }
@@ -152,7 +136,7 @@ public final class StylePacks {
                     var entries = zip.entries();
                     while (entries.hasMoreElements()) {
                         ZipEntry e = entries.nextElement();
-                        if (!e.isDirectory()) count(e.getName(), textures, models);
+                        if (!e.isDirectory()) count(e.getName(), tally);
                     }
                     ZipEntry png = zip.getEntry("pack.png");
                     if (png != null) {
@@ -167,33 +151,14 @@ public final class StylePacks {
         } catch (IOException e) {
             return null;
         }
-        String best = OTHER;
-        int bestN = 0;
-        for (String[] rule : RULES) {
-            int n = textures.getOrDefault(rule[0], 0) + models.getOrDefault(rule[0], 0);
-            if (n > bestN) {
-                best = rule[0];
-                bestN = n;
-            }
-        }
-        boolean addon = bestN > 0 && textures.getOrDefault(best, 0) == 0;
+        String best = tally.best();
+        boolean addon = tally.addon();
         return new Style(file, prettyName(file, best), best, addon, icon);
     }
 
-    private static void count(String path, Map<String, Integer> textures, Map<String, Integer> models) {
-        if (!path.startsWith("assets/minecraft/")) return;
-        String rel = path.substring("assets/minecraft/".length());
-        // OptiFine skies (optifine/sky/world0/sky1.properties and its images) count as textures
-        boolean model = rel.startsWith("models/");
-        boolean texture = rel.startsWith("textures/") || rel.startsWith("optifine/") || rel.startsWith("mcpatcher/");
-        if (!texture && !model) return;
-        if (!rel.endsWith(".png") && !rel.endsWith(".json") && !rel.endsWith(".properties")) return;
-        for (int i = 0; i < RULES.length; i++) {
-            if (PATTERNS[i].matcher(rel).find()) {
-                (texture ? textures : models).merge(RULES[i][0], 1, Integer::sum);
-                return;
-            }
-        }
+    /** Counts a file under today's name, so old packs sort like new ones. */
+    private static void count(String path, StyleFiles.Tally tally) {
+        if (path.startsWith(StyleFiles.MC)) tally.add(StyleFiles.names(path).get(0));
     }
 
     /** "crystal_see_through.zip" in the crystal category reads "See Through". */
@@ -248,18 +213,34 @@ public final class StylePacks {
         crystalSeeThrough = false;
         if (picks.isEmpty()) return selected;
 
+        // Each pick as the game should load it: the pack itself, or a copy with old texture
+        // names fixed and other categories' files left out (see StyleFiles)
         Path dir = folder();
-        Map<String, Pack> byFile = new LinkedHashMap<>();
-        new FolderRepositorySource(dir, PackType.CLIENT_RESOURCES, PackSource.DEFAULT, mc.directoryValidator())
-                .loadPacks(p -> byFile.put(fileOf(p.getId()), p));
-        List<PackResources> out = new ArrayList<>(selected);
+        Map<String, Path> load = new LinkedHashMap<>();
         for (String file : picks) {
-            Pack p = byFile.get(file);
-            if (p == null) continue;
-            out.addAll(PackCompat.open(p));
+            Path pack = dir.resolve(file);
+            if (!Files.exists(pack)) continue;
+            try {
+                load.put(file, StyleFiles.prepare(pack));
+            } catch (IOException | RuntimeException e) {
+                load.put(file, pack);
+            }
+        }
+        StyleFiles.prune(dir, new HashSet<>(load.values()));
+
+        Map<Path, Pack> byPath = new HashMap<>();
+        for (Path from : new Path[] {dir, StyleFiles.cache(dir)}) {
+            if (!Files.isDirectory(from)) continue;
+            new FolderRepositorySource(from, PackType.CLIENT_RESOURCES, PackSource.DEFAULT, mc.directoryValidator())
+                    .loadPacks(p -> byPath.put(from.resolve(fileOf(p.getId())), p));
+        }
+        List<PackResources> out = new ArrayList<>(selected);
+        for (Path path : load.values()) {
+            Pack p = byPath.get(path);
+            if (p != null) out.addAll(PackCompat.open(p));
         }
         String crystal = m.pick("crystal");
-        if (crystal != null) crystalSeeThrough = glassy(dir.resolve(crystal));
+        if (crystal != null && load.containsKey(crystal)) crystalSeeThrough = glassy(load.get(crystal));
         return out;
     }
 
