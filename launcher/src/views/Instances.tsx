@@ -10,7 +10,9 @@ import Screenshots from './Screenshots';
 /* Figma 96:2 — the card's picture ("dawnbright 2", the scene's middle band)
    and the 16×16 pixel gear on its square, both exact exports */
 import instanceBanner from '../assets/brand/instance-banner.webp';
-import gear16 from '../assets/brand/gear-16.png';
+import PixelArrow from '../components/px/PixelArrow';
+import PixelGlyph from '../components/px/PixelGlyph';
+import { LEGACY } from '../lib/ui';
 import {
   ago,
   api,
@@ -242,7 +244,7 @@ export default function Instances({
             <NavCell key={f} label={f} active={filter === f} onClick={() => setFilter(f)} />
           ))}
           {groups.map((g) => (
-            <NavCell key={g} label={g.toUpperCase()} active={filter === `g:${g}`} onClick={() => setFilter(`g:${g}`)} />
+            <NavCell key={g} keep label={g} active={filter === `g:${g}`} onClick={() => setFilter(`g:${g}`)} />
           ))}
           <div className="win__fill" />
         </div>
@@ -264,40 +266,39 @@ export default function Instances({
               {shown.map((p) => (
                 <PxBox
                   key={p.id}
-                  family="grey"
+                  family="panel"
                   className={[
                     'card',
                     p.id === selected?.id ? 'is-selected' : '',
                     live?.profileId === p.id ? 'is-live' : '',
                   ].join(' ')}
                 >
-                  {/* 30:374 — a 2px black + 3px band frame around the picture */}
                   <span className="card__banner-frame">
                     <InstanceArt profile={p} className="card__banner" />
                   </span>
                   <span className="card__name">{p.name}</span>
                   <span className="card__info">
                     {loaderLabel(p)} · {p.gameVersion} ·{' '}
-                    {live?.profileId === p.id ? <span className="is-live">RUNNING</span> : ago(p.lastPlayed)}
+                    {live?.profileId === p.id ? <span className="is-live">Running</span> : ago(p.lastPlayed)}
                     {p.modCount > 0 ? ` · ${p.modCount} mods` : ''}
                   </span>
                   <div className="card__row">
                     {live?.profileId === p.id ? (
                       <PxButton
                         family="red"
-                        height="fill"
+                        height="md"
                         className="card__play"
                         disabled={live.state !== 'running'}
                         onClick={onStop}
                       >
-                        <TT size={22} tone="red" sx={1.15}>
-                          {live.state === 'running' ? 'STOP GAME' : live.state === 'stopping' ? 'STOPPING…' : 'STARTING…'}
+                        <TT size={20}>
+                          {live.state === 'running' ? 'Stop game' : live.state === 'stopping' ? 'Stopping…' : 'Starting…'}
                         </TT>
                       </PxButton>
                     ) : (
                       <PxButton
-                        family="grey"
-                        height="fill"
+                        family={LEGACY ? 'grey' : 'soft'}
+                        height={LEGACY ? 'fill' : 'md'}
                         className="card__play"
                         disabled={live !== null}
                         onClick={() => {
@@ -305,20 +306,27 @@ export default function Instances({
                           onLaunch(p.id);
                         }}
                       >
-                        <TT size={22} tone="accent" sx={1.15}>
-                          PLAY NOW
-                        </TT>
+                        {LEGACY ? (
+                          <TT size={22} tone="accent" sx={1.15}>
+                            PLAY NOW
+                          </TT>
+                        ) : (
+                          <>
+                            <PixelArrow size="1em" />
+                            <TT size={20}>Play</TT>
+                          </>
+                        )}
                       </PxButton>
                     )}
-                    {/* 38:9 — the 40px square, the 93:132 gear centred on it */}
                     <PxButton
                       family="grey"
-                      height="fill"
+                      height="md"
                       className="card__gear"
                       title={`${p.name} settings`}
+                      aria-label={`${p.name} settings`}
                       onClick={() => setEditingId(p.id)}
                     >
-                      <img className="card__gear-glyph" src={gear16} alt="" draggable={false} />
+                      <PixelGlyph glyph="gear" size={15} />
                     </PxButton>
                   </div>
                 </PxBox>
@@ -362,13 +370,13 @@ export default function Instances({
 
 /* what each update was called; the patch-notes blurb covers the rest */
 const DROP_NAMES: Record<string, string> = {
-  '26.3': 'WILDERNESS BOUND',
-  '26.2': 'CHAOS CUBED',
-  '26.1': 'TINY TAKEOVER',
-  '1.21.11': 'MOUNTS OF MAYHEM',
-  '1.21.9': 'THE COPPER AGE',
-  '1.21.6': 'CHASE THE SKIES',
-  '1.21.5': 'SPRING TO LIFE',
+  '26.3': 'Wilderness Bound',
+  '26.2': 'Chaos Cubed',
+  '26.1': 'Tiny Takeover',
+  '1.21.11': 'Mounts of Mayhem',
+  '1.21.9': 'The Copper Age',
+  '1.21.6': 'Chase the Skies',
+  '1.21.5': 'Spring to Life',
 };
 
 /** "26.1.2" → "26.1"; 1.x keeps its patch ("1.21.11") — those were drops */
@@ -490,12 +498,17 @@ function NewInstance({
                     >
                       <img src={a?.imageUrl ?? instanceBanner} alt="" draggable={false} />
                       <span className={`vcard__tag${snap ? ' vcard__tag--snap' : ''}`}>
-                        {snap ? 'SNAPSHOT' : 'DUSK PROFILE'}
+                        {snap ? 'Snapshot' : 'Dusk profile'}
                       </span>
                       <span className="vcard__info">
-                        <TT size={36}>{ver.id.toUpperCase()}</TT>
+                        {/* a snapshot id is long (26.4-snapshot-1): the line big, the build under it */}
+                        <TT size={36} keep>{snap ? ver.id.split('-')[0] : ver.id}</TT>
                         <span className="vcard__drop">
-                          {drop ?? (snap ? 'NEXT UPDATE PREVIEW' : a?.blurb?.toUpperCase() ?? 'RELEASE')}
+                          {snap
+                            ? `Next update · ${ver.id.split('-').slice(1).join(' ') || 'preview'}`
+                            : drop
+                              ? drop
+                              : a?.blurb ?? 'Release'}
                         </span>
                       </span>
                     </button>
@@ -508,7 +521,7 @@ function NewInstance({
               <input
                 className="input"
                 aria-label="Instance name"
-                placeholder="INSTANCE NAME"
+                placeholder="Instance name"
                 value={duskName ?? DUSK_PROFILE.instanceName(v)}
                 onChange={(e) => setDuskName(e.target.value)}
               />
@@ -518,17 +531,17 @@ function NewInstance({
               value={duskVer}
               options={duskOptions}
               onChange={setDuskVer}
-              placeholder="OTHER VERSION"
+              placeholder="Other version"
             />
             <PxButton
-              family="dusk"
+              family="accent"
               height="md"
               className="vpick__create"
               disabled={busy || !known || !finalName}
               title={known ? undefined : 'Pick a Minecraft version'}
               onClick={() => void createDusk()}
             >
-              <TT size={20} tone="purple">
+              <TT size={20}>
                 {busy ? 'CREATING…' : 'CREATE'}
               </TT>
             </PxButton>
@@ -544,10 +557,8 @@ function NewInstance({
           {err && <span className="meta">{err}</span>}
 
           <div className="modal__row vpick__more">
-            <PxButton family="moss" height="md" onClick={onBrowse}>
-              <TT size={16} tone="moss">
-                BROWSE MODPACKS
-              </TT>
+            <PxButton family="grey" height="md" onClick={onBrowse}>
+              <TT size={16}>Browse modpacks</TT>
             </PxButton>
             <PxButton family="grey" height="md" onClick={() => setStep('custom')} title="A bare vanilla, Fabric or NeoForge instance">
               <TT size={16}>CUSTOM PROFILE</TT>
@@ -589,7 +600,7 @@ function NewInstance({
           <PxBox family="panel" height="md">
             <input
               className="input"
-              placeholder="MY INSTANCE"
+              placeholder="My instance"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -686,7 +697,7 @@ function NewInstance({
             <TT size={20}>CANCEL</TT>
           </PxButton>
           <PxButton
-            family="green"
+            family="accent"
             height="md"
             disabled={busy || !name.trim() || !version.trim()}
             onClick={async () => {
@@ -795,7 +806,7 @@ function ImportExternal({
             found.map((e) => (
               <div key={e.path} className="extimport__row" title={e.path}>
                 <span className="extimport__info">
-                  <TT size={16}>{e.name}</TT>
+                  <TT size={16} keep>{e.name}</TT>
                   <span className="meta">
                     {[
                       e.group ? `${e.source} › ${e.group}` : e.source,

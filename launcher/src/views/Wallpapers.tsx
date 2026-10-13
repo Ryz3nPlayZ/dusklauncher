@@ -24,7 +24,7 @@ export const wallpaperLabel = (name: string) =>
     .replace(/[-_.]*\d{3,4}x\d{3,4}$/i, '')
     .replace(/[-_.]+/g, ' ')
     .trim()
-    .toUpperCase() || name.toUpperCase();
+    .replace(/^./, (c) => c.toUpperCase()) || name;
 
 export default function Wallpapers({
   current,
@@ -83,11 +83,8 @@ export default function Wallpapers({
         {/* the title leads; BACK sits on the right, beside any CTA (as in the
            instance editor and project pages) */}
         <h1 className="page__title">Wallpapers</h1>
-        <PxButton family="red" height="md" className="browse__back" onClick={onBack}>
-          <PixelGlyph glyph="left" size={22} color="var(--r-co)" />
-          <TT size={20} tone="red">
-            BACK
-          </TT>
+        <PxButton family="grey" height="md" className="browse__back" title="Back" aria-label="Back" onClick={onBack}>
+          <PixelGlyph glyph="left" size={22} color="var(--text-2)" />
         </PxButton>
         <PxButton
           family="blue"

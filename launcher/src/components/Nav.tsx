@@ -1,21 +1,24 @@
+import type { ReactNode } from 'react';
 import type { Account } from '../lib/api';
 import type { Route } from '../routes';
 import PlayerHead from './PlayerHead';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isTauri } from '../lib/api';
-import { cellClass, NAV_SX, TT } from './px/Px';
-import PixelGlyph from './px/PixelGlyph';
+import { GearSix, Minus, Square, X } from '@phosphor-icons/react';
 import mark from '../assets/brand/dusk-mark.png';
+import { LEGACY } from '../lib/ui';
+import NavLegacy from './legacy/NavLegacy';
 
 const appWindow = () => getCurrentWindow();
 
-/* Figma 1:3 — the tab cells are fixed plates, not label-sized: HOME 116→218,
-   INSTANCES 216→388, COSMETICS 386→561, each sharing its 2px dividers with
-   its neighbours. `w` is the band between dividers, in Figma px. */
-const TABS: { route: Route; label: string; w: number }[] = [
-  { route: 'home', label: 'HOME', w: 98 },
-  { route: 'instances', label: 'INSTANCES', w: 168 },
-  { route: 'cosmetics', label: 'COSMETICS', w: 171 },
+/* the pages, in the order you reach for them; the account and settings sit
+   apart on the right */
+const TABS: { route: Route; label: string }[] = [
+  { route: 'home', label: 'Home' },
+  { route: 'instances', label: 'Instances' },
+  { route: 'cosmetics', label: 'Cosmetics' },
+  { route: 'store', label: 'Store' },
+  { route: 'quests', label: 'Quests' },
 ];
 
 export default function Nav({
@@ -24,95 +27,84 @@ export default function Nav({
   account,
   skin,
   claimable = 0,
+  update,
 }: {
   route: Route;
   onRoute: (r: Route) => void;
   account: Account | null;
   skin: string | null;
-  /** quest rewards waiting for CLAIM */
+  /** quest rewards waiting for Claim */
   claimable?: number;
+  /** the launcher-update button, when there is one */
+  update?: ReactNode;
 }) {
+  if (LEGACY) return <NavLegacy route={route} onRoute={onRoute} account={account} skin={skin} claimable={claimable} />;
   return (
-    <header className="nav">
-      <div className="px px--cell px--grey nav__cell nav__brand" data-tauri-drag-region>
+    <header className="nav" data-tauri-drag-region>
+      <div className="nav__brand" data-tauri-drag-region>
         <img className="nav__brand-mark" src={mark} alt="" draggable={false} />
-        <TT size={16} sx={NAV_SX}>
-          DUSK
-        </TT>
+        <span className="nav__brand-name">Dusk</span>
       </div>
 
-      {TABS.map((t) => (
-        <button
-          key={t.route}
-          className={cellClass(route === t.route, 'nav__tab')}
-          style={{ width: `calc(${t.w * 1.91} * var(--u))` }}
-          onClick={() => onRoute(t.route)}
-        >
-          <TT size={16} sx={NAV_SX}>
+      <nav className="nav__tabs" aria-label="Pages">
+        {TABS.map((t) => (
+          <button
+            key={t.route}
+            className={['nav__tab', route === t.route ? 'is-active' : ''].join(' ')}
+            aria-current={route === t.route ? 'page' : undefined}
+            onClick={() => onRoute(t.route)}
+            title={
+              t.route === 'quests' && claimable > 0
+                ? `${claimable} reward${claimable === 1 ? '' : 's'} to claim`
+                : undefined
+            }
+          >
             {t.label}
-          </TT>
-        </button>
-      ))}
+            {t.route === 'quests' && claimable > 0 && (
+              <span className="nav__badge num">{claimable > 99 ? '99+' : claimable}</span>
+            )}
+          </button>
+        ))}
+      </nav>
 
       <div className="nav__gap" data-tauri-drag-region />
 
+      {update}
+
+      {/* SocialPane portals its Friends button in here: it owns the state */}
+      <div id="nav-social" className="nav__slot" />
+
       <button
-        className={cellClass(route === 'profile', 'nav__profile')}
+        className={['nav__profile', route === 'profile' ? 'is-active' : ''].join(' ')}
         onClick={() => onRoute('profile')}
+        title={account ? 'Your profile' : 'Sign in'}
       >
-        <PlayerHead skin={skin} size={40} />
-        <TT size={16} sx={NAV_SX}>
-          {account?.username ?? 'SIGN IN'}
-        </TT>
+        <PlayerHead skin={skin} size={22} />
+        <span className="nav__profile-name">{account?.username ?? 'Sign in'}</span>
       </button>
 
       <button
-        className={cellClass(route === 'quests')}
-        onClick={() => onRoute('quests')}
-        title={claimable > 0 ? `Quests — ${claimable} reward${claimable === 1 ? '' : 's'} to claim` : 'Quests'}
-      >
-        <TT size={16} sx={NAV_SX}>
-          QUESTS
-        </TT>
-        {claimable > 0 && (
-          <span className="social__badge">
-            <TT size={11}>{claimable > 99 ? '99+' : String(claimable)}</TT>
-          </span>
-        )}
-      </button>
-
-      <button
-        className={['px px--cell px--accent nav__cell', route === 'store' ? 'is-open' : ''].join(' ')}
-        onClick={() => onRoute('store')}
-      >
-        <TT size={16} tone="accent" sx={NAV_SX}>
-          STORE
-        </TT>
-      </button>
-
-      <button
-        className={cellClass(route === 'settings')}
+        className={['nav__icon', route === 'settings' ? 'is-active' : ''].join(' ')}
         onClick={() => onRoute('settings')}
+        title="Settings"
+        aria-label="Settings"
       >
-        <TT size={16} sx={NAV_SX}>
-          SETTINGS
-        </TT>
+        <GearSix size={18} weight="bold" />
       </button>
 
-      {/* the window is undecorated, so minimise / maximise / close close the
-          strip on the right — three narrow cells, the last one red */}
+      {/* the window is undecorated, so minimise / maximise / close live here */}
       {isTauri && (
-        <>
-          <button className={cellClass(false, 'nav__win')} title="Minimize" onClick={() => void appWindow().minimize()}>
-            <PixelGlyph glyph="minimize" size={14} color="var(--text-2)" />
+        <div className="nav__win">
+          <button className="nav__icon" title="Minimize" aria-label="Minimize" onClick={() => void appWindow().minimize()}>
+            <Minus size={16} weight="bold" />
           </button>
-          <button className={cellClass(false, 'nav__win')} title="Maximize" onClick={() => void appWindow().toggleMaximize()}>
-            <PixelGlyph glyph="maximize" size={14} color="var(--text-2)" />
+          <button className="nav__icon" title="Maximize" aria-label="Maximize" onClick={() => void appWindow().toggleMaximize()}>
+            <Square size={14} weight="bold" />
           </button>
-          <button className="px px--cell px--red nav__cell nav__win nav__win--close" title="Close" onClick={() => void appWindow().close()}>
-            <PixelGlyph glyph="close" size={14} color="var(--r-co)" />
+          <button className="nav__icon nav__icon--close" title="Close" aria-label="Close" onClick={() => void appWindow().close()}>
+            <X size={16} weight="bold" />
           </button>
-        </>
+        </div>
       )}
     </header>
   );

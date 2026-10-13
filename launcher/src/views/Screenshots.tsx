@@ -164,11 +164,8 @@ export default function Screenshots({
         {/* the title leads; BACK sits on the right, beside any CTA (as in the
            instance editor and project pages) */}
         <h1 className="page__title">Media</h1>
-        <PxButton family="red" height="md" className="browse__back" onClick={onBack}>
-          <PixelGlyph glyph="left" size={22} color="var(--r-co)" />
-          <TT size={20} tone="red">
-            BACK
-          </TT>
+        <PxButton family="grey" height="md" className="browse__back" title="Back" aria-label="Back" onClick={onBack}>
+          <PixelGlyph glyph="left" size={22} color="var(--text-2)" />
         </PxButton>
       </div>
 
@@ -211,7 +208,7 @@ export default function Screenshots({
                 {takes.map((r) => (
                   <PxBox key={r.path} family="grey" className="card wall shot">
                     <RecordingThumb path={r.path} />
-                    <span className="card__name">{r.profileName.toUpperCase()}</span>
+                    <span className="card__name">{r.profileName}</span>
                     <span className="card__info">
                       {stamp(r.recordedAt, clock24h)} · {length(r.durationMs)} · {fileSize(r.size)}
                     </span>
@@ -276,7 +273,7 @@ export default function Screenshots({
                   <button className="card__banner-frame shot__open" title="View" onClick={() => setViewing(s.path)}>
                     <img className="card__banner" src={srcOf(s)} alt="" loading="lazy" draggable={false} />
                   </button>
-                  <span className="card__name">{s.profileName.toUpperCase()}</span>
+                  <span className="card__name">{s.profileName}</span>
                   <span className="card__info">
                     {stamp(s.takenAt, clock24h)} · {fileSize(s.size)}
                   </span>
@@ -293,7 +290,7 @@ export default function Screenshots({
                       title={s.favorite ? 'Unfavorite' : 'Favorite'}
                       onClick={() => void favorite(s)}
                     >
-                      <PixelGlyph glyph="star" size={18} color={s.favorite ? 'var(--accent-co)' : 'var(--text-2)'} />
+                      <PixelGlyph glyph="star" size={18} filled={s.favorite} color={s.favorite ? "var(--warn)" : "var(--text-2)"} />
                     </PxButton>
                     <PxButton family="red" height="fill" className="card__gear" title="Move to trash" onClick={() => void remove(s)}>
                       <PixelGlyph glyph="close" size={16} color="var(--r-co)" />
@@ -314,7 +311,7 @@ export default function Screenshots({
                 <img src={srcOf(current)} alt={current.name} draggable={false} />
               </div>
               <div className="shot__caption">
-                <TT size={16}>{current.profileName.toUpperCase()}</TT>
+                <TT size={16} keep>{current.profileName}</TT>
                 <span className="meta">
                   {current.name} · {stamp(current.takenAt, clock24h)} · {fileSize(current.size)}
                 </span>
@@ -348,7 +345,7 @@ export default function Screenshots({
                   title={current.favorite ? 'Unfavorite' : 'Favorite'}
                   onClick={() => void favorite(current)}
                 >
-                  <PixelGlyph glyph="star" size={18} color={current.favorite ? 'var(--accent-co)' : 'var(--text-2)'} />
+                  <PixelGlyph glyph="star" size={18} filled={current.favorite} color={current.favorite ? "var(--warn)" : "var(--text-2)"} />
                 </PxButton>
                 <PxButton
                   family="grey"
@@ -471,7 +468,7 @@ function SendPicker({ shot, onClose, onSent }: { shot: Screenshot; onClose: () =
               disabled={busy !== null}
               onClick={() => void send(f)}
             >
-              <TT size={16}>{busy === f.uuid ? 'SENDING…' : f.username.toUpperCase()}</TT>
+              <TT size={16}>{busy === f.uuid ? 'Sending…' : f.username}</TT>
             </PxButton>
           ))}
         </div>

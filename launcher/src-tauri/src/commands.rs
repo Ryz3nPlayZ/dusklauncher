@@ -619,6 +619,39 @@ pub async fn list_versions(state: State<'_, AppState>) -> Result<Vec<VersionDto>
         .collect())
 }
 
+/// A mod that needs a newer Fabric Loader than the instance pins stops the
+/// game before it opens ("Incompatible mods found"). Fabric Language Kotlin
+/// 1.14.2 needs 0.19.5, and LiquidBounce brings it in. Before launching, the
+/// pin moves to the newest stable loader every mod takes, and is saved so the
+/// instance's page shows it. Offline, or with no build that fits, it stays.
+async fn bump_loader_for_mods(state: &AppState, profile: Profile) -> Profile {
+    let Some(pinned) = profile.loader_version.clone().filter(|_| profile.loader == Loader::Fabric) else {
+        return profile;
+    };
+    let mods = profile.dirs(&state.data_dir).mods;
+    let reqs = tokio::task::spawn_blocking(move || crate::deps::loader_requirements(&mods)).await.unwrap_or_default();
+    if crate::deps::loader_satisfies(&pinned, &reqs) {
+        return profile;
+    }
+    let builds = match fasterlauncher_core::fabric::loader_builds(&state.client, &profile.game_version).await {
+        Ok(b) => b.into_iter().map(|b| (b.version, b.stable)).collect::<Vec<_>>(),
+        Err(e) => {
+            tracing::warn!("couldn't list Fabric Loader builds to move off {pinned}: {e}");
+            return profile;
+        }
+    };
+    let Some(next) = crate::deps::loader_for(&builds, &reqs) else { return profile };
+    tracing::info!("a mod needs a newer Fabric Loader: {pinned} -> {next}");
+    let mut p = profile;
+    p.loader_version = Some(next.clone());
+    let mut store = state.profiles.lock().unwrap();
+    if let Some(saved) = store.profiles.iter_mut().find(|s| s.id == p.id) {
+        saved.loader_version = Some(next);
+        state.save_profiles(&store);
+    }
+    p
+}
+
 /// The fabric loader the installer would pin for a new profile — the meta
 /// endpoint's newest stable loader. The UI shows it next to the version
 /// picker so "just choose Minecraft" is genuinely all a user must decide.
@@ -730,6 +763,7 @@ pub async fn install_and_launch(
     };
     emit_state(&app, &profile_id, "starting", None);
 
+    let profile = bump_loader_for_mods(&state, profile).await;
     let session = launch_session(&state).await?;
 
     let client = state.client.clone();

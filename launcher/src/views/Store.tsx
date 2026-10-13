@@ -348,8 +348,8 @@ export default function Store({
               {/* the item card: what is picked, what it is, what it costs — then the one thing to do about it */}
               <div className="store__item">
                 <div className="store__item-head">
-                  <TT size={16} tone={pickedWorn ? 'green' : 'plain'} className="store__item-name">
-                    {(pickedCape?.name ?? pickedAcc?.name ?? 'NOTHING PICKED').toUpperCase()}
+                  <TT size={16} tone={pickedWorn ? 'green' : 'plain'} className="store__item-name" keep>
+                    {pickedCape?.name ?? pickedAcc?.name ?? 'Nothing picked'}
                   </TT>
                   {picked && (
                     <TT size={13} tone={pickedWorn ? 'green' : pickedOwned ? 'sub' : 'accent'}>
@@ -469,8 +469,8 @@ export default function Store({
                             <CapeSwatch src={capeData[c.id]?.cape} scale={6} frameMs={c.frameMs} />
                           </div>
                           <span className="skin-tile__name">
-                            <TT size={16} tone={worn ? 'green' : 'dim'}>
-                              {c.name.toUpperCase()}
+                            <TT size={16} tone={worn ? 'green' : 'dim'} keep>
+                              {c.name}
                             </TT>
                           </span>
                           <span className="store-tile__tag">
@@ -502,8 +502,8 @@ export default function Store({
                             <AccessorySwatch src={accData[a.id]?.texture} model={accData[a.id]?.model} entry={a} />
                           </div>
                           <span className="skin-tile__name">
-                            <TT size={16} tone={worn ? 'green' : 'dim'}>
-                              {a.name.toUpperCase()}
+                            <TT size={16} tone={worn ? 'green' : 'dim'} keep>
+                              {a.name}
                             </TT>
                           </span>
                           <span className="store-tile__tag">

@@ -1,21 +1,26 @@
 import { useCallback, useEffect, useState } from 'react';
-import { PxBox, PxButton, TT } from '../components/px/Px';
-import { api, isTauri, type Account, type Quest, type Quests as Board } from '../lib/api';
+import { Check, Fire } from '@phosphor-icons/react';
+import { api, isTauri, type Account, type Quest, type Quests as Board, type Streak } from '../lib/api';
+import { LEGACY } from '../lib/ui';
+import QuestsLegacy from './legacy/QuestsLegacy';
 
 const errText = (e: unknown) => String(e).replace(/^Error: /, '');
+const coins = (n: number) => n.toLocaleString();
 
-/**
- * Quests: the daily streak, the daily and weekly boards, and achievements.
- * The server tracks progress (play time comes from the mod); rewards wait
- * here, and in game, until CLAIM. `onClaimable` keeps the nav badge honest.
- */
-export default function Quests({
-  account,
-  onClaimable,
-}: {
+type QuestsProps = {
   account: Account | null;
   onClaimable: (n: number) => void;
-}) {
+};
+
+/**
+ * Quests: the daily streak, the daily and weekly boards side by side, and
+ * achievements. The server tracks progress (play time comes from the mod);
+ * rewards wait here, and in game, until Claim. `onClaimable` keeps the nav
+ * badge honest. A reward reads as a button only once it can be claimed.
+ */
+export default function Quests(props: QuestsProps) {
+  if (LEGACY) return <QuestsLegacy {...props} />;
+  const { account, onClaimable } = props;
   const [board, setBoard] = useState<Board | null>(null);
   const [note, setNote] = useState<string | null>(null);
   /* why the board couldn't load; the next good refresh clears it */
@@ -59,7 +64,7 @@ export default function Quests({
     try {
       const r = await api.claimQuest(id);
       take(r.quests);
-      setNote(r.paid > 0 ? `+${r.paid} coins` : 'Nothing to claim yet.');
+      setNote(r.paid > 0 ? `+${coins(r.paid)} coins` : 'Nothing to claim yet.');
     } catch (e) {
       setNote(errText(e));
     } finally {
@@ -67,202 +72,209 @@ export default function Quests({
     }
   };
 
-  if (!signedIn) {
-    return (
-      <div className="page">
-        <div className="page__head">
-          <h1 className="page__title">Quests</h1>
-        </div>
-        <PxBox family="panel" className="stack">
-          <span className="meta">Sign in to earn coins from quests.</span>
-        </PxBox>
-      </div>
-    );
-  }
-
-  const s = board?.streak;
+  const ready = board?.claimable ?? 0;
   return (
-    <div className="page">
+    <div className="page quests">
       <div className="page__head">
         <h1 className="page__title">Quests</h1>
-        <div className="quests__head">
-          {(note ?? (board && loadErr)) && <span className="meta">{note ?? loadErr}</span>}
-          {board && (
-            <TT size={20} tone="yellow">
-              {`${board.coins} COINS`}
-            </TT>
-          )}
-          <PxButton
-            family={board && board.claimable > 0 ? 'accent' : 'grey'}
-            height="md"
-            disabled={!board || board.claimable === 0 || busy !== null}
-            onClick={() => void claim('all')}
-          >
-            <TT size={16} tone={board && board.claimable > 0 ? 'accent' : 'sub'}>
-              {busy === 'all' ? 'CLAIMING…' : `CLAIM ALL${board && board.claimable > 0 ? ` (${board.claimable})` : ''}`}
-            </TT>
-          </PxButton>
-        </div>
+        {(note ?? (board && loadErr)) && <span className="quests__note">{note ?? loadErr}</span>}
+        {board && (
+          <span className="quests__balance" title="Your coins">
+            <CoinDot />
+            <span className="num">{coins(board.coins)}</span>
+          </span>
+        )}
+        {ready > 0 && (
+          <button className="quests__claim quests__claim--all" disabled={busy !== null} onClick={() => void claim('all')}>
+            {busy === 'all' ? 'Claiming…' : `Claim all (${ready})`}
+          </button>
+        )}
       </div>
 
-      {!board ? (
-        <PxBox family="panel" className="stack">
-          <span className="meta">{loadErr ?? 'Loading…'}</span>
-        </PxBox>
+      {!signedIn ? (
+        <div className="quests__empty">Sign in to earn coins from quests.</div>
+      ) : !board ? (
+        <div className="quests__empty">{loadErr ?? 'Loading…'}</div>
       ) : (
-        <div className="column">
-          {s && (
-            <PxBox family={s.done && !s.claimed ? 'accent' : 'panel'} className="stack">
-              <div className="quests__row">
-                <div className="srow__text">
-                  <TT size={20} tone={s.days > 0 ? 'accent' : undefined}>
-                    {s.days > 0 ? `${s.days} DAY STREAK` : 'START A STREAK'}
-                  </TT>
-                  <span className="meta">
-                    {s.done
-                      ? 'Today counts. Come back tomorrow to keep it going.'
-                      : `Play ${s.needMinutes} minutes today to keep it: ${Math.min(s.todayMinutes, s.needMinutes)} / ${s.needMinutes} min`}
-                  </span>
-                </div>
-                <ClaimButton
-                  done={s.done}
-                  claimed={s.claimed}
-                  coins={s.coins}
-                  busy={busy === 'streak'}
-                  disabled={busy !== null}
-                  onClick={() => void claim('streak')}
-                />
-              </div>
-              <Bar progress={s.todayMinutes} goal={s.needMinutes} />
-              <div className="quests__cycle">
-                {s.cycle.map((c, i) => (
-                  <PxBox
-                    key={i}
-                    family={i < s.cycleDay || (i === s.cycleDay && s.done) ? 'accent' : i === s.cycleDay ? 'soft' : 'panel'}
-                    className="quests__day"
-                  >
-                    <TT size={11} tone="dim">
-                      {`DAY ${i + 1}`}
-                    </TT>
-                    <TT size={14} tone={i <= s.cycleDay ? 'yellow' : 'sub'}>
-                      {`+${c}`}
-                    </TT>
-                  </PxBox>
-                ))}
-              </div>
-            </PxBox>
-          )}
+        <div className="quests__body scroll">
+          <StreakCard s={board.streak} busy={busy} onClaim={() => void claim('streak')} />
 
-          <Section
-            label="DAILY"
-            reset={board.dailyReset}
-            quests={board.daily}
-            busy={busy}
-            onClaim={(id) => void claim(id)}
-          />
-          <Section
-            label="WEEKLY"
-            reset={board.weeklyReset}
-            quests={board.weekly}
-            busy={busy}
-            onClaim={(id) => void claim(id)}
-          />
-          <Section
-            label="ACHIEVEMENTS"
-            hint="Claimed achievements show as badges on your profile."
-            quests={board.achievements}
-            busy={busy}
-            onClaim={(id) => void claim(id)}
-          />
+          <div className="quests__boards">
+            <Board title="Daily" reset={board.dailyReset} quests={board.daily} busy={busy} onClaim={(id) => void claim(id)} />
+            <Board title="Weekly" reset={board.weeklyReset} quests={board.weekly} busy={busy} onClaim={(id) => void claim(id)} />
+          </div>
+
+          <section className="quests__panel">
+            <header className="quests__panel-head">
+              <h2>Achievements</h2>
+              <span>Claimed ones show as badges on your profile</span>
+            </header>
+            <div className="quests__badges">
+              {board.achievements.map((q) => (
+                <div key={q.id} className={['quests__badge', q.claimed ? 'is-claimed' : ''].join(' ')}>
+                  <span className="quests__title">{q.title}</span>
+                  <Progress q={q} />
+                  <Reward q={q} busy={busy} onClaim={() => void claim(q.id)} />
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
       )}
     </div>
   );
 }
 
-function Section({
-  label,
+/** the streak: how long it is, whether today counts yet, and the week's payouts */
+function StreakCard({ s, busy, onClaim }: { s: Streak; busy: string | null; onClaim: () => void }) {
+  const today = Math.min(s.todayMinutes, s.needMinutes);
+  return (
+    <section className={['quests__streak', s.days > 0 ? 'is-going' : ''].join(' ')}>
+      <div className="quests__streak-top">
+        <span className="quests__flame">
+          <Fire size={26} weight="fill" />
+        </span>
+        <div className="quests__streak-text">
+          <span className="quests__streak-days">
+            {s.days > 0 ? (
+              <>
+                <span className="num">{s.days}</span> day streak
+              </>
+            ) : (
+              'Start a streak'
+            )}
+          </span>
+          <span className="quests__streak-sub">
+            {s.done
+              ? 'Today counts. Play tomorrow to keep it going.'
+              : `Play ${s.needMinutes} minutes today to keep it: ${today} of ${s.needMinutes} so far`}
+          </span>
+          {!s.done && (
+            <div className="quests__bar quests__bar--streak">
+              <div className="quests__fill" style={{ width: `${(today / Math.max(1, s.needMinutes)) * 100}%` }} />
+            </div>
+          )}
+        </div>
+        <Reward
+          q={{ done: s.done, claimed: s.claimed, coins: s.coins }}
+          busy={busy}
+          id="streak"
+          onClaim={onClaim}
+        />
+      </div>
+
+      <ol className="quests__week" aria-label="This week's streak rewards">
+        {s.cycle.map((c, i) => {
+          const done = i < s.cycleDay || (i === s.cycleDay && s.done);
+          const today = i === s.cycleDay;
+          return (
+            <li
+              key={i}
+              className={['quests__day', done ? 'is-done' : '', today ? 'is-today' : '', i === s.cycle.length - 1 ? 'is-bonus' : '']
+                .filter(Boolean)
+                .join(' ')}
+            >
+              <span className="quests__day-label">{today ? 'Today' : `Day ${i + 1}`}</span>
+              <span className="quests__day-mark">{done ? <Check size={14} weight="bold" /> : <CoinDot />}</span>
+              <span className="quests__day-coins num">+{c}</span>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+function Board({
+  title,
   reset,
-  hint,
   quests,
   busy,
   onClaim,
 }: {
-  label: string;
-  reset?: number;
-  hint?: string;
+  title: string;
+  reset: number;
   quests: Quest[];
   busy: string | null;
   onClaim: (id: string) => void;
 }) {
+  const left = quests.filter((q) => !q.claimed).length;
   return (
-    <PxBox family="panel" className="stack quests__section">
-      <div className="quests__row">
-        <TT size={16} tone="dim">
-          {label}
-        </TT>
-        {reset !== undefined && <span className="meta">new in {until(reset)}</span>}
-        {hint && <span className="meta">{hint}</span>}
-      </div>
-      {quests.map((q) => (
-        <div key={q.id} className="srow quests__quest">
-          <div className="srow__text">
-            <TT size={16} tone={q.claimed ? 'sub' : undefined}>
-              {q.title}
-            </TT>
-            <Bar progress={q.progress} goal={q.goal} />
-            <span className="meta">
-              {amount(Math.min(q.progress, q.goal), q.unit)} / {amount(q.goal, q.unit)}
-            </span>
+    <section className="quests__panel">
+      <header className="quests__panel-head">
+        <h2>{title}</h2>
+        <span>
+          {left === 0 ? 'All done · ' : ''}new in {until(reset)}
+        </span>
+      </header>
+      <div className="quests__list">
+        {quests.map((q) => (
+          <div key={q.id} className={['quests__quest', q.claimed ? 'is-claimed' : ''].join(' ')}>
+            <div className="quests__quest-text">
+              <span className="quests__title">{q.title}</span>
+              <Progress q={q} />
+            </div>
+            <Reward q={q} busy={busy} id={q.id} onClaim={() => onClaim(q.id)} />
           </div>
-          <ClaimButton
-            done={q.done}
-            claimed={q.claimed}
-            coins={q.coins}
-            busy={busy === q.id}
-            disabled={busy !== null}
-            onClick={() => onClaim(q.id)}
-          />
-        </div>
-      ))}
-    </PxBox>
+        ))}
+      </div>
+    </section>
   );
 }
 
-function ClaimButton({
-  done,
-  claimed,
-  coins,
+/** a bar with "12m / 20m" beside it */
+function Progress({ q }: { q: Quest }) {
+  const f = q.goal > 0 ? Math.min(1, q.progress / q.goal) : 0;
+  return (
+    <div className="quests__progress">
+      <div className="quests__bar">
+        <div className="quests__fill" style={{ width: `${f * 100}%` }} />
+      </div>
+      <span className="quests__count num">
+        {amount(Math.min(q.progress, q.goal), q.unit)} / {amount(q.goal, q.unit)}
+      </span>
+    </div>
+  );
+}
+
+/** what a quest pays: plain coins while it's in progress, a Claim button once
+    it's done, a check once it's paid */
+function Reward({
+  q,
   busy,
-  disabled,
-  onClick,
+  id,
+  onClaim,
 }: {
-  done: boolean;
-  claimed: boolean;
-  coins: number;
-  busy: boolean;
-  disabled: boolean;
-  onClick: () => void;
+  q: Pick<Quest, 'done' | 'claimed' | 'coins'> & { id?: string };
+  busy: string | null;
+  id?: string;
+  onClaim: () => void;
 }) {
-  const ready = done && !claimed;
+  const key = id ?? q.id;
+  if (q.claimed)
+    return (
+      <span className="quests__reward is-claimed">
+        <Check size={14} weight="bold" />
+        Claimed
+      </span>
+    );
+  if (q.done)
+    return (
+      <button className="quests__claim" disabled={busy !== null} onClick={onClaim}>
+        {busy === key ? 'Claiming…' : `Claim +${coins(q.coins)}`}
+      </button>
+    );
   return (
-    <div className="srow__control">
-      <PxButton family={ready ? 'accent' : 'grey'} height="md" disabled={!ready || disabled} onClick={onClick}>
-        <TT size={16} tone={ready ? 'accent' : claimed ? 'sub' : 'yellow'}>
-          {claimed ? 'CLAIMED' : busy ? 'CLAIMING…' : ready ? `CLAIM +${coins}` : `+${coins}`}
-        </TT>
-      </PxButton>
-    </div>
+    <span className="quests__reward" title="Paid when you finish it">
+      <CoinDot />
+      <span className="num">+{coins(q.coins)}</span>
+    </span>
   );
 }
 
-function Bar({ progress, goal }: { progress: number; goal: number }) {
-  const f = goal > 0 ? Math.min(1, progress / goal) : 0;
-  return (
-    <div className="quests__bar">
-      <div className="quests__fill" style={{ width: `${f * 100}%` }} />
-    </div>
-  );
+/** a gold coin, sized off the text beside it */
+function CoinDot() {
+  return <span className="coin" aria-hidden="true" />;
 }
 
 /** minutes read as hours once they pass an hour */

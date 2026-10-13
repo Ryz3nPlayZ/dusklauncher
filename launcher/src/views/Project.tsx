@@ -157,6 +157,9 @@ export default function Project({
     <div className="page">
       {/* frame 5 head: the instance-editor layout with the grey type plate */}
       <div className="page__head editor__head">
+        <PxButton family="grey" height="md" className="editor__back" title="Back" aria-label="Back" onClick={onBack}>
+          <PixelGlyph glyph="left" size={22} color="var(--text-2)" />
+        </PxButton>
         <span className="editor__icon project__icon">
           {project?.iconUrl ? (
             <img src={project.iconUrl} alt="" draggable={false} />
@@ -177,12 +180,6 @@ export default function Project({
             {meta}
           </TT>
         </div>
-        <PxButton family="red" height="md" className="browse__back" onClick={onBack}>
-          <PixelGlyph glyph="left" size={22} color="var(--r-co)" />
-          <TT size={20} tone="red">
-            BACK
-          </TT>
-        </PxButton>
         <PxButton
           family="moss"
           height="md"
@@ -273,7 +270,7 @@ export default function Project({
                           </span>
                           <span className="project__vtext">
                             <span className="browse__name">
-                              <TT size={20}>{v.name || v.versionNumber}</TT>
+                              <TT size={20} keep>{v.name || v.versionNumber}</TT>
                               {v.name && v.name !== v.versionNumber && <span className="meta">{v.versionNumber}</span>}
                             </span>
                             <span className="meta">
@@ -287,7 +284,7 @@ export default function Project({
                                 title={`What ${v.versionNumber} changes`}
                                 onClick={() => setNotesOpen(notesOpen === v.id ? null : v.id)}
                               >
-                                {notesOpen === v.id ? 'HIDE WHAT’S NEW' : 'WHAT’S NEW'}
+                                {notesOpen === v.id ? 'Hide what’s new' : 'What’s new'}
                               </button>
                             )}
                           </span>
@@ -396,7 +393,7 @@ export default function Project({
                   .filter((x): x is [string, string] => !!x[1])
                   .map(([label, url]) => (
                     <button key={label} className="project__link" onClick={() => void openLink(url)}>
-                      <TT size={13} tone="blue">
+                      <TT size={13}>
                         {label}
                       </TT>
                     </button>

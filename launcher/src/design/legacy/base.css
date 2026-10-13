@@ -1,0 +1,185 @@
+/* ── base ──────────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--text-1);
+  background: var(--black);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  /* it's an app, not a document: nothing highlights on cmd+A or a stray
+     drag. Fields opt back in below; the sign-in code opts into `all`. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+input,
+textarea,
+[contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  appearance: none;
+  -webkit-app-region: no-drag;
+}
+
+img,
+canvas {
+  image-rendering: pixelated;
+}
+
+/* the app is one rectangle: nav strip on top, view below, status foot. */
+.app {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.view {
+  position: relative;
+  z-index: var(--z-content);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* content views dim the scene behind them, the way Dawn does — the scene is
+   the Home stage, everywhere else it is wallpaper */
+.view--dim::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* Figma 30:353 — the scene under a page is dimmed 30% */
+  background: rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+.view--dim > * {
+  position: relative;
+}
+
+/* page scaffolding shared by every non-home view: title row, then body.
+   Figma 28:249 @ 1280×832: the head row sits 47px under the navbar, the
+   window 47px under that, both 67px in from the sides; 86px stays clear
+   below the window (room for the status bar, which the frame omits). */
+.page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(90 * var(--u));
+  padding: calc(90 * var(--u)) calc(128 * var(--u)) calc(164 * var(--u));
+}
+
+/* the header row: the page's name, its search, its primary action — all one
+   row tall, the same row height as a navbar cell */
+.page__head {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: var(--gap-sm);
+  /* the NEW INSTANCE plate (40:7) is 42px tall — shorter than a nav cell */
+  height: calc(80 * var(--u));
+}
+/* the page's name (30:352): Monocraft Bold 40px, 2px tracking, flush with
+   the window's left edge */
+.page__title {
+  display: flex;
+  align-items: center;
+  font-family: var(--font-pixel);
+  font-size: calc(70 * var(--t));
+  letter-spacing: calc(3.5 * var(--t));
+  text-transform: uppercase;
+  color: #fff;
+  -webkit-text-stroke: var(--tt-w) #fff;
+  paint-order: stroke fill;
+  margin: 0;
+  margin-right: auto;
+  white-space: nowrap;
+}
+/* the head's primary action (40:20): 12px in from the band on each side */
+.page__cta {
+  flex: none;
+  padding: 0 calc(23 * var(--u));
+}
+.page__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: var(--gap);
+}
+
+/* form controls inherit the panel voice — a control is a panel with a
+   caret in it, never a browser widget */
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-1);
+  font-family: var(--font-body);
+  font-size: calc(21 * var(--t));
+  padding: 0 calc(12 * var(--u));
+}
+.input::placeholder {
+  color: var(--text-3);
+}
+
+/* ── status foot: the ONLINE pill (spec panel stack, small) ────────────── */
+.status-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-nav);
+  height: var(--h-sm);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--gap);
+  pointer-events: none;
+}
+.status-bar > * {
+  pointer-events: auto;
+}
+.status-pill {
+  margin-left: auto;
+  height: var(--h-sm);
+  min-width: 210px;
+  gap: 10px;
+  padding: 0 18px;
+  justify-content: flex-start;
+}
+.status-pill__dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  background: var(--g-up);
+}
+.status-pill__dot--off {
+  background: var(--r-lo);
+}
+
+/* the update button owns the bottom-left corner; the pill keeps the right */
+.update-btn {
+  height: var(--h-sm);
+  padding: 0 18px;
+}

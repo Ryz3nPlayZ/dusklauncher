@@ -1,268 +1,511 @@
 /* ── views ─────────────────────────────────────────────────────────────────
-   Layout only. Every box below is a spec element (.px …) — these rules place
-   them on the grid and never restyle them. Sizes are multiples of --u, so a
-   layout keeps its proportions instead of one machine's pixel counts. */
+   Layout only. Boxes are .px surfaces (px.css) and windows (nav.css); these
+   rules place them and adjust them per page. Sizes are multiples of --u, so
+   a layout keeps its proportions instead of one machine's pixel counts. */
 
 /* ══ HOME ═══════════════════════════════════════════════════════════════
-   Figma 1:3 @ 1280×832, below the 46px navbar: nametag 30 · 26 · player
-   227×303 · 59 · console row 62 — one column, centred in the stage both
-   ways (146 above, 160 below). Every number is that frame's px × 1.91 --u. */
+   After Laby's: a stage with your character fills most of the window, Play
+   pinned across its bottom edge with the instance swap beside it. Down the
+   right, your instances and the worlds played last, then friends. */
 .home {
+  --dock-tag: calc(40 * var(--u));
+  --dock-gap: calc(14 * var(--u));
   flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) calc(600 * var(--u));
+  column-gap: calc(28 * var(--u));
+  padding: calc(20 * var(--u)) calc(44 * var(--u)) calc(36 * var(--u));
+}
+
+/* ── the stage and the dock under it ── */
+.home__main {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  /* the frame centres the column 7px high of true centre; the status bar
-     (not in the frame) takes the bottom, so the top gives back the rest */
-  padding: calc(66 * var(--u)) calc(72 * var(--u)) calc(var(--h-sm) + var(--gap));
-}
-
-.home__stage {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: calc(50 * var(--u));
-}
-
-/* the nametag (28:145): 30px plate, rgba(0,0,0,.5), Monocraft 16px white
-   with 0.8px tracking, padded 10px and lifted 4px so the glyphs sit centred */
-.home__tag {
-  flex: none;
-  height: calc(57 * var(--u));
-  padding: 0 calc(19 * var(--u)) calc(8 * var(--u));
-  display: flex;
-  align-items: center;
-  background: rgba(0, 0, 0, 0.5);
-  font-family: var(--font-pixel);
-  font-weight: 700;
-  font-size: calc(28 * var(--t));
-  letter-spacing: 0.05em;
-  color: #fff;
-  white-space: nowrap;
-}
-
-/* the player is a button, but the hit area is the CHARACTER: PlayerRender
-   ray-tests the pointer against the mesh and flips `is-hit`; the click
-   only counts while it's on. So no cursor on the box, and no :hover — the
-   outline and the hint follow the figure, not the rectangle around it. */
-.home__player {
-  position: relative;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: calc(6 * var(--u));
-  border: 0;
-  padding: 0;
-  background: none;
-  cursor: default;
   -webkit-app-region: no-drag;
 }
-.home__player.is-hit {
+.home__panel,
+.home__you {
+  border: 1px solid var(--line);
+  border-radius: var(--r-win);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  box-shadow: var(--shadow-win);
+}
+.home__panel {
+  background: var(--surface);
+  overflow: hidden;
+}
+.home__you {
+  position: relative;
+  align-self: stretch;
+  flex: 1 1 0;
+  min-height: calc(420 * var(--u));
+  /* a soft light behind the character, darker toward the floor */
+  background:
+    radial-gradient(ellipse 42% 52% at 50% 44%, rgb(var(--tint-rgb) / 0.09), transparent 72%),
+    linear-gradient(180deg, rgb(22 22 26 / 0.5), rgb(11 11 13 / 0.8));
+}
+.home__you-head {
+  position: absolute;
+  z-index: 1;
+  top: calc(28 * var(--u));
+  left: calc(32 * var(--u));
+  right: calc(260 * var(--u));
+  display: flex;
+  flex-direction: column;
+}
+.home__you-name {
+  font-size: calc(28 * var(--t));
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home__you-sub {
+  font-size: calc(17 * var(--t));
+  color: var(--text-3);
+}
+.home__you-btn {
+  position: absolute;
+  z-index: 1;
+  top: calc(26 * var(--u));
+  right: calc(26 * var(--u));
+  height: calc(60 * var(--u));
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 calc(24 * var(--u));
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-ctl);
+  background: rgb(var(--tint-rgb) / 0.05);
+  color: var(--text-1);
+  font: inherit;
+  font-size: calc(19 * var(--t));
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--t-med) var(--ease-out),
+    border-color var(--t-med) var(--ease-out);
+}
+.home__you-btn:hover {
+  background: var(--hover);
+  border-color: var(--line-3);
+}
+/* the hit area is the CHARACTER: PlayerRender ray-tests the pointer against
+   the mesh and flips `is-hit`; the click only counts while it's on. It
+   stops short of the bottom so the dock never covers the feet. */
+.home__stage {
+  position: absolute;
+  top: calc(40 * var(--u));
+  left: 0;
+  right: 0;
+  bottom: calc(var(--h-xl) / 2 + var(--dock-tag) + var(--dock-gap) + 24 * var(--u));
+  padding: 0;
+  border: 0;
+  /* the floor it stands on */
+  background: radial-gradient(ellipse 15% 3.5% at 50% 89%, rgb(0 0 0 / 0.5), transparent 70%);
+  cursor: default;
+}
+.home__stage.is-hit {
   cursor: pointer;
 }
-/* the render box (28:142, 227×303). skinview3d measures this canvas's
-   PARENT and writes an inline width and height back onto the canvas, so
-   the parent's size must never depend on the canvas. */
+/* skinview3d measures this canvas's PARENT and writes an inline width and
+   height back onto the canvas, so the parent's size must never depend on
+   the canvas */
 .home__stage-box {
-  position: relative;
+  position: absolute;
+  inset: 0;
   display: block;
-  width: calc(490 * var(--u));
-  height: calc(650 * var(--u));
   overflow: hidden;
 }
 .home__canvas {
   display: block;
   max-width: 100%;
   max-height: 100%;
+  transition: filter var(--t-med) var(--ease-out);
 }
-/* hover: the figure darkens and gets an outline around the CHARACTER, not
-   its box. The canvas is transparent, so four 2px drop-shadows dilate the
-   rendered alpha into a hard white edge that follows the silhouette through
-   the pose; brightness() runs first so the edge itself stays white. Snaps
-   in, never fades. */
-.home__player.is-hit .home__canvas,
-.home__player:focus-visible .home__canvas {
-  filter: brightness(0.6) drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff)
-    drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff);
-}
-/* the wardrobe hint overlays the bottom of the render so it adds no height
-   of its own — the Figma column has nothing between the player and the CTA */
-.home__wardrobe {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  transform: translateX(-50%);
-  display: flex;
-  justify-content: center;
-  padding: calc(6 * var(--u)) calc(16 * var(--u)) calc(9 * var(--u));
-  /* the same half-black plate as the name tag, so it reads on any wallpaper */
-  background: rgba(0, 0, 0, 0.6);
-  font-family: var(--font-pixel);
-  font-weight: 400;
-  font-size: calc(20 * var(--t));
-  letter-spacing: 0.04em;
-  color: #fff;
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 120ms steps(2);
-  pointer-events: none;
-}
-.home__player.is-hit .home__wardrobe,
-.home__player:focus-visible .home__wardrobe {
-  opacity: 1;
+.home__stage.is-hit .home__canvas {
+  filter: drop-shadow(0 0 1.5px rgb(255 255 255 / 0.95))
+    drop-shadow(0 0 18px rgb(var(--acc-rgb) / calc(0.7 * var(--glow))));
 }
 
-/* the console row (27:138 + 28:243): PLAY NOW 238×62, a 13px gap, the
-   62×62 picker — 59px under the player */
-.home__console {
+/* the dock: a tag, Play and the swap button centred on the stage's bottom
+   edge, the instance's facts under it */
+.home__dock {
+  position: relative;
+  z-index: 2;
   flex: none;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: calc(-1 * (var(--dock-tag) + var(--dock-gap) + var(--h-xl) / 2));
+}
+.home__tag {
+  height: var(--dock-tag);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--dock-gap);
+  padding: 0 calc(18 * var(--u));
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: rgb(11 11 13 / 0.7);
+  font-size: calc(16 * var(--t));
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.home__live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bad);
+  box-shadow: 0 0 10px rgb(var(--bad-rgb) / 0.7);
+  animation: live-pulse 1.6s var(--ease-out) infinite;
+}
+@keyframes live-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+.home__console {
+  position: relative;
+  max-width: 100%;
   display: flex;
   align-items: stretch;
-  gap: calc(25 * var(--u));
+  gap: calc(12 * var(--u));
+  height: var(--h-xl);
 }
-/* 30px in from the band on both sides; arrow · 37 · text block */
 .home__play {
-  width: calc(455 * var(--u));
-  max-width: 60vw;
-  padding: 0 calc(57 * var(--u));
-  gap: calc(71 * var(--u));
-  /* the arrow is sized in em off this — 27px against a 20px label */
-  font-size: calc(34 * var(--t));
+  width: calc(560 * var(--u));
+  max-width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: calc(20 * var(--u));
+  padding: 0 calc(40 * var(--u)) 0 calc(14 * var(--u));
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: var(--acc);
+  color: var(--acc-ink);
+  box-shadow: var(--hl), var(--glow-acc), 0 18px 40px rgb(0 0 0 / 0.35);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform var(--t-med) var(--ease-spring),
+    box-shadow var(--t-med) var(--ease-out),
+    background var(--t-med) var(--ease-out);
+}
+.home__play:hover:not(:disabled) {
+  box-shadow: var(--hl), var(--glow-acc-hover), 0 18px 40px rgb(0 0 0 / 0.35);
+  transform: translateY(-1px);
+}
+.home__play:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.home__play.is-stop {
+  background: rgb(28 14 16 / 0.92);
+  color: var(--bad);
+  box-shadow: inset 0 0 0 1px rgb(var(--bad-rgb) / 0.45), 0 18px 40px rgb(0 0 0 / 0.35);
+}
+.home__play.is-stop:hover:not(:disabled) {
+  background: rgb(40 16 19 / 0.95);
+}
+.home__play:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+/* the instance's picture, round inside the pill so the curves nest */
+.home__play-art,
+.home__play-icon {
+  flex: none;
+  width: calc(var(--h-xl) - 28 * var(--u));
+  height: calc(var(--h-xl) - 28 * var(--u));
+  border-radius: 50%;
+  overflow: hidden;
+}
+.home__play-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.08);
+}
+.home__play.is-stop .home__play-icon {
+  background: rgb(var(--bad-rgb) / 0.14);
 }
 .home__play-text {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  line-height: 1.15;
 }
-/* the instance name under PLAY NOW (27:104): 12px Monocraft, flat white, 0.6px tracking */
+.home__play-label {
+  font-size: calc(32 * var(--t));
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
 .home__play-sub {
-  font-family: var(--font-pixel);
-  font-weight: 700;
-  font-size: calc(15 * var(--t));
-  line-height: 1.4;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #fff;
+  font-size: calc(18 * var(--t));
+  font-weight: 600;
+  opacity: 0.62;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
 }
-.home__quick {
+.home__play-glyph {
+  flex: none;
+}
+/* swap: a round button the height of Play */
+.home__switch {
+  flex: none;
   width: var(--h-xl);
-  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  background: rgb(20 20 23 / 0.92);
+  color: var(--text-1);
+  box-shadow: var(--hl), 0 18px 40px rgb(0 0 0 / 0.35);
+  cursor: pointer;
+  transition:
+    background var(--t-med) var(--ease-out),
+    border-color var(--t-med) var(--ease-out),
+    transform var(--t-med) var(--ease-spring);
 }
-.home__quick-glyph {
-  width: calc(44 * var(--u));
-  height: calc(27 * var(--u));
+.home__switch:hover,
+.home__switch.is-open {
+  background: rgb(40 40 45 / 0.95);
+  border-color: var(--line-3);
+}
+.home__switch:active {
+  transform: scale(0.96);
+}
+.home__facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  height: calc(40 * var(--u));
+  margin-top: calc(18 * var(--u));
+}
+.home__fact {
+  height: calc(40 * var(--u));
+  display: inline-flex;
+  align-items: center;
+  padding: 0 calc(16 * var(--u));
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--line);
+  background: rgb(11 11 13 / 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-size: calc(16 * var(--t));
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
 }
 
-/* the instance picker's popout: a window the width of the console row,
-   sitting on the row's top edge — a bar (what it is · MANAGE) over
-   a list of one-line rows, each the instance's name and its meta line, the
-   selected one on the accent stack */
-.home__popout {
+/* the switcher's menu: opens upward over the stage from the console */
+.home__menu {
   position: absolute;
-  right: 0;
-  bottom: calc(var(--h-xl) + var(--gap-sm));
-  width: calc(598 * var(--u));
-  max-width: 90vw;
-  max-height: calc(560 * var(--u));
+  left: 0;
+  bottom: calc(100% + 10px);
+  width: 100%;
+  min-width: calc(560 * var(--u));
+  max-height: calc(620 * var(--u));
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pop);
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
   z-index: var(--z-modal);
+  transform-origin: bottom center;
+  animation: pop-in var(--t-med) var(--ease-out);
 }
-.home__popout-list {
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+.home__menu-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(22 * var(--u)) calc(26 * var(--u)) calc(10 * var(--u));
+  font-size: calc(17 * var(--t));
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.home__menu-list {
   flex: 1 1 auto;
   min-height: 0;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--px-nav);
-  background: var(--black);
+  gap: 2px;
+  padding: 0 calc(10 * var(--u)) calc(10 * var(--u));
 }
-.home__popout-row {
+.home__menu-row {
+  position: relative;
   flex: none;
-  /* a compact row: the name and one meta line, nothing between them */
-  height: calc(76 * var(--u));
-  justify-content: space-between;
-  gap: calc(18 * var(--u));
-  padding: 0 calc(18 * var(--u));
-  text-align: left;
+  border-radius: 14px;
+  transition: background var(--t-fast) var(--ease-out);
 }
-.home__popout-name {
+.home__menu-row:hover {
+  background: var(--hover);
+}
+.home__menu-row.is-current {
+  background: rgb(var(--tint-rgb) / 0.07);
+}
+.home__menu-pick {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: calc(18 * var(--u));
+  padding: calc(12 * var(--u)) calc(16 * var(--u));
+  /* room for the play button that shows on hover */
+  padding-right: calc(86 * var(--u));
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home__menu-art {
+  flex: none;
+  width: calc(64 * var(--u));
+  height: calc(64 * var(--u));
+  border-radius: var(--r-sm);
+}
+.home__menu-text {
   flex: 1 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  gap: 2px;
 }
-.home__popout-name .meta {
-  font-size: calc(17 * var(--t));
-  line-height: 1.2;
+.home__menu-name {
+  font-size: calc(21 * var(--t));
+  font-weight: 650;
+  color: var(--text-1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
 }
-.home__popout-mark {
+.home__menu-meta {
+  font-size: calc(17 * var(--t));
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home__menu-check {
   flex: none;
-  width: calc(18 * var(--u));
-  height: calc(18 * var(--u));
-  background: linear-gradient(var(--accent-up) 50%, var(--accent-lo) 50%);
-  box-shadow: 0 0 0 2px var(--black);
+  color: var(--text-1);
 }
-/* the row whose game is up: a red square instead of the accent one, and the
-   "RUNNING" word in the meta line picks up the same red */
-.home__popout-mark--live {
-  background: linear-gradient(var(--r-up) 50%, var(--r-lo) 50%);
+.home__menu-play,
+.home__jump-go {
+  width: calc(54 * var(--u));
+  height: calc(54 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--acc);
+  color: var(--acc-ink);
+  opacity: 0;
+  transition:
+    opacity var(--t-fast) var(--ease-out),
+    transform var(--t-med) var(--ease-spring);
 }
-.home__popout-name .is-live,
-.card__info .is-live {
-  color: var(--r-co);
+.home__menu-play {
+  position: absolute;
+  top: 50%;
+  right: calc(16 * var(--u));
+  cursor: pointer;
+  transform: translateY(-50%) scale(0.85);
 }
-/* "JUMP BACK IN" / "INSTANCES" over their rows */
-.home__popout-head {
-  flex: none;
-  padding: calc(10 * var(--u)) calc(18 * var(--u)) calc(4 * var(--u));
+.home__menu-row:hover .home__menu-play,
+.home__menu-play:focus-visible {
+  opacity: 1;
+  transform: translateY(-50%);
 }
-.home__popout-empty {
-  flex: none;
-  flex-direction: column;
-  gap: calc(14 * var(--u));
-  padding: calc(30 * var(--u)) calc(24 * var(--u));
+/* the check makes way for the play button on hover */
+.home__menu-row:hover .home__menu-check {
+  opacity: 0;
 }
-.home__console-wrap {
-  position: relative;
+.home__menu-foot {
   flex: none;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: var(--gap-sm);
-  margin-top: calc(113 * var(--u));
-  -webkit-app-region: no-drag;
+  justify-content: space-between;
+  padding: calc(20 * var(--u)) calc(26 * var(--u));
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: calc(19 * var(--t));
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color var(--t-fast) var(--ease-out),
+    background var(--t-fast) var(--ease-out);
 }
-.home__error {
-  width: calc(713 * var(--u));
-  max-width: 90vw;
-  padding: 0 calc(22 * var(--u));
+.home__menu-foot:hover {
+  color: var(--text-1);
+  background: var(--hover);
+}
+.home__menu-meta .is-live,
+.card__info .is-live {
+  color: var(--bad);
 }
 
-/* launch progress replaces the console while installing */
+.home__error {
+  max-width: calc(680 * var(--u));
+  margin: calc(14 * var(--u)) 0 0;
+  padding: calc(14 * var(--u)) calc(24 * var(--u));
+  border: 1px solid rgb(var(--bad-rgb) / 0.35);
+  border-radius: var(--r-card);
+  background: rgb(28 14 16 / 0.9);
+  font-size: calc(19 * var(--t));
+  line-height: 1.45;
+  color: var(--bad);
+  overflow-wrap: anywhere;
+}
+
+/* launch progress takes Play's place while installing */
 .home__progress {
-  width: calc(713 * var(--u));
-  max-width: 90vw;
+  width: calc(560 * var(--u));
+  max-width: 100%;
+  display: flex;
   flex-direction: column;
-  align-items: stretch;
   justify-content: center;
-  gap: calc(12 * var(--u));
-  padding: 0 calc(26 * var(--u));
+  gap: calc(14 * var(--u));
+  padding: 0 calc(40 * var(--u));
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-ctl);
+  background: rgb(20 20 23 / 0.94);
+  box-shadow: var(--hl), 0 18px 40px rgb(0 0 0 / 0.35);
 }
 .home__progress-head {
   display: flex;
@@ -271,41 +514,323 @@
   gap: calc(16 * var(--u));
   min-width: 0;
 }
-/* long stage names ("DOWNLOADING LIBRARIES") ellipsize instead of pushing
-   the count into the frame */
 .home__progress-stage {
   flex: 1 1 auto;
   min-width: 0;
+  font-size: calc(22 * var(--t));
+  font-weight: 650;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .home__progress-count {
   flex: 0 0 auto;
-  font-family: var(--font-pixel);
-  font-weight: 700;
-  font-size: calc(15 * var(--t));
-  letter-spacing: 0.05em;
+  font-size: calc(18 * var(--t));
   color: var(--text-3);
   white-space: nowrap;
 }
 .home__bar {
-  height: calc(22 * var(--u));
-  background: var(--black);
-  padding: 4px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--track);
+  overflow: hidden;
 }
 .home__bar-fill {
   height: 100%;
-  background: linear-gradient(var(--accent-up) 50%, var(--accent-lo) 50%);
-  transition: width 160ms steps(8);
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--acc-2), var(--acc));
+  box-shadow: 0 0 10px rgb(var(--acc-rgb) / calc(0.8 * var(--glow)));
+  transition: width 400ms var(--ease-out);
 }
+
+/* ── the right column: instances, then friends ── */
+.home__side {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(20 * var(--u));
+  /* ends level with the stage's bottom edge, not the dock hanging under it */
+  padding-bottom: calc(var(--h-xl) / 2 + 58 * var(--u));
+  -webkit-app-region: no-drag;
+}
+.home__panel-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: calc(60 * var(--u));
+  padding: calc(22 * var(--u)) calc(22 * var(--u)) calc(10 * var(--u)) calc(30 * var(--u));
+  box-sizing: content-box;
+}
+.home__panel-title {
+  font-size: calc(26 * var(--t));
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.home__panel-link {
+  margin-left: auto;
+  height: calc(52 * var(--u));
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 calc(18 * var(--u));
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: none;
+  color: var(--text-3);
+  font: inherit;
+  font-size: calc(17 * var(--t));
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color var(--t-fast) var(--ease-out),
+    background var(--t-fast) var(--ease-out);
+}
+.home__panel-link:hover {
+  color: var(--text-1);
+  background: var(--hover);
+}
+.home__recent {
+  flex: 0 1 auto;
+  max-height: 58%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.home__recent-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 calc(12 * var(--u)) calc(14 * var(--u));
+}
+/* a world or server played last, one click to rejoin */
+.home__jump {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: calc(18 * var(--u));
+  padding: calc(12 * var(--u)) calc(16 * var(--u));
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease-out);
+}
+.home__jump:hover:not(:disabled) {
+  background: var(--hover);
+}
+.home__jump:hover:not(:disabled) .home__jump-go {
+  opacity: 1;
+}
+.home__jump:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.home__jump-icon {
+  flex: none;
+  width: calc(64 * var(--u));
+  height: calc(64 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  background: rgb(var(--tint-rgb) / 0.06);
+  color: var(--text-2);
+}
+.home__jump-go {
+  flex: none;
+}
+
+/* ── friends ── */
+.home__friends {
+  flex: 1 1 0;
+  min-height: calc(260 * var(--u));
+  display: flex;
+  flex-direction: column;
+}
+.home__friends-count {
+  font-size: calc(18 * var(--t));
+  font-weight: 600;
+  color: var(--ok);
+}
+.home__friends-add {
+  margin-left: auto;
+  width: calc(56 * var(--u));
+  height: calc(56 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgb(var(--tint-rgb) / 0.05);
+  color: var(--text-2);
+  cursor: pointer;
+  transition:
+    color var(--t-med) var(--ease-out),
+    background var(--t-med) var(--ease-out);
+}
+.home__friends-add:hover {
+  color: var(--text-1);
+  background: var(--hover);
+}
+.home__friends-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 calc(12 * var(--u)) calc(16 * var(--u));
+}
+.home__friends-group {
+  flex: none;
+  padding: calc(18 * var(--u)) calc(16 * var(--u)) calc(6 * var(--u));
+  font-size: calc(16 * var(--t));
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.home__friends-group:first-child {
+  padding-top: calc(4 * var(--u));
+}
+.home__friend {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: calc(18 * var(--u));
+  min-height: calc(84 * var(--u));
+  padding: calc(10 * var(--u)) calc(16 * var(--u));
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t-med) var(--ease-out);
+}
+.home__friend:hover {
+  background: var(--hover);
+}
+.home__friend:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: -2px;
+}
+.home__friend .head {
+  border-radius: 6px;
+  overflow: hidden;
+}
+.home__friend-text {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.home__friend-name {
+  font-size: calc(21 * var(--t));
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home__friend-status {
+  font-size: calc(17 * var(--t));
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home__friend-status.is-online {
+  color: var(--ok);
+}
+.home__friend-chat {
+  flex: none;
+  color: var(--text-3);
+  opacity: 0;
+  transition: opacity var(--t-med) var(--ease-out);
+}
+.home__friend:hover .home__friend-chat {
+  opacity: 1;
+}
+.home__friend-unread {
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 99px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--acc);
+  color: var(--acc-ink);
+  font-size: 11px;
+  font-weight: 650;
+}
+.home__friends-empty {
+  margin: 0;
+  padding: calc(12 * var(--u)) calc(16 * var(--u));
+  font-size: calc(19 * var(--t));
+  line-height: 1.5;
+  color: var(--text-3);
+}
+.home__friends-empty p {
+  margin: 0;
+}
+.home__friends-cta {
+  margin-top: calc(18 * var(--u));
+  height: calc(60 * var(--u));
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 calc(24 * var(--u));
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: var(--acc);
+  color: var(--acc-ink);
+  font: inherit;
+  font-size: calc(19 * var(--t));
+  font-weight: 650;
+  cursor: pointer;
+}
+.home__friends-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14 * var(--u));
+  padding: calc(8 * var(--u)) calc(16 * var(--u));
+}
+.home__friends-skeleton span {
+  height: calc(64 * var(--u));
+  border-radius: 14px;
+  background: rgb(var(--tint-rgb) / 0.05);
+  animation: skeleton 1.4s var(--ease-out) infinite;
+}
+@keyframes skeleton {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* narrow windows: a narrower right column */
+@media (max-width: 1180px) {
+  .home {
+    grid-template-columns: minmax(0, 1fr) calc(500 * var(--u));
+    padding-inline: calc(32 * var(--u));
+  }
+}
+
 
 /* content panels stack from the top — .px centres its children by default,
    which is right for a button and wrong for a list */
 .card,
 .modal,
 .viewer,
-.home__popout,
 .stack,
 .column,
 .account,
@@ -342,50 +867,57 @@
 }
 
 /* ══ INSTANCES ══════════════════════════════════════════════════════════
-   Figma 28:249. The window body holds the tiles 33px in from its edge and
-   38px under the bar; each tile (96:2) is a 307×223 grey plate — the nav
-   cell's construction — carrying a framed picture, the name, one info line
-   and a PLAY NOW bar with a square beside it. All px × 1.91 --u. */
+   A grid of cards: the picture, the name, one line of facts, then Play
+   with the settings gear beside it. Cards grow to fit; nothing is clipped. */
 .win__body--tiles {
-  padding: calc(73 * var(--u)) calc(63 * var(--u));
+  padding: calc(40 * var(--u));
 }
 .grid {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, calc(587 * var(--u)));
+  grid-template-columns: repeat(auto-fill, minmax(calc(520 * var(--u)), 1fr));
   grid-auto-rows: min-content;
   gap: calc(30 * var(--u));
   align-content: start;
   overflow-y: auto;
+  /* room for a card's hover lift and ring, which the scroll box would clip */
+  padding: 6px;
+  margin: -6px;
 }
 
 .card {
-  height: calc(426 * var(--u));
   flex-direction: column;
   align-items: stretch;
-  /* 11px above the picture, 12px each side, 11px under the button row —
-     measured from the plate's outer edge, so the 2px outline comes off */
-  padding: calc(21 * var(--u) - var(--px-black)) calc(23 * var(--u) - var(--px-black));
+  justify-content: flex-start;
+  gap: 0;
+  padding: calc(18 * var(--u));
+  transition:
+    transform var(--t-med) var(--ease-spring),
+    border-color var(--t-med) var(--ease-out),
+    box-shadow var(--t-med) var(--ease-out);
+}
+.grid > .card:hover {
+  transform: translateY(-2px);
+  --bd: var(--line-2);
+  --shadow: 0 14px 34px -14px rgb(0 0 0 / 0.7);
 }
 /* the card whose game is up wears the red band, so it reads as active from
    across the grid, not just from its button */
 .card.is-live {
-  --up: var(--r-up);
-  --lo: var(--r-lo);
-  --co: var(--r-co);
+  --bd: rgb(var(--bad-rgb) / 0.45);
+  --shadow: 0 10px 34px -12px rgb(var(--bad-rgb) / 0.55);
 }
-/* 30:374 — 283×108: 2px black, 3px #323232, the picture inside */
+/* the picture: a rounded frame at a fixed 5:2 */
 .card__banner-frame {
   flex: none;
   display: block;
-  height: calc(206 * var(--u));
-  padding: var(--px-band);
-  border: var(--px-black) solid var(--black);
-  background: var(--panel-bd);
+  aspect-ratio: 5 / 2;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--well);
 }
-/* 30:372 — the picture is the scene's middle band, exported at that crop,
-   so it simply fills the frame */
+/* the picture is the scene's middle band, so it simply fills the frame */
 .card__banner {
   display: block;
   width: 100%;
@@ -393,50 +925,47 @@
   object-fit: cover;
   image-rendering: pixelated;
 }
-/* 36:3 — Monocraft Bold 14px, flat white, 13px under the picture */
+/* the name under the picture */
 .card__name {
-  margin-top: calc(25 * var(--u));
-  font-family: var(--font-pixel);
-  font-weight: 700;
-  font-size: calc(24 * var(--t));
-  line-height: 1.5;
-  color: #fff;
+  margin-top: calc(20 * var(--u));
+  font-family: var(--font-body);
+  font-weight: 650;
+  font-size: calc(26 * var(--t));
+  line-height: 1.4;
+  color: var(--text-1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 36:4 — Monocraft Regular 10px, -1px tracking */
+/* one quiet line of facts under the name */
 .card__info {
-  font-family: var(--font-pixel);
-  font-weight: 400;
-  font-size: calc(17 * var(--t));
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: calc(19 * var(--t));
   line-height: 1.5;
-  letter-spacing: -0.1em;
-  color: #fff;
+  color: var(--text-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 38:5 — the row: a 233×40 bar, 10px, a 40×40 square, 4px under the info */
+/* Play and the gear, one pill row under the facts */
 .card__row {
+  flex: none;
   display: flex;
   align-items: stretch;
-  gap: calc(19 * var(--u));
-  height: calc(76 * var(--u));
-  margin-top: calc(8 * var(--u));
+  gap: calc(12 * var(--u));
+  height: var(--h-md);
+  margin-top: calc(18 * var(--u));
 }
 .card__play {
   flex: 1;
   min-width: 0;
   padding: 0;
-  --surf-bot: var(--tile-surf-bot);
-  --surf-hold: 35.6%;
 }
 .card__gear {
-  flex: 0 0 calc(76 * var(--u));
+  flex: 0 0 var(--h-md);
   padding: 0;
 }
-/* 93:132 — 16 Figma px of white pixel art, scaled like everything else */
 .card__gear-glyph {
   width: calc(31 * var(--u));
   height: calc(31 * var(--u));
@@ -451,12 +980,31 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgb(5 5 7 / 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: fade-in var(--t-med) var(--ease-out);
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
 }
 /* dialogs sit over busy pages: the window variant's 87% lets the page
    ghost through the text, so a modal draws fully opaque */
-.modal.px--window {
-  opacity: 1;
+.modal.px--window,
+.modal {
+  --fill: var(--surface-solid);
+  --bd: var(--line-2);
+  --shadow: var(--shadow-win);
+  border-radius: var(--r-win);
+  animation: modal-in var(--t-med) var(--ease-out);
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
 }
 .modal {
   width: calc(640 * var(--u));
@@ -464,7 +1012,7 @@
   flex-direction: column;
   align-items: stretch;
   gap: calc(18 * var(--u));
-  padding: calc(28 * var(--u));
+  padding: calc(36 * var(--u));
 }
 .modal__row {
   display: flex;
@@ -562,9 +1110,10 @@
   display: flex;
   align-items: center;
   gap: calc(18 * var(--u));
-  padding: calc(14 * var(--u)) calc(20 * var(--u));
-  border: var(--px-black) solid var(--black);
-  background: var(--listing-body);
+  padding: calc(14 * var(--u)) calc(22 * var(--u));
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: rgb(var(--tint-rgb) / 0.03);
 }
 .extimport__info {
   flex: 1;
@@ -626,11 +1175,18 @@
   aspect-ratio: 1;
   min-width: 0;
   padding: 0;
-  border: var(--px-black) solid var(--black);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
   background: var(--panel);
   overflow: hidden;
   cursor: pointer;
   text-align: left;
+  transition:
+    transform var(--t-med) var(--ease-spring),
+    box-shadow var(--t-med) var(--ease-out);
+}
+.vcard:not(.vcard--ghost):hover {
+  transform: translateY(-2px);
 }
 .vcard--ghost {
   cursor: default;
@@ -642,7 +1198,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 220ms steps(6);
+  transition: transform 400ms var(--ease-out);
 }
 .vcard:hover img {
   transform: scale(1.05);
@@ -652,33 +1208,35 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  box-shadow: inset 0 0 0 calc(3 * var(--u)) rgba(255, 255, 255, 0.08);
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.06);
+}
+.vcard.is-picked {
+  box-shadow: var(--glow-acc-hover);
 }
 .vcard.is-picked::after {
-  box-shadow:
-    inset 0 0 0 calc(5 * var(--u)) var(--p-up),
-    inset 0 0 0 calc(8 * var(--u)) var(--black);
+  box-shadow: inset 0 0 0 2px var(--acc);
 }
 .vcard:focus-visible {
-  outline: calc(3 * var(--u)) solid var(--p-co);
-  outline-offset: 2px;
+  outline: 2px solid var(--acc);
+  outline-offset: 3px;
 }
 .vcard__tag {
   position: absolute;
   top: calc(12 * var(--u));
   left: calc(12 * var(--u));
-  padding: calc(5 * var(--u)) calc(9 * var(--u));
-  font-family: var(--font-pixel);
-  font-weight: 700;
-  font-size: calc(13 * var(--t));
-  letter-spacing: 0.06em;
-  color: var(--p-co);
-  background: linear-gradient(var(--p-up), var(--p-lo));
-  box-shadow: 0 0 0 2px var(--black);
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-family: var(--font-body);
+  font-weight: 650;
+  font-size: calc(16 * var(--t));
+  color: var(--text-1);
+  background: rgb(11 11 13 / 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 .vcard__tag--snap {
-  color: var(--y-co);
-  background: linear-gradient(var(--y-lo), #6b3b00);
+  color: var(--warn);
 }
 .vcard__info {
   position: absolute;
@@ -697,9 +1255,8 @@
 }
 .vcard__drop {
   max-width: 100%;
-  font-family: var(--font-pixel);
-  font-size: calc(14 * var(--t));
-  letter-spacing: 0.05em;
+  font-family: var(--font-body);
+  font-size: calc(17 * var(--t));
   color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
@@ -745,37 +1302,41 @@
   align-items: center;
   justify-content: center;
 }
-/* a stepped down-arrow: three bars, each narrower */
+/* a chevron, turned up while the list is open */
 .combo__caret::before {
   content: '';
-  width: calc(15 * var(--u));
-  height: calc(9 * var(--u));
-  background: var(--text-2);
-  clip-path: polygon(0 0, 100% 0, 100% 33%, 80% 33%, 80% 67%, 60% 67%, 60% 100%, 40% 100%, 40% 67%, 20% 67%, 20% 33%, 0 33%);
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--text-2);
+  border-bottom: 2px solid var(--text-2);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform var(--t-med) var(--ease-out);
 }
 .combo__caret.is-open::before {
-  transform: scaleY(-1);
+  transform: translateY(2px) rotate(-135deg);
 }
 .combo__caret:hover::before {
-  background: var(--text-1);
+  border-color: var(--text-1);
 }
 .combo__list {
   position: absolute;
   left: 0;
   right: 0;
-  top: calc(100% + var(--px-nav));
-  max-height: calc(320 * var(--u));
+  top: calc(100% + 6px);
+  max-height: calc(360 * var(--u));
   overflow-y: auto;
   z-index: calc(var(--z-modal) + 1);
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
   align-items: stretch;
-  padding: var(--px-nav);
-  background: var(--black);
-}
-.combo__list.px--window {
-  opacity: 1;
+  gap: 2px;
+  padding: 6px;
+  border-radius: var(--r-pop);
+  --fill: var(--surface-solid);
+  --bd: var(--line-2);
+  --shadow: var(--shadow-pop);
+  animation: fade-in var(--t-fast) var(--ease-out);
 }
 .combo__opt {
   flex: none;
@@ -783,31 +1344,41 @@
   align-items: center;
   justify-content: space-between;
   gap: calc(14 * var(--u));
-  min-height: calc(46 * var(--u));
-  padding: 0 calc(14 * var(--u));
+  min-height: calc(60 * var(--u));
+  padding: 0 calc(18 * var(--u));
   border: 0;
+  border-radius: 10px;
   background: transparent;
   color: var(--text-1);
   font-family: var(--font-body);
-  font-size: calc(19 * var(--t));
+  font-size: calc(21 * var(--t));
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }
 .combo__opt.is-hi {
-  background: linear-gradient(var(--cta-surf-top), var(--grey-surf-bot));
-  box-shadow: inset 0 0 0 2px var(--accent-lo);
+  background: var(--hover);
 }
 .combo__opt.is-sel .combo__val {
-  color: var(--accent-up);
+  font-weight: 650;
+}
+.combo__opt.is-sel::after {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--acc);
+  box-shadow: 0 0 8px rgb(var(--acc-rgb) / calc(0.8 * var(--glow)));
 }
 .combo__opt .meta {
-  font-size: calc(15 * var(--t));
+  margin-left: auto;
+  font-size: calc(17 * var(--t));
   white-space: nowrap;
 }
 
-/* ── the pixel checkbox ────────────────────────────────────────────────────
-   The spec's construction in miniature: grey ring + panel body; checking
-   swaps the band to the green family and drops a green block in the middle. */
+/* ── the checkbox ──────────────────────────────────────────────────────────
+   A small rounded square; checked, it turns white with an ink tick. */
 .check {
   display: flex;
   align-items: center;
@@ -823,34 +1394,48 @@
   gap: calc(10 * var(--u));
 }
 .check__box {
-  --corner: 0px;
   flex: none;
-  width: calc(34 * var(--u));
-  height: calc(34 * var(--u));
+  width: calc(36 * var(--u));
+  height: calc(36 * var(--u));
   min-width: 0;
   min-height: 0;
   padding: 0;
+  border-radius: 6px;
+  --fill: rgb(var(--tint-rgb) / 0.05);
+  --bd: var(--line-3);
+}
+.check:hover .check__box:not(.is-on) {
+  --bd: rgb(var(--tint-rgb) / 0.4);
 }
 .check__box.is-on {
-  --up: var(--g-up);
-  --lo: var(--g-lo);
+  --fill: var(--acc);
+  --bd: transparent;
+  --shadow: 0 0 10px rgb(var(--acc-rgb) / calc(0.45 * var(--glow)));
 }
 .check__tick {
-  width: 38%;
-  height: 38%;
-  background: var(--g-up);
+  width: 28%;
+  height: 52%;
+  border-right: 2px solid var(--acc-ink);
+  border-bottom: 2px solid var(--acc-ink);
+  transform: translateY(-12%) rotate(45deg) scale(0.4);
   opacity: 0;
+  transition:
+    opacity var(--t-fast) var(--ease-out),
+    transform var(--t-med) var(--ease-spring);
 }
 .check__box.is-on .check__tick {
   opacity: 1;
+  transform: translateY(-12%) rotate(45deg) scale(1);
 }
 
 /* ══ BROWSE MODPACKS (spec screenshots: filters sidebar + result rows) ══ */
 .browse__back {
-  flex: 0 0 auto;
-  gap: calc(10 * var(--u));
+  flex: none;
+  width: var(--h-md);
+  height: var(--h-md);
+  padding: 0;
 }
-/* the search owns the rest of the head once BACK has replaced the title */
+/* the search owns the rest of the head once Back has replaced the title */
 .browse__search {
   flex: 1 1 auto;
   max-width: none;
@@ -875,25 +1460,26 @@
 }
 .browse__filters-head {
   flex: none;
-  position: relative;
   height: calc(56 * var(--u));
   display: flex;
   align-items: center;
-  justify-content: center;
-  border-bottom: 2px solid var(--panel-bd);
+  justify-content: space-between;
+  padding: 0 calc(8 * var(--u));
+  border-bottom: 1px solid var(--line);
 }
 .browse__clear {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
+  height: calc(44 * var(--u));
   display: flex;
   align-items: center;
   border: 0;
-  padding: 0 calc(6 * var(--u));
+  border-radius: var(--r-ctl);
+  padding: 0 calc(16 * var(--u));
   background: none;
   cursor: pointer;
+  transition: background var(--t-fast) var(--ease-out);
 }
+.browse__clear:hover { background: var(--hover); }
+.browse__clear:hover .tt { --tt-c: var(--text-1); }
 .browse__group {
   flex: none;
   display: flex;
@@ -901,7 +1487,7 @@
   align-items: stretch;
   gap: calc(10 * var(--u));
   padding-bottom: calc(18 * var(--u));
-  border-bottom: 1px solid var(--panel-bd);
+  border-bottom: 1px solid var(--line);
 }
 .browse__group:last-child {
   padding-bottom: 0;
@@ -953,7 +1539,7 @@
 }
 .browse__count {
   margin-left: auto;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
 }
 .browse__list {
   flex: 1;
@@ -976,14 +1562,14 @@
 }
 .browse__row:hover,
 .browse__row:focus-visible {
-  --surf-top: #222;
-  --surf-bot: #222;
+  --fill: rgb(var(--tint-rgb) / 0.06);
+  --bd: var(--line-2);
   outline: 0;
 }
 /* the instance already holds this one — a green edge so it reads before
    the button does, and the row sits back a touch */
 .browse__row--installed {
-  box-shadow: inset calc(8 * var(--u)) 0 0 var(--g-lo);
+  --bd: rgb(var(--ok-rgb) / 0.35);
 }
 .browse__row--installed .browse__icon,
 .browse__row--installed .browse__text {
@@ -996,8 +1582,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: var(--px-black) solid var(--black);
-  background: var(--listing-body);
+  border-radius: 16px;
+  background: var(--well);
   overflow: hidden;
 }
 .browse__icon img {
@@ -1054,14 +1640,13 @@
   display: inline-flex;
   align-items: center;
   height: calc(34 * var(--u));
-  padding: 0 calc(12 * var(--u));
-  border: var(--px-black) solid var(--black);
-  background: var(--listing-body);
-  font-family: var(--font-pixel);
+  padding: 0 calc(14 * var(--u));
+  border-radius: 99px;
+  background: rgb(var(--tint-rgb) / 0.06);
+  font-family: var(--font-body);
   font-size: calc(18 * var(--t));
-  letter-spacing: 0.04em;
+  font-weight: 500;
   color: var(--text-2);
-  text-transform: uppercase;
 }
 /* 172:74 — 173×41, 12px in from the row's band */
 .browse__install {
@@ -1095,12 +1680,24 @@
   align-items: center;
   gap: var(--gap);
 }
+/* the head is as tall as the picture; its buttons stay row height */
+.editor__head > .px {
+  height: var(--h-md);
+}
+.editor__head > .page__cta {
+  margin-left: auto;
+}
+.editor__back {
+  flex: none;
+  width: var(--h-md);
+  padding: 0;
+}
 .editor__icon {
   flex: none;
   width: calc(172 * var(--u));
   height: calc(172 * var(--u));
-  border: var(--px-black) solid var(--black);
-  background: var(--panel);
+  border-radius: var(--r-card);
+  background: var(--well);
   overflow: hidden;
 }
 .editor__icon img {
@@ -1178,7 +1775,7 @@
 }
 .editor__foot {
   margin-top: auto;
-  border-top: 2px solid var(--panel-bd);
+  border-top: 1px solid var(--line);
   border-bottom: 0;
 }
 .editor__list {
@@ -1197,8 +1794,13 @@
   gap: calc(28 * var(--u));
   height: calc(149 * var(--u));
   padding: 0 calc(26 * var(--u));
-  border: var(--px-black) solid var(--black);
-  background: var(--listing-body);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: rgb(var(--tint-rgb) / 0.03);
+  transition: background var(--t-med) var(--ease-out);
+}
+.editor__row:hover {
+  background: rgb(var(--tint-rgb) / 0.05);
 }
 .editor__row.is-off .editor__filename {
   text-decoration: line-through;
@@ -1210,8 +1812,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: var(--px-black) solid var(--black);
-  background: var(--panel);
+  border-radius: 12px;
+  background: var(--well);
+  overflow: hidden;
 }
 .editor__row-icon img {
   width: 100%;
@@ -1231,26 +1834,33 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* WHAT'S NEW: a version's changelog opens below its row (a file with an
+/* What's new: a version's changelog opens below its row (a file with an
    update in the instance editor, a version on a project page) */
 .changelog-toggle {
   align-self: flex-start;
   padding: 0;
   border: 0;
   background: none;
-  color: var(--blue, #5aa9ff);
+  color: var(--text-1);
+  font: inherit;
+  font-size: calc(19 * var(--t));
+  font-weight: 600;
   text-decoration: underline;
+  text-decoration-color: var(--line-3);
+  text-underline-offset: 3px;
   cursor: pointer;
+  transition: text-decoration-color 0.15s;
 }
+.changelog-toggle:hover { text-decoration-color: currentColor; }
 .changelog {
   flex: none;
   max-height: calc(420 * var(--u));
   overflow-y: auto;
   margin-top: calc(-8 * var(--u));
   padding: calc(18 * var(--u)) calc(26 * var(--u));
-  border: var(--px-black) solid var(--black);
-  border-top: 0;
-  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: rgb(var(--tint-rgb) / 0.02);
 }
 .editor__kind {
   flex: none;
@@ -1276,7 +1886,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.3;
-  color: #aaaaaa;
+  color: var(--text-3);
 }
 .worlds__actions {
   width: auto;
@@ -1297,7 +1907,7 @@
 }
 /* the world was saved by a newer game than the instance runs */
 .worlds__newer {
-  color: var(--y-up);
+  color: var(--warn);
 }
 /* the ADD SERVER and RENAME dialogs: the modal's own column, inside a form so
    Enter submits */
@@ -1323,8 +1933,9 @@
   justify-content: center;
   gap: calc(8 * var(--u));
   height: calc(149 * var(--u));
-  border: var(--px-black) dashed var(--accent-up);
-  background: var(--listing-body);
+  border: 1.5px dashed rgb(var(--acc-rgb) / 0.5);
+  border-radius: var(--r-card);
+  background: var(--surface-solid);
 }
 /* a library the instance's mods need and mods/ doesn't have */
 /* the problem rows stack above the list but never crowd it out */
@@ -1342,15 +1953,16 @@
   align-items: center;
   gap: calc(16 * var(--u));
   padding: calc(10 * var(--u)) calc(16 * var(--u));
-  border: var(--px-black) solid var(--y-up);
-  background: var(--listing-body);
+  border: 1px solid rgb(var(--warn-rgb) / 0.3);
+  border-radius: var(--r-card);
+  background: rgb(var(--warn-rgb) / 0.06);
 }
 .editor__dep-text {
   flex: 1;
   min-width: 0;
 }
 .editor__dep-warn {
-  color: var(--y-up);
+  color: var(--warn);
 }
 /* the content filter: shorter than the browse search, same stack */
 .editor__search {
@@ -1378,7 +1990,7 @@
   flex-direction: column;
   overflow: auto;
   padding: calc(14 * var(--u)) calc(18 * var(--u));
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-family: var(--font-num);
   font-size: calc(19 * var(--t));
   line-height: 1.5;
   color: var(--text-2);
@@ -1395,9 +2007,15 @@
   position: absolute;
   right: calc(40 * var(--u));
   bottom: calc(24 * var(--u));
-  padding: calc(8 * var(--u)) calc(16 * var(--u));
-  border: var(--px-black) solid var(--black);
-  background: var(--panel);
+  padding: calc(10 * var(--u)) calc(20 * var(--u));
+  border: 1px solid var(--line-2);
+  border-radius: 99px;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-pop);
+  color: var(--text-1);
+  font: inherit;
+  font-size: calc(18 * var(--t));
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -1447,7 +2065,7 @@
   min-width: 0;
   /* the column is narrow, so the pair keeps only the band plus a hair of
      face on each side; the label fits itself to what is left */
-  padding: 0 calc(var(--px-band) + 8 * var(--u));
+  padding: 0 calc(12 * var(--u));
 }
 .wardrobe__note {
   flex: none;
@@ -1468,6 +2086,9 @@
   gap: var(--gap);
   align-content: start;
   overflow-y: auto;
+  /* room for a tile's hover lift, which the scroll box would clip */
+  padding: 6px;
+  margin: -6px;
 }
 .skin-tile {
   flex-direction: column;
@@ -1553,7 +2174,7 @@
   gap: var(--gap);
   min-height: calc(126 * var(--u));
   padding: calc(18 * var(--u)) calc(10 * var(--u));
-  border-bottom: 2px solid var(--panel-bd);
+  border-bottom: 1px solid var(--line);
 }
 .srow:last-child {
   border-bottom: 0;
@@ -1595,11 +2216,11 @@
 }
 .wall__stub {
   display: block;
-  background: linear-gradient(160deg, var(--panel-bd), var(--panel));
+  background: linear-gradient(160deg, rgb(var(--tint-rgb) / 0.08), rgb(var(--tint-rgb) / 0.02));
 }
 .slider {
   width: calc(300 * var(--u));
-  accent-color: var(--accent-up);
+  accent-color: var(--acc);
 }
 
 /* ══ SIGN-IN ════════════════════════════════════════════════════════════
@@ -1642,14 +2263,15 @@
   overflow: hidden;
   display: flex;
   align-items: center;
-  padding: 0 calc(24 * var(--u));
-  border: var(--px-black) solid var(--black);
-  background: var(--listing-body);
-  font-family: var(--font-pixel);
-  font-weight: 700;
+  padding: 0 calc(28 * var(--u));
+  border: 1px solid var(--line-2);
+  border-radius: 99px;
+  background: var(--well);
+  font-family: var(--font-num);
+  font-weight: 600;
   font-size: calc(40 * var(--t));
-  letter-spacing: 0.18em;
-  color: #fff;
+  letter-spacing: 0.16em;
+  color: var(--text-1);
   user-select: all;
   -webkit-user-select: all;
 }
@@ -1751,7 +2373,7 @@
   flex-direction: column;
   gap: calc(6 * var(--u));
   padding: calc(6 * var(--u)) calc(4 * var(--u)) calc(2 * var(--u));
-  border-top: var(--px-black) solid var(--black);
+  border-top: 1px solid var(--line);
 }
 .store__item-head {
   display: flex;
@@ -1851,8 +2473,14 @@
   display: inline-flex;
   padding: calc(4 * var(--u)) 0;
 }
-.project__link:hover .tt {
+.project__link .tt {
   text-decoration: underline;
+  text-decoration-color: var(--line-3);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--t-fast) var(--ease-out);
+}
+.project__link:hover .tt {
+  text-decoration-color: currentColor;
 }
 
 /* the VERSIONS list: type plate · name + numbers · INSTALL */
@@ -1874,8 +2502,8 @@
   display: inline-flex;
   justify-content: center;
   padding: calc(4 * var(--u)) 0;
-  border: var(--px-black) solid var(--black);
-  background: #111;
+  border: 1px solid var(--line);
+  background: var(--well);
 }
 .project__vtext {
   flex: 1;
@@ -1907,8 +2535,8 @@
   display: flex;
   flex-direction: column;
   gap: calc(6 * var(--u));
-  border: var(--px-black) solid var(--black);
-  background: #111;
+  border: 1px solid var(--line);
+  background: var(--well);
   overflow: hidden;
 }
 .project__shot img {
@@ -1937,7 +2565,7 @@
 .project__lightbox img {
   max-width: 92vw;
   max-height: 88vh;
-  border: var(--px-black) solid var(--black);
+  border: 1px solid var(--line);
 }
 
 /* rendered Modrinth markdown */
@@ -1955,20 +2583,21 @@
   color: var(--white, #fff);
 }
 .md h1 { font-size: 1.6em; }
-.md h2 { font-size: 1.35em; border-bottom: var(--px-black) solid var(--black); padding-bottom: 0.25em; }
+.md h2 { font-size: 1.35em; border-bottom: 1px solid var(--line); padding-bottom: 0.25em; }
 .md h3 { font-size: 1.15em; }
 .md p, .md ul, .md ol, .md blockquote, .md pre, .md table { margin: 0.7em 0; }
 .md ul, .md ol { padding-left: 1.6em; }
 .md li + li { margin-top: 0.25em; }
-.md a { color: var(--blue, #5aa9ff); text-decoration: underline; cursor: pointer; }
+.md a { color: var(--text-1); text-decoration: underline; text-decoration-color: var(--line-3); text-underline-offset: 3px; cursor: pointer; }
+.md a:hover { text-decoration-color: currentColor; }
 .md img { max-width: 100%; height: auto; display: block; margin: 0.6em 0; }
-.md code { background: #111; padding: 0.1em 0.35em; font-size: 0.9em; }
-.md pre { background: #111; padding: 0.8em; overflow-x: auto; border: var(--px-black) solid var(--black); }
+.md code { background: var(--well); padding: 0.1em 0.35em; font-size: 0.9em; }
+.md pre { background: var(--well); padding: 0.8em; overflow-x: auto; border: 1px solid var(--line); }
 .md pre code { background: none; padding: 0; }
 .md blockquote { border-left: calc(4 * var(--u)) solid var(--text-3); padding-left: 0.8em; color: var(--text-2); }
-.md hr { border: 0; border-top: var(--px-black) solid var(--black); margin: 1em 0; }
+.md hr { border: 0; border-top: 1px solid var(--line); margin: 1em 0; }
 .md table { border-collapse: collapse; }
-.md th, .md td { border: var(--px-black) solid var(--black); padding: 0.3em 0.6em; }
+.md th, .md td { border: 1px solid var(--line); padding: 0.3em 0.6em; }
 .md center, .md div { display: block; }
 .md details summary { cursor: pointer; color: var(--text-2); }
 
@@ -2006,8 +2635,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: var(--px-black) solid var(--black);
-  background: #111;
+  border: 1px solid var(--line);
+  background: var(--well);
   overflow: hidden;
 }
 .install__icon img {
@@ -2098,14 +2727,21 @@
   height: 100%;
 }
 .social__win {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + var(--gap-sm));
+  position: fixed;
+  top: var(--nav-h);
+  right: calc(22 * var(--u));
+  bottom: calc(22 * var(--u));
   flex: none;
-  width: calc(1100 * var(--u));
+  width: calc(960 * var(--u));
   max-width: calc(100vw - 2 * var(--gap));
-  height: min(calc(1320 * var(--u)), calc(100vh - var(--nav-h) - var(--h-sm) - 3 * var(--gap-sm)));
   z-index: var(--z-modal);
+  animation: drawer-in var(--t-med) var(--ease-out);
+}
+@keyframes drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
 }
 /* the list bodies read like settings: rows edge to edge, dividers between */
 .social__body {
@@ -2147,7 +2783,7 @@
   background: rgba(255, 255, 255, 0.04);
 }
 .social__row--link:focus-visible {
-  outline: 2px solid var(--accent-co);
+  outline: 2px solid var(--acc);
   outline-offset: -2px;
 }
 /* RECEIVED / SENT — a group label over its rows */
@@ -2184,13 +2820,15 @@
   bottom: -3px;
   width: calc(18 * var(--u));
   height: calc(18 * var(--u));
-  background: linear-gradient(var(--g-up) 50%, var(--g-lo) 50%);
-  box-shadow: 0 0 0 2px var(--black);
+  border-radius: 50%;
+  border: 2px solid var(--surface-solid);
+  background: var(--ok);
+  box-shadow: 0 0 8px rgb(var(--ok-rgb) / calc(0.6 * var(--glow)));
 }
 /* online is green everywhere — the pill's dot, not the red "live" of a
    running instance */
 .social .is-online {
-  color: var(--g-lo);
+  color: var(--ok);
 }
 /* the count square: the instance picker's accent mark, with a number in it */
 .social__badge {
@@ -2201,8 +2839,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(var(--accent-up) 50%, var(--accent-lo) 50%);
-  box-shadow: 0 0 0 2px var(--black);
+  border-radius: 99px;
+  background: var(--acc);
+  color: var(--acc-ink);
+  box-shadow: 0 0 10px rgb(var(--acc-rgb) / calc(0.5 * var(--glow)));
 }
 .status-pill .social__badge {
   margin-left: auto;
@@ -2210,9 +2850,8 @@
   height: calc(28 * var(--u));
 }
 .social__badge .tt {
-  --tt-top: var(--black);
-  --tt-bot: var(--black);
-  --tt-stroke: 0;
+  color: var(--acc-ink);
+  font-weight: 650;
 }
 
 /* ── chat: who, then the conversation, then the composer ─────────────── */
@@ -2270,8 +2909,8 @@
 .social__stamp::after {
   content: '';
   flex: 1;
-  height: 2px;
-  background: var(--panel-bd);
+  height: 1px;
+  background: var(--line);
 }
 .social__stamp .meta {
   flex: none;
@@ -2302,7 +2941,7 @@
   display: flex;
   gap: calc(12 * var(--u));
   padding-top: var(--gap-sm);
-  border-top: 2px solid var(--panel-bd);
+  border-top: 1px solid var(--line);
 }
 .social__composer > .px:last-child {
   flex: none;
@@ -2329,7 +2968,7 @@
   align-items: center;
   gap: var(--gap);
   padding: calc(10 * var(--u)) calc(10 * var(--u)) var(--gap);
-  border-bottom: 2px solid var(--panel-bd);
+  border-bottom: 1px solid var(--line);
 }
 .social__hero .srow__text {
   flex: 1;
@@ -2366,7 +3005,7 @@
   justify-content: center;
   height: min(calc(760 * var(--u)), 62vh);
   background: #000;
-  border: var(--px-black) solid var(--black);
+  border: 1px solid var(--line);
 }
 .shot__stage img {
   max-width: 100%;
@@ -2462,19 +3101,21 @@
   display: block;
   max-width: 100%;
   max-height: calc(320 * var(--u));
+  border-radius: 12px;
   cursor: zoom-in;
 }
 .social__image--loading {
   width: calc(360 * var(--u));
   height: calc(200 * var(--u));
-  background: var(--panel-bd);
+  border-radius: 12px;
+  background: var(--well);
   cursor: default;
 }
 .social__zoom img {
   max-width: 92vw;
   max-height: 88vh;
   object-fit: contain;
-  border: var(--px-black) solid var(--black);
+  border: 1px solid var(--line);
 }
 .social__shots,
 .social__gifts {
@@ -2491,13 +3132,18 @@
 .social__shot {
   aspect-ratio: 16 / 9;
   padding: 0;
-  border: var(--px-black) solid var(--black);
-  background: var(--panel-bd);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--well);
   cursor: pointer;
+  transition: transform var(--t-med) var(--ease-spring), box-shadow var(--t-med) var(--ease-out);
 }
 .social__shot:hover,
 .social__shot:focus-visible {
-  outline: 2px solid var(--accent-co);
+  outline: 0;
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 2px var(--acc), 0 0 16px rgb(var(--acc-rgb) / calc(0.4 * var(--glow)));
 }
 .social__shot img {
   display: block;
@@ -2518,7 +3164,7 @@
   gap: calc(16 * var(--u));
   height: calc(76 * var(--u));
   padding: 0 calc(6 * var(--u));
-  border-bottom: 2px solid var(--panel-bd);
+  border-bottom: 1px solid var(--line);
 }
 .social__gift > .social__text {
   flex: 1;
@@ -2556,53 +3202,331 @@
   flex: none;
 }
 
-/* ── quests: streak card, boards, achievements ───────────────────────── */
-.quests__head {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
+/* ── quests: streak card, daily and weekly side by side, achievements ──
+   Coins are gold everywhere; a reward is only a button once it's claimable. */
+.quests {
+  --coin: var(--warn);
 }
-.quests__head .px {
-  min-width: calc(220 * var(--u));
+.quests .num {
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
 }
-.quests__row {
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-}
-.quests__row > .meta:first-of-type {
-  margin-left: auto;
-}
-.quests__section {
+.coin {
   flex: none;
+  width: 0.95em;
+  height: 0.95em;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffe9a3, var(--coin) 55%, #c9952a);
+  box-shadow: inset 0 0 0 1.5px rgb(120 80 10 / 0.45);
 }
-.quests__section .srow {
-  align-self: stretch;
+.quests__note {
+  font-size: calc(19 * var(--t));
+  font-weight: 600;
+  color: var(--text-2);
+}
+.quests__balance {
+  height: var(--h-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 calc(24 * var(--u));
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  font-size: calc(21 * var(--t));
+  font-weight: 600;
+  color: var(--text-1);
+}
+.quests__claim {
+  flex: none;
+  height: calc(60 * var(--u));
+  padding: 0 calc(26 * var(--u));
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: var(--acc);
+  color: var(--acc-ink);
+  box-shadow: var(--hl), var(--glow-acc);
+  font: inherit;
+  font-size: calc(19 * var(--t));
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform var(--t-med) var(--ease-spring),
+    box-shadow var(--t-med) var(--ease-out);
+}
+.quests__claim:hover:not(:disabled) {
+  box-shadow: var(--hl), var(--glow-acc-hover);
+  transform: translateY(-1px);
+}
+.quests__claim:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.quests__claim:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.quests__claim--all {
+  height: var(--h-sm);
+}
+.quests__empty {
+  padding: calc(40 * var(--u));
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  font-size: calc(21 * var(--t));
+  color: var(--text-3);
+}
+.quests__body {
+  flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(24 * var(--u));
+  margin-right: calc(-14 * var(--u));
+  padding-right: calc(14 * var(--u));
+}
+
+/* panels: the streak, each board, achievements */
+.quests__streak,
+.quests__panel {
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+}
+
+/* ── the streak ── */
+.quests__streak {
+  display: flex;
+  flex-direction: column;
+  gap: calc(26 * var(--u));
+  padding: calc(30 * var(--u)) calc(32 * var(--u));
+}
+.quests__streak-top {
+  display: flex;
+  align-items: center;
+  gap: calc(24 * var(--u));
+}
+.quests__flame {
+  flex: none;
+  width: calc(84 * var(--u));
+  height: calc(84 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgb(var(--tint-rgb) / 0.06);
+  color: var(--text-3);
+}
+.quests__streak.is-going .quests__flame {
+  background: rgb(var(--warn-rgb) / 0.14);
+  color: var(--coin);
+}
+.quests__streak-text {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.quests__streak-days {
+  font-size: calc(34 * var(--t));
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--text-1);
+}
+.quests__streak-sub {
+  font-size: calc(19 * var(--t));
+  color: var(--text-3);
+}
+.quests__bar--streak {
+  max-width: calc(520 * var(--u));
+  margin-top: 6px;
+}
+.quests__week {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: calc(12 * var(--u));
+}
+.quests__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  padding: calc(16 * var(--u)) 0 calc(14 * var(--u));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgb(var(--tint-rgb) / 0.02);
+  color: var(--text-3);
+}
+.quests__day-label {
+  font-size: calc(16 * var(--t));
+  font-weight: 600;
+}
+.quests__day-mark {
+  width: calc(44 * var(--u));
+  height: calc(44 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgb(var(--tint-rgb) / 0.05);
+  font-size: calc(22 * var(--t));
+}
+.quests__day:not(.is-bonus):not(.is-done) .coin {
+  opacity: 0.55;
+}
+.quests__day-coins {
+  font-size: calc(17 * var(--t));
+  font-weight: 600;
+}
+.quests__day.is-done {
+  color: var(--text-2);
+  background: rgb(var(--tint-rgb) / 0.05);
+}
+.quests__day.is-done .quests__day-mark {
+  background: var(--acc);
+  color: var(--acc-ink);
+}
+.quests__day.is-today {
+  border-color: var(--line-3);
+  color: var(--text-1);
+  background: rgb(var(--tint-rgb) / 0.07);
+}
+
+/* ── boards ── */
+.quests__boards {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(620 * var(--u)), 1fr));
+  gap: calc(24 * var(--u));
+}
+.quests__panel {
+  display: flex;
+  flex-direction: column;
+  padding: calc(26 * var(--u)) calc(30 * var(--u)) calc(14 * var(--u));
+}
+.quests__panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--gap-sm);
+  padding-bottom: calc(10 * var(--u));
+}
+.quests__panel-head h2 {
+  margin: 0;
+  font-size: calc(26 * var(--t));
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--text-1);
+}
+.quests__panel-head span {
+  font-size: calc(17 * var(--t));
+  color: var(--text-3);
+  text-align: right;
+}
+.quests__list {
+  display: flex;
+  flex-direction: column;
+}
+.quests__quest {
+  display: flex;
+  align-items: center;
+  gap: calc(24 * var(--u));
+  padding: calc(20 * var(--u)) 0;
+  border-top: 1px solid var(--line);
+}
+.quests__quest-text {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(12 * var(--u));
+}
+.quests__title {
+  font-size: calc(21 * var(--t));
+  font-weight: 650;
+  color: var(--text-1);
+  overflow-wrap: anywhere;
+}
+.quests__progress {
+  display: flex;
+  align-items: center;
+  gap: calc(16 * var(--u));
 }
 .quests__bar {
-  align-self: stretch;
-  height: calc(14 * var(--u));
-  background: var(--black);
-  box-shadow: 0 0 0 2px var(--panel-bd);
+  flex: 1 1 0;
+  height: 6px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgb(var(--tint-rgb) / 0.08);
 }
 .quests__fill {
   height: 100%;
-  background: linear-gradient(var(--accent-up) 50%, var(--accent-lo) 50%);
+  border-radius: inherit;
+  background: var(--acc);
+  transition: width 400ms var(--ease-out);
 }
-.quests__cycle {
-  align-self: stretch;
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: var(--gap-sm);
+.quests__count {
+  flex: none;
+  min-width: calc(110 * var(--u));
+  font-size: calc(16 * var(--t));
+  color: var(--text-3);
+  text-align: right;
 }
-.quests__day {
-  flex-direction: column;
+/* a reward still to earn: gold coins, plain text, not a button */
+.quests__reward {
+  flex: none;
+  display: inline-flex;
   align-items: center;
-  gap: calc(6 * var(--u));
-  padding: calc(12 * var(--u)) 0;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: calc(130 * var(--u));
+  font-size: calc(19 * var(--t));
+  font-weight: 650;
+  color: var(--text-2);
+}
+.quests__reward.is-claimed {
+  font-weight: 600;
+  color: var(--text-3);
+}
+.quests__reward.is-claimed svg {
+  color: var(--ok);
+}
+/* paid quests step back */
+.is-claimed > .quests__quest-text,
+.quests__badge.is-claimed > .quests__title,
+.quests__badge.is-claimed > .quests__progress {
+  opacity: 0.5;
+}
+
+/* ── achievements: a grid of tiles ── */
+.quests__badges {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(300 * var(--u)), 1fr));
+  gap: calc(14 * var(--u));
+  padding: calc(6 * var(--u)) 0 calc(16 * var(--u));
+}
+.quests__badge {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14 * var(--u));
+  padding: calc(20 * var(--u)) calc(22 * var(--u));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgb(var(--tint-rgb) / 0.03);
+}
+.quests__badge .quests__reward,
+.quests__badge .quests__claim {
+  align-self: flex-start;
+  justify-content: flex-start;
+  min-width: 0;
 }
 /* the claimable count on the nav's QUESTS cell */
 .nav__cell .social__badge {
@@ -2639,7 +3563,7 @@
   position: relative;
   display: block;
   overflow: hidden;
-  background: var(--panel-bd);
+  background: var(--well);
 }
 .art .art__fill {
   position: absolute;

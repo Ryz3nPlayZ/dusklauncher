@@ -1,5 +1,6 @@
 /**
- * Friends, requests and 1:1 chat — opened from the status pill. A light
+ * Friends, requests and 1:1 chat — opened from the nav's Friends button
+ * (the status pill in the legacy look), or from anywhere via openSocial(). A light
  * dropdown (Home.tsx's popout pattern), not a route: closes on an outside
  * click or Escape, same as the instance picker.
  *
@@ -17,6 +18,7 @@
  */
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { UsersThree } from '@phosphor-icons/react';
 import { NavCell, NavLabel, PxBox, PxButton, TT } from './px/Px';
 import PlayerHead from './PlayerHead';
 import { Row } from './px/Form';
@@ -35,6 +37,13 @@ import {
 } from '../lib/api';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { stamp as timeStamp } from '../lib/time';
+import { LEGACY } from '../lib/ui';
+
+/** open the pane from elsewhere (Home's friends column): on a friend's chat,
+    or straight onto Add friend */
+export function openSocial(detail: { uuid?: string; add?: boolean } = {}) {
+  window.dispatchEvent(new CustomEvent('dusk:social', { detail }));
+}
 
 /** well inside the service's two-minute online window */
 const HEARTBEAT_MS = 30_000;
@@ -101,11 +110,11 @@ export interface SocialPrefs {
   notifyMessages: boolean;
 }
 
-function statusLine(f: Pick<Friend, 'online' | 'playing' | 'server' | 'lastSeen'>): { text: string; online: boolean } {
-  if (f.online && f.playing && f.server) return { text: `PLAYING ${f.playing} · ${f.server}`, online: true };
-  if (f.online && f.playing) return { text: `PLAYING ${f.playing}`, online: true };
-  if (f.online) return { text: 'ONLINE', online: true };
-  return { text: `LAST SEEN ${ago(f.lastSeen).toUpperCase()}`, online: false };
+export function statusLine(f: Pick<Friend, 'online' | 'playing' | 'server' | 'lastSeen'>): { text: string; online: boolean } {
+  if (f.online && f.playing && f.server) return { text: `Playing ${f.playing} · ${f.server}`, online: true };
+  if (f.online && f.playing) return { text: `Playing ${f.playing}`, online: true };
+  if (f.online) return { text: 'Online', online: true };
+  return { text: `Last seen ${ago(f.lastSeen)}`, online: false };
 }
 
 /* http(s) links in chat text; trailing punctuation stays text */
@@ -207,7 +216,7 @@ function useEscape(active: boolean, close: () => void) {
   }, [active]);
 }
 
-function FriendHead({ uuid, online, size }: { uuid: string; online?: boolean; size: number }) {
+export function FriendHead({ uuid, online, size }: { uuid: string; online?: boolean; size: number }) {
   const skin = useSkin(uuid);
   return (
     <span className="social__head">
@@ -259,6 +268,13 @@ export default function SocialPane({
   /* a link waiting on the "open this?" warning */
   const [link, setLink] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  /* the modern look's trigger lives in the nav (portaled into its slot), so
+     it isn't inside ref — the outside-click test checks it too */
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!LEGACY) setSlot(document.getElementById('nav-social'));
+  }, []);
   // Escape reads these from a listener registered once per open
   const addingRef = useRef(adding);
   addingRef.current = adding;
@@ -364,6 +380,7 @@ export default function SocialPane({
       // small positioning box, so it isn't a DOM descendant of ref — a click
       // inside it must not read as an outside click and close the pane
       if (ref.current?.contains(target)) return;
+      if (triggerRef.current?.contains(target)) return;
       if ((target as Element).closest?.('.modal-scrim')) return;
       setOpen(false);
     };
@@ -389,6 +406,17 @@ export default function SocialPane({
       setNotice(null);
     }
   }, [open]);
+
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const d = (e as CustomEvent<{ uuid?: string; add?: boolean }>).detail ?? {};
+      setOpen(true);
+      if (d.uuid) setView({ kind: 'chat', uuid: d.uuid });
+      if (d.add) setAdding(true);
+    };
+    window.addEventListener('dusk:social', onOpen);
+    return () => window.removeEventListener('dusk:social', onOpen);
+  }, []);
 
   // a notice (request sent, friend removed) is a moment, not a state
   useEffect(() => {
@@ -422,8 +450,37 @@ export default function SocialPane({
     .filter(Boolean)
     .join(', ');
 
+  const navTrigger =
+    slot &&
+    createPortal(
+      <button
+        ref={triggerRef}
+        className={['nav__friends', open ? 'is-active' : ''].join(' ')}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        title={badgeTitle ? `Friends and chat — ${badgeTitle}` : 'Friends and chat'}
+      >
+        <UsersThree size={18} weight="bold" />
+        <span className="nav__friends-label">{gameRunning ? 'In game' : 'Friends'}</span>
+        {signedIn && onlineCount > 0 && (
+          <span className="nav__friends-online num" title={`${onlineCount} online`}>
+            {onlineCount}
+          </span>
+        )}
+        {badge > 0 && (
+          <span className="nav__badge num" aria-label={badgeTitle}>
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+      </button>,
+      slot,
+    );
+
   return (
     <div className="social" ref={ref}>
+      {navTrigger}
+      {LEGACY && (
       <PxButton
         family="panel"
         height="sm"
@@ -443,6 +500,7 @@ export default function SocialPane({
           </span>
         )}
       </PxButton>
+      )}
 
       {open && (
         <div className="win win--solid social__win" role="dialog" aria-label="Friends and chat">
@@ -703,7 +761,7 @@ function AddFriendDialog({
             <PxBox family="panel" height="md">
               <input
                 className="input"
-                placeholder="USERNAME"
+                placeholder="Username"
                 value={name}
                 maxLength={16}
                 autoFocus
@@ -764,7 +822,7 @@ function PersonRow({
     <>
       <FriendHead uuid={uuid} online={online} size={40} />
       <div className="srow__text">
-        <TT size={20} tone={dim ? 'dim' : 'plain'}>
+        <TT size={20} tone={dim ? 'dim' : 'plain'} keep>
           {name}
         </TT>
         <span className={`meta ${metaOnline ? 'is-online' : ''}`}>{meta}</span>
@@ -1252,7 +1310,7 @@ function MessageBody({
     return (
       <div className="social__card">
         <TT size={14} tone="dim">
-          {mine ? 'YOU SENT AN INVITE' : `${name.toUpperCase()} INVITED YOU`}
+          {mine ? 'You sent an invite' : `${name} invited you`}
         </TT>
         <span className="social__text social__card-title">{meta.server}</span>
         {meta.version && <span className="meta">Minecraft {meta.version}</span>}
@@ -1268,7 +1326,7 @@ function MessageBody({
     return (
       <div className="social__card social__card--gift">
         <TT size={14} tone="dim">
-          {mine ? `YOU GIFTED ${name.toUpperCase()}` : `${name.toUpperCase()} GIFTED YOU`}
+          {mine ? `You gifted ${name}` : `${name} gifted you`}
         </TT>
         <span className="social__text social__card-title">{meta.name ?? 'A cosmetic'}</span>
         {!mine && <span className="meta">Equip it under COSMETICS.</span>}
@@ -1288,7 +1346,7 @@ function GiftRun({ gifts, mine, name }: { gifts: ChatMessage[]; mine: boolean; n
   return (
     <div className="social__card social__card--gift">
       <TT size={14} tone="dim">
-        {mine ? `YOU GIFTED ${name.toUpperCase()} ${gifts.length} ITEMS` : `${name.toUpperCase()} GIFTED YOU ${gifts.length} ITEMS`}
+        {mine ? `You gifted ${name} ${gifts.length} items` : `${name} gifted you ${gifts.length} items`}
       </TT>
       <ul className="social__gift-names">
         {shown.map((n, i) => (
@@ -1487,7 +1545,7 @@ function ProfileView({
         <div className="social__hero">
           <FriendHead uuid={uuid} online={status?.online} size={88} />
           <div className="srow__text">
-            <TT size={36} tone="plain">
+            <TT size={36} tone="plain" keep>
               {name}
             </TT>
             {status && <span className={`meta ${status.online ? 'is-online' : ''}`}>{status.text}</span>}
@@ -1552,7 +1610,7 @@ function ProfileView({
           <div className="modal-scrim" onClick={() => !busy && setConfirming(null)}>
             <PxBox family="red" className="px--window modal" onClick={(e) => e.stopPropagation()}>
               <TT size={22} tone="red">
-                {`${confirming === 'block' ? 'BLOCK' : 'REMOVE'} ${name.toUpperCase()}?`}
+                {`${confirming === 'block' ? 'Block' : 'Remove'} ${name}?`}
               </TT>
               <span className="meta">
                 {confirming === 'block'

@@ -58,8 +58,8 @@ export default function Profile({
         <PxBox family={account?.authenticated ? 'green' : 'panel'} className="account">
           <PlayerHead skin={skin} size={64} />
           <div className="account__text">
-            <TT size={22} tone={account?.authenticated ? 'green' : undefined}>
-              {account?.username ?? 'NOT SIGNED IN'}
+            <TT size={22} tone={account?.authenticated ? 'green' : undefined} keep>
+              {account?.username ?? 'Not signed in'}
             </TT>
             <span className="meta">
               {account?.authenticated
@@ -96,12 +96,12 @@ export default function Profile({
               </PxButton>
             ) : (
               <PxButton
-                family="blue"
+                family="accent"
                 height="md"
                 disabled={busy}
                 onClick={() => void start()}
               >
-                <TT size={22} tone="blue">
+                <TT size={20}>
                   {signingIn ? 'WAITING…' : 'SIGN IN'}
                 </TT>
               </PxButton>
@@ -122,7 +122,7 @@ export default function Profile({
             {others.map((a) => (
               <div key={a.uuid} className="srow">
                 <div className="srow__text">
-                  <TT size={20}>{a.username}</TT>
+                  <TT size={20} keep>{a.username}</TT>
                   <span className="meta">{a.uuid}</span>
                 </div>
                 <div className="srow__control">

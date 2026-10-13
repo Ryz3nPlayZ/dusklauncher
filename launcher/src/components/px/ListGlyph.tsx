@@ -1,9 +1,15 @@
-/**
- * The instance-picker glyph — Figma 28:232, a 23×14 pixel list: two hollow
- * 6×6 squares (2px ring) down the left, two 2px lines beside each, the top
- * pair gold and the bottom pair orange.
- */
+/** The instance picker's glyph: up/down carets, the picker opens a list. The
+    legacy look draws its pixel list: two hollow squares, two lines beside
+    each, gold over orange. */
+import { CaretUpDown } from '@phosphor-icons/react';
+import { LEGACY } from '../../lib/ui';
+
 export default function ListGlyph({ className }: { className?: string }) {
+  if (LEGACY) return <LegacyListGlyph className={className} />;
+  return <CaretUpDown className={className} weight="bold" aria-hidden="true" style={{ flex: 'none' }} />;
+}
+
+function LegacyListGlyph({ className }: { className?: string }) {
   const ring = (y: number, fill: string) => (
     <path
       d={`M0 ${y}h6v6h-6z M2 ${y + 2}h2v2h-2z`}

@@ -3,6 +3,7 @@ import SceneBackground from './background/SceneBackground';
 import CustomWallpaper from './background/CustomWallpaper';
 import Nav from './components/Nav';
 import UpdateButton from './components/UpdateButton';
+import { LEGACY } from './lib/ui';
 import type { Pose } from './components/PlayerRender';
 import {
   api,
@@ -35,7 +36,16 @@ import CrashDialog from './components/CrashDialog';
 /** The window is undecorated (tauri.conf.json), so the shell owns its chrome. */
 
 export default function App() {
-  const [route, setRoute] = useState<Route>('home');
+  /* a restart from Settings (switching the look) reopens Settings */
+  const [route, setRoute] = useState<Route>(() => {
+    try {
+      const back = sessionStorage.getItem('dusk.reopen');
+      sessionStorage.removeItem('dusk.reopen');
+      return back === 'settings' ? 'settings' : 'home';
+    } catch {
+      return 'home';
+    }
+  });
   const [account, setAccount] = useState<Account | null>(null);
   // null until the first account read lands — the gate must not flash
   // before we know whether a session exists
@@ -340,6 +350,10 @@ export default function App() {
   const sceneStill =
     !!settings?.reduceMotion || settings?.fpsCap === 0 || game?.state === 'running' || game?.state === 'starting';
 
+  const updateButton = (
+    <UpdateButton status={updater.status} onInstall={() => void updater.install()} onRestart={() => void updater.restart()} />
+  );
+
   return (
     <div className="app">
       {settings?.customBackground ? (
@@ -356,7 +370,14 @@ export default function App() {
         />
       )}
 
-      <Nav route={route} onRoute={setRoute} account={account} skin={skin} claimable={claimable} />
+      <Nav
+        route={route}
+        onRoute={setRoute}
+        account={account}
+        skin={skin}
+        claimable={claimable}
+        update={updateButton}
+      />
 
       <main className={`view${route === 'home' ? '' : ' view--dim'}`}>
         {route === 'home' && (
@@ -438,7 +459,7 @@ export default function App() {
       )}
 
       <div className="status-bar">
-        <UpdateButton status={updater.status} onInstall={() => void updater.install()} onRestart={() => void updater.restart()} />
+        {LEGACY && updateButton}
         <SocialPane
           // a different account starts from a clean pane — no stale friends or chat
           key={account?.uuid ?? 'signed-out'}

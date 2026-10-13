@@ -1,9 +1,8 @@
-/**
- * The play triangle — Figma vector 27:136, a 15×27 pixel arrow on a 3px
- * grid: a full-height bar on the left, seven 3×3 steps out and back. Gold
- * above the midline, orange below, hard split. Sized in em off whatever row
- * it sits in, so it tracks the label beside it through every window size.
- */
+/** The play triangle, sized in em off the label beside it; the legacy look
+    draws the gold-over-orange pixel arrow instead. */
+import { Play } from '@phosphor-icons/react';
+import { LEGACY } from '../../lib/ui';
+
 const STEPS: [number, number][] = [
   [3, 3],
   [6, 6],
@@ -14,7 +13,13 @@ const STEPS: [number, number][] = [
   [3, 21],
 ];
 
-export default function PixelArrow({ size = '1.35em' }: { size?: string }) {
+export default function PixelArrow({ size }: { size?: string }) {
+  if (LEGACY) return <LegacyArrow size={size ?? '1.35em'} />;
+  const s = size ?? '1.1em';
+  return <Play weight="fill" aria-hidden="true" style={{ width: s, height: s, flex: 'none' }} />;
+}
+
+function LegacyArrow({ size }: { size: string }) {
   return (
     <svg
       viewBox="0 0 15 27"

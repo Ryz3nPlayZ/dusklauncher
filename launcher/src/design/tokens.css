@@ -1,129 +1,118 @@
 /* ── DuskLauncher design tokens ───────────────────────────────────────────
-   Dawn-parity pixel system. VISUAL SOURCE OF TRUTH: ~/dusk-spec/spec.html
-   (screenshot-verified SVG specimens — every value below was measured there,
-   never eyeballed). Nothing outside this file may declare a raw color or
-   font-family. */
+   Clean: neutral graphite surfaces, a white accent, a soft glow on the
+   primary action and the current pick. Controls are pills, cards and pop-ups
+   18px, windows 26px. Plus Jakarta Sans for text, Geist Mono for numbers.
+   Nothing outside this file declares a font-family; colours outside it go
+   through these names. */
 
 @font-face {
-  font-family: 'Monocraft';
-  src: url('../assets/fonts/Monocraft-Bold.otf') format('opentype');
-  font-weight: 700;
+  font-family: 'Plus Jakarta Sans';
+  src: url('../assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') format('woff2-variations');
+  font-weight: 200 800;
   font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'Monocraft';
-  /* Latin subset of the Regular face — the repo's Monocraft.otf is actually
-     the Black Italic cut (see its name table), so it is not used. */
-  src: url('../assets/fonts/Monocraft-Regular.woff2') format('woff2');
-  font-weight: 400;
+  font-family: 'Plus Jakarta Sans';
+  src: url('../assets/fonts/plus-jakarta-sans-latin-ext-wght-normal.woff2') format('woff2-variations');
+  font-weight: 200 800;
   font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'Inter';
-  src: url('../assets/fonts/inter-400.woff2') format('woff2');
-  font-weight: 400;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Inter';
-  src: url('../assets/fonts/inter-500.woff2') format('woff2');
-  font-weight: 500;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Inter';
-  src: url('../assets/fonts/inter-600.woff2') format('woff2');
-  font-weight: 600;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Inter';
-  src: url('../assets/fonts/inter-700.woff2') format('woff2');
-  font-weight: 700;
+  font-family: 'Geist Mono';
+  src: url('../assets/fonts/geist-mono-latin-wght-normal.woff2') format('woff2-variations');
+  font-weight: 100 900;
   font-display: swap;
 }
 
 :root {
-  /* typography — headings/tabs/CTAs: Monocraft Bold (bundled, SIL OFL),
-     always UPRIGHT, always ALL CAPS. Body/metadata: Inter. Type is
-     thickened with the --tt-w stroke in its own fill (paint-order: stroke);
-     subtext takes 0.8 of it. */
-  --font-pixel: 'Monocraft', ui-monospace, monospace;
-  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
 
-  /* ── construction (applies to EVERYTHING) ── */
-  --black: #000000;          /* outline around all elements */
-  --black-w: var(--px-black); /* outline weight (2px on navbar frame/dividers) */
-  --border-w: 6px;           /* border-band weight */
-  --radius: 0px;             /* sharp corners, no blur, no gradients-as-style */
+  --font-body: 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-num: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
-  /* L corners (top-right / bottom-left only): square outer box,
-     leg = side length × 17/86. Vert rect overlaps the foot band. */
-  --l-ratio: 0.1977;         /* 17/86 */
+  /* ── surfaces ── */
+  --bg: #0b0b0d;
+  --bg-2: #131316;
+  --surface: rgb(20 20 23 / 0.78);
+  --surface-solid: #18181b;
+  --raised: #232327;
+  --raised-2: #2c2c31;
+  --well: rgb(0 0 0 / 0.28); /* inset areas: image frames, code, empty slots */
+  --tint-rgb: 255 255 255;
+  --line: rgb(var(--tint-rgb) / 0.08);
+  --line-2: rgb(var(--tint-rgb) / 0.14);
+  --line-3: rgb(var(--tint-rgb) / 0.22);
+  --hover: rgb(var(--tint-rgb) / 0.06);
+  --track: #333338;
+  --scroll: #45454c;
+  --knob: #e4e4e7;
 
-  /* surface gradients: hold flat top color through 45%, then blend down.
-     The ONLY blended elements in the system. */
-  --surf-hold: 45%;
+  /* ── text ── */
+  --text-1: #f4f4f5;
+  --text-2: #b4b4bb;
+  --text-3: #7f7f88;
 
-  /* two-tone pixel text: hard 50/50 split, upper lighter, never smooth.
-     --tt-w is the stroke that thickens each fill in place (paint-order:
-     stroke fill). Monocraft Bold is already heavy; at the type sizes this
-     shell actually uses, 0.5px doubled the apparent weight. */
-  --tt-w: 0.2px;
-  /* Figma: HOME/INSTANCES/COSMETICS vectors — c6c6c6 over 7b7b7b, hard
-     split; the cut sits at ~42% of the cap, not mid-box */
-  --tab-text-top: #c6c6c6;
-  --tab-text-bot: #7b7b7b;
+  /* ── the accent: white, dark ink on it ── */
+  --acc: #f4f4f5;
+  --acc-2: #c4c4cc;
+  --acc-rgb: 255 255 255;
+  --acc-ink: #111113;
+  --acc-text: #ffffff;
 
-  /* ── navbar tabs (234×86 cells, full-height, shared black dividers) ── */
-  --tab-base: #1e1e1e;      /* Figma cell fill */
-  --tab-border: #323232;
-  --tab-corner: #4a4a4a;
-  /* the open tab: the plate is identical (Figma 8:28 has one construction
-     for every cell) — only the label steps up to this brighter pair */
-  --act-text-top: #f2f2f2;
-  --act-text-bot: #a6a6a6;
+  /* ── status voices: muted, used for meaning only (installed, live, error) ── */
+  --ok: #5fd38a;
+  --ok-rgb: 95 211 138;
+  --bad: #ff6b5e;
+  --bad-rgb: 255 107 94;
+  --info: #7cb4ff;
+  --info-rgb: 124 180 255;
+  --warn: #f5c451;
+  --warn-rgb: 245 196 81;
+  --violet: #a98bff;
+  --violet-rgb: 169 139 255;
 
-  /* ── generic panel: 5px black + 6px border + body.
-     The panel IS the component (search bar, FILTERS header, listing tile).
-     Window variant: identical stack at 87% opacity (range 85–90). */
-  --panel: #1e1e1e;
-  --panel-bd: #323232;
-  --panel-window-opacity: 0.87;
-  --listing-body: #181818;   /* modpack listing tiles */
+  /* ── shape ── */
+  --r-ctl: 999px; /* buttons, inputs, tabs, chips */
+  --r-card: 18px; /* cards, tiles, rows that stand alone */
+  --r-pop: 18px; /* menus, popovers */
+  --r-win: 26px; /* windows, modals */
+  --r-sm: 10px; /* small frames: thumbnails, icons */
 
-  /* ── accent family. Derivation (HLS, measured from #FFC600):
-     lower = H−12.8° / L−0.055 / S−0.053 · corner = H+8.6° / L+0.402.
-     Any new accent = pick a hue, run the same math. */
-  --y-up: #ffc600;  --y-lo: #de8105;  --y-co: #fffbcd;   /* gold (PLAY NOW) */
-  --g-up: #00ff40;  --g-lo: #06dd0e;  --g-co: #cdffe1;   /* green (install) */
-  --b-up: #1f7cff;  --b-lo: #09a0f8;  --b-co: #ecf1ff;   /* blue (+0.06 L so
-     the top reads light — blue needs the lift, yellow doesn't) */
-  --r-up: #ff1100;  --r-lo: #dd0626;  --r-co: #ff8b8e;   /* red (PvP/delete) */
-  /* Figma 98:86 / 98:40 — the NEW INSTANCE chooser's two voices: a purple
-     for DUSK PROFILE and a mossier green than INSTALL's for BROWSE MODPACKS */
-  --p-up: #813ec1;  --p-lo: #4616ca;  --p-co: #e9d8ff;   /* purple (dusk) */
-  --m-up: #8ccf2d;  --m-lo: #468a28;                     /* moss (modpacks) */
-  --cta-surf-top: #1e1e1e;
-  --cta-surf-bot: #413018;   /* PLAY NOW: Figma 238×62, 1e1e1e → 413018 */
-  --grey-surf-bot: #2b261c;
-  /* Figma 30:381 — the tile's PLAY NOW: flat through 35.6%, then 271e11 */
-  --tile-surf-bot: #271e11;  /* the grey quick button beside it, held to 13.5% */
-  --inst-surf-bot: #16241a;  /* grey-border INSTALL: whisper-green bottom */
-  --dusk-surf-bot: #1f163a;  /* Figma 98:79 — DUSK PROFILE: purple bottom */
-  --moss-surf-bot: #202c1d;  /* Figma 98:31 — BROWSE MODPACKS: moss bottom */
+  /* ── glow (soft: the Clean tone runs it at half) ── */
+  --glow: 0.5;
+  --glow-acc: 0 6px 22px -4px rgb(var(--acc-rgb) / calc(0.55 * var(--glow)));
+  --glow-acc-hover: 0 10px 34px -4px rgb(var(--acc-rgb) / calc(0.8 * var(--glow))),
+    0 0 0 4px rgb(var(--acc-rgb) / calc(0.12 * var(--glow)));
+  --ring: 0 0 0 3px rgb(var(--acc-rgb) / calc(0.14 * var(--glow)));
+  --shadow-pop: 0 18px 40px rgb(0 0 0 / 0.5);
+  --shadow-win: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 30px 80px rgb(0 0 0 / 0.45);
+  --hl: inset 0 1px 0 rgb(255 255 255 / 0.06); /* top highlight on raised controls */
 
-  /* ── scrollbar: 25px assembly — 5 black housing / 4 accent CLOSED RING
-     (upper #FFC600, lower #DD7F06, split at mid-height) / 7 inner thumb
-     gradient #C77707 → #382C1B. */
-  --sb-in-top: #c77707;
-  --sb-in-bot: #382c1b;
+  /* ── motion ── */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-fast: 120ms;
+  --t-med: 260ms;
 
-  /* ── legacy body-text scale (unchanged) ── */
-  --text-1: #f4f4f4;
-  --text-2: #b8b8b8;
-  --text-3: #828282;
-  --success: #39d353;
+  /* ── legacy names, kept so older rules read in the new voice ── */
+  --black: var(--bg);
+  --panel: var(--surface-solid);
+  --panel-bd: var(--raised);
+  --listing-body: var(--surface-solid);
+  --accent-up: var(--acc);
+  --accent-lo: var(--acc-2);
+  --accent-co: var(--acc);
+  --y-up: var(--acc);  --y-lo: var(--acc-2);  --y-co: var(--acc);
+  --g-up: var(--ok);   --g-lo: #3fb36a;       --g-co: #a6efc0;
+  --b-up: var(--info); --b-lo: #5b9bf0;       --b-co: #b9d6ff;
+  --r-up: var(--bad);  --r-lo: #e5534b;       --r-co: #ffb0a8;
+  --p-up: var(--violet); --p-lo: #8b6cf0;     --p-co: #d9ccff;
+  --m-up: var(--ok);   --m-lo: #3fb36a;
+  --success: var(--ok);
 
   /* z stack */
   --z-bg: 0;
@@ -132,88 +121,30 @@
   --z-modal: 60;
 }
 
-/* ── themes: one dark-panel base; the theme ONLY swaps scene + accent ── */
-:root,
-[data-theme='overworld'] {
-  color-scheme: dark;
-  --accent-up: var(--y-up);
-  --accent-lo: var(--y-lo);
-  --accent-co: var(--y-co);
-  --accent-surf-bot: var(--cta-surf-bot);
-  --scene-sky-top: #7db8ff;
-  --scene-sky-bottom: #b7dcff;
-}
-[data-theme='nether'] {
-  color-scheme: dark;
-  --accent-up: var(--r-up);
-  --accent-lo: var(--r-lo);
-  --accent-co: var(--r-co);
-  --accent-surf-bot: var(--r-surf-bot);
-  --scene-sky-top: #17090d;
-  --scene-sky-bottom: #2b0a12;
-}
-
-/* ── construction sizes (measured from spec.html specimens) ───────────────
-   Two kinds of number live here and they behave differently.
-
-   CONSTRUCTION is pixel art: whole pixels only, no fractional borders, or it
-   blurs. It does not track --u continuously — but it IS authored for the
-   reference window, and the spec's proportions are what carry over: black is
-   5/86 of the row and the band 6/86. Holding 5 and 6 while the row came down
-   from 86 to 60 is what made every frame read as too heavy.
-
-   SIZE splits into two atoms, and they are NOT the same number.
-
-   --u sizes BOXES: every height, gutter and tile. It is 0.7px at the app's
-   own window (1280×800), i.e. the spec's "86px row" lands at 60 real pixels.
-   The spec.html specimens are magnified construction drawings — their 86 and
-   234 are proportions to hold, not CSS pixels to copy. Copying them literally
-   is what made a navbar eat an eighth of the window.
-
-   --t sizes TYPE. It sits above --u — type fills more of its button than a
-   scale-everything-together would give, which is what the reference looks
-   like — but only by about a fifth, not by half. Raising the type scale 1.7x
-   AND dropping the box scale to 0.7 compounded to ~2.4x the original ratio,
-   which is what made the labels read as oversized.
-
-   Both track the smaller axis below the reference window and neither grows
-   past it: a big display shows MORE (more cards per row, more skins per
-   shelf), never the same shell blown up. */
+/* ── size scale ────────────────────────────────────────────────────────────
+   --u sizes boxes (every height, gutter and tile) and --t sizes type. Both
+   are 0.523/0.575px at the app's own 1280×800 window, track the smaller axis
+   below it and never grow past it: a big display shows more, not the same
+   shell blown up. */
 :root {
   --u: clamp(0.41px, min(0.0409vw, 0.0654vh), 0.523px);
   --t: clamp(0.448px, min(0.0449vw, 0.0719vh), 0.575px);
 
-  /* Construction weight. Whole pixels, scaled against the reference
-     screenshots: 2px of black — the same weight the navbar draws — with a
-     4px band inside it. */
-  --px-black: 2px;
-  --px-band: 3px;
-  --px-nav: 2px;
-  /* L-corner leg — the spec's 17/86 of the side, held at the box scale so
-     the corner stays a fifth of the edge rather than a third of it */
-  --px-corner: 9px;
-  --px-corner-cta: 9px;
+  /* old construction widths, now hairlines */
+  --px-black: 1px;
+  --px-band: 0px;
+  --px-nav: 0px;
 
-  /* the height scale. --h-md IS the navbar height: a search bar, a tab, a
-     settings control and a nav cell are all one row tall, everywhere. */
-  --nav-h: calc(88 * var(--u));  /* Figma 46px @ 1280×832 */
-  /* the hero CTA. The spec draws it at 143 against an 86 navbar — a 1.66x
-     jump that reads as a slab once the shell is at its real scale. It stays
-     the largest row in the app, but in the navbar's magnitude, not double. */
-  --h-xl: calc(118 * var(--u)); /* Figma 62px @ 1280×832 */
-  --h-lg: calc(120 * var(--u));
-  --h-md: calc(88 * var(--u));  /* the standard row — navbar parity */
-  --h-sm: calc(69 * var(--u));
+  /* the height scale: a search bar, a tab and a settings control share --h-md */
+  --nav-h: calc(104 * var(--u));
+  --h-xl: calc(118 * var(--u));
+  --h-lg: calc(96 * var(--u));
+  --h-md: calc(80 * var(--u));
+  --h-sm: calc(66 * var(--u));
   --h-listing: calc(107 * var(--u));
 
-  /* the gutter scale, likewise relative */
-  --gap: calc(24 * var(--u));
-  --gap-sm: calc(14 * var(--u));
+  --gap: calc(28 * var(--u));
+  --gap-sm: calc(16 * var(--u));
 
-  /* surface bottoms for the derived families (spec §3) */
-  --g-surf-bot: #123d1c;
-  --b-surf-bot: #12283d;
-  --r-surf-bot: #3d1512;
-
-  --sb-w: 16px;      /* scrollbar assembly: 2 black / 3 accent / 6 inner */
+  --sb-w: 10px;
 }

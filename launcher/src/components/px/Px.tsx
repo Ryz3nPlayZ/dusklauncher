@@ -1,24 +1,24 @@
 /**
- * The construction primitives. Every visible box in the app is one of these —
- * they are the spec.html specimens, nothing more. A view may arrange them and
- * choose a family + a height from the scale; it may never restyle one.
+ * The shared primitives. Every visible box in the app is one of these: a view
+ * arranges them and picks a family (its voice) and a height from the scale.
  */
 import { useLayoutEffect, useRef } from 'react';
 import type { ButtonHTMLAttributes, CSSProperties, HTMLAttributes, ReactNode } from 'react';
+import { LEGACY } from '../../lib/ui';
 
-/** Border families, exactly the ones the spec derives. */
+/** Voices. Each swaps only the fill, border and text colour. */
 export type Family =
-  | 'panel' // 5.1 · grey ring, no corners
-  | 'grey' // grey ring + #4A4A4A corners
-  | 'install' // 5.3 · whisper-green surface, green text
-  | 'soft' // 5.3 construction wearing the accent surface — a panel's primary
-  | 'accent' // 2 · PLAY NOW and every selected state — follows the theme
-  | 'yellow' // 2 · the gold family itself
-  | 'green' // 3 · INSTALL
-  | 'blue' // 3 · EXAMPLE
-  | 'red' // 3 · DELETE
-  | 'dusk' // Figma 98:73 · grey ring, purple surface (DUSK PROFILE)
-  | 'moss'; // Figma 98:72 · grey ring, moss surface (BROWSE MODPACKS)
+  | 'panel' // a quiet card
+  | 'grey' // a raised control: the default button
+  | 'install' // green tint: install, get
+  | 'soft' // a panel's own primary: brighter raised
+  | 'accent' // the primary action and the current pick: white with a soft glow
+  | 'yellow' // same as accent (older call sites)
+  | 'green' // green tint
+  | 'blue' // blue tint
+  | 'red' // red tint: delete, stop
+  | 'dusk' // violet tint: Dusk's own things
+  | 'moss'; // green tint (older call sites)
 
 /** The height scale. Rows that sit side by side share one value. */
 export type Height = 'xl' | 'lg' | 'md' | 'sm' | 'listing' | 'fill';
@@ -47,7 +47,7 @@ function classes(family: Family, height: Height, extra?: string, listing?: boole
 interface BoxProps extends HTMLAttributes<HTMLDivElement> {
   family?: Family;
   height?: Height;
-  /** listing tiles use the darker #181818 body (spec 5.1) */
+  /** a listing tile */
   listing?: boolean;
   children?: ReactNode;
 }
@@ -74,7 +74,7 @@ interface BtnProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children?: ReactNode;
 }
 
-/** A button. Presses by translating 2px, per DESIGN.md. */
+/** A button. Lifts on hover, settles on press. */
 export function PxButton({
   family = 'grey',
   height = 'lg',
@@ -90,20 +90,72 @@ export function PxButton({
   );
 }
 
-/* ── fit-to-cell ──────────────────────────────────────────────────────────
-   A label's natural width is its glyphs × 1ch (plus tracking, or × the
-   stretch). The cell it sits in is often a fixed plate — a nav tab, PLAY NOW,
-   a grid tile — and nothing ties the two together, so the label used to run
-   straight past the plate's edge. The rule now: the box may shrink to
-   whatever the cell leaves it (.tt has min-width: 0 / max-width: 100%), and
-   this hook scales the glyphs down into that box. One mechanism for every
-   label, instead of a vw cap per view.
+/* ── label casing ─────────────────────────────────────────────────────────
+   Labels used to be written in capitals for the pixel face. A label with no
+   lower-case letters is now read as one of those and put in sentence case,
+   keeping the words that are always capitals (HUD, FPS, RAM…) and the names
+   that are always capitalised (Dusk, Minecraft, Fabric…). Anything already in
+   mixed case — and anything marked `keep`, like a player or instance name —
+   is left exactly as written. */
+const UPPER = new Set([
+  'HUD', 'FPS', 'RAM', 'JVM', 'GPU', 'CPU', 'OK', 'ID', 'URL', 'UUID', 'IP', 'UI', 'API', 'MB', 'GB', 'KB',
+  'TB', 'XP', 'TPS', 'NBT', 'PNG', 'JPG', 'GIF', 'HD', '2D', '3D', 'MC', 'AFK', 'DM', 'DMS', 'FAQ',
+  'TOS', 'EULA', 'MSA', 'RGB', 'HEX', 'SMP', 'UHC', 'FOV', 'VR', 'JSON', 'ZIP', 'CF', 'I',
+]);
+const PROPER: Record<string, string> = {
+  DUSK: 'Dusk', MINECRAFT: 'Minecraft', MICROSOFT: 'Microsoft', XBOX: 'Xbox', FABRIC: 'Fabric',
+  QUILT: 'Quilt', FORGE: 'Forge', NEOFORGE: 'NeoForge', MODRINTH: 'Modrinth', CURSEFORGE: 'CurseForge',
+  JAVA: 'Java', DISCORD: 'Discord', GITHUB: 'GitHub', WINDOWS: 'Windows', MACOS: 'macOS', LINUX: 'Linux',
+  PVP: 'PvP', PVE: 'PvE', OPTIFINE: 'OptiFine', SODIUM: 'Sodium', IRIS: 'Iris', PRISM: 'Prism',
+  MULTIMC: 'MultiMC', ATLAUNCHER: 'ATLauncher', LUNAR: 'Lunar', BADLION: 'Badlion', FEATHER: 'Feather',
+  OVERWORLD: 'Overworld', NETHER: 'Nether', END: 'End', MOJANG: 'Mojang', TWITCH: 'Twitch',
+  YOUTUBE: 'YouTube', KOFI: 'Ko-fi', PAYPAL: 'PayPal', STRIPE: 'Stripe', TAURI: 'Tauri',
+};
 
-   Both rects are read in the same (transformed) space, so the ratio is the
-   layout box over the natural text width regardless of the scale currently
-   applied — no reset-and-remeasure. */
+function caseWord(w: string, first: boolean): string {
+  const m = /^([^A-Z0-9]*)(.*?)([^A-Z0-9]*)$/.exec(w);
+  if (!m || !m[2]) return w;
+  const [, pre, core, post] = m;
+  let out: string;
+  if (UPPER.has(core)) out = core;
+  else if (PROPER[core]) out = PROPER[core];
+  else if (/^V\d/.test(core)) out = 'v' + core.slice(1);
+  else if (/\d/.test(core)) out = core; // versions, sizes, counts
+  else {
+    const lower = core.toLowerCase();
+    out = first ? lower.charAt(0).toUpperCase() + lower.slice(1) : lower;
+  }
+  return pre + out + post;
+}
+
+/** Sentence-cases a label written in capitals; mixed-case text is returned as is. */
+export function labelCase(text: string): string {
+  // tokens with digits (v0.7.5, 1.21.11, 12ms) don't count as lower case
+  const words = text.replace(/\S*\d\S*/g, '');
+  if (!/[A-Z]/.test(words) || /[a-z]/.test(words)) return text;
+  let first = true;
+  return text
+    .split(/(\s+)/)
+    .map((part) => {
+      if (/^\s+$/.test(part) || part === '') return part;
+      if (part === '·' || part === '—' || part === '|') {
+        first = true;
+        return part;
+      }
+      const out = caseWord(part, first);
+      if (/[A-Z0-9]/.test(part)) first = /[.!?:]$/.test(part);
+      return out;
+    })
+    .join('');
+}
+
+/* ── legacy: fit-to-cell ──────────────────────────────────────────────────
+   The pixel face is wide and its labels sit in fixed plates, so in the legacy
+   look each label is scaled down to whatever width its cell leaves it. Both
+   rects are read in the same (transformed) space, so the ratio holds whatever
+   scale is applied now. */
 const fitObserver =
-  typeof ResizeObserver === 'undefined'
+  !LEGACY || typeof ResizeObserver === 'undefined'
     ? null
     : new ResizeObserver((entries) => {
         for (const e of entries) fitLabel(e.target as HTMLElement);
@@ -121,10 +173,9 @@ function fitLabel(el: HTMLElement) {
   el.style.setProperty('--tt-fit', fit < 0.999 ? fit.toFixed(4) : '1');
 }
 
-/* the box only reports a resize when it is the thing that changed; the
-   natural width can move on its own (the font swapping in, --t stepping on
-   a window resize while the box stays clamped), so those refit every label */
-if (typeof window !== 'undefined') {
+/* the natural width can change while the box stays put (the font swapping
+   in, --t stepping on a resize), so those refit every label */
+if (LEGACY && typeof window !== 'undefined') {
   const refitAll = () => document.querySelectorAll<HTMLElement>('.tt').forEach(fitLabel);
   window.addEventListener('resize', refitAll);
   document.fonts?.ready.then(refitAll);
@@ -141,49 +192,65 @@ function useFit() {
   return ref;
 }
 
-/** Two-tone pixel text — hard 50/50 split, 0.5px matched stroke. */
+/** One line of UI text. Sentence-cases capitals unless `keep` (names, user
+    text); the legacy look sets everything but names in pixel capitals. */
 export function TT({
   children,
   size = 22,
   tone,
+  keep,
   sx,
   className,
+  title,
 }: {
   children: string;
   size?: 36 | 22 | 20 | 16 | 14 | 13 | 11;
   tone?: 'yellow' | 'green' | 'blue' | 'red' | 'purple' | 'moss' | 'accent' | 'sub' | 'dim' | 'plain';
-  /** horizontal stretch — the Figma labels are scaled vectors (nav 1.5, PLAY NOW 1.15) */
+  /** a name or user-written text: shown exactly as given */
+  keep?: boolean;
+  /** horizontal stretch, legacy look only (nav 1.4, Play 1.15) */
   sx?: number;
   className?: string;
+  title?: string;
 }) {
-  const stretched = sx !== undefined && sx !== 1;
   const ref = useFit();
+  if (LEGACY) {
+    const text = keep ? children : children.toUpperCase();
+    const stretched = sx !== undefined && sx !== 1;
+    return (
+      <span
+        ref={ref}
+        className={['tt', `tt--${size}`, tone ? `tt--${tone}` : '', stretched ? 'tt--sx' : '', className ?? '']
+          .filter(Boolean)
+          .join(' ')}
+        style={stretched ? ({ '--tt-sx': sx, '--tt-n': text.length } as CSSProperties) : undefined}
+        data-text={text}
+        title={title}
+      >
+        {text}
+      </span>
+    );
+  }
+  const text = keep ? children : labelCase(children);
   return (
     <span
-      ref={ref}
-      className={['tt', `tt--${size}`, tone ? `tt--${tone}` : '', stretched ? 'tt--sx' : '', className ?? '']
-        .filter(Boolean)
-        .join(' ')}
-      style={stretched ? ({ '--tt-sx': sx, '--tt-n': children.length } as CSSProperties) : undefined}
-      data-text={children}
+      className={['tt', `tt--${size}`, tone ? `tt--${tone}` : '', className ?? ''].filter(Boolean).join(' ')}
+      title={title}
     >
-      {children}
+      {text}
     </span>
   );
 }
 
-/* ── navbar cells ─────────────────────────────────────────────────────────
-   The strip at the top of the window and the tab strip inside a page are the
-   same component. Every cell is the Figma 8:28 plate — 3px #323232 band,
-   #4a4a4a L corners, flat surface, no depth line, and no second construction
-   for the open tab: selection reads only as the brighter label (is-active).
-   A cell never takes the accent. */
+/* ── tab cells ─────────────────────────────────────────────────────────────
+   The tab strips inside pages (a window's bar): ghost pills, the open one
+   raised. */
 
-/** Figma 1:3 — the 16px cell labels are stretched 1.4× (HOME = 60px). */
-export const NAV_SX = 1.4;
+/** The tab labels' stretch: legacy only, where they fill fixed plates. */
+export const NAV_SX = LEGACY ? 1.4 : 1;
 
 export function cellClass(active: boolean, extra = '') {
-  return ['px px--cell px--grey nav__cell', active ? 'is-active' : '', extra]
+  return ['px px--cell nav__cell', LEGACY ? 'px--grey' : '', active ? 'is-active' : '', extra]
     .filter(Boolean)
     .join(' ');
 }
@@ -194,30 +261,29 @@ export function NavCell({
   label,
   className,
   title,
+  keep,
   onClick,
 }: {
   active?: boolean;
   label: string;
   className?: string;
   title?: string;
+  /** a name (an instance group, a skin): shown as written */
+  keep?: boolean;
   onClick?: () => void;
 }) {
   return (
     <button className={cellClass(active, className)} title={title} onClick={onClick}>
-      <TT size={16} sx={NAV_SX}>
-        {label}
-      </TT>
+      <TT size={16} keep={keep} sx={NAV_SX}>{label}</TT>
     </button>
   );
 }
 
 /** A cell that only reports something — the instance count, a status. */
-export function NavLabel({ label, className }: { label: string; className?: string }) {
+export function NavLabel({ label, className, keep }: { label: string; className?: string; keep?: boolean }) {
   return (
     <div className={cellClass(false, className)}>
-      <TT size={16} tone="dim" sx={NAV_SX}>
-        {label}
-      </TT>
+      <TT size={16} tone="dim" keep={keep} sx={NAV_SX}>{label}</TT>
     </div>
   );
 }

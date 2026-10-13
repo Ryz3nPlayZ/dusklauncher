@@ -1,0 +1,29 @@
+/* The legacy look covers the launcher as it was; these are the pieces added
+   since, drawn in its idiom: square plates, a #323232 band in a black
+   outline, Monocraft capitals for headings and Inter for the rest. */
+
+:root {
+  --warn: var(--y-up);
+}
+
+/* ── the arrow-only Back plates (instance editor, a project page, browse) ── */
+.editor__back,
+.browse__back {
+  flex: none;
+  width: var(--h-md);
+  padding: 0;
+  justify-content: center;
+}
+.editor__head > .editor__back,
+.page__head > .browse__back {
+  height: var(--h-md);
+  align-self: center;
+}
+
+/* ── a finished quest day: tick and coins ── */
+.quests__day-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--success);
+}

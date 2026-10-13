@@ -303,7 +303,7 @@ export default function Cosmetics({
           <NavCell label="ACCESSORIES" active={tab === 'ACCESSORIES'} onClick={() => setTab('ACCESSORIES')} />
           <NavCell label="OUTFITS" active={tab === 'OUTFITS'} onClick={() => setTab('OUTFITS')} />
           <div className="win__fill" />
-          <NavLabel label={current ? current.name.toUpperCase() : 'NO SKIN SELECTED'} />
+          <NavLabel keep label={current ? current.name : 'No skin selected'} />
         </div>
 
         <div className="win__body">
@@ -420,8 +420,8 @@ export default function Cosmetics({
                             <CapeSwatch src={c.texture} scale={6} />
                           </div>
                           <span className="skin-tile__name">
-                            <TT size={16} tone={c.active ? 'green' : 'dim'}>
-                              {c.name.toUpperCase()}
+                            <TT size={16} tone={c.active ? 'green' : 'dim'} keep>
+                              {c.name}
                             </TT>
                           </span>
                         </PxBox>
@@ -472,8 +472,8 @@ export default function Cosmetics({
                             <CapeSwatch src={capeData[c.id]?.cape} scale={6} frameMs={c.frameMs} />
                           </div>
                           <span className="skin-tile__name">
-                            <TT size={16} tone={wornCape === c.id ? 'green' : 'dim'}>
-                              {c.name.toUpperCase()}
+                            <TT size={16} tone={wornCape === c.id ? 'green' : 'dim'} keep>
+                              {c.name}
                             </TT>
                           </span>
                         </PxBox>
@@ -502,8 +502,8 @@ export default function Cosmetics({
                               <AccessorySwatch src={accData[a.id]?.texture} model={accData[a.id]?.model} entry={a} />
                             </div>
                             <span className="skin-tile__name">
-                              <TT size={16} tone={worn ? 'green' : 'dim'}>
-                                {a.name.toUpperCase()}
+                              <TT size={16} tone={worn ? 'green' : 'dim'} keep>
+                                {a.name}
                               </TT>
                             </span>
                           </PxBox>
@@ -648,8 +648,8 @@ export default function Cosmetics({
                           <SkinSnapshot skin={data[s.name]} model={modelOf(s) ?? 'auto'} />
                         </div>
                         <span className="skin-tile__name">
-                          <TT size={16} tone={s.selected ? 'green' : 'dim'}>
-                            {s.name.toUpperCase()}
+                          <TT size={16} tone={s.selected ? 'green' : 'dim'} keep>
+                            {s.name}
                           </TT>
                         </span>
                       </PxBox>

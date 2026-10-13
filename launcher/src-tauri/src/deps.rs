@@ -497,10 +497,58 @@ pub async fn mod_problems(state: State<'_, AppState>, profile_id: String) -> Res
     .map_err(|e| e.to_string())
 }
 
+/// The `fabricloader` ranges the enabled jars in `mods_dir` depend on. Only
+/// each jar's own fabric.mod.json is read, so this stays quick enough to run
+/// on every launch.
+pub fn loader_requirements(mods_dir: &std::path::Path) -> Vec<serde_json::Value> {
+    let Ok(rd) = std::fs::read_dir(mods_dir) else { return Vec::new() };
+    rd.flatten()
+        .filter(|e| e.file_name().to_string_lossy().ends_with(".jar"))
+        .filter_map(|e| {
+            let mut zip = zip::ZipArchive::new(std::fs::File::open(e.path()).ok()?).ok()?;
+            meta_of(&mut zip)?.get("depends")?.get("fabricloader").cloned()
+        })
+        .collect()
+}
+
+/// Whether `version` of Fabric Loader takes every range; a range that can't
+/// be read never counts against it.
+pub fn loader_satisfies(version: &str, requirements: &[serde_json::Value]) -> bool {
+    requirements.iter().all(|r| satisfies(version, r) != Some(false))
+}
+
+/// Of `builds` (newest first, `(version, stable)`), the newest stable one
+/// that takes every range, else the newest build at all that does.
+pub fn loader_for(builds: &[(String, bool)], requirements: &[serde_json::Value]) -> Option<String> {
+    let fits = |v: &&(String, bool)| loader_satisfies(&v.0, requirements);
+    builds
+        .iter()
+        .filter(|b| b.1)
+        .find(fits)
+        .or_else(|| builds.iter().find(fits))
+        .map(|b| b.0.clone())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn loader_bump_picks_newest_stable_that_fits() {
+        let reqs = vec![serde_json::json!(">=0.16.14"), serde_json::json!(">=0.19.5")];
+        assert!(!loader_satisfies("0.18.4", &reqs));
+        assert!(loader_satisfies("0.19.5", &reqs));
+        let builds = vec![
+            ("0.20.0-beta.1".to_string(), false),
+            ("0.19.6".to_string(), true),
+            ("0.19.5".to_string(), true),
+            ("0.18.4".to_string(), true),
+        ];
+        assert_eq!(loader_for(&builds, &reqs).as_deref(), Some("0.19.6"));
+        assert_eq!(loader_for(&builds, &[serde_json::json!(">=0.20.0-beta.1")]).as_deref(), Some("0.20.0-beta.1"));
+        assert_eq!(loader_for(&builds, &[serde_json::json!(">=9")]), None);
+    }
 
     fn jar_bytes(meta: &str, nested: &[(&str, Vec<u8>)]) -> Vec<u8> {
         let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));

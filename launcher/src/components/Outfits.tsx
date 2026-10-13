@@ -78,7 +78,7 @@ export default function Outfits({
         <PxBox family="panel" height="md" className="outfits__field">
           <input
             className="input"
-            placeholder="NAME THIS LOOK"
+            placeholder="Name this look"
             value={name}
             maxLength={MAX_NAME}
             spellCheck={false}
@@ -111,7 +111,7 @@ export default function Outfits({
       {outfits?.map((o) => (
         <div key={o.id} className="srow outfits__row">
           <div className="srow__text">
-            <TT size={20} tone="plain">
+            <TT size={20} tone="plain" keep>
               {o.name}
             </TT>
             <span className="meta">{summary(o.loadout)}</span>

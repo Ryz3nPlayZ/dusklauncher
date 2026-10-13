@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavCell, PxBox, PxButton, TT } from '../components/px/Px';
 import { Choice, Row } from '../components/px/Form';
 import { api, type AppInfo, type Referral, type Settings } from '../lib/api';
+import { LEGACY, restartUi, saveUiStyle, UI_STYLE, type UiStyle } from '../lib/ui';
 import Wallpapers, { wallpaperLabel } from './Wallpapers';
 import SettingsSocial from './SettingsSocial';
 
@@ -25,6 +26,8 @@ export default function SettingsView({
   const [info, setInfo] = useState<AppInfo | null>(null);
   /* the wallpaper library is its own page (the instances layout) */
   const [gallery, setGallery] = useState(false);
+  /* the look saved for the next start; it differs from UI_STYLE until a restart */
+  const [ui, setUi] = useState<UiStyle>(UI_STYLE);
   const set = (patch: Partial<Settings>) => onSave({ ...settings, ...patch });
   /* redeem codes → Dusk coins; the wallet is server-side, so this only ever
      reports what the API said */
@@ -45,7 +48,7 @@ export default function SettingsView({
       if (r.unlocked) onUnlocked?.(r.unlocked);
       setCode('');
     } catch (e) {
-      setRedeemNote({ ok: false, text: String(e).replace(/^Error: /, '').toUpperCase() });
+      setRedeemNote({ ok: false, text: String(e).replace(/^Error: /, '') });
     } finally {
       setRedeeming(false);
     }
@@ -91,7 +94,7 @@ export default function SettingsView({
       setReferral(await api.claimReferral(trimmed));
       setRefCode('');
     } catch (e) {
-      setReferralErr(String(e).replace(/^Error: /, '').toUpperCase());
+      setReferralErr(String(e).replace(/^Error: /, ''));
     } finally {
       setClaiming(false);
     }
@@ -143,7 +146,55 @@ export default function SettingsView({
         <div className="win__body settings__body scroll">
           {tab === 'GENERAL' && (
             <>
-              <Row label="THEME" hint="Swaps the accent family and the scene behind the launcher.">
+              <Row
+                label="INTERFACE"
+                hint={
+                  ui !== UI_STYLE
+                    ? 'Restart the launcher to switch. A running game and downloads keep going.'
+                    : ui === 'legacy'
+                      ? 'The original pixel look: blocky plates and the Minecraft font.'
+                      : 'Rounded, soft and quiet. Legacy brings back the original pixel look.'
+                }
+              >
+                {ui !== UI_STYLE && (
+                  <PxButton
+                    family="accent"
+                    height="md"
+                    onClick={() => {
+                      // come back to this page, not Home
+                      try {
+                        sessionStorage.setItem('dusk.reopen', 'settings');
+                      } catch {
+                        /* storage blocked: it just opens on Home */
+                      }
+                      restartUi();
+                    }}
+                  >
+                    <TT size={16} tone="accent">
+                      RESTART NOW
+                    </TT>
+                  </PxButton>
+                )}
+                <Choice
+                  value={ui}
+                  onPick={(v) => {
+                    setUi(v);
+                    saveUiStyle(v);
+                  }}
+                  options={[
+                    { value: 'modern', label: 'MODERN' },
+                    { value: 'legacy', label: 'LEGACY' },
+                  ]}
+                />
+              </Row>
+              <Row
+                label="THEME"
+                hint={
+                  LEGACY
+                    ? 'Swaps the accent family and the scene behind the launcher.'
+                    : 'Picks the scene behind the launcher.'
+                }
+              >
                 <Choice
                   value={settings.theme}
                   onPick={(theme) => set({ theme })}
@@ -263,7 +314,7 @@ export default function SettingsView({
                   <input
                     className="input"
                     value={code}
-                    placeholder="CODE"
+                    placeholder="Code"
                     disabled={redeeming}
                     spellCheck={false}
                     autoCapitalize="off"
@@ -275,7 +326,7 @@ export default function SettingsView({
                   <TT size={16}>{redeeming ? 'REDEEMING…' : 'REDEEM'}</TT>
                 </PxButton>
                 {redeemNote?.ok && (
-                  <TT size={13} tone="green">
+                  <TT size={13} tone="green" keep>
                     {redeemNote.text}
                   </TT>
                 )}
@@ -315,7 +366,7 @@ export default function SettingsView({
                 {referral && (
                   <>
                     <PxBox family="panel" height="md">
-                      <TT size={16} tone="accent">
+                      <TT size={16} tone="accent" keep>
                         {referral.code}
                       </TT>
                     </PxBox>
@@ -340,8 +391,8 @@ export default function SettingsView({
                   controlClassName="srow__control--wrap"
                 >
                   {referral.referredBy ? (
-                    <TT size={16} tone={referral.referralPaid ? 'green' : 'dim'}>
-                      {referral.referredBy.toUpperCase()}
+                    <TT size={16} tone={referral.referralPaid ? 'green' : 'dim'} keep>
+                      {referral.referredBy}
                     </TT>
                   ) : (
                     <>
@@ -349,7 +400,7 @@ export default function SettingsView({
                         <input
                           className="input"
                           value={refCode}
-                          placeholder="FRIEND'S CODE"
+                          placeholder="Friend's code"
                           disabled={claiming}
                           spellCheck={false}
                           autoCapitalize="characters"

@@ -1,0 +1,8 @@
+/* the pixel look the launcher had before, kept for Settings → Interface →
+   Legacy, in cascade order; compat.css styles what was added since */
+@import './tokens.css';
+@import './base.css';
+@import './px.css';
+@import './nav.css';
+@import './views.css';
+@import './compat.css';

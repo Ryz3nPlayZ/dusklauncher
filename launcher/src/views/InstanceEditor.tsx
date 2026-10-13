@@ -213,6 +213,9 @@ export default function InstanceEditor({
     <div className="page">
       {/* 172:580 / 172:352 / 172:602 — icon, name + metadata, the type plate */}
       <div className="page__head editor__head">
+        <PxButton family="grey" height="md" className="editor__back" title="Back to instances" aria-label="Back to instances" onClick={onBack}>
+          <PixelGlyph glyph="left" size={22} color="var(--text-2)" />
+        </PxButton>
         <button
           type="button"
           className="editor__icon"
@@ -229,7 +232,7 @@ export default function InstanceEditor({
         <div className="editor__ident">
           <div className="editor__ident-row">
             <h1 className="page__title editor__title">{profile.name}</h1>
-            <PxBox family="moss" height="sm" className="editor__badge">
+            <PxBox family="soft" height="sm" className="editor__badge">
               <TT size={14} tone="plain">
                 {profile.loader.toUpperCase()}
               </TT>
@@ -248,10 +251,6 @@ export default function InstanceEditor({
             </TT>
           )}
         </div>
-        <PxButton family="grey" height="md" className="browse__back" onClick={onBack}>
-          <PixelGlyph glyph="left" size={22} color="var(--text-2)" />
-          <TT size={16}>BACK</TT>
-        </PxButton>
         {mine ? (
           <PxButton
             family="red"
@@ -273,9 +272,7 @@ export default function InstanceEditor({
             title={live ? 'Another instance is running' : undefined}
             onClick={() => onLaunch(profile.id)}
           >
-            <TT size={16} tone="accent">
-              PLAY NOW
-            </TT>
+            <TT size={16}>Play</TT>
           </PxButton>
         )}
       </div>
@@ -524,7 +521,7 @@ function SettingsTab({
     setNote(null);
     try {
       const copy = await api.duplicateProfile(profile.id);
-      setNote(`Copied as “${copy.name}” — it's in INSTANCES.`);
+      setNote(`Copied as “${copy.name}” — it's on the Instances page.`);
       await onSaved();
     } catch (e) {
       setNote(String(e));
@@ -626,7 +623,7 @@ function SettingsTab({
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
         </PxBox>
       </Row>
-      <Row label="GROUP" hint="Instances in a group get their own tab in INSTANCES. Empty = no group.">
+      <Row label="GROUP" hint="Instances in a group get their own tab on the Instances page. Leave it empty for none.">
         <PxBox family="panel" height="md">
           <input
             className="input"
@@ -972,7 +969,7 @@ function SettingsTab({
               DELETE INSTANCE
             </TT>
           </PxButton>
-          <PxButton family="green" height="md" disabled={!dirty || !valid || busy} onClick={() => void save()}>
+          <PxButton family="accent" height="md" disabled={!dirty || !valid || busy} onClick={() => void save()}>
             <TT size={16} tone="green">
               {busy ? 'SAVING…' : 'SAVE'}
             </TT>
@@ -1363,7 +1360,7 @@ function ContentTab({
 
       {vanilla && (
         <span className="meta">
-          This instance runs vanilla — switch the loader to Fabric or NeoForge in SETTINGS for mods to load.
+          This instance runs vanilla — switch the loader to Fabric or NeoForge in Settings for mods to load.
         </span>
       )}
       {note && <span className="meta">{note}</span>}
@@ -1442,7 +1439,7 @@ function ContentTab({
         {dropping && (
           <div className="editor__drop">
             <TT size={20} tone="accent">
-              {`DROP TO ADD TO ${profile.name.toUpperCase()}`}
+              {`Drop to add to ${profile.name}`}
             </TT>
             <span className="meta">.jar mods · .zip resource packs and shader packs</span>
           </div>
@@ -1474,7 +1471,7 @@ function ContentTab({
                   )}
                 </span>
                 <span className="editor__file">
-                  <TT size={16} tone={m.enabled ? 'plain' : 'dim'}>
+                  <TT size={16} tone={m.enabled ? 'plain' : 'dim'} keep>
                     {m.name || displayName(m.filename)}
                   </TT>
                   <span className="meta editor__filename">
@@ -1487,7 +1484,7 @@ function ContentTab({
                       title={`What ${upd.versionNumber} changes`}
                       onClick={() => setNotesOpen(notesOpen === key ? null : key)}
                     >
-                      {notesOpen === key ? 'HIDE WHAT’S NEW' : 'WHAT’S NEW'}
+                      {notesOpen === key ? 'Hide what’s new' : 'What’s new'}
                     </button>
                   )}
                 </span>
@@ -1822,7 +1819,7 @@ function WorldsTab({
         {dragOver && (
           <div className="editor__drop">
             <TT size={20} tone="accent">
-              {`DROP TO ADD TO ${profile.name.toUpperCase()}`}
+              {`Drop to add to ${profile.name}`}
             </TT>
             <span className="meta">world .zip files and world folders</span>
           </div>
@@ -1846,7 +1843,7 @@ function WorldsTab({
                 )}
               </span>
               <span className="editor__file">
-                <TT size={16}>{sv.name}</TT>
+                <TT size={16} keep>{sv.name}</TT>
                 {up && up.motd.length > 0 ? (
                   <span className="meta worlds__motd">
                     {up.motd.map((m, i) => (
@@ -1952,7 +1949,7 @@ function WorldsTab({
                 title={busy ? 'Close the game first to rename it' : 'Rename'}
                 onClick={() => setRenaming({ world: w, name: w.levelName ?? w.name })}
               >
-                <TT size={16}>{plain(w.levelName ?? w.name)}</TT>
+                <TT size={16} keep>{plain(w.levelName ?? w.name)}</TT>
               </button>
               <span className="meta">
                 {[
@@ -2310,7 +2307,7 @@ function DatapacksWindow({
   return (
     <div className="modal-scrim" onClick={onClose}>
       <PxBox family="red" className="px--window modal extimport" onClick={(e) => e.stopPropagation()}>
-        <TT size={22}>{`DATAPACKS · ${plain(world.levelName ?? world.name).toUpperCase()}`}</TT>
+        <TT size={22}>{`Datapacks · ${plain(world.levelName ?? world.name)}`}</TT>
         <span className="meta">
           {dragOver
             ? 'Drop to add these to the world.'
@@ -2341,7 +2338,7 @@ function DatapacksWindow({
                     )}
                   </span>
                   <span className="extimport__info">
-                    <TT size={16}>{h.title}</TT>
+                    <TT size={16} keep>{h.title}</TT>
                     <span className="meta" title={h.description}>
                       {`by ${h.author} · ${fmtCount(h.downloads)} downloads · ${h.description}`}
                     </span>
@@ -2377,7 +2374,7 @@ function DatapacksWindow({
                 )}
               </span>
               <span className="extimport__info">
-                <TT size={16} tone={p.enabled ? undefined : 'dim'}>
+                <TT size={16} tone={p.enabled ? undefined : 'dim'} keep>
                   {p.file.replace(/\.zip$/i, '')}
                 </TT>
                 <span className="meta" title={p.description ?? undefined}>
@@ -2500,7 +2497,7 @@ function BackupsWindow({
           {backups?.map((b) => (
             <div key={b.file} className="extimport__row">
               <span className="extimport__info">
-                <TT size={16}>{b.world}</TT>
+                <TT size={16} keep>{b.world}</TT>
                 <span className="meta" title={`backups/${b.file}`}>
                   {[ago(b.made), b.auto ? 'auto, after a session' : 'made by hand', fmtBytes(b.size)].join(' · ')}
                 </span>

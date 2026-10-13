@@ -29,7 +29,7 @@ export default function InstallModpack({
   onBack,
   heading = 'INSTALL MODPACK',
   action = 'INSTALL',
-  defaultName = target.title.toUpperCase(),
+  defaultName = target.title,
   note,
   installed,
   busyLabel = 'INSTALLING…',
@@ -141,7 +141,7 @@ export default function InstallModpack({
               INSTANCE NAME
             </TT>
             {installed ? (
-              <TT size={20}>{defaultName}</TT>
+              <TT size={20} keep>{defaultName}</TT>
             ) : (
               <PxBox family="panel" height="md">
                 <input
@@ -212,7 +212,7 @@ export default function InstallModpack({
                 </span>
                 <span className="project__vtext">
                   <span className="browse__name">
-                    <TT size={16}>{v.name || v.versionNumber}</TT>
+                    <TT size={16} keep>{v.name || v.versionNumber}</TT>
                     {v.name && v.name !== v.versionNumber && <span className="meta">{v.versionNumber}</span>}
                     {v.id === installed && (
                       <TT size={11} tone="green">

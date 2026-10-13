@@ -187,11 +187,8 @@ export default function BrowseProjects({
     <div className="page">
       {/* BACK sits where the title would; the search takes the rest of the row */}
       <div className="page__head">
-        <PxButton family="red" height="md" className="browse__back" onClick={onBack}>
-          <PixelGlyph glyph="left" size={22} color="var(--r-co)" />
-          <TT size={20} tone="red">
-            BACK
-          </TT>
+        <PxButton family="grey" height="md" className="browse__back" title="Back" aria-label="Back" onClick={onBack}>
+          <PixelGlyph glyph="left" size={22} color="var(--text-2)" />
         </PxButton>
         <PxBox family="panel" height="md" className="search browse__search">
           <PixelGlyph glyph="search" size={26} color="var(--text-3)" />
@@ -212,7 +209,7 @@ export default function BrowseProjects({
         <PxBox family="panel" className="browse__filters scroll">
           <div className="browse__filters-head">
             <TT size={20} tone="dim">
-              FILTERS
+              Filters
             </TT>
             {activeCount > 0 && (
               <button
@@ -222,8 +219,8 @@ export default function BrowseProjects({
                   setFacets(EMPTY_FACETS);
                 }}
               >
-                <TT size={13} tone="red">
-                  CLEAR
+                <TT size={14} tone="sub">
+                  Clear all
                 </TT>
               </button>
             )}
@@ -293,7 +290,7 @@ export default function BrowseProjects({
               >
                 {[10, 20, 40].map((n) => (
                   <option key={n} value={n}>
-                    {n}
+                    {n} per page
                   </option>
                 ))}
               </select>
@@ -374,7 +371,7 @@ export default function BrowseProjects({
                   </span>
                   <span className="browse__text">
                     <span className="browse__name">
-                      <TT size={22}>{h.title}</TT>
+                      <TT size={22} keep>{h.title}</TT>
                       <span className="meta browse__by">
                         by {h.author} · {fmtCount(h.downloads)} downloads · {fmtCount(h.follows)} followers
                       </span>

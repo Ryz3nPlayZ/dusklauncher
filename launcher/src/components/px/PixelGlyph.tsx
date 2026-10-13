@@ -1,9 +1,24 @@
 /**
- * Hand-drawn pixel glyphs as crisp SVG rects — no icon font, no emoji
- * (DESIGN.md). Each glyph is drawn on a 12×12 grid.
+ * The app's small icons, by name. Phosphor (MIT) at one weight, so every
+ * glyph in the app reads as one family.
  */
+import {
+  CaretLeft,
+  CaretRight,
+  Cube,
+  GearSix,
+  MagnifyingGlass,
+  Minus,
+  Square,
+  Star,
+  X,
+} from '@phosphor-icons/react';
+import type { Icon } from '@phosphor-icons/react';
+import { LEGACY } from '../../lib/ui';
+
 export type Glyph = 'minimize' | 'maximize' | 'close' | 'search' | 'gear' | 'left' | 'right' | 'box' | 'star';
 
+/* the legacy look's glyphs: crisp pixel rects on a 12×12 grid */
 const RECTS: Record<Glyph, [number, number, number, number][]> = {
   right: [
     [2, 2, 2, 2],
@@ -84,30 +99,58 @@ const RECTS: Record<Glyph, [number, number, number, number][]> = {
   ],
 };
 
+const ICONS: Record<Glyph, Icon> = {
+  minimize: Minus,
+  maximize: Square,
+  close: X,
+  search: MagnifyingGlass,
+  gear: GearSix,
+  left: CaretLeft,
+  right: CaretRight,
+  box: Cube,
+  star: Star,
+};
+
 export default function PixelGlyph({
   glyph,
   size = 12,
   color = 'currentColor',
+  filled,
   className,
 }: {
   glyph: Glyph;
   size?: number;
   color?: string;
+  /** the solid cut — a favourite's star */
+  filled?: boolean;
   className?: string;
 }) {
+  if (LEGACY) {
+    return (
+      <svg
+        className={className}
+        width={size}
+        height={size}
+        viewBox="0 0 12 12"
+        shapeRendering="crispEdges"
+        aria-hidden="true"
+        style={{ flex: 'none' }}
+      >
+        {RECTS[glyph].map(([x, y, w, h], i) => (
+          <rect key={i} x={x} y={y} width={w} height={h} fill={color} />
+        ))}
+      </svg>
+    );
+  }
+  const I = ICONS[glyph];
   return (
-    <svg
+    <I
       className={className}
-      width={size}
-      height={size}
-      viewBox="0 0 12 12"
-      shapeRendering="crispEdges"
+      size={Math.round(size * 1.25)}
+      color={color}
+      weight={filled ? 'fill' : 'bold'}
       aria-hidden="true"
       style={{ flex: 'none' }}
-    >
-      {RECTS[glyph].map(([x, y, w, h], i) => (
-        <rect key={i} x={x} y={y} width={w} height={h} fill={color} />
-      ))}
-    </svg>
+    />
   );
 }

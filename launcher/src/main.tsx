@@ -1,14 +1,18 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import './design/tokens.css';
-import './design/base.css';
-import './design/px.css';
-import './design/nav.css';
-import './design/views.css';
+import { LEGACY, UI_STYLE } from './lib/ui';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+/* one look's stylesheets, chosen at startup (Settings → Interface); the app
+   renders once they're in, so the other look never flashes first */
+const styles = LEGACY ? import('./design/legacy/index.css') : import('./design/index.css');
+
+document.documentElement.dataset.ui = UI_STYLE;
+
+void styles.finally(() =>
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  ),
 );
