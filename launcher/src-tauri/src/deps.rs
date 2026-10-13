@@ -497,24 +497,54 @@ pub async fn mod_problems(state: State<'_, AppState>, profile_id: String) -> Res
     .map_err(|e| e.to_string())
 }
 
-/// The `fabricloader` ranges the enabled jars in `mods_dir` depend on. Only
-/// each jar's own fabric.mod.json is read, so this stays quick enough to run
-/// on every launch.
-pub fn loader_requirements(mods_dir: &std::path::Path) -> Vec<serde_json::Value> {
+/// The ranges the enabled jars in `mods_dir`, and the jars they bundle (two
+/// levels down), put on the dependency `dep` (`fabricloader`, `java`). A
+/// bundled module can ask for more than its jar does: C2ME's natives-math
+/// wants Java 22 while C2ME itself says 21. Only fabric.mod.json files are
+/// read, so this stays quick enough to run on every launch.
+pub fn requirements(mods_dir: &std::path::Path, dep: &str) -> Vec<serde_json::Value> {
+    fn walk<R: Read + Seek>(zip: &mut zip::ZipArchive<R>, dep: &str, depth: u32, out: &mut Vec<serde_json::Value>) {
+        let Some(meta) = meta_of(zip) else { return };
+        if let Some(range) = meta.get("depends").and_then(|d| d.get(dep)) {
+            out.push(range.clone());
+        }
+        if depth >= 2 {
+            return;
+        }
+        for nested in meta.get("jars").and_then(|v| v.as_array()).into_iter().flatten() {
+            let Some(file) = nested.get("file").and_then(|v| v.as_str()) else { continue };
+            let Some(bytes) = read_entry(zip, file, NESTED_CAP) else { continue };
+            if let Ok(mut inner) = zip::ZipArchive::new(std::io::Cursor::new(bytes)) {
+                walk(&mut inner, dep, depth + 1, out);
+            }
+        }
+    }
     let Ok(rd) = std::fs::read_dir(mods_dir) else { return Vec::new() };
-    rd.flatten()
-        .filter(|e| e.file_name().to_string_lossy().ends_with(".jar"))
-        .filter_map(|e| {
-            let mut zip = zip::ZipArchive::new(std::fs::File::open(e.path()).ok()?).ok()?;
-            meta_of(&mut zip)?.get("depends")?.get("fabricloader").cloned()
-        })
-        .collect()
+    let mut out = Vec::new();
+    for e in rd.flatten().filter(|e| e.file_name().to_string_lossy().ends_with(".jar")) {
+        if let Some(mut zip) = std::fs::File::open(e.path()).ok().and_then(|f| zip::ZipArchive::new(f).ok()) {
+            walk(&mut zip, dep, 0, &mut out);
+        }
+    }
+    out
 }
 
 /// Whether `version` of Fabric Loader takes every range; a range that can't
 /// be read never counts against it.
 pub fn loader_satisfies(version: &str, requirements: &[serde_json::Value]) -> bool {
     requirements.iter().all(|r| satisfies(version, r) != Some(false))
+}
+
+/// The Mojang runtimes a launch can move up to, oldest first.
+const RUNTIMES: &[(u32, &str)] = &[(17, "java-runtime-gamma"), (21, "java-runtime-delta"), (25, "java-runtime-epsilon")];
+
+/// When a mod's `java` range (from [`requirements`]) shuts out `major`, the
+/// oldest newer Mojang runtime every range takes, as (major, component).
+pub fn java_for(major: u32, requirements: &[serde_json::Value]) -> Option<(u32, &'static str)> {
+    if loader_satisfies(&major.to_string(), requirements) {
+        return None;
+    }
+    RUNTIMES.iter().copied().find(|(m, _)| *m > major && loader_satisfies(&m.to_string(), requirements))
 }
 
 /// Of `builds` (newest first, `(version, stable)`), the newest stable one
@@ -533,6 +563,38 @@ pub fn loader_for(builds: &[(String, bool)], requirements: &[serde_json::Value])
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn java_moves_up_only_for_a_mod_that_needs_it() {
+        let c2me = vec![serde_json::json!(">=21"), serde_json::json!(">=22")];
+        assert_eq!(java_for(21, &c2me), Some((25, "java-runtime-epsilon")));
+        assert_eq!(java_for(25, &c2me), None);
+        assert_eq!(java_for(21, &[serde_json::json!(">=17")]), None);
+        assert_eq!(java_for(21, &[serde_json::json!(">=99")]), None);
+    }
+
+    #[test]
+    fn requirements_reach_bundled_jars() {
+        let mut inner = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        inner.start_file("fabric.mod.json", zip::write::SimpleFileOptions::default()).unwrap();
+        inner.write_all(br#"{"id":"natives","depends":{"java":">=22"}}"#).unwrap();
+        let inner = inner.finish().unwrap().into_inner();
+        let dir = std::env::temp_dir().join(format!("dusk-reqs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut outer = zip::ZipWriter::new(std::fs::File::create(dir.join("c2me.jar")).unwrap());
+        let opts = zip::write::SimpleFileOptions::default();
+        outer.start_file("fabric.mod.json", opts).unwrap();
+        outer
+            .write_all(br#"{"id":"c2me","depends":{"java":">=21","fabricloader":">=0.16"},"jars":[{"file":"META-INF/jars/n.jar"}]}"#)
+            .unwrap();
+        outer.start_file("META-INF/jars/n.jar", opts).unwrap();
+        outer.write_all(&inner).unwrap();
+        outer.finish().unwrap();
+        assert_eq!(requirements(&dir, "java"), vec![serde_json::json!(">=21"), serde_json::json!(">=22")]);
+        assert_eq!(requirements(&dir, "fabricloader"), vec![serde_json::json!(">=0.16")]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn loader_bump_picks_newest_stable_that_fits() {

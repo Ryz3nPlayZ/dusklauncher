@@ -629,7 +629,7 @@ async fn bump_loader_for_mods(state: &AppState, profile: Profile) -> Profile {
         return profile;
     };
     let mods = profile.dirs(&state.data_dir).mods;
-    let reqs = tokio::task::spawn_blocking(move || crate::deps::loader_requirements(&mods)).await.unwrap_or_default();
+    let reqs = tokio::task::spawn_blocking(move || crate::deps::requirements(&mods, "fabricloader")).await.unwrap_or_default();
     if crate::deps::loader_satisfies(&pinned, &reqs) {
         return profile;
     }
@@ -786,7 +786,8 @@ pub async fn install_and_launch(
         },
     };
 
-    let java_bin = java_for(&app, &client, &state, &profile, &dirs, &version.effective_java()).await?;
+    let java = java_for_mods(&profile, &dirs, version.effective_java()).await;
+    let java_bin = java_for(&app, &client, &state, &profile, &dirs, &java).await?;
 
     let env = {
         let (env_vars, [prelaunch_hook, wrapper_hook, post_exit_hook]) = state.settings.lock().unwrap().launch_hooks(&profile);
@@ -1232,6 +1233,29 @@ pub async fn game_state(state: State<'_, AppState>) -> Result<Option<GameStatePa
         state: "running".into(),
         code: None,
     }))
+}
+
+/// The game's Java, moved up to a newer Mojang runtime when a mod (or a
+/// module bundled in one) won't take it: C2ME's natives-math needs Java 22
+/// while 1.21.11 ships on 21, and Fabric Loader would stop at Incompatible
+/// mods found.
+async fn java_for_mods(
+    profile: &Profile,
+    dirs: &fasterlauncher_core::profile::ProfileDirs,
+    java: fasterlauncher_core::meta::JavaVersion,
+) -> fasterlauncher_core::meta::JavaVersion {
+    if profile.loader != Loader::Fabric {
+        return java;
+    }
+    let mods = dirs.mods.clone();
+    let reqs = tokio::task::spawn_blocking(move || crate::deps::requirements(&mods, "java")).await.unwrap_or_default();
+    match crate::deps::java_for(java.major_version, &reqs) {
+        Some((major, component)) => {
+            tracing::info!("a mod needs a newer Java: {} -> {major}", java.major_version);
+            fasterlauncher_core::meta::JavaVersion { component: component.into(), major_version: major }
+        }
+        None => java,
+    }
 }
 
 /// Java for a profile: the instance's own executable, else the settings
