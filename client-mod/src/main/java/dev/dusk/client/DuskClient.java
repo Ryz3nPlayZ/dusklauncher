@@ -37,6 +37,7 @@ import dev.dusk.client.modules.hud.LightLevel;
 import dev.dusk.client.modules.hud.LookingAt;
 import dev.dusk.client.modules.hud.ServerLag;
 import dev.dusk.client.modules.misc.BackgroundFps;
+import dev.dusk.client.modules.render.RenderScale;
 import dev.dusk.client.modules.misc.ChatSearch;
 import dev.dusk.client.modules.misc.SoundChanger;
 import dev.dusk.client.modules.misc.NameHider;
@@ -224,6 +225,7 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new CrosshairIndicator());
         modules.register(new Fullbright());
         modules.register(new MotionBlur());
+        if (Compat.RENDER_SCALE) modules.register(new RenderScale());
         modules.register(new TntCountdown());
         modules.register(new NameHider());
         modules.register(new FovChanger());

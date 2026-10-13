@@ -26,7 +26,8 @@ public final class ShieldStateTracker {
     private static final long ATTACK_ENTRY_TTL_MS = 1000;
     private static final byte SHIELD_DISABLE_STATUS = 30;
     private static final int DISABLE_TICKS = 100;
-    private static final ItemStack SHIELD = new ItemStack(Items.SHIELD);
+    /** Built on first use: on 26.x an ItemStack made before the item components are bound (the title screen) throws. */
+    private static ItemStack shield;
     /** The use time vanilla gives a shield, which it counts down while raised. */
     private static final int IDLE_USE_TIME = 72000;
 
@@ -39,6 +40,11 @@ public final class ShieldStateTracker {
     private static Level lastLevel;
 
     private ShieldStateTracker() {}
+
+    private static ItemStack shield() {
+        if (shield == null) shield = new ItemStack(Items.SHIELD);
+        return shield;
+    }
 
     /** Implemented on LivingEntity by a mixin: the item it is using and the ticks it has left. */
     public interface UseSync {
@@ -80,13 +86,13 @@ public final class ShieldStateTracker {
             }
         }
         shieldUseTicks.keySet().removeIf(Player::isRemoved);
-        if (client.player != null && Compat.isOnCooldown(client.player, SHIELD)) {
+        if (client.player != null && Compat.isOnCooldown(client.player, shield())) {
             localShieldCooldownTicks++;
         } else {
             localShieldCooldownTicks = 0;
         }
         if (pendingBreak != null && currentTick - pendingBreak.createdTick() >= 1) {
-            if (client.player == null || !Compat.isOnCooldown(client.player, SHIELD)) {
+            if (client.player == null || !Compat.isOnCooldown(client.player, shield())) {
                 disable(pendingBreak.target());
             }
             pendingBreak = null;
@@ -187,14 +193,14 @@ public final class ShieldStateTracker {
 
     public static boolean isCoolingDown(Player player) {
         Minecraft client = Minecraft.getInstance();
-        if (player == client.player) return Compat.isOnCooldown(player, SHIELD);
+        if (player == client.player) return Compat.isOnCooldown(player, shield());
         return cooldowns.getOrDefault(player.getUUID(), 0) > 0;
     }
 
     public static float getCooldownProgress(Player player) {
         if (player == null) return 0f;
         Minecraft client = Minecraft.getInstance();
-        if (player == client.player) return Compat.cooldownPercent(player, SHIELD, 0);
+        if (player == client.player) return Compat.cooldownPercent(player, shield(), 0);
         int remaining = cooldowns.getOrDefault(player.getUUID(), 0);
         if (remaining <= 0) return 0f;
         return Math.max(0f, Math.min(1f, remaining / (float) DISABLE_TICKS));

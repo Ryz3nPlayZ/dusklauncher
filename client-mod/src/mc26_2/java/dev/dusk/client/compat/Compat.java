@@ -32,6 +32,8 @@ public final class Compat {
      * them stay unregistered elsewhere rather than showing a dead toggle.
      */
     public static final boolean MODERN_CLIENT_HOOKS = true;
+    /** Render Scale's world pass (dev.dusk.client.render.WorldScale) exists on this line. */
+    public static final boolean RENDER_SCALE = false;
 
     public static void setScreen(Minecraft mc, @Nullable Screen screen) {
         mc.gui.setScreen(screen);
