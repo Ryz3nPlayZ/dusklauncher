@@ -1,0 +1,4 @@
+# Render Scale swaps the main target the 1.21.11 way (getMainRenderTarget,
+# the sampler cache); the versions below it and 26.x leave it off for now
+java/dev/dusk/client/render/WorldScale.java
+java/dev/dusk/client/mixin/scale/**
