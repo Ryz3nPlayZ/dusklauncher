@@ -102,9 +102,11 @@ if [ "$(printf '%s' "$json" | python3 -c 'import json,sys; print(json.load(sys.s
   exit 0
 fi
 
-# release notes: the commit subjects since the previous tag, unless someone
-# already wrote proper notes into the draft
-prev="$(git describe --tags --abbrev=0 "$tag^" 2>/dev/null || true)"
+# release notes: the commit subjects since the last published release (a tag
+# whose run was cancelled never reached anyone), unless someone already wrote
+# proper notes into the draft
+prev="$(gh release list --repo "$REPO" --exclude-drafts --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || true)"
+git rev-parse -q --verify "refs/tags/$prev" >/dev/null 2>&1 || prev="$(git describe --tags --abbrev=0 "$tag^" 2>/dev/null || true)"
 body="$(printf '%s' "$json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["body"])')"
 if [[ "$body" == Draft* || -z "$body" ]]; then
   if [ -n "$prev" ]; then
