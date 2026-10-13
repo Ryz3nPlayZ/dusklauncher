@@ -679,7 +679,7 @@ public class SocialScreen extends PanelScreen {
     }
 
     private void buildShots(List<Row> out, Social.Friend f) {
-        out.add(section("SEND A SCREENSHOT TO " + f.username().toUpperCase(Locale.ROOT)));
+        out.add(section("SEND A SCREENSHOT TO " + Theme.caps(f.username())));
         List<Path> list = shots;
         if (list == null) {
             out.add(text("Loading...", Theme.TEXT_MUTED, false));
@@ -702,7 +702,7 @@ public class SocialScreen extends PanelScreen {
                     c.fill(tx, y, tx + tw, y + th, 0xFF101010);
                     RemoteImages.Image img = thumbs.get(p.toString(), () -> Files.readAllBytes(p));
                     if (img != null) fit(c, img, tx, y, tw, th);
-                    c.outline(tx, y, tw, th, hot ? Theme.LABEL_UP : 0xFF000000);
+                    c.outline(tx, y, tw, th, hot ? Theme.pick(Theme.TEXT, Theme.LABEL_UP) : Theme.pick(Theme.LINE_2, 0xFF000000));
                     if (p.equals(sending)) {
                         c.fill(tx, y, tx + tw, y + th, 0xAA000000);
                         c.centeredText("SENDING...", tx + tw / 2, y + th / 2 - 4, Theme.TEXT, false);
@@ -821,7 +821,7 @@ public class SocialScreen extends PanelScreen {
     private Row invite(Social.Message m, boolean mine, String name, int maxW) {
         String server = m.meta("server"), version = m.meta("version");
         int cw = Math.min(maxW, 210), ch = 46;
-        String title = mine ? "YOU SENT AN INVITE" : name.toUpperCase(Locale.ROOT) + " INVITED YOU";
+        String title = mine ? "YOU SENT AN INVITE" : Theme.caps(name) + " INVITED YOU";
         boolean canJoin = !mine && !server.isEmpty();
         return new Row(ch + 1, (c, x, y, w, mx, my) -> {
             int bx = mine ? x + w - cw : x;
@@ -843,7 +843,7 @@ public class SocialScreen extends PanelScreen {
     }
 
     private Row gift(Social.Message m, boolean mine, String name, int maxW) {
-        String title = mine ? "YOU GIFTED " + name.toUpperCase(Locale.ROOT) : name.toUpperCase(Locale.ROOT) + " GIFTED YOU";
+        String title = mine ? "YOU GIFTED " + Theme.caps(name) : Theme.caps(name) + " GIFTED YOU";
         String item = m.meta("name").isEmpty() ? "A cosmetic" : m.meta("name");
         int cw = Math.min(maxW, 210), ch = mine ? 32 : 44;
         return new Row(ch + 1, (c, x, y, w, mx, my) -> {
@@ -857,7 +857,7 @@ public class SocialScreen extends PanelScreen {
     }
 
     private Row giftRun(List<Social.Message> run, boolean mine, String name, int maxW) {
-        String upper = name.toUpperCase(Locale.ROOT);
+        String upper = Theme.caps(name);
         String title = mine ? "YOU GIFTED " + upper + " " + run.size() + " ITEMS" : upper + " GIFTED YOU " + run.size() + " ITEMS";
         List<String> names = new ArrayList<>();
         for (int k = 0; k < Math.min(GIFT_PREVIEW, run.size()); k++) {
@@ -896,9 +896,9 @@ public class SocialScreen extends PanelScreen {
             c.fill(bx, y, bx + fw, y + fh, 0xFF101010);
             if (img != null) {
                 fit(c, img, bx, y, fw, fh);
-                c.outline(bx, y, fw, fh, Vanilla.inside(mx, my, bx, y, fw, fh) ? Theme.LABEL_UP : 0xFF000000);
+                c.outline(bx, y, fw, fh, Vanilla.inside(mx, my, bx, y, fw, fh) ? Theme.pick(Theme.TEXT, Theme.LABEL_UP) : Theme.pick(Theme.LINE_2, 0xFF000000));
             } else {
-                c.outline(bx, y, fw, fh, 0xFF000000);
+                c.outline(bx, y, fw, fh, Theme.pick(Theme.LINE_2, 0xFF000000));
                 String s = failed ? "EXPIRED" : "Loading...";
                 c.text(s, bx + (fw - c.textWidth(s)) / 2, y + fh / 2 - 4, Theme.TEXT_FAINT, false);
             }
@@ -951,13 +951,14 @@ public class SocialScreen extends PanelScreen {
                 return;
             }
             String title = "NO FRIENDS YET", hint = "Add someone with + ADD. They need to have signed in to Dusk Launcher once.";
-            Theme.label(c, title, px + (pw - c.textWidth(title)) / 2, cy, Theme.LABEL_UP, Theme.LABEL_LO, 1f);
+            Theme.label(c, title, px + (pw - Theme.labelWidth(c, title, 1f)) / 2, cy, Theme.LABEL_UP, Theme.LABEL_LO, 1f);
             String h = Theme.ellipsize(c, hint, pw - 2 * pad);
             c.text(h, px + (pw - c.textWidth(h)) / 2, cy + 14, Theme.TEXT_FAINT, false);
             return;
         }
         // the column
-        c.fill(colX, colY, colX + colW, colBottom, 0x40000000);
+        if (Theme.modern()) Round.fill(c, colX, colY, colW, colBottom - colY, Round.w(10), 0x0AFFFFFF, Theme.LINE);
+        else c.fill(colX, colY, colX + colW, colBottom, 0x40000000);
         c.scissor(colX, colY, colX + colW, colBottom);
         boolean inCol = Vanilla.inside(mx, my, colX, colY, colW, colBottom - colY);
         for (int i = 0; i < friends.size(); i++) {
@@ -966,20 +967,28 @@ public class SocialScreen extends PanelScreen {
             Social.Friend f = friends.get(i);
             boolean sel = Social.same(f.uuid(), selected == null ? "" : selected);
             boolean hot = inCol && my >= y && my < y + FRIEND_H;
-            if (sel) Theme.box(c, colX, y, colW, FRIEND_H - 1, Theme.Family.SOFT, false, false);
+            if (Theme.modern()) {
+                if (sel || hot) Round.fill(c, colX + 2, y + 1, colW - 4, FRIEND_H - 2, Round.w(8), sel ? 0x1AFFFFFF : Theme.HOVER);
+            } else if (sel) Theme.box(c, colX, y, colW, FRIEND_H - 1, Theme.Family.SOFT, false, false);
             else if (hot) c.fill(colX, y, colX + colW, y + FRIEND_H - 1, 0x22FFFFFF);
             Heads.draw(c, heads, f.uuid(), colX + 5, y + 5, 16);
             if (f.online()) {
-                c.fill(colX + 17, y + 17, colX + 23, y + 23, 0xFF000000);
-                c.fill(colX + 18, y + 18, colX + 22, y + 22, Theme.GREEN_LO);
+                if (Theme.modern()) {
+                    Round.dot(c, colX + 16, y + 16, 8, 0xFF141417);
+                    Round.dot(c, colX + 17, y + 17, 6, Theme.OK);
+                } else {
+                    c.fill(colX + 17, y + 17, colX + 23, y + 23, 0xFF000000);
+                    c.fill(colX + 18, y + 18, colX + 22, y + 22, Theme.GREEN_LO);
+                }
             }
             int badgeW = 0;
             if (f.unread() > 0) {
                 String n = f.unread() > 99 ? "99+" : String.valueOf(f.unread());
                 badgeW = c.textWidth(n) + 6;
                 int bx = colX + colW - badgeW - 5;
-                c.fill(bx, y + 8, bx + badgeW, y + 18, Theme.ACCENT);
-                c.text(n, bx + 3, y + 9, 0xFF1A1A1A, false);
+                if (Theme.modern()) Round.pill(c, bx, y + 8, badgeW, 10, Theme.ACCENT);
+                else c.fill(bx, y + 8, bx + badgeW, y + 18, Theme.ACCENT);
+                c.text(n, bx + 3, y + 9, Theme.pick(Theme.INK, 0xFF1A1A1A), false);
             }
             int tw = colW - 28 - (badgeW > 0 ? badgeW + 8 : 4);
             c.text(Theme.ellipsize(c, f.username(), tw), colX + 27, y + 4, Theme.TEXT, false);
@@ -990,7 +999,8 @@ public class SocialScreen extends PanelScreen {
         if (fm > 0) {
             int h = colBottom - colY, barH = Math.max(12, h * h / (friends.size() * FRIEND_H));
             int barY = colY + (h - barH) * fscroll / fm;
-            c.fill(colX + colW - 2, barY, colX + colW, barY + barH, Theme.LABEL_LO);
+            if (Theme.modern()) Round.pill(c, colX + colW - 4, barY, 3, barH, 0xFF45454C);
+            else c.fill(colX + colW - 2, barY, colX + colW, barY + barH, Theme.LABEL_LO);
         }
 
         // the conversation
@@ -1012,7 +1022,7 @@ public class SocialScreen extends PanelScreen {
             String label = armed("join:" + f.server()) ? "SURE?" : "JOIN";
             boxButton(c, label, joinX, headY + 6, 46, BTN_H, mx, my, Theme.Family.GREEN, false, true);
         }
-        c.fill(rx + 1, headY + 29, rx + rw - 1, headY + 30, 0xFF000000);
+        c.fill(rx + 1, headY + 29, rx + rw - 1, headY + 30, Theme.pick(Theme.LINE, 0xFF000000));
 
         drawRows(c, mx, my);
         drawScrollbar(c);
@@ -1235,10 +1245,11 @@ public class SocialScreen extends PanelScreen {
 
     /** The launcher's status line. */
     static String status(Social.Friend f) {
-        if (f.online() && f.playing() != null) return f.server() != null ? "PLAYING " + f.playing() + " · " + f.server() : "PLAYING " + f.playing();
-        if (f.online()) return "ONLINE";
-        if (f.lastSeen() <= 0) return "OFFLINE";
-        return "LAST SEEN " + ago(f.lastSeen()).toUpperCase(Locale.ROOT);
+        String playing = Theme.sentence("PLAYING ");
+        if (f.online() && f.playing() != null) return f.server() != null ? playing + f.playing() + " · " + f.server() : playing + f.playing();
+        if (f.online()) return Theme.sentence("ONLINE");
+        if (f.lastSeen() <= 0) return Theme.sentence("OFFLINE");
+        return Theme.sentence("LAST SEEN " + Theme.caps(ago(f.lastSeen())));
     }
 
     static String ago(long unix) {
@@ -1265,6 +1276,6 @@ public class SocialScreen extends PanelScreen {
         LocalDate d = day(unix), today = LocalDate.now();
         if (d.equals(today)) return "TODAY";
         if (d.equals(today.minusDays(1))) return "YESTERDAY";
-        return local(unix).format(DAY).toUpperCase(Locale.ROOT);
+        return Theme.caps(local(unix).format(DAY));
     }
 }

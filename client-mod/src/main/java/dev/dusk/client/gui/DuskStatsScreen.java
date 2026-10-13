@@ -366,7 +366,7 @@ public class DuskStatsScreen extends PanelScreen {
         for (Map.Entry<String, List<Entry>> g : groups.entrySet()) {
             if (group != 0) {
                 out.add(new Cell(listX, y, listW, HEAD_H, null,
-                        g.getKey().toUpperCase(Locale.ROOT) + "  ·  " + g.getValue().size()));
+                        Theme.caps(g.getKey()) + "  ·  " + g.getValue().size()));
                 y += HEAD_H;
             }
             y = grid(out, g.getValue(), y) + 4;
@@ -408,7 +408,7 @@ public class DuskStatsScreen extends PanelScreen {
         if (tab != GENERAL) {
             int s = stat[tab];
             String[] names = tab == ITEMS ? ITEM_STATS : MOB_STATS;
-            x = button(out, "stat", "SHOW: " + (s < 0 ? "ALL" : names[s].toUpperCase(Locale.ROOT)), s >= 0, x);
+            x = button(out, "stat", "SHOW: " + (s < 0 ? "ALL" : Theme.caps(names[s])), s >= 0, x);
         }
         x = button(out, "group", "GROUP: " + GROUPS[group], group != 0, x);
         button(out, "empty", showEmpty ? "EMPTY: SHOWN" : "EMPTY: HIDDEN", showEmpty, x);
@@ -488,7 +488,10 @@ public class DuskStatsScreen extends PanelScreen {
     }
 
     private void drawRow(Canvas c, Entry e, int y, boolean hot, int row) {
-        if (hot) c.fill(listX, y, listX + listW, y + ROW_H, 0xFF333333);
+        if (Theme.modern()) {
+            if (hot) Round.fill(c, listX, y, listW, ROW_H, Round.w(5), 0x14FFFFFF);
+            else if (row % 2 == 0) Round.fill(c, listX, y, listW, ROW_H, Round.w(5), 0x06FFFFFF);
+        } else if (hot) c.fill(listX, y, listX + listW, y + ROW_H, 0xFF333333);
         else if (row % 2 == 0) c.fill(listX, y, listX + listW, y + ROW_H, 0xFF1A1A1A);
         int vw = c.textWidth(e.shown);
         c.text(Theme.ellipsize(c, e.name, listW - vw - 16), listX + 4, y + 2, e.values[0] > 0 ? Theme.TEXT : Theme.TEXT_FAINT, false);
@@ -497,7 +500,7 @@ public class DuskStatsScreen extends PanelScreen {
 
     private void drawItem(Canvas c, Cell cell, int y, boolean hot) {
         Entry e = cell.entry;
-        c.fill(cell.x, y, cell.x + cell.w, y + cell.h, hot ? 0xFF3C3C3C : e.total() > 0 ? 0xFF262626 : 0xFF1A1A1A);
+        tile(c, cell.x, y, cell.w, cell.h, hot, e.total() > 0);
         if (e.icon != null) c.item(e.icon, cell.x + (cell.w - 16) / 2, y + 3);
         int s = stat[tab];
         if (s >= 0) {
@@ -509,7 +512,7 @@ public class DuskStatsScreen extends PanelScreen {
     private void drawMob(Canvas c, Cell cell, int y, boolean hot, int mouseX, int mouseY) {
         Entry e = cell.entry;
         int x = cell.x;
-        c.fill(x, y, x + cell.w, y + cell.h, hot ? 0xFF3C3C3C : e.total() > 0 ? 0xFF262626 : 0xFF1A1A1A);
+        tile(c, x, y, cell.w, cell.h, hot, e.total() > 0);
         Entity model = e.type == null ? null : model(e.type);
         if (model instanceof LivingEntity living) {
             float bw = Math.max(0.3f, living.getBbWidth()), bh = Math.max(0.3f, living.getBbHeight());
@@ -542,6 +545,15 @@ public class DuskStatsScreen extends PanelScreen {
 
     private static final int DEATHS = 0xFFFF6B5E;
 
+    /** An item or mob cell's backing: brighter once it has counts, brighter still under the mouse. */
+    private static void tile(Canvas c, int x, int y, int w, int h, boolean hot, boolean any) {
+        if (Theme.modern()) {
+            Round.fill(c, x, y, w, h, Round.w(8), hot ? 0x1AFFFFFF : any ? 0x0DFFFFFF : 0x05FFFFFF, hot ? Theme.LINE_2 : Theme.LINE);
+            return;
+        }
+        c.fill(x, y, x + w, y + h, hot ? 0xFF3C3C3C : any ? 0xFF262626 : 0xFF1A1A1A);
+    }
+
     private List<String> lines(Entry e) {
         List<String> out = new ArrayList<>();
         out.add(e.name);
@@ -563,13 +575,14 @@ public class DuskStatsScreen extends PanelScreen {
         int w = 0;
         for (String l : lines) w = Math.max(w, c.textWidth(l));
         w += 8;
-        int h = lines.size() * 10 + 4;
+        int padX = Theme.modern() ? 6 : 4, padY = Theme.modern() ? 5 : 3;
+        w += 2 * padX - 8;
+        int h = lines.size() * 10 + 2 * padY - 2;
         int x = Math.min(mx + 10, this.width - w - 2), y = Math.max(2, Math.min(my - 14, this.height - h - 2));
-        c.fill(x, y, x + w, y + h, 0xF0100010);
-        c.outline(x, y, w, h, 0x505000FF);
+        Vanilla.popBox(c, x, y, w, h);
         for (int i = 0; i < lines.size(); i++) {
             int col = i == 0 ? Theme.TEXT : i == lines.size() - 1 ? Theme.TEXT_FAINT : Theme.TEXT_MUTED;
-            c.text(lines.get(i), x + 4, y + 3 + i * 10, col, true);
+            c.text(lines.get(i), x + padX, y + padY + i * 10, col, !Theme.modern());
         }
     }
 

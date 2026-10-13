@@ -3,6 +3,8 @@ package dev.dusk.client.gui.widget;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.Px;
+import dev.dusk.client.gui.Round;
+import dev.dusk.client.gui.Theme;
 import dev.dusk.client.gui.Vanilla;
 import dev.dusk.client.module.setting.ColorSetting;
 
@@ -70,8 +72,14 @@ public class ColorPickerPopup implements Popup {
             c.fillGradient(sx + i, sy, sx + i + 1, sy + SV, top, 0xFF000000);
         }
         int cx = sx + Math.round(sat * (SV - 1)), cy = sy + Math.round((1 - val) * (SV - 1));
-        c.outline(cx - 2, cy - 2, 5, 5, 0xFF000000);
-        c.outline(cx - 1, cy - 1, 3, 3, 0xFFFFFFFF);
+        if (Theme.modern()) {
+            // a white ring around the picked colour
+            Round.dot(c, cx - 3, cy - 3, 7, 0x66000000);
+            Round.ring(c, cx - 3, cy - 3, 7, 7, 64, 0xFFFFFFFF);
+        } else {
+            c.outline(cx - 2, cy - 2, 5, 5, 0xFF000000);
+            c.outline(cx - 1, cy - 1, 3, 3, 0xFFFFFFFF);
+        }
 
         int hx = hueX();
         for (int i = 0; i < 6; i++) {
@@ -89,12 +97,25 @@ public class ColorPickerPopup implements Popup {
 
         int fy = fieldY(), fw = W - 2 * PAD - FIELD_H - PAD;
         Px.field(c, sx, fy, fw, FIELD_H, editing);
-        String shown = "#" + (editing ? buffer : setting.hex()) + (editing && (System.currentTimeMillis() / 500) % 2 == 0 ? "_" : "");
-        c.text(shown, sx + 4, fy + (FIELD_H - 8) / 2 + 1, editing ? 0xFFE0E0E0 : Vanilla.TEXT_DIM, true);
+        boolean blink = editing && (System.currentTimeMillis() / 500) % 2 == 0;
+        if (Theme.modern()) {
+            String hex = "#" + (editing ? buffer : setting.hex());
+            int tx = sx + 7, ty = fy + (FIELD_H - 8) / 2 + 1;
+            c.text(hex, tx, ty, editing ? Theme.TEXT : Theme.TEXT_MUTED, false);
+            if (blink) c.fill(tx + c.textWidth(hex) + 1, ty - 1, tx + c.textWidth(hex) + 2, ty + 8, Theme.TEXT);
+        } else {
+            String shown = "#" + (editing ? buffer : setting.hex()) + (blink ? "_" : "");
+            c.text(shown, sx + 4, fy + (FIELD_H - 8) / 2 + 1, editing ? 0xFFE0E0E0 : Vanilla.TEXT_DIM, true);
+        }
         ColorWidget.swatch(c, sx + fw + PAD, fy, FIELD_H, setting.argb(), false);
     }
 
     private static void marker(Canvas c, int barX, int my) {
+        if (Theme.modern()) {
+            Round.pill(c, barX - 2, my - 2, BAR + 4, 5, 0xFF111113);
+            Round.pill(c, barX - 1, my - 1, BAR + 2, 3, 0xFFFFFFFF);
+            return;
+        }
         c.fill(barX - 1, my - 1, barX + BAR + 1, my + 2, 0xFF000000);
         c.fill(barX - 1, my, barX + BAR + 1, my + 1, 0xFFFFFFFF);
     }

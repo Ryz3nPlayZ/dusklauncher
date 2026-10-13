@@ -39,12 +39,15 @@ public final class NavBar {
         this.tabs = tabs;
         this.tools = tools;
         this.search = search;
-        int right = x + w - 1;
+        // the modern window's corners are round: keep the cells clear of them
+        int inset = Theme.modern() ? 6 : 1;
+        ToIntFunction<String> measure = Theme.modern() ? t -> width.applyAsInt(Theme.sentence(t)) : width;
+        int right = x + w - inset;
         toolX = new int[tools.size()];
         toolW = new int[tools.size()];
         for (int i = 0; i < tools.size(); i++) {
             Tool t = tools.get(i);
-            int tw = t.icon != null ? CELL_H + 4 : width.applyAsInt(t.text) + 20;
+            int tw = t.icon != null ? CELL_H + 4 : measure.applyAsInt(t.text) + 20;
             right -= tw;
             toolX[i] = right;
             toolW[i] = tw;
@@ -52,12 +55,12 @@ public final class NavBar {
         }
         tabX = new int[tabs.length];
         tabW = new int[tabs.length];
-        int cursor = x + 1;
+        int cursor = x + inset;
         for (int pad : new int[] {12, 8, 5}) {
-            cursor = x + 1;
+            cursor = x + inset;
             for (int i = 0; i < tabs.length; i++) {
                 tabX[i] = cursor;
-                tabW[i] = width.applyAsInt(tabs[i]) + 2 * pad;
+                tabW[i] = measure.applyAsInt(tabs[i]) + 2 * pad;
                 cursor += tabW[i] + 1;
             }
             if (right - cursor >= (search != null ? 90 : 10)) break;
@@ -97,6 +100,10 @@ public final class NavBar {
 
     /** Draws the bar; {@code active} is the open tab's index, or -1 for none. */
     public void draw(Canvas c, int active, int mouseX, int mouseY, int screenW, int screenH) {
+        if (Theme.modern()) {
+            drawModern(c, active, mouseX, mouseY, screenW, screenH);
+            return;
+        }
         int cy = y + 1;
         c.fill(x, y, x + w, y + H, BLACK);
         for (int i = 0; i < tabs.length; i++) {
@@ -131,8 +138,63 @@ public final class NavBar {
         if (tip != null) Vanilla.tooltip(c, tip.tip, mouseX, mouseY, screenW, screenH);
     }
 
+    /**
+     * The modern bar: no bar at all, just the tabs as text on the window with
+     * the open one in a soft pill (OneClient's tabs), round icon buttons and a
+     * pill search box. The window draws the hairline under it.
+     */
+    private void drawModern(Canvas c, int active, int mouseX, int mouseY, int screenW, int screenH) {
+        int cy = y + 1, py = cy + 2, ph = CELL_H - 4;
+        for (int i = 0; i < tabs.length; i++) {
+            boolean hover = Vanilla.inside(mouseX, mouseY, tabX[i], cy, tabW[i], CELL_H);
+            if (i == active) Round.pill(c, tabX[i], py, tabW[i], ph, 0x1FFFFFFF);
+            else if (hover) Round.pill(c, tabX[i], py, tabW[i], ph, Theme.HOVER);
+            pillText(c, tabs[i], tabX[i], cy, tabW[i], i == active || hover ? Theme.TEXT : Theme.TEXT_MUTED);
+        }
+        if (search != null && searchW > 0) {
+            Round.fill(c, searchX, py, searchW, ph, 64, 0x0DFFFFFF, search.focused() ? 0x8CFFFFFF : Theme.LINE_2);
+            Icons.SEARCH.draw(c, searchX + 6, cy + (CELL_H - 7) / 2, Theme.TEXT_FAINT);
+            search.render(c, mouseX, mouseY);
+        }
+        Tool tip = null;
+        for (int i = 0; i < tools.size(); i++) {
+            Tool t = tools.get(i);
+            int tx = toolX[i], tw = toolW[i];
+            boolean hover = Vanilla.inside(mouseX, mouseY, tx, cy, tw, CELL_H);
+            if (t.id.equals("label")) {
+                pillText(c, t.text, tx, cy, tw, Theme.TEXT_FAINT);
+                continue;
+            }
+            if (t.icon != null) {
+                // a round button the height of the pills
+                int d = ph, dx = tx + (tw - d) / 2;
+                if (hover) Round.dot(c, dx, py, d, t.id.equals("close") ? 0x33FF6B5E : 0x1FFFFFFF);
+                int col = t.id.equals("close") && hover ? Theme.BAD : hover ? Theme.TEXT : Theme.GLYPH;
+                t.icon.draw(c, tx + (tw - t.icon.width()) / 2, cy + (CELL_H - t.icon.height()) / 2, col);
+            } else {
+                if (hover) Round.pill(c, tx, py, tw, ph, Theme.HOVER);
+                pillText(c, t.text, tx, cy, tw, hover ? Theme.TEXT : Theme.TEXT_MUTED);
+            }
+            if (hover && !t.tip.isEmpty()) tip = t;
+        }
+        if (tip != null) Vanilla.tooltip(c, tip.tip, mouseX, mouseY, screenW, screenH);
+    }
+
+    /** Sans text centred in a bar cell. */
+    private static void pillText(Canvas c, String text, int x, int y, int w, int color) {
+        String shown = Theme.sentence(text);
+        Theme.sansPush();
+        c.text(shown, x + (w - c.textWidth(shown)) / 2, y + (CELL_H - 7) / 2, color, false);
+        Theme.sansPop();
+    }
+
     /** A cell with a centred two-tone label (idle, or the brighter pair when {@code active}). */
     public static void cellLabel(Canvas c, String label, int x, int y, int w, boolean active, boolean hover) {
+        if (Theme.modern()) {
+            if (active || hover) Round.pill(c, x, y + 2, w, CELL_H - 4, active ? 0x1FFFFFFF : Theme.HOVER);
+            pillText(c, label, x, y, w, active || hover ? Theme.TEXT : Theme.TEXT_MUTED);
+            return;
+        }
         Theme.cell(c, x, y, w, CELL_H, hover);
         int up = active ? Theme.ACTIVE_UP : Theme.LABEL_UP, lo = active ? Theme.ACTIVE_LO : Theme.LABEL_LO;
         Theme.label(c, label, x + (w - c.textWidth(label)) / 2, y + (CELL_H - 7) / 2,
@@ -141,6 +203,10 @@ public final class NavBar {
 
     /** A cell that only reports something (the launcher's NavLabel): dim flat text. */
     public static void cellText(Canvas c, String label, int x, int y, int w) {
+        if (Theme.modern()) {
+            pillText(c, label, x, y, w, Theme.TEXT_FAINT);
+            return;
+        }
         Theme.cell(c, x, y, w, CELL_H, false);
         c.text(label, x + (w - c.textWidth(label)) / 2, y + (CELL_H - 7) / 2, Theme.DIM, false);
     }
@@ -150,6 +216,17 @@ public final class NavBar {
      * the body at 90%. Draw it before anything that sits in the body.
      */
     public static void window(Canvas c, int x, int y, int w, int h) {
+        if (Theme.modern()) {
+            // nav.css .win: a rounded graphite sheet on a soft shadow, a hairline under the tabs
+            Round.begin(c);
+            int x0 = Round.w(x), y0 = Round.w(y), x1 = Round.w(x + w), y1 = Round.w(y + h), r = Px.radius(h, 22);
+            Round.softW(c, x0, y0, x1, y1, r, Round.w(10), Round.w(3), 0x73000000);
+            Round.fillW(c, x0, y0, x1, y1, r, 0xF5141417);
+            Round.ringW(c, x0, y0, x1, y1, r, Px.line(), Theme.LINE_2);
+            Round.end(c);
+            c.fill(x + 6, y + H - 1, x + w - 6, y + H, Theme.LINE);
+            return;
+        }
         c.outline(x, y, w, h, BLACK);
         c.fill(x + 1, y + H, x + w - 1, y + h - 1, 0xE61E1E1E);
     }

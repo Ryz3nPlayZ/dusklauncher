@@ -100,7 +100,7 @@ public abstract class PanelScreen extends MenuScreen {
     protected void drawBackgroundOverlay(Canvas c) {
         super.drawBackgroundOverlay(c);
         relayout();
-        if (inWorld()) c.fill(0, 0, this.width, this.height, 0x4D000000);
+        if (inWorld()) c.fill(0, 0, this.width, this.height, Theme.pick(0x660B0B0D, 0x4D000000));
         NavBar.window(c, px, py, pw, ph);
         drawUnderWidgets(c);
     }
@@ -117,6 +117,12 @@ public abstract class PanelScreen extends MenuScreen {
         if (maxScroll() <= 0) return;
         int h = listBottom - listY, barH = Math.max(16, h * h / contentHeight());
         int barY = listY + (h - barH) * scroll / maxScroll();
+        if (Theme.modern()) {
+            // a slim thumb with no track, like the launcher's scrollbars
+            int tw = Math.max(3, BAR_W - 1), tx = barX() + (BAR_W - tw) / 2;
+            Round.pill(c, tx, barY, tw, barH, draggingBar ? 0xFF6A6A72 : 0xFF45454C);
+            return;
+        }
         c.fill(barX(), listY, barX() + BAR_W, listBottom, 0xFF141414);
         c.fill(barX(), barY, barX() + BAR_W, barY + barH, draggingBar ? Theme.LABEL_UP : Theme.LABEL_LO);
     }
@@ -232,6 +238,11 @@ public abstract class PanelScreen extends MenuScreen {
                                        Theme.Family f, boolean on, boolean enabled) {
         boolean hover = enabled && Vanilla.inside(mouseX, mouseY, x, y, w, h);
         Theme.box(c, x, y, w, h, f, hover, !enabled && !on);
+        if (Theme.modern()) {
+            Px.Tone tone = on ? Px.Tone.GREEN : f == Theme.Family.ACCENT ? Px.Tone.ACCENT : Px.Tone.GREY;
+            Px.label(c, label, x, y, w, h, Px.Size.S16, tone, hover, !enabled && !on, false, 0xFF);
+            return hover;
+        }
         int up = on ? Theme.GREEN_UP : Theme.LABEL_UP, lo = on ? Theme.GREEN_LO : Theme.LABEL_LO;
         boolean dis = !enabled && !on;
         Theme.label(c, label, x + (w - c.textWidth(label)) / 2, y + (h - 7) / 2,

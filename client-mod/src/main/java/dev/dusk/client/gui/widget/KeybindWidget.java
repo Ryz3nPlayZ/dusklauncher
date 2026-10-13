@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.compat.Input;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.Px;
+import dev.dusk.client.gui.Theme;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 
@@ -45,8 +46,16 @@ public class KeybindWidget extends SettingRow {
 
     @Override
     protected void renderControl(Canvas c, int mouseX, int mouseY) {
-        String text = focused ? "> Press a key <" : keyName.get();
         boolean hot = inControl(mouseX, mouseY) || focused;
+        if (Theme.modern()) {
+            // a pill holding the key; listening, it lights white and asks for one
+            String key = keyName.get();
+            Px.box(c, controlX(), top(), CONTROL_W, SQUARE, focused ? Theme.Family.ACCENT : Theme.Family.GREY, hot, false, 0xFF);
+            Px.sans(c, focused ? "Press a key" : key.isEmpty() ? "None" : key, controlX(), top(), CONTROL_W, SQUARE, Px.Size.S16,
+                    focused ? Theme.INK : key.isEmpty() ? Theme.TEXT_FAINT : hot ? Theme.TEXT : Theme.TEXT_MUTED, false, false);
+            return;
+        }
+        String text = focused ? "> Press a key <" : keyName.get();
         Px.button(c, controlX(), top(), CONTROL_W, SQUARE, hot, true);
         Px.label(c, text, controlX(), top(), CONTROL_W, SQUARE, Px.Size.S16, focused ? Px.Tone.ACCENT : Px.Tone.GREY,
                 hot, false, false, 0xFF);

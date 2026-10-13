@@ -40,13 +40,16 @@ public final class Px {
 
     /** TT sizes: font-size in launcher pixels at the reference window (26t, 30t...). */
     public enum Size {
-        S11(18), S14(23), S16(26), S20(30);
+        S11(18, 0.7), S14(23, 0.8), S16(26, 0.85), S20(30, 0.95);
 
         /** Cap height in launcher pixels: Monocraft's caps are 0.8em. */
         final double cap;
+        /** The modern look's sans against body text (vanilla's 7px cap). */
+        final double sans;
 
-        Size(int t) {
+        Size(int t, double sans) {
             this.cap = t * 0.575 * 0.8;
+            this.sans = sans;
         }
     }
 
@@ -81,7 +84,7 @@ public final class Px {
     }
 
     /** {@code css} launcher pixels in whole window pixels, never less than one. */
-    private static int px(double css) {
+    static int px(double css) {
         return Math.max(1, (int) Math.round(css * unit()));
     }
 
@@ -99,6 +102,10 @@ public final class Px {
 
     /** A PxButton or PxBox of any family, faded by {@code alpha} (0-255). */
     public static void box(Canvas c, int x, int y, int w, int h, Theme.Family f, boolean hot, boolean disabled, int alpha) {
+        if (Theme.modern()) {
+            modernBox(c, x, y, w, h, f, hot, disabled, alpha);
+            return;
+        }
         frame(c, x, y, w, h, true, f.up, f.lo, f.corner, SURF, f.bot, f.hold, hot, disabled, alpha);
     }
 
@@ -150,12 +157,25 @@ public final class Px {
 
     /** A text field: the launcher's panel PxBox (no corners), its band gold while focused. */
     public static void field(Canvas c, int x, int y, int w, int h, boolean focused) {
+        if (Theme.modern()) {
+            Round.fill(c, x, y, w, h, controlRadius(h), 0x99000000, focused ? 0x8CFFFFFF : Theme.LINE_2);
+            return;
+        }
         int band = focused ? GOLD_LO : BAND;
         frame(c, x, y, w, h, true, band, band, 0, SURF, SURF, 100, false, false, 0xFF);
     }
 
     /** A popup or list body: the launcher's panel PxBox. */
     public static void panel(Canvas c, int x, int y, int w, int h) {
+        if (Theme.modern()) {
+            Round.begin(c);
+            int x0 = Round.w(x), y0 = Round.w(y), x1 = Round.w(x + w), y1 = Round.w(y + h), r = Math.min(px(14), controlRadius(h));
+            Round.softW(c, x0, y0, x1, y1, r, px(14), px(5), 0x66000000);
+            Round.fillW(c, x0, y0, x1, y1, r, 0xFA1C1C20);
+            Round.ringW(c, x0, y0, x1, y1, r, line(), Theme.LINE_2);
+            Round.end(c);
+            return;
+        }
         frame(c, x, y, w, h, true, BAND, BAND, 0, SURF, SURF, 100, false, false, 0xFF);
     }
 
@@ -165,6 +185,10 @@ public final class Px {
      */
     public static void slider(Canvas c, int x, int y, int w, int h, double fraction, String text, boolean hot) {
         double f = Math.max(0, Math.min(1, fraction));
+        if (Theme.modern()) {
+            modernSlider(c, x, y, w, h, f, text, hot);
+            return;
+        }
         panel(c, x, y, w, h);
         int handleW = Math.max(6, Math.round(h * 0.4f));
         int hx = x + (int) Math.round(f * (w - handleW));
@@ -181,6 +205,13 @@ public final class Px {
      * gradient. The track is clear.
      */
     public static void scrollbar(Canvas c, int x, int w, int barY, int barH) {
+        if (Theme.modern()) {
+            Round.begin(c);
+            int cx = Round.w(x + w / 2.0), tw = Math.max(2, Math.min(Round.w(w), px(7)));
+            Round.fillW(c, cx - tw / 2, Round.w(barY), cx - tw / 2 + tw, Round.w(barY + barH), 64, 0xFF45454C);
+            Round.end(c);
+            return;
+        }
         double s = gui();
         int x0 = (int) Math.round(x * s), x1 = (int) Math.round((x + w) * s);
         int y0 = (int) Math.round(barY * s), y1 = (int) Math.round((barY + barH) * s);
@@ -209,11 +240,28 @@ public final class Px {
      */
     public static void label(Canvas c, String text, int x, int y, int w, int h, Size size, Tone tone,
                              boolean hot, boolean disabled, boolean left, int alpha) {
+        if (Theme.modern()) {
+            modernText(c, Theme.sentence(text), x, y, w, h, size, tone, hot, disabled, left, alpha, true);
+            return;
+        }
         drawText(c, text.toUpperCase(Locale.ROOT), x, y, w, h, size, tone, hot, disabled, left, alpha);
+    }
+
+    /** As {@link #label}; in the modern look in the regular weight (row names, body text). */
+    public static void plain(Canvas c, String text, int x, int y, int w, int h, Size size, Tone tone, boolean hot, boolean left) {
+        if (Theme.modern()) {
+            modernText(c, Theme.sentence(text), x, y, w, h, size, tone, hot, false, left, 0xFF, false);
+            return;
+        }
+        label(c, text, x, y, w, h, size, tone, hot, false, left, 0xFF);
     }
 
     /** As {@link #label} but keeping the text's case, for values whose case means something. */
     public static void value(Canvas c, String text, int x, int y, int w, int h, Tone tone, boolean hot, boolean left) {
+        if (Theme.modern()) {
+            modernText(c, text, x, y, w, h, Size.S16, tone, hot, false, left, 0xFF, false);
+            return;
+        }
         drawText(c, text, x, y, w, h, Size.S16, tone, hot, false, left, 0xFF);
     }
 
@@ -281,7 +329,17 @@ public final class Px {
 
     /** Width of a TT label in GUI pixels, to lay controls out around. */
     public static int labelWidth(Canvas c, String text, Size size) {
+        if (Theme.modern()) {
+            float e = sansScale(size);
+            return (int) Math.ceil(sansWidth(c, sansText(Theme.sentence(text), true), e) * e / gui());
+        }
         return (int) Math.ceil(width(c, bold(text.toUpperCase(Locale.ROOT))) * fontPx(size) / gui());
+    }
+
+    /** {@code text}'s width in GUI pixels as {@link #sans} draws it at {@code size}, before any step-down. */
+    public static float sansWidth(Canvas c, String text, Size size, boolean bold) {
+        float e = sansScale(size);
+        return (float) (sansWidth(c, sansText(text, bold), e) * e / gui());
     }
 
     /** A glyph centred in a box, about half its height (the launcher's icon cells), in a TT tone's top colour. */
@@ -292,7 +350,9 @@ public final class Px {
         c.push();
         c.translate((float) (Math.round(fx) / s), (float) (Math.round(fy) / s));
         c.scale((float) (1 / s), (float) (1 / s));
-        icon.draw(c, 0, 0, tint(tone.up, hot, disabled, alpha), f);
+        int argb = Theme.modern() ? modernTint(onInk(x + w / 2.0, y + h / 2.0) ? Theme.INK : modernTone(tone, hot), disabled, alpha)
+                : tint(tone.up, hot, disabled, alpha);
+        icon.draw(c, 0, 0, argb, f);
         c.pop();
     }
 
@@ -317,6 +377,179 @@ public final class Px {
         c.scale((float) (f / s), (float) (f / s));
         c.text(text, 0, 0, argb, false);
         c.pop();
+    }
+
+    // ---- the modern look ---------------------------------------------------------
+
+    /** A hairline's width in window pixels: one, two on big GUI scales. */
+    public static int line() {
+        return Math.max(1, Math.min(2, (int) Math.round(unit())));
+    }
+
+    /** Corner radius in window pixels: {@code css} launcher pixels, no more than half of {@code h}. */
+    public static int radius(int h, double css) {
+        return Math.min(px(css), (int) Math.round(h * gui() / 2));
+    }
+
+    /** A control's corners: a pill up to a tall row, the launcher's 18px card radius past it. */
+    public static int controlRadius(int h) {
+        return h <= 28 ? (int) Math.ceil(h * gui() / 2) : px(18);
+    }
+
+    /** Accent fills drawn this frame, so text and glyphs on them take the dark ink. */
+    private static final int INKS = 32;
+    private static final int[] ink = new int[INKS * 4];
+    private static int inkNext, inkCount;
+
+    /** A new frame: forget last frame's accent fills. */
+    static void frameStart() {
+        inkCount = 0;
+        inkNext = 0;
+    }
+
+    private static void markInk(int x, int y, int w, int h) {
+        int i = inkNext * 4;
+        ink[i] = x;
+        ink[i + 1] = y;
+        ink[i + 2] = x + w;
+        ink[i + 3] = y + h;
+        inkNext = (inkNext + 1) % INKS;
+        inkCount = Math.min(INKS, inkCount + 1);
+    }
+
+    /** Whether a point (GUI pixels) is on an accent fill drawn this frame. */
+    public static boolean onInk(double x, double y) {
+        for (int n = 0; n < inkCount; n++) {
+            int i = n * 4;
+            if (x >= ink[i] && x < ink[i + 2] && y >= ink[i + 1] && y < ink[i + 3]) return true;
+        }
+        return false;
+    }
+
+    private static void modernBox(Canvas c, int x, int y, int w, int h, Theme.Family f, boolean hot, boolean disabled, int alpha) {
+        if (w <= 0 || h <= 0) return;
+        Round.begin(c);
+        int x0 = Round.w(x), y0 = Round.w(y), x1 = Round.w(x + w), y1 = Round.w(y + h), r = controlRadius(h);
+        int fill, ring;
+        switch (f) {
+            case ACCENT -> {
+                fill = hot ? 0xFFFFFFFF : Theme.ACCENT;
+                ring = 0;
+                // the launcher's --glow-acc: a soft white haze under the pill
+                if (!disabled) Round.softW(c, x0, y0, x1, y1, r, px(10), px(3), hot ? 0x40FFFFFF : 0x26FFFFFF);
+                if (!disabled) markInk(x, y, w, h);
+            }
+            case GREEN -> {
+                fill = hot ? 0x3D5FD38A : 0x295FD38A;
+                ring = 0x735FD38A;
+            }
+            case PANEL -> {
+                fill = hot ? 0xFF1F1F23 : 0xFF18181B;
+                ring = hot ? Theme.LINE_3 : Theme.LINE_2;
+            }
+            default -> {
+                fill = hot ? Theme.RAISED_2 : Theme.RAISED;
+                ring = hot ? Theme.LINE_3 : Theme.LINE_2;
+            }
+        }
+        Round.fillW(c, x0, y0, x1, y1, r, modernTint(fill, disabled, alpha));
+        if (ring != 0) Round.ringW(c, x0, y0, x1, y1, r, line(), modernTint(ring, disabled, alpha));
+        Round.end(c);
+    }
+
+    private static void modernSlider(Canvas c, int x, int y, int w, int h, double f, String text, boolean hot) {
+        Round.begin(c);
+        int x0 = Round.w(x), y0 = Round.w(y), x1 = Round.w(x + w), y1 = Round.w(y + h), r = controlRadius(h);
+        Round.fillW(c, x0, y0, x1, y1, r, hot ? Theme.RAISED_2 : Theme.RAISED);
+        int inset = Math.max(2, px(5)), kw = Math.max(3, px(6));
+        int kx = x0 + inset + (int) Math.round(f * (x1 - x0 - 2 * inset - kw));
+        // the filled run up to the knob, then the knob: a slim white bar
+        Round.fillW(c, x0, y0, kx + kw + inset, y1, r, 0x1FFFFFFF);
+        Round.fillW(c, kx, y0 + inset, kx + kw, y1 - inset, 64, Theme.ACCENT);
+        Round.ringW(c, x0, y0, x1, y1, r, line(), hot ? Theme.LINE_3 : Theme.LINE_2);
+        Round.end(c);
+        modernText(c, text, x, y, w, h, Size.S16, Tone.ACTIVE, hot, false, false, 0xFF, false);
+    }
+
+    /** Window pixels per sans font unit for {@code size}, on the quarter steps the fonts are cut for. */
+    private static float sansScale(Size size) {
+        double e = size.sans * gui();
+        if (!Sans.supported()) return (float) Math.max(1, Math.round(e));
+        return Math.max(0.5f, Math.round(e * 4) / 4f);
+    }
+
+    private static Component sansText(String text, boolean bold) {
+        return bold ? bold(text) : Component.literal(text);
+    }
+
+    /** {@code text}'s advance in font units when drawn at {@code e} window pixels to the unit. */
+    private static int sansWidth(Canvas c, Component text, float e) {
+        float k = (float) (e / gui());
+        Theme.sansPush();
+        c.push();
+        c.scale(k, k);
+        int w = c.textWidth(text);
+        c.pop();
+        Theme.sansPop();
+        return w;
+    }
+
+    private static int modernTone(Tone tone, boolean hot) {
+        return switch (tone) {
+            case GREY, DIM -> hot ? Theme.TEXT : Theme.TEXT_MUTED;
+            case GREEN -> Theme.OK;
+            case RED -> Theme.BAD;
+            default -> Theme.TEXT;
+        };
+    }
+
+    private static int modernTint(int argb, boolean disabled, int alpha) {
+        int a = (argb >>> 24) * Math.max(0, Math.min(255, alpha)) / 255;
+        if (disabled) a = a * 2 / 5;
+        return Math.max(alpha < 0xFF ? 5 : 0, a) << 24 | argb & 0xFFFFFF;
+    }
+
+    /**
+     * Sans text in a box at {@code size} against body text, centred (or from
+     * the left at the control padding), stepped down a little and then cut
+     * short when it does not fit. Dark ink on an accent fill.
+     */
+    private static void modernText(Canvas c, String text, int x, int y, int w, int h, Size size, Tone tone,
+                                   boolean hot, boolean disabled, boolean left, int alpha, boolean bold) {
+        int color = onInk(x + w / 2.0, y + h / 2.0) ? Theme.INK : modernTone(tone, hot);
+        sans(c, text, x, y, w, h, size, modernTint(color, disabled, alpha), bold, left);
+    }
+
+    /**
+     * Sans text in a box in exactly {@code argb} (the modern look's text;
+     * in the legacy look the vanilla font at the size's pixel scale), centred
+     * or from the left with {@link #pad}, stepped down to 3/4 size and then
+     * cut short when it does not fit.
+     */
+    public static void sans(Canvas c, String text, int x, int y, int w, int h, Size size, int argb, boolean bold, boolean left) {
+        if (text.isEmpty() || w <= 0) return;
+        double s = gui();
+        float e = sansScale(size), min = e * 0.75f;
+        int room = (int) Math.round((w - 2 * (left ? pad() : Math.min(pad(), 4))) * s);
+        Component shown = sansText(text, bold);
+        float step = Sans.supported() ? 0.25f : 1f;
+        while (e - step >= Math.max(0.5f, min) && sansWidth(c, shown, e) * e > room) e -= step;
+        if (sansWidth(c, shown, e) * e > room) {
+            String cut = text;
+            while (!cut.isEmpty() && sansWidth(c, sansText(cut + "...", bold), e) * e > room) cut = cut.substring(0, cut.length() - 1);
+            shown = sansText(cut + "...", bold);
+        }
+        int tw = Math.round(sansWidth(c, shown, e) * e);
+        int wx = (int) Math.round(left ? (x + pad()) * s : (x + w / 2.0) * s - tw / 2.0);
+        int baseline = (int) Math.round((y + h / 2.0) * s + 3.5 * e);
+        Theme.sansPush();
+        c.push();
+        c.scale((float) (1 / s), (float) (1 / s));
+        c.translate(wx, baseline - 7 * e);
+        c.scale(e, e);
+        c.text(shown, 0, 0, argb, false);
+        c.pop();
+        Theme.sansPop();
     }
 
     // ---- colour ------------------------------------------------------------------

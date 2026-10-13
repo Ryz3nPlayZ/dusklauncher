@@ -314,7 +314,8 @@ public class PackBrowserScreen extends PanelScreen {
     private void drawRow(Canvas c, int i, Hit hit, int y, int mouseX, int mouseY, boolean hotList) {
         Theme.plate(c, listX, y, listW, rowH, Theme.SURFACE, Theme.SURFACE, false);
         int is = rowH - 8, ix = listX + 4, iy = y + 4;
-        c.fill(ix, iy, ix + is, iy + is, 0x33000000);
+        if (Theme.modern()) Round.fill(c, ix, iy, is, is, Round.w(6), 0x33000000);
+        else c.fill(ix, iy, ix + is, iy + is, 0x33000000);
         if (hit.icon != null) {
             RemoteImages.Image img = icons.get(hit.icon, () -> Http.get(hit.icon, null).body());
             if (img != null) {
@@ -334,7 +335,7 @@ public class PackBrowserScreen extends PanelScreen {
         if (after + c.textWidth(by) <= tx + tw) c.text(by, after, y + 6, Theme.TEXT_MUTED, false);
         String err = installErrors.get(hit.id);
         c.text(Theme.ellipsize(c, err != null ? err : hit.description, tw), tx, y + 18, err != null ? Theme.RED_UP : Theme.TEXT_MUTED, false);
-        c.text(count(hit.downloads) + " downloads", tx, y + 30, 0x80FFFFFF, false);
+        c.text(count(hit.downloads) + " downloads", tx, y + 30, Theme.pick(Theme.TEXT_FAINT, 0x80FFFFFF), false);
 
         Install st = installs.getOrDefault(hit.id, Install.NONE);
         String label = switch (st) {

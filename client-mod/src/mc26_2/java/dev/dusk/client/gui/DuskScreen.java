@@ -24,6 +24,11 @@ public abstract class DuskScreen extends Screen {
 
     protected void drawOverlay(Canvas canvas, int mouseX, int mouseY, float delta) {}
 
+    /** False keeps the vanilla font in the modern look (the HUD editor previews the real HUD). */
+    protected boolean sansText() {
+        return true;
+    }
+
     /** False skips vanilla's blurred/dirt background (the HUD editor wants the world visible). */
     protected boolean vanillaBackground() {
         return true;
@@ -32,13 +37,13 @@ public abstract class DuskScreen extends Screen {
     @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         if (vanillaBackground()) super.extractBackground(graphics, mouseX, mouseY, delta);
-        drawBackgroundOverlay(new GraphicsCanvas(graphics, this.font));
+        Theme.paint(true, sansText(), () -> drawBackgroundOverlay(new GraphicsCanvas(graphics, this.font)));
     }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         super.extractRenderState(graphics, mouseX, mouseY, delta);
-        drawOverlay(new GraphicsCanvas(graphics, this.font), mouseX, mouseY, delta);
+        Theme.paint(false, sansText(), () -> drawOverlay(new GraphicsCanvas(graphics, this.font), mouseX, mouseY, delta));
     }
 
     // ---- version-neutral input: screens override these, never the vanilla signatures ----

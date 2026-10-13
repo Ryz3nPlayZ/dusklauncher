@@ -65,6 +65,11 @@ public class HudEditorScreen extends MenuScreen {
     }
 
     @Override
+    protected boolean sansText() {
+        return false;
+    }
+
+    @Override
     protected void drawBackgroundOverlay(Canvas canvas) {
         canvas.fill(0, 0, this.width, this.height, Theme.OVERLAY);
     }
@@ -84,7 +89,12 @@ public class HudEditorScreen extends MenuScreen {
                 String tag = e.name() + " " + e.scalePercent() + "%";
                 int tx = Math.min(e.x(), this.width - c.textWidth(tag) - 2);
                 int tyy = e.y() + h + 3 > this.height - 10 ? e.y() - 11 : e.y() + h + 3;
-                c.text(tag, tx, tyy, Vanilla.TEXT, true);
+                if (Theme.modern()) {
+                    Vanilla.popBox(c, tx - 3, tyy - 2, c.textWidth(tag) + 6, 12);
+                    c.text(tag, tx, tyy, Theme.TEXT, false);
+                } else {
+                    c.text(tag, tx, tyy, Vanilla.TEXT, true);
+                }
             }
         }
 
@@ -107,7 +117,7 @@ public class HudEditorScreen extends MenuScreen {
             dragOffX = (int) mx - hit.x();
             dragOffY = (int) my - hit.y();
         } else if (button == 1) {
-            open(ConfigScreen.module(this, hit));
+            open(DuskSettingsScreen.module(this, hit));
         }
         return true;
     }

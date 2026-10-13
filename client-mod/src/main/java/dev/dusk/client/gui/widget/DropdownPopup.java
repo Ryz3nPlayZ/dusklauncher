@@ -2,6 +2,8 @@ package dev.dusk.client.gui.widget;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.gui.Round;
+import dev.dusk.client.gui.Theme;
 import dev.dusk.client.gui.Px;
 import dev.dusk.client.gui.Vanilla;
 
@@ -61,7 +63,10 @@ public class DropdownPopup implements Popup {
         int rowW = aw - 2 * INSET - (bar ? Vanilla.SCROLLBAR_W : 0);
         for (int r = 0; r < visible(); r++) {
             int i = scroll + r, ry = y + INSET + r * ROW;
-            if (i == hovered) c.fill(x + INSET, ry, x + INSET + rowW, ry + ROW, 0xFF323232);
+            if (i == hovered) {
+                if (Theme.modern()) Round.fill(c, x + INSET, ry, rowW, ROW, Round.w(6), 0x14FFFFFF);
+                else c.fill(x + INSET, ry, x + INSET + rowW, ry + ROW, 0xFF323232);
+            }
             Px.value(c, options.get(i), x + INSET, ry, rowW, ROW, i == selected ? Px.Tone.ACCENT : Px.Tone.GREY,
                     i == hovered, true);
         }

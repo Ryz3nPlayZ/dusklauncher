@@ -248,7 +248,9 @@ public class StylesScreen extends PanelScreen {
             Category cat = shown.get(i);
             int y = sideY + i * (sideRow + SIDE_GAP);
             boolean sel = cat.id().equals(category), hover = Vanilla.inside(mouseX, mouseY, sideX, y, sideW, sideRow);
-            if (sel) c.fill(sideX, y, sideX + sideW, y + sideRow, 0x40FFFFFF);
+            if (Theme.modern()) {
+                if (sel || hover) Round.fill(c, sideX, y, sideW, sideRow, Round.w(Math.min(9, sideRow / 2.0)), sel ? 0x1FFFFFFF : Theme.HOVER);
+            } else if (sel) c.fill(sideX, y, sideX + sideW, y + sideRow, 0x40FFFFFF);
             else if (hover) c.fill(sideX, y, sideX + sideW, y + sideRow, 0x1AFFFFFF);
             int tx = sideX + 4;
             if (sideRow >= 18) {
@@ -291,7 +293,7 @@ public class StylesScreen extends PanelScreen {
     }
 
     private static String seeThroughLabel(Styles m) {
-        return "SEE-THROUGH: " + m.seeThrough().toUpperCase(Locale.ROOT);
+        return "SEE-THROUGH: " + Theme.caps(m.seeThrough());
     }
 
     private void drawTile(Canvas c, @Nullable Style s, @Nullable Category cat, int x, int y, boolean hover) {
@@ -299,7 +301,8 @@ public class StylesScreen extends PanelScreen {
         boolean on = s == null ? m == null || m.pick(category) == null : picked(s);
         Theme.plate(c, x, y, tileW, tileH, Theme.SURFACE, Theme.SURFACE_BOT, hover);
         int is = tileW - 10, ix = x + 5, iy = y + 5;
-        c.fill(ix, iy, ix + is, iy + is, 0x33000000);
+        if (Theme.modern()) Round.fill(c, ix, iy, is, is, Round.w(6), 0x33000000);
+        else c.fill(ix, iy, ix + is, iy + is, 0x33000000);
         RemoteImages.Image img = s == null || s.icon() == null ? null : icons.get(iconKey(s), s::icon);
         if (img != null) {
             c.push();

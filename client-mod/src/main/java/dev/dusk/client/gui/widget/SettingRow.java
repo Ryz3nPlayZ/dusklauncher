@@ -3,6 +3,8 @@ package dev.dusk.client.gui.widget;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.Px;
 import dev.dusk.client.gui.Icons;
+import dev.dusk.client.gui.Round;
+import dev.dusk.client.gui.Theme;
 import dev.dusk.client.gui.Vanilla;
 import dev.dusk.client.module.setting.Setting;
 import org.jetbrains.annotations.Nullable;
@@ -54,12 +56,19 @@ public abstract class SettingRow extends Widget {
     @Override
     public void render(Canvas c, int mouseX, int mouseY) {
         renderRow(c, mouseX, mouseY);
-        Px.label(c, label, x, y, controlX() - x, h, Px.Size.S20, Px.Tone.PLAIN, false, false, true, 0xFF);
+        if (Theme.modern()) Px.sans(c, Theme.sentence(label), x, y, controlX() - x - 4, h, Px.Size.S16, Theme.TEXT, false, true);
+        else Px.plain(c, label, x, y, controlX() - x, h, Px.Size.S20, Px.Tone.PLAIN, false, true);
         renderControl(c, mouseX, mouseY);
         if (resettable != null) {
             int rx = resetX(), ry = top();
             boolean on = changed();
             boolean hover = Vanilla.inside(mouseX, mouseY, rx, ry, SQUARE, SQUARE);
+            if (Theme.modern()) {
+                // a round ghost button that only shows up once there is something to reset
+                if (on) Round.dot(c, rx, ry, SQUARE, hover ? Theme.RAISED_2 : Theme.RAISED);
+                Px.glyph(c, Icons.RESET, rx, ry, SQUARE, SQUARE, Px.Tone.GREY, hover && on, !on, on ? 0xFF : 0x80);
+                return;
+            }
             Px.button(c, rx, ry, SQUARE, SQUARE, hover, on);
             Px.glyph(c, Icons.RESET, rx, ry, SQUARE, SQUARE, Px.Tone.GREY, hover && on, !on, 0xFF);
         }

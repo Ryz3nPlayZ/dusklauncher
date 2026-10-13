@@ -244,8 +244,13 @@ public class QuestsScreen extends PanelScreen {
         for (int i = 0; i < s.cycle().size(); i++) {
             int cx = tx + i * (cell + 2), cy = y + 29;
             boolean today = i == s.cycleDay(), past = i < s.cycleDay();
-            int fill = today ? (s.done() ? 0xFF2E5A1E : 0xFF4A3A12) : past ? 0xFF243A1C : 0xFF262626;
-            c.fill(cx, cy, cx + cell, cy + 11, fill);
+            if (Theme.modern()) {
+                int fill = today ? (s.done() ? 0x405FD38A : 0x33F4F4F5) : past ? 0x1F5FD38A : 0x0DFFFFFF;
+                Round.pill(c, cx, cy, cell, 11, fill);
+            } else {
+                int fill = today ? (s.done() ? 0xFF2E5A1E : 0xFF4A3A12) : past ? 0xFF243A1C : 0xFF262626;
+                c.fill(cx, cy, cx + cell, cy + 11, fill);
+            }
             String v = Long.toString(s.cycle().get(i));
             int col = today ? Theme.ACCENT : past ? Theme.GREEN_LO : Theme.TEXT_FAINT;
             c.text(v, cx + (cell - c.textWidth(v)) / 2, cy + 2, col, false);
@@ -261,9 +266,14 @@ public class QuestsScreen extends PanelScreen {
         // progress bar with the count beside it
         String count = amount(Math.min(q.progress(), q.goal()), q.unit()) + " / " + amount(q.goal(), q.unit());
         int barW = Math.max(30, textW - c.textWidth(count) - 8), barY = y + 19;
-        c.fill(tx, barY, tx + barW, barY + 4, 0xFF141414);
         int done = (int) (barW * Math.min(1.0, q.goal() <= 0 ? 1.0 : q.progress() / (double) q.goal()));
-        c.fill(tx, barY, tx + done, barY + 4, q.done() ? Theme.GREEN_LO : Theme.ACCENT);
+        if (Theme.modern()) {
+            Round.pill(c, tx, barY, barW, 4, Theme.TRACK);
+            if (done > 0) Round.pill(c, tx, barY, Math.max(4, done), 4, q.done() ? Theme.OK : Theme.ACCENT);
+        } else {
+            c.fill(tx, barY, tx + barW, barY + 4, 0xFF141414);
+            c.fill(tx, barY, tx + done, barY + 4, q.done() ? Theme.GREEN_LO : Theme.ACCENT);
+        }
         c.text(count, tx + barW + 6, y + 17, Theme.TEXT_FAINT, false);
         String coins = "+" + q.coins();
         int cx = buttonX() - 8 - c.textWidth(coins);

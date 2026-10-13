@@ -27,6 +27,9 @@ public abstract class Widget {
         this.x = x; this.y = y; this.w = w; this.h = h;
     }
 
+    /** Whether this sits in a {@link ScrollPane}'s cards: setting rows do, headings and notes don't. */
+    public boolean carded() { return true; }
+
     public boolean contains(double mx, double my) {
         return mx >= x && my >= y && mx < x + w && my < y + h;
     }

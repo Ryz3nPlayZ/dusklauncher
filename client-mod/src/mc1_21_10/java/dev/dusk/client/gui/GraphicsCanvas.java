@@ -31,37 +31,53 @@ public record GraphicsCanvas(GuiGraphics g, Font font) implements Canvas {
 
     @Override
     public void text(Component text, int x, int y, int argb) {
-        g.drawString(font, text, x, y, argb);
+        text(text, x, y, argb, true);
     }
 
     @Override
     public void text(String text, int x, int y, int argb, boolean shadow) {
-        g.drawString(font, text, x, y, argb, shadow);
+        if (Theme.sansOn()) text(Component.literal(text), x, y, argb, shadow);
+        else g.drawString(font, text, x, y, argb, shadow);
     }
 
     @Override
     public void text(Component text, int x, int y, int argb, boolean shadow) {
-        g.drawString(font, text, x, y, argb, shadow);
+        // the sans cut has no pixel shadow to drop; on the HUD it gets a soft one
+        if (Theme.sansOn()) {
+            Component s = sans(text);
+            if (shadow && Theme.sansShadow()) {
+                push();
+                translate(0.5f, 0.5f);
+                g.drawString(font, s, x, y, Theme.sansShadowColor(argb), false);
+                pop();
+            }
+            g.drawString(font, s, x, y, argb, false);
+        } else g.drawString(font, text, x, y, argb, shadow);
     }
 
     @Override
     public int textWidth(Component text) {
-        return font.width(text);
+        return font.width(Theme.sansOn() ? sans(text) : text);
     }
 
     @Override
     public void centeredText(Component text, int x, int y, int argb) {
-        g.drawCenteredString(font, text, x, y, argb);
+        text(text, x - textWidth(text) / 2, y, argb, true);
     }
 
     @Override
     public void centeredText(String text, int x, int y, int argb, boolean shadow) {
-        g.drawString(font, text, x - font.width(text) / 2, y, argb, shadow);
+        text(text, x - textWidth(text) / 2, y, argb, shadow);
     }
 
     @Override
     public int textWidth(String text) {
-        return font.width(text);
+        return Theme.sansOn() ? font.width(sans(Component.literal(text))) : font.width(text);
+    }
+
+    /** The sans cut for the scale the current transform draws at. */
+    private Component sans(Component text) {
+        return Sans.wrap(text, (float) Math.hypot(g.pose().m00(), g.pose().m01()));
     }
 
     @Override

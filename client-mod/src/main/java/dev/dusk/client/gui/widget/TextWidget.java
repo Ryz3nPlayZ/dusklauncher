@@ -2,6 +2,7 @@ package dev.dusk.client.gui.widget;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.gui.Theme;
 import dev.dusk.client.gui.Px;
 import dev.dusk.client.gui.Vanilla;
 import dev.dusk.client.module.setting.TextSetting;
@@ -24,6 +25,11 @@ public class TextWidget extends SettingRow {
     @Override
     protected int controlWidth() { return FIELD_W; }
 
+    /** Where the text starts inside the field: clear of the modern pill's round end. */
+    static int inset() {
+        return Theme.modern() ? 8 : 5;
+    }
+
     @Override
     protected void renderControl(Canvas c, int mouseX, int mouseY) {
         if (!focused) buffer = setting.get(); // follow the reset button
@@ -31,13 +37,14 @@ public class TextWidget extends SettingRow {
         Px.field(c, fx, fy, FIELD_W, SQUARE, focused);
         c.scissor(fx + 2, fy + 1, fx + FIELD_W - 2, fy + SQUARE - 1);
         if (buffer.isEmpty() && !focused) {
-            c.text("Empty", fx + 5, fy + 6, 0xFF707070, true);
+            c.text("Empty", fx + inset(), fy + 6, Theme.pick(Theme.TEXT_FAINT, 0xFF707070), !Theme.modern());
         } else {
-            String shown = buffer + (focused && (System.currentTimeMillis() / 500) % 2 == 0 ? "_" : "");
+            String shown = buffer + (focused && (System.currentTimeMillis() / 500) % 2 == 0 ? Theme.modern() ? "|" : "_" : "");
             // keep the end in view while typing past the box
             int start = 0;
             while (start < shown.length() && c.textWidth(shown.substring(start)) > FIELD_W - 10) start++;
-            c.text(shown.substring(start), fx + 5, fy + 6, focused ? 0xFFE0E0E0 : Vanilla.TEXT_DIM, true);
+            c.text(shown.substring(start), fx + inset(), fy + 6, Theme.modern() ? Theme.TEXT : focused ? 0xFFE0E0E0 : Vanilla.TEXT_DIM,
+                    !Theme.modern());
         }
         c.unscissor();
     }

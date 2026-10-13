@@ -1,6 +1,7 @@
 package dev.dusk.client.hud;
 
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.gui.Theme;
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.BoolSetting;
 import dev.dusk.client.module.setting.ColorSetting;
@@ -13,8 +14,13 @@ import dev.dusk.client.module.setting.IntSetting;
  * {@link #width}/{@link #height} for hit-testing and drag bounds.
  */
 public abstract class HudElement extends Module {
-    /** Background padding around the element box, in unscaled pixels. */
-    public static final int PAD = 2;
+    /** Background padding around the element box, in unscaled pixels (the modern look's rounded box gets more). */
+    public static final int PAD = 2, MODERN_PAD = 4;
+
+    /** This frame's background padding. */
+    public static int pad() {
+        return Theme.modern() ? MODERN_PAD : PAD;
+    }
 
     protected final IntSetting scale;
     protected final BoolSetting background;
@@ -62,10 +68,10 @@ public abstract class HudElement extends Module {
 
     /** On-screen (scaled) box, including padding when the background is on. */
     public int screenWidth(HudContext ctx) {
-        return Math.round((width(ctx) + (background() ? PAD * 2 : 0)) * scale());
+        return Math.round((width(ctx) + (background() ? pad() * 2 : 0)) * scale());
     }
 
     public int screenHeight(HudContext ctx) {
-        return Math.round((height(ctx) + (background() ? PAD * 2 : 0)) * scale());
+        return Math.round((height(ctx) + (background() ? pad() * 2 : 0)) * scale());
     }
 }

@@ -1,5 +1,7 @@
 package dev.dusk.client.hud;
 
+import dev.dusk.client.gui.Sans;
+import dev.dusk.client.gui.Theme;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -20,7 +22,16 @@ public record HudContext(Minecraft mc, int width, int height, float partialTick,
     @Nullable
     public ClientLevel level() { return mc.level; }
 
-    public int textWidth(String s) { return mc.font.width(s); }
+    /** {@code s}'s width in the HUD's font (the smooth sans when {@link HudRenderer#smooth}). */
+    public int textWidth(String s) {
+        if (!HudRenderer.smooth()) return mc.font.width(s);
+        Theme.hudSansPush();
+        try {
+            return mc.font.width(Sans.wrap(s, 1f));
+        } finally {
+            Theme.hudSansPop();
+        }
+    }
 
     public int lineHeight() { return mc.font.lineHeight; }
 }

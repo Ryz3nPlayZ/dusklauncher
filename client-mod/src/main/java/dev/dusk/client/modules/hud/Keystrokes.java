@@ -1,6 +1,8 @@
 package dev.dusk.client.modules.hud;
 
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.gui.Round;
+import dev.dusk.client.gui.Theme;
 import dev.dusk.client.hud.ClickTracker;
 import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.hud.TextHud;
@@ -17,7 +19,7 @@ import java.util.Map;
  * tile that fades to the pressed colours (100 ms in, 400 ms out).
  */
 public class Keystrokes extends TextHud {
-    private static final int KEY = 22, GAP = 1;
+    private static final int KEY = 22;
     private static final long FADE_IN = 100, FADE_OUT = 400;
 
     private final BoolSetting chromaPressed = add(new BoolSetting("chromaPressed", "Chroma when pressed", false));
@@ -50,29 +52,40 @@ public class Keystrokes extends TextHud {
         return "";
     }
 
+    /** Space between the tiles: the modern look's rounded tiles get a little more room. */
+    private static int gap() {
+        return Theme.modern() ? 2 : 1;
+    }
+
     @Override
     public int width(HudContext ctx) {
-        return KEY * 3 + GAP * 4;
+        return KEY * 3 + gap() * 4;
     }
 
     @Override
     public int height(HudContext ctx) {
-        return displayCps.get() ? (int) (KEY * 3.5 + GAP * 5) : (int) (KEY * 2.5 + GAP * 4);
+        int gap = gap();
+        return displayCps.get() ? (int) (KEY * 3.5 + gap * 5) : (int) (KEY * 2.5 + gap * 4);
     }
 
     @Override
     public void render(Canvas c, HudContext ctx) {
+        int gap = gap();
         Options o = ctx.mc().options;
         boolean arrows = useArrow.get();
-        movementKey(c, ctx, KEY + GAP * 2, GAP, o.keyUp, arrows ? "▲" : label(o.keyUp));
-        movementKey(c, ctx, KEY + GAP * 2, KEY + GAP * 2, o.keyDown, arrows ? "▼" : label(o.keyDown));
-        movementKey(c, ctx, KEY * 2 + GAP * 3, KEY + GAP * 2, o.keyRight, arrows ? "▶" : label(o.keyRight));
-        movementKey(c, ctx, GAP, KEY + GAP * 2, o.keyLeft, arrows ? "◀" : label(o.keyLeft));
-        jumpKey(c, GAP, KEY * 2 + GAP * 3, KEY * 3 + GAP * 2, KEY / 2, o.keyJump);
+        movementKey(c, ctx, KEY + gap * 2, gap, o.keyUp, arrows ? "▲" : label(o.keyUp));
+        movementKey(c, ctx, KEY + gap * 2, KEY + gap * 2, o.keyDown, arrows ? "▼" : label(o.keyDown));
+        movementKey(c, ctx, KEY * 2 + gap * 3, KEY + gap * 2, o.keyRight, arrows ? "▶" : label(o.keyRight));
+        movementKey(c, ctx, gap, KEY + gap * 2, o.keyLeft, arrows ? "◀" : label(o.keyLeft));
+        jumpKey(c, gap, KEY * 2 + gap * 3, KEY * 3 + gap * 2, KEY / 2, o.keyJump);
         if (displayCps.get()) {
-            int y = (int) (KEY * 2.5) + GAP * 4, w = (int) (KEY * 1.5) + GAP / 2;
-            mouseKey(c, ctx, GAP, y, w, o.keyAttack, ClickTracker.leftCps(), "LMB");
-            mouseKey(c, ctx, (int) (KEY * 1.5 + GAP * 2.5) + 1, y, w, o.keyUse, ClickTracker.rightCps(), "RMB");
+            int y = (int) (KEY * 2.5) + gap * 4, w = (int) (KEY * 1.5) + gap / 2, x2 = (int) (KEY * 1.5 + gap * 2.5) + 1;
+            if (gap > 1) {
+                w = (KEY * 3 + gap) / 2;
+                x2 = gap * 2 + w;
+            }
+            mouseKey(c, ctx, gap, y, w, o.keyAttack, ClickTracker.leftCps(), "LMB");
+            mouseKey(c, ctx, x2, y, w, o.keyUse, ClickTracker.rightCps(), "RMB");
         }
     }
 
@@ -90,11 +103,17 @@ public class Keystrokes extends TextHud {
         float elapsed = now - at[0];
         float fade = down ? Math.min(1f, elapsed / FADE_IN) : 1f - Math.min(1f, elapsed / FADE_OUT);
 
-        if (background.get()) c.fill(x, y, x + w, y + h, backgroundColor.argb());
-        if (backgroundPressed.get()) {
-            c.fill(x, y, x + w, y + h, (int) (fade / 2 * 255) << 24 | backgroundColorPressed.argb() & 0xFFFFFF);
+        int pressed = (int) (fade / 2 * 255) << 24 | backgroundColorPressed.argb() & 0xFFFFFF;
+        if (Theme.modern()) {
+            int r = Round.w(3);
+            if (background.get()) Round.fill(c, x, y, w, h, r, backgroundColor.argb());
+            if (backgroundPressed.get()) Round.fill(c, x, y, w, h, r, pressed);
+            if (showBorder.get()) Round.ring(c, x, y, w, h, r, 0xFF000000 | borderColor.argb());
+            return fade;
         }
-        if (showBorder.get()) c.outline(x - GAP, y - GAP, w + GAP * 2, h + GAP * 2, 0xFF000000 | borderColor.argb());
+        if (background.get()) c.fill(x, y, x + w, y + h, backgroundColor.argb());
+        if (backgroundPressed.get()) c.fill(x, y, x + w, y + h, pressed);
+        if (showBorder.get()) c.outline(x - 1, y - 1, w + 2, h + 2, 0xFF000000 | borderColor.argb());
         return fade;
     }
 
@@ -121,10 +140,13 @@ public class Keystrokes extends TextHud {
         c.text(label, 0, 0, color, shadow.get());
         c.pop();
         String cpsLabel = cps + " CPS";
+        // the smooth font stays sharp small, so it can sit a little larger and softer
+        float small = Theme.sansOn() ? 0.75f : 0.7f;
+        int cpsColor = Theme.sansOn() ? (color >>> 24) * 3 / 4 << 24 | color & 0xFFFFFF : color;
         c.push();
-        c.translate(x + (w - ctx.textWidth(cpsLabel) * 0.7f) / 2f, y + KEY / 2f + 3);
-        c.scale(0.7f, 0.7f);
-        c.text(cpsLabel, 0, 0, color, shadow.get());
+        c.translate(x + (w - ctx.textWidth(cpsLabel) * small) / 2f, y + KEY / 2f + 3);
+        c.scale(small, small);
+        c.text(cpsLabel, 0, 0, cpsColor, shadow.get());
         c.pop();
     }
 

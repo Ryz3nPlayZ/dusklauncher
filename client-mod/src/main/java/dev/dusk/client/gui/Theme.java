@@ -1,5 +1,7 @@
 package dev.dusk.client.gui;
 
+import dev.dusk.client.config.DuskConfig;
+
 /**
  * The launcher's look for the Dusk screens (launcher/src/design/tokens.css):
  * a black outline, a #323232 band and #4a4a4a L-corners at the top-right and
@@ -11,25 +13,235 @@ public final class Theme {
 
     public enum Kind { NORMAL, PRIMARY }
 
-    public static final int TEXT = 0xFFF4F4F4, TEXT_MUTED = 0xFFB8B8B8, TEXT_FAINT = 0xFF828282;
-    public static final int OVERLAY = 0x66000000;
-
     private static final int BLACK = 0xFF000000;
     private static final int BAND = 0xFF323232, CORNER = 0xFF4A4A4A;
     private static final int GOLD_UP = 0xFFFFC600, GOLD_LO = 0xFFDE8105, GOLD_CORNER = 0xFFFFFBCD;
     private static final int SURF_TOP = 0xFF1E1E1E, SURF_BOT = 0xFF2B261C, CTA_BOT = 0xFF413018;
-    /** Two-tone label pairs (Figma frames 7/8): idle and active. */
-    public static final int LABEL_UP = 0xFFC6C6C6, LABEL_LO = 0xFF7B7B7B;
-    public static final int ACTIVE_UP = 0xFFF2F2F2, ACTIVE_LO = 0xFFA6A6A6;
-    /** The module grid's moss "enabled" pair and card surfaces. */
-    public static final int MOSS_UP = 0xFF8CCF2D, MOSS_LO = 0xFF468A28, MOSS_BOT = 0xFF202C1D;
-    public static final int RED_UP = 0xFFFF1100;
-    public static final int SURFACE = SURF_TOP, SURFACE_BOT = SURF_BOT, ACCENT = GOLD_UP;
+
+    // ---- the two looks ------------------------------------------------------------
+
+    /**
+     * The modern look (launcher/src/design/tokens.css): graphite surfaces,
+     * white as the accent, pills and rounded cards, Plus Jakarta Sans. The
+     * legacy look is the launcher's pixel frames, kept behind
+     * {@code uiStyle: "legacy"} in duskclient.json.
+     */
+    private static boolean modern = readModern();
+    private static int sansDepth;
+
+    private static boolean readModern() {
+        return !"legacy".equals(DuskConfig.get().uiStyle);
+    }
+
+    public static boolean modern() {
+        return modern;
+    }
+
+    /** {@code modern} in the modern look, {@code legacy} in the old one. */
+    public static int pick(int modern, int legacy) {
+        return Theme.modern ? modern : legacy;
+    }
+
+    /** Re-reads the look and starts a frame; screens call it before drawing. */
+    public static void sync() {
+        boolean m = readModern();
+        if (m != modern) {
+            modern = m;
+            palette();
+        }
+        Px.frameStart();
+    }
+
+    public static void setModern(boolean on) {
+        DuskConfig.get().uiStyle = on ? "dusk" : "legacy";
+        DuskConfig.save();
+        sync();
+    }
+
+    /**
+     * One of a Dusk screen's draw passes: {@code frame} for the first pass of
+     * the frame (re-reads the look, see {@link #sync}), {@code sans} to draw
+     * its text in the modern look's sans.
+     */
+    public static void paint(boolean frame, boolean sans, Runnable body) {
+        if (frame) sync();
+        if (sans) sansPush();
+        try {
+            body.run();
+        } finally {
+            if (sans) sansPop();
+        }
+    }
+
+    /** Text drawn until the matching {@link #sansPop} uses the modern look's sans (when modern). */
+    public static void sansPush() {
+        sansDepth++;
+    }
+
+    public static void sansPop() {
+        sansDepth = Math.max(0, sansDepth - 1);
+    }
+
+    /** Whether text drawn now takes the sans (modern look, inside a {@link #sansPush}; or a {@link #hudSans} pass). */
+    public static boolean sansOn() {
+        return modern && sansDepth > 0 || hudSans > 0;
+    }
+
+    /**
+     * Whether sans text drawn now gets a soft shadow when it asks for one:
+     * only in the HUD, where it sits on the world rather than on a panel.
+     */
+    public static boolean sansShadow() {
+        return hudSans > 0;
+    }
+
+    /** The soft shadow under sans text in {@code argb}. */
+    public static int sansShadowColor(int argb) {
+        int a = (argb >>> 24) * 3 / 4;
+        return a << 24 | (argb & 0xFCFCFC) >> 3;
+    }
+
+    private static int hudSans;
+
+    /** Draws {@code body} (a HUD element) in the sans whatever the look, with its shadows kept. */
+    public static void hudSans(Runnable body) {
+        hudSans++;
+        try {
+            body.run();
+        } finally {
+            hudSans--;
+        }
+    }
+
+    public static void hudSansPush() {
+        hudSans++;
+    }
+
+    public static void hudSansPop() {
+        hudSans = Math.max(0, hudSans - 1);
+    }
+
+    /** Draws {@code body} in the default font even inside a sans page (HUD previews). */
+    public static void sansOff(Runnable body) {
+        int depth = sansDepth, hud = hudSans;
+        sansDepth = 0;
+        hudSans = 0;
+        try {
+            body.run();
+        } finally {
+            sansDepth = depth;
+            hudSans = hud;
+        }
+    }
+
+    // ---- palette ------------------------------------------------------------------
+
+    public static int TEXT, TEXT_MUTED, TEXT_FAINT, OVERLAY;
+    /** Two-tone label pairs (Figma frames 7/8): idle and active. One colour each in the modern look. */
+    public static int LABEL_UP, LABEL_LO, ACTIVE_UP, ACTIVE_LO;
+    /** The module grid's "enabled" pair and card surfaces. */
+    public static int MOSS_UP, MOSS_LO, MOSS_BOT;
+    public static int RED_UP, SURFACE, SURFACE_BOT, ACCENT;
+    /** Label pairs the launcher's TT tones use. */
+    public static int DIM, GREEN_UP, GREEN_LO, GOLD_LO_TEXT;
+    public static int RED_CORNER, GLYPH;
+    /** Modern surfaces: the page, a raised control and the step above it. */
+    public static int BG, RAISED, RAISED_2;
+    /** Hairlines: faint, normal and strong; the hover wash; a slider track. */
+    public static int LINE, LINE_2, LINE_3, HOVER, TRACK;
+    /** Text on an accent fill; the status colours. */
+    public static int INK, OK, BAD, INFO, WARN;
+
+    static {
+        palette();
+    }
+
+    private static void palette() {
+        if (modern) {
+            TEXT = 0xFFF4F4F5; TEXT_MUTED = 0xFFB4B4BB; TEXT_FAINT = 0xFF7F7F88; OVERLAY = 0x8C0B0B0D;
+            LABEL_UP = LABEL_LO = 0xFFB4B4BB;
+            ACTIVE_UP = ACTIVE_LO = 0xFFF4F4F5;
+            MOSS_UP = MOSS_LO = 0xFF5FD38A; MOSS_BOT = 0x295FD38A;
+            RED_UP = 0xFFFF6B5E; SURFACE = 0xFF18181B; SURFACE_BOT = 0xFF18181B; ACCENT = 0xFFF4F4F5;
+            DIM = 0xFF7F7F88; GREEN_UP = GREEN_LO = 0xFF5FD38A; GOLD_LO_TEXT = 0xFFC4C4CC;
+            RED_CORNER = 0xFFFF6B5E; GLYPH = 0xFFB4B4BB;
+            BG = 0xFF0B0B0D; RAISED = 0xFF232327; RAISED_2 = 0xFF2C2C31;
+            LINE = 0x14FFFFFF; LINE_2 = 0x24FFFFFF; LINE_3 = 0x38FFFFFF; HOVER = 0x0FFFFFFF; TRACK = 0xFF333338;
+            INK = 0xFF111113; OK = 0xFF5FD38A; BAD = 0xFFFF6B5E; INFO = 0xFF7CB4FF; WARN = 0xFFF5C451;
+        } else {
+            TEXT = 0xFFF4F4F4; TEXT_MUTED = 0xFFB8B8B8; TEXT_FAINT = 0xFF828282; OVERLAY = 0x66000000;
+            LABEL_UP = 0xFFC6C6C6; LABEL_LO = 0xFF7B7B7B;
+            ACTIVE_UP = 0xFFF2F2F2; ACTIVE_LO = 0xFFA6A6A6;
+            MOSS_UP = 0xFF8CCF2D; MOSS_LO = 0xFF468A28; MOSS_BOT = 0xFF202C1D;
+            RED_UP = 0xFFFF1100; SURFACE = SURF_TOP; SURFACE_BOT = SURF_BOT; ACCENT = GOLD_UP;
+            DIM = 0xFFCFCFCF; GREEN_UP = 0xFF00FF40; GREEN_LO = 0xFF06DD0E; GOLD_LO_TEXT = GOLD_LO;
+            RED_CORNER = 0xFFFF8B8E; GLYPH = 0xFFB8B8B8;
+            BG = 0xFF101010; RAISED = 0xFF333333; RAISED_2 = 0xFF3C3C3C;
+            LINE = BLACK; LINE_2 = BAND; LINE_3 = CORNER; HOVER = 0x22FFFFFF; TRACK = 0xFF141414;
+            INK = 0xFF000000; OK = 0xFF00FF40; BAD = 0xFFFF1100; INFO = 0xFF55AAFF; WARN = GOLD_UP;
+        }
+    }
+
+    /**
+     * ALL-CAPS labels from the legacy look in sentence case for the modern
+     * one ("SAVE OUTFIT" to "Save outfit"), keeping known initialisms; text
+     * with any lower case is left as written.
+     */
+    public static String sentence(String text) {
+        if (!modern || text.isEmpty()) return text;
+        int upper = 0, lower = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (Character.isLowerCase(ch)) lower++;
+            else if (Character.isUpperCase(ch)) upper++;
+        }
+        // mostly capitals: a legacy label, maybe with a name or value spliced in (see caps)
+        if (upper == 0 || upper < lower) return text;
+        StringBuilder out = new StringBuilder(text.length());
+        boolean first = true;
+        String[] words = text.split(" ", -1);
+        for (int n = 0; n < words.length; n++) {
+            String word = words[n];
+            if (n > 0) out.append(' ');
+            String bare = word.replaceAll("[^A-Za-z0-9]", "");
+            boolean caps = !bare.isEmpty() && bare.equals(bare.toUpperCase(java.util.Locale.ROOT))
+                    && bare.chars().anyMatch(Character::isLetter) && bare.chars().noneMatch(Character::isDigit);
+            if (!caps || KEEP.contains(bare) || bare.equals("I")) {
+                out.append(word);
+            } else {
+                String w = word.toLowerCase(java.util.Locale.ROOT);
+                if (first) {
+                    int i = 0;
+                    while (i < w.length() && !Character.isLetter(w.charAt(i))) i++;
+                    if (i < w.length()) w = w.substring(0, i) + Character.toUpperCase(w.charAt(i)) + w.substring(i + 1);
+                }
+                out.append(w);
+            }
+            if (!bare.isEmpty()) first = false;
+        }
+        return out.toString();
+    }
+
+    /**
+     * A name or value for a legacy all-caps label: upper case in the legacy
+     * look, as written in the modern one (where {@link #sentence} leaves it be).
+     */
+    public static String caps(String text) {
+        return modern ? text : text.toUpperCase(java.util.Locale.ROOT);
+    }
+
+    private static final java.util.Set<String> KEEP = java.util.Set.of(
+            "HUD", "FPS", "CPS", "XP", "UI", "OK", "ID", "RGB", "HEX", "PVP", "MC", "GUI", "TPS", "HP", "AFK", "DM", "URL", "NPC",
+            "TNT", "ESP", "FOV", "NBT", "LAN", "MOTD", "RAM", "GPU", "CPU", "PNG", "JPG", "API", "AM", "PM", "MS", "HSV", "VSYNC", "DPI");
 
     // ---- frames ---------------------------------------------------------
 
     /** A clickable plate. */
     public static void button(Canvas c, int x, int y, int w, int h, boolean hover, Kind kind) {
+        if (modern) {
+            Px.box(c, x, y, w, h, kind == Kind.PRIMARY ? Family.ACCENT : Family.GREY, hover, false, 0xFF);
+            return;
+        }
         if (kind == Kind.NORMAL) {
             // Figma frame 7: flat #1e1e1e body inside the #323232 band
             plate(c, x, y, w, h, SURF_TOP, SURF_TOP, hover);
@@ -44,6 +256,11 @@ public final class Theme {
      * #4a4a4a L-corners.
      */
     public static void plate(Canvas c, int x, int y, int w, int h, int top, int bot, boolean hot) {
+        if (modern) {
+            // a card: a faint lift over the window, its hairline brighter on hover
+            Round.fill(c, x, y, w, h, Px.radius(h, 14), hot ? 0x12FFFFFF : 0x0AFFFFFF, hot ? LINE_2 : LINE);
+            return;
+        }
         Px.frame(c, x, y, w, h, true, BAND, BAND, CORNER, top, bot, 45, hot, false, 0xFF);
     }
 
@@ -53,6 +270,12 @@ public final class Theme {
      * space, so draw it outside any transform.
      */
     public static void label(Canvas c, String text, int x, int y, int up, int lo, float scale) {
+        if (modern) {
+            sansPush();
+            scaledText(c, sentence(text), x, y, up, scale);
+            sansPop();
+            return;
+        }
         int split = y + Math.round(3.5f * scale);
         int r = x + labelWidth(c, text, scale) + 2, b = y + Math.round(c.lineHeight() * scale) + 2;
         c.scissor(x - 1, y - 1, r, split);
@@ -64,6 +287,12 @@ public final class Theme {
     }
 
     public static int labelWidth(Canvas c, String text, float scale) {
+        if (modern) {
+            sansPush();
+            int w = Math.round(c.textWidth(sentence(text)) * scale);
+            sansPop();
+            return w;
+        }
         return Math.round(c.textWidth(text) * scale);
     }
 
@@ -111,9 +340,6 @@ public final class Theme {
         }
     }
 
-    /** Label pairs the launcher's TT tones use. */
-    public static final int DIM = 0xFFCFCFCF, GREEN_UP = 0xFF00FF40, GREEN_LO = 0xFF06DD0E, GOLD_LO_TEXT = GOLD_LO;
-
     /** The launcher's hover (brightness 1.18) and disabled (grayscale .7, brightness .72) filters. */
     public static int filter(int argb, boolean hot, boolean disabled) {
         if (!hot && !disabled) return argb;
@@ -138,19 +364,26 @@ public final class Theme {
 
     /** A navbar cell: the grey band and corners on a flat surface, no black of its own (the bar supplies it). */
     public static void cell(Canvas c, int x, int y, int w, int h, boolean hot) {
+        if (modern) {
+            if (hot) Round.pill(c, x, y, w, h, HOVER);
+            return;
+        }
         Px.frame(c, x, y, w, h, false, BAND, BAND, CORNER, SURF_TOP, SURF_TOP, 100, hot, false, 0xFF);
     }
 
     /** The window-close cell: red band and corners on a red surface. */
     public static void closeCell(Canvas c, int x, int y, int w, int h, boolean hot) {
+        if (modern) {
+            if (hot) Round.pill(c, x, y, w, h, 0x33FF6B5E);
+            return;
+        }
         int face = hot ? RED_UP : 0xFFDD0626;
         Px.frame(c, x, y, w, h, false, RED_UP, 0xFFDD0626, RED_CORNER, face, face, 100, false, false, 0xFF);
     }
 
-    public static final int RED_CORNER = 0xFFFF8B8E, GLYPH = 0xFFB8B8B8;
-
     /** The bar's filler: a plain panel with bands top and bottom only. */
     public static void barFill(Canvas c, int x, int y, int w, int h) {
+        if (modern) return;
         c.fill(x, y, x + w, y + h, SURF_TOP);
         c.fill(x, y, x + w, y + 1, BAND);
         c.fill(x, y + h - 1, x + w, y + h, BAND);
@@ -158,7 +391,7 @@ public final class Theme {
 
 
     public static void vDivider(Canvas c, int x, int y0, int y1) {
-        c.fill(x, y0, x + 1, y1, BLACK);
+        c.fill(x, y0, x + 1, y1, modern ? LINE_2 : BLACK);
     }
 
 
@@ -200,6 +433,14 @@ public final class Theme {
         return lc < GLYPH_W && LETTERS[l][r].charAt(lc) == '1';
     });
 
+    /** "Dusk"'s advance in the bold cut, in thousandths of an em. */
+    private static final int DUSK_EM = 2424;
+
+    /** Window pixels per font unit for a sans cap half of {@code size} window pixels, on a quarter step. */
+    private static float sansStep(int size) {
+        return Math.max(0.5f, Math.round(size * 0.5f / 7f * 4) / 4f);
+    }
+
     private interface Cell { boolean at(int r, int col); }
 
     private static boolean[][] mask(int w, int h, Cell cell) {
@@ -222,6 +463,10 @@ public final class Theme {
 
     /** Width of {@link #wordmark} in GUI pixels at {@code unit}. */
     public static int wordmarkWidth(int unit) {
+        if (modern) {
+            int size = MARK_ART * art(unit);
+            return (int) Math.ceil((size + size * 0.28 + DUSK_EM * 9.4 * sansStep(size) / 1000.0) / Px.gui());
+        }
         int cell = letterCell(unit);
         return (int) Math.ceil((MARK_ART * art(unit) + (MARK_GAP + LETTERS_W + 1) * cell) / Px.gui());
     }
@@ -249,6 +494,21 @@ public final class Theme {
         c.scale(art, art);
         c.blit(MARK, 0, 0, 0, 0, MARK_ART, MARK_ART, MARK_ART, MARK_ART, alpha255 << 24 | 0xFFFFFF);
         c.pop();
+        if (modern) {
+            // the app icon and "Dusk" in the bold sans, its cap half the icon's height
+            float e = sansStep(size);
+            int baseline = wy + Math.round(size / 2f + 3.5f * e);
+            sansPush();
+            c.push();
+            c.translate(wx + Math.round(size * 1.28f), baseline - 7 * e);
+            c.scale(e, e);
+            c.text(net.minecraft.network.chat.Component.literal("Dusk").withStyle(net.minecraft.ChatFormatting.BOLD),
+                    0, 0, alpha255 << 24 | TEXT & 0xFFFFFF, false);
+            c.pop();
+            sansPop();
+            c.pop();
+            return;
+        }
 
         int tx = wx + size + MARK_GAP * cell, ty = wy + (size - GLYPH_H * cell) / 2;
         cells(c, LETTER_MASK, tx + cell, ty + cell, cell, cell, alpha255, r -> SHADOW);

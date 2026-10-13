@@ -1,7 +1,11 @@
 package dev.dusk.client.hud;
 
 import dev.dusk.client.DuskClient;
+import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.gui.Round;
+import dev.dusk.client.gui.Sans;
+import dev.dusk.client.gui.Theme;
 import dev.dusk.client.media.MediaBackend;
 import dev.dusk.client.module.ModuleManager;
 import dev.dusk.client.modules.misc.Waypoints;
@@ -13,9 +17,15 @@ import dev.dusk.client.social.SocialNotifier;
 public final class HudRenderer {
     private HudRenderer() {}
 
+    /** Whether HUD text takes the smooth sans (Preferences, on versions that have it). */
+    public static boolean smooth() {
+        return Sans.supported() && DuskConfig.get().hudSmoothFont;
+    }
+
     public static void render(Canvas c, HudContext ctx) {
         ModuleManager modules = DuskClient.modules();
         if (modules == null) return;
+        Theme.sync();
         if (!ctx.editing()) {
             Zoom.drawOverlay(c, ctx);
             LightOverlay.draw(c, ctx);
@@ -35,19 +45,27 @@ public final class HudRenderer {
     }
 
     public static void draw(Canvas c, HudElement e, HudContext ctx) {
-        e.beforeDraw(ctx);
-        clampToScreen(e, ctx);
-        float s = e.scale();
-        int pad = e.background() ? HudElement.PAD : 0;
-        c.push();
-        c.translate(e.x(), e.y());
-        c.scale(s, s);
-        if (e.background()) {
-            c.fill(0, 0, e.width(ctx) + pad * 2, e.height(ctx) + pad * 2, e.backgroundColor());
+        boolean smooth = smooth();
+        if (smooth) Theme.hudSansPush();
+        try {
+            e.beforeDraw(ctx);
+            clampToScreen(e, ctx);
+            float s = e.scale();
+            int pad = e.background() ? HudElement.pad() : 0;
+            c.push();
+            c.translate(e.x(), e.y());
+            c.scale(s, s);
+            if (e.background()) {
+                int w = e.width(ctx) + pad * 2, h = e.height(ctx) + pad * 2;
+                if (Theme.modern()) Round.fill(c, 0, 0, w, h, Round.w(3), e.backgroundColor());
+                else c.fill(0, 0, w, h, e.backgroundColor());
+            }
+            c.translate(pad, pad);
+            e.render(c, ctx);
+            c.pop();
+        } finally {
+            if (smooth) Theme.hudSansPop();
         }
-        c.translate(pad, pad);
-        e.render(c, ctx);
-        c.pop();
     }
 
     /** Keeps the box on screen after window resizes or GUI-scale changes. */

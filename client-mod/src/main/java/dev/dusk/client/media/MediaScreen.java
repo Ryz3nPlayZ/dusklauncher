@@ -7,6 +7,7 @@ import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.Icons;
 import dev.dusk.client.gui.PanelScreen;
 import dev.dusk.client.gui.RemoteImages;
+import dev.dusk.client.gui.Round;
 import dev.dusk.client.gui.Theme;
 import dev.dusk.client.gui.Vanilla;
 import net.minecraft.client.KeyMapping;
@@ -290,7 +291,8 @@ public class MediaScreen extends PanelScreen {
         drawImage(c, thumbs, e, tx, ty, tw, thumbH);
         if (recordings()) {
             int bx = tx + 4, by = ty + thumbH - 15;
-            c.fill(bx, by, bx + 11, by + 11, 0xAA000000);
+            if (Theme.modern()) Round.dot(c, bx, by, 11, 0xB0101012);
+            else c.fill(bx, by, bx + 11, by + 11, 0xAA000000);
             Icons.PLAY.draw(c, bx + 2, by + 2, 0xFFFFFFFF);
         }
         int iy = ty + thumbH + 4;
@@ -307,12 +309,13 @@ public class MediaScreen extends PanelScreen {
 
     /** {@code e}'s image fitted inside the box, letterboxed; a placeholder while it loads or when there is none. */
     private void drawImage(Canvas c, RemoteImages images, Mcpr.Entry e, int x, int y, int w, int h) {
-        c.fill(x, y, x + w, y + h, 0xFF101010);
+        if (Theme.modern()) Round.fill(c, x, y, w, h, Round.w(4), 0xFF141417);
+        else c.fill(x, y, x + w, y + h, 0xFF101010);
         RemoteImages.Image img = images.get(key(e), () -> thumbBytes(e));
         if (img == null) {
             Icons icon = recordings() ? Icons.MEDIA : Icons.FOLDER;
             if (images.failed(key(e)) || !recordings()) {
-                icon.draw(c, x + (w - icon.width() * 2) / 2, y + (h - icon.height() * 2) / 2, 0xFF3A3A3A, 2);
+                icon.draw(c, x + (w - icon.width() * 2) / 2, y + (h - icon.height() * 2) / 2, Theme.pick(0xFF4A4A52, 0xFF3A3A3A), 2);
             }
             return;
         }
@@ -362,7 +365,7 @@ public class MediaScreen extends PanelScreen {
             return;
         }
         Mcpr.Entry e = entries.get(viewing);
-        c.fill(0, 0, this.width, this.height, 0xE6000000);
+        c.fill(0, 0, this.width, this.height, Theme.pick(0xEB0B0B0D, 0xE6000000));
         int top = 12, bottom = this.height - 48;
         drawImage(c, full, e, 12, top, this.width - 24, bottom - top);
         String cap = title(e) + " · " + info(e) + " · " + (viewing + 1) + "/" + entries.size();
@@ -470,7 +473,7 @@ public class MediaScreen extends PanelScreen {
         });
         // the picked choice reads through the disabled filter too
         choices((row, value, label, x, y, w, h, on, enabled) -> {
-            if (on) c.outline(x - 1, y - 1, w + 2, h + 2, enabled ? Theme.ACCENT : 0x66FFFFFF);
+            if (on && !Theme.modern()) c.outline(x - 1, y - 1, w + 2, h + 2, enabled ? Theme.ACCENT : 0x66FFFFFF);
             return false;
         });
     }

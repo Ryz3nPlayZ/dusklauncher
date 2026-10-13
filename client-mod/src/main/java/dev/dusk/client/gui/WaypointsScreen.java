@@ -222,8 +222,13 @@ public class WaypointsScreen extends PanelScreen {
         Theme.plate(c, listX, y, listW, ROW_H, Theme.SURFACE, Theme.SURFACE, false);
         int sx = listX + 6, sy = y + (ROW_H - SWATCH) / 2;
         boolean swatchHot = Vanilla.inside(mx, my, sx, sy, SWATCH, SWATCH);
-        c.fill(sx - 1, sy - 1, sx + SWATCH + 1, sy + SWATCH + 1, swatchHot ? 0xFFFFFFFF : 0xFF000000);
-        c.fill(sx, sy, sx + SWATCH, sy + SWATCH, w.color | 0xFF000000);
+        if (Theme.modern()) {
+            Round.dot(c, sx - 1, sy - 1, SWATCH + 2, swatchHot ? Theme.TEXT : Theme.LINE_3);
+            Round.dot(c, sx, sy, SWATCH, w.color | 0xFF000000);
+        } else {
+            c.fill(sx - 1, sy - 1, sx + SWATCH + 1, sy + SWATCH + 1, swatchHot ? 0xFFFFFFFF : 0xFF000000);
+            c.fill(sx, sy, sx + SWATCH, sy + SWATCH, w.color | 0xFF000000);
+        }
 
         int tx = nameX(), tw = hideX() - 8 - tx;
         if (w == editing && nameField != null && !editingCoords) {

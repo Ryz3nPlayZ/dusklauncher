@@ -7,7 +7,6 @@ import dev.dusk.client.compat.Input;
 import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.cosmetics.CosmeticsManager;
 import dev.dusk.client.cosmetics.LoadoutWatcher;
-import dev.dusk.client.gui.DuskMenuScreen;
 import dev.dusk.client.gui.MenuScreen;
 import dev.dusk.client.hud.HudHooks;
 import dev.dusk.client.hud.Raycast;
@@ -120,6 +119,7 @@ import dev.dusk.client.modules.toggle.ToggleSprint;
 import dev.dusk.client.server.ServerApi;
 import dev.dusk.client.social.SocialNotifier;
 import dev.dusk.client.gui.QuestsScreen;
+import dev.dusk.client.gui.DuskSettingsScreen;
 import dev.dusk.client.gui.DuskStatsScreen;
 import dev.dusk.client.gui.SocialScreen;
 import dev.dusk.client.gui.StylesScreen;
@@ -346,7 +346,7 @@ public class DuskClient implements ClientModInitializer {
             while (settingsKey.consumeClick()) {
                 Screen current = Compat.currentScreen(client);
                 if (client.player != null && !(current instanceof MenuScreen)) {
-                    Compat.setScreen(client, new DuskMenuScreen(current));
+                    Compat.setScreen(client, new DuskSettingsScreen(current));
                 }
             }
             boolean changed = Fullbright.instance().tickKeys();
@@ -407,7 +407,8 @@ public class DuskClient implements ClientModInitializer {
         int n = SocialNotifier.badge(), q = SocialNotifier.ready();
         String label = n > 0 ? "Friends & Chat (" + n + ")" : "Friends & Chat";
         String quests = q > 0 ? "Quests (" + q + ")" : "Quests";
-        int left = screen.width / 2 - width / 2, y = Math.min(bottom + 4, screen.height - 48), half = (width - 4) / 2;
+        // vanilla's paired rows: two 98s with 8 between, so the seam lines up with theirs
+        int left = screen.width / 2 - width / 2, y = Math.min(bottom + 4, screen.height - 48), half = (width - 8) / 2;
         widgets.add(Button.builder(Component.literal(label), b -> SocialScreen.show(screen))
                 .bounds(left, y, half, 20).build());
         widgets.add(Button.builder(Component.literal(quests), b -> QuestsScreen.show(screen))

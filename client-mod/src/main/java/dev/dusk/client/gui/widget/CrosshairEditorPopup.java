@@ -4,6 +4,8 @@ import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.compat.Input;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.Px;
+import dev.dusk.client.gui.Round;
+import dev.dusk.client.gui.Theme;
 import dev.dusk.client.gui.Vanilla;
 import dev.dusk.client.module.setting.PixelGridSetting;
 import dev.dusk.client.modules.render.CrosshairPresets;
@@ -70,7 +72,7 @@ public class CrosshairEditorPopup implements Popup {
     @Override
     public void render(Canvas c, int mouseX, int mouseY, int screenW, int screenH) {
         place(screenW, screenH);
-        c.fill(0, 0, screenW, screenH, 0xA0000000);
+        c.fill(0, 0, screenW, screenH, Theme.pick(0x990B0B0D, 0xA0000000));
         Px.panel(c, px - 1, py - 1, pw + 2, ph + 2);
 
         int hx = -1, hy = -1;
@@ -85,20 +87,20 @@ public class CrosshairEditorPopup implements Popup {
                     c.fill(cx, cy, cx + ps, cy + ps, argb);
                 } else {
                     int in = ps / 4;
-                    c.fill(cx + in, cy + in, cx + ps - in, cy + ps - in, i == N / 2 || j == N / 2 ? 0xFF424242 : 0xFF3A3A3A);
+                    c.fill(cx + in, cy + in, cx + ps - in, cy + ps - in, i == N / 2 || j == N / 2 ? Theme.pick(0xFF38383E, 0xFF424242) : Theme.pick(0xFF2A2A2F, 0xFF3A3A3A));
                 }
-                if (i == hx && j == hy) c.outline(cx, cy, ps, ps, 0xFFDF1515);
+                if (i == hx && j == hy) c.outline(cx, cy, ps, ps, Theme.pick(0xFFFFFFFF, 0xFFDF1515));
             }
         }
 
         int ax = asideX();
-        c.text("Color", ax, gy() + 1, Vanilla.TEXT, true);
+        heading(c, "Colour", ax, gy() + 1);
         ColorWidget.swatch(c, ax, swatchY(), 20, crosshair.pixelColor().argb(),
                 Vanilla.inside(mouseX, mouseY, ax, swatchY(), 20, 20));
         boolean clearHover = Vanilla.inside(mouseX, mouseY, ax, clearY(), ASIDE, 20);
         Px.button(c, ax, clearY(), ASIDE, 20, clearHover, true);
         Px.label(c, "Clear", ax, clearY(), ASIDE, 20, clearHover, false, 0xFF);
-        c.text("Presets", ax, presetsTop() - 11, Vanilla.TEXT, true);
+        heading(c, "Presets", ax, presetsTop() - 11);
 
         int top = presetsTop(), bottom = presetsBottom();
         presetScroll = Math.max(0, Math.min(maxPresetScroll(), presetScroll));
@@ -107,7 +109,8 @@ public class CrosshairEditorPopup implements Popup {
             int ry = top + k * THUMB_ROW - presetScroll;
             if (ry + THUMB_ROW < top || ry > bottom) continue;
             boolean hover = mouseY >= top && mouseY < bottom && Vanilla.inside(mouseX, mouseY, ax, ry, ASIDE, THUMB_ROW - 2);
-            c.fill(ax, ry, ax + ASIDE, ry + THUMB_ROW - 2, hover ? 0x50000000 : 0x10000000);
+            if (Theme.modern()) Round.fill(c, ax, ry, ASIDE, THUMB_ROW - 2, Round.w(6), hover ? 0x1AFFFFFF : 0x08FFFFFF, hover ? Theme.LINE_2 : Theme.LINE);
+            else c.fill(ax, ry, ax + ASIDE, ry + THUMB_ROW - 2, hover ? 0x50000000 : 0x10000000);
             int[][] grid = THUMBS[k];
             int tx = ax + (ASIDE - 2 * N) / 2, ty = ry + (THUMB_ROW - 2 - 2 * N) / 2;
             for (int j = 0; j < N; j++) {
@@ -119,8 +122,13 @@ public class CrosshairEditorPopup implements Popup {
         c.unscissor();
 
         boolean doneHover = Vanilla.inside(mouseX, mouseY, doneX(), doneY(), doneW(), 20);
-        Px.button(c, doneX(), doneY(), doneW(), 20, doneHover, true);
+        Px.box(c, doneX(), doneY(), doneW(), 20, Theme.modern() ? Theme.Family.ACCENT : Theme.Family.GREY, doneHover, false, 0xFF);
         Px.label(c, "Done", doneX(), doneY(), doneW(), 20, doneHover, false, 0xFF);
+    }
+
+    private static void heading(Canvas c, String text, int x, int y) {
+        if (Theme.modern()) c.text(text, x, y, Theme.TEXT_MUTED, false);
+        else c.text(text, x, y, Vanilla.TEXT, true);
     }
 
     @Override

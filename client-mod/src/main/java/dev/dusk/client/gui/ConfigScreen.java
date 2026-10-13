@@ -51,15 +51,25 @@ public class ConfigScreen extends MenuScreen {
 
     public static ConfigScreen preferences(@Nullable Screen parent) {
         ConfigScreen s = new ConfigScreen(parent, "Preferences", "", null);
-        ScrollPane p = s.pane;
+        fillPreferences(s.pane);
+        return s;
+    }
+
+    /** The Preferences rows: the look, the HUD font, the title screen, the launcher background and the menu key. */
+    public static void fillPreferences(ScrollPane p) {
+        p.add(new ToggleWidget("Modern look", Theme::modern, Theme::setModern), SettingsBuilder.rowH());
+        p.add(new ToggleWidget("Smooth HUD text", () -> DuskConfig.get().hudSmoothFont, v -> {
+            DuskConfig.get().hudSmoothFont = v;
+            DuskConfig.save();
+        }), SettingsBuilder.rowH());
         p.add(new ToggleWidget("Animated title scene", () -> DuskConfig.get().titleScene, v -> {
             DuskConfig.get().titleScene = v;
             DuskConfig.save();
-        }), SettingsBuilder.ROW_H);
+        }), SettingsBuilder.rowH());
         p.add(new ToggleWidget("Show account on title screen", () -> DuskConfig.get().showAccountTile, v -> {
             DuskConfig.get().showAccountTile = v;
             DuskConfig.save();
-        }), SettingsBuilder.ROW_H);
+        }), SettingsBuilder.rowH());
         p.add(new LabelWidget(""), 6);
         p.add(new LabelWidget("Launcher background (PNG/JPG path, empty = default)"), 14);
         p.add(new TextFieldWidget(() -> DuskConfig.get().backgroundPath, v -> {
@@ -67,8 +77,7 @@ public class ConfigScreen extends MenuScreen {
             DuskConfig.save();
         }, false, 512).placeholder("C:/path/to/background.png"), 20);
         p.add(new LabelWidget(""), 6);
-        p.add(new KeybindWidget("Open the Dusk menu", DuskClient::settingsKey), SettingsBuilder.ROW_H);
-        return s;
+        p.add(new KeybindWidget("Open the Dusk menu", DuskClient::settingsKey), SettingsBuilder.rowH());
     }
 
     @Override

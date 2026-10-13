@@ -739,7 +739,7 @@ public class WardrobeScreen extends PanelScreen {
 
     @Override
     protected String[] tabs() {
-        return giftTo != null ? new String[] {"GIFT FOR " + giftName.toUpperCase(Locale.ROOT)} : TABS;
+        return giftTo != null ? new String[] {"GIFT FOR " + Theme.caps(giftName)} : TABS;
     }
 
     @Override
@@ -760,7 +760,7 @@ public class WardrobeScreen extends PanelScreen {
     protected List<Tool> tools() {
         if (giftTo != null) return List.of(new Tool("close", Icons.CLOSE, "", "Close"));
         SkinLibrary.Entry cur = current();
-        String name = cur != null ? cur.name().toUpperCase(Locale.ROOT) : "NO SKIN SELECTED";
+        String name = cur != null ? Theme.caps(cur.name()) : "NO SKIN SELECTED";
         return List.of(new Tool("close", Icons.CLOSE, "", "Close"),
                 new Tool("label", null, name.length() > 22 ? name.substring(0, 21) + "..." : name, ""));
     }
@@ -916,8 +916,8 @@ public class WardrobeScreen extends PanelScreen {
         int[] cb = actionBox(false), ab = actionBox(true);
         if (giftTo != null) {
             // no look to apply: the viewer's foot says who's getting it
-            String to = Theme.ellipsize(c, "FOR " + giftName.toUpperCase(Locale.ROOT), vw - 8);
-            Theme.label(c, to, vx + (vw - c.textWidth(to)) / 2, cb[1] + (cb[3] - 7) / 2, Theme.LABEL_UP, Theme.LABEL_LO, 1f);
+            String to = Theme.ellipsize(c, "FOR " + Theme.caps(giftName), vw - 8);
+            Theme.label(c, to, vx + (vw - Theme.labelWidth(c, to, 1f)) / 2, cb[1] + (cb[3] - 7) / 2, Theme.LABEL_UP, Theme.LABEL_LO, 1f);
         } else {
             boxButton(c, "CANCEL", cb[0], cb[1], cb[2], cb[3], mouseX, mouseY, Theme.Family.GREY, false, canCancel());
             String apply = busy ? "..." : tab == 0 ? (applied() ? "APPLIED" : "APPLY") : "APPLY LOOK";
@@ -952,11 +952,13 @@ public class WardrobeScreen extends PanelScreen {
         }
         if (tipFor != null) {
             // the launcher's title attribute: traits under the pointer
-            int w = c.textWidth(tipFor.tip) + 8;
-            int x = Math.max(2, Math.min(this.width - 2 - w, mouseX + 8)), y = Math.min(this.height - 15, mouseY + 12);
+            int pad = Theme.modern() ? 6 : 4, th = Theme.modern() ? 17 : 13;
+            int w = c.textWidth(tipFor.tip) + 2 * pad;
+            int x = Math.max(2, Math.min(this.width - 2 - w, mouseX + 8)), y = Math.min(this.height - th - 2, mouseY + 12);
             c.beginLayer();
-            c.fill(x, y, x + w, y + 13, 0xE0000000);
-            c.text(tipFor.tip, x + 4, y + 3, Theme.TEXT, false);
+            if (Theme.modern()) Vanilla.popBox(c, x, y, w, th);
+            else c.fill(x, y, x + w, y + 13, 0xE0000000);
+            c.text(tipFor.tip, x + pad, y + (th - 7) / 2, Theme.TEXT, false);
             c.endLayer();
         }
     }
@@ -986,7 +988,7 @@ public class WardrobeScreen extends PanelScreen {
                 if (y + ROW_H < listY || y > listBottom) continue;
                 Social.Outfit o = list.get(i);
                 int[] wear = outfitButton(i, true), del = outfitButton(i, false);
-                c.fill(listX, y + ROW_H - 1, listX + listW, y + ROW_H, 0x30FFFFFF);
+                c.fill(listX, y + ROW_H - 1, listX + listW, y + ROW_H, Theme.pick(Theme.LINE, 0x30FFFFFF));
                 int textW = wear[0] - GAP - listX - 4;
                 c.text(Theme.ellipsize(c, o.name(), textW), listX + 4, y + 5, Theme.TEXT, false);
                 c.text(Theme.ellipsize(c, summary(o.loadout()), textW), listX + 4, y + 16, Theme.TEXT_FAINT, false);
@@ -1010,14 +1012,15 @@ public class WardrobeScreen extends PanelScreen {
         Theme.box(c, x, y, tileW, tileH, t.family, hot, false);
         int m = 2 + Math.max(2, tileW / 28);
         t.thumb.draw(c, x + m, y + m, tileW - 2 * m, tileH - 2 * m - NAME_H);
-        String label = Theme.ellipsize(c, t.label.toUpperCase(Locale.ROOT), tileW - 2 * m);
-        int lx = x + (tileW - c.textWidth(label)) / 2, ly = y + tileH - m - NAME_H + (NAME_H - 7) / 2;
+        String label = Theme.ellipsize(c, Theme.caps(t.label), tileW - 2 * m);
+        int lx = x + (tileW - Theme.labelWidth(c, label, 1f)) / 2, ly = y + tileH - m - NAME_H + (NAME_H - 7) / 2;
         if (t.worn) Theme.label(c, label, lx, ly, Theme.GREEN_UP, Theme.GREEN_LO, 1f);
         else c.text(label, lx, ly, Theme.DIM, false);
         if (t.badge != null) {
-            String b = Theme.ellipsize(c, t.badge, tileW - 8);
+            String b = Theme.ellipsize(c, Theme.sentence(t.badge), tileW - 8);
             int bw = c.textWidth(b) + 6, bx = x + tileW - 3 - bw;
-            c.fill(bx, y + 3, bx + bw, y + 14, 0xC0000000);
+            if (Theme.modern()) Round.pill(c, bx, y + 3, bw, 11, 0xC0101012);
+            else c.fill(bx, y + 3, bx + bw, y + 14, 0xC0000000);
             int col = t.worn ? Theme.GREEN_LO : t.badge.equals("OWNED") ? Theme.TEXT_MUTED : Theme.ACCENT;
             c.text(b, bx + 3, y + 5, col, false);
         }

@@ -38,6 +38,16 @@ import java.util.Objects;
  */
 public final class SettingsBuilder {
     public static final int ROW_H = 24;
+
+    /** A row's height: roomier in the modern look, where rows sit in cards with hairlines between. */
+    public static int rowH() {
+        return Theme.modern() ? 28 : ROW_H;
+    }
+
+    /** A group heading's height: in the modern look it leaves air above the card it heads. */
+    private static int headerH() {
+        return Theme.modern() ? 30 : 22;
+    }
     /** Modules with more settings than this open with only their first group unfolded. */
     private static final int EXPAND_ALL_LIMIT = 40;
 
@@ -45,10 +55,16 @@ public final class SettingsBuilder {
 
     /** @param onChange runs after any edit (the screen saves when it closes) */
     public static void build(ScrollPane pane, Module m, PopupHost host, Runnable onChange) {
-        pane.add(new ToggleWidget("Enabled", m::enabled, v -> { m.setEnabled(v); onChange.run(); }), ROW_H);
+        build(pane, m, host, onChange, true);
+    }
+
+    /** @param enabledRow false when the page shows the module's switch somewhere else */
+    public static void build(ScrollPane pane, Module m, PopupHost host, Runnable onChange, boolean enabledRow) {
+        int rowH = rowH();
+        if (enabledRow) pane.add(new ToggleWidget("Enabled", m::enabled, v -> { m.setEnabled(v); onChange.run(); }), rowH);
         ToggleKeySetting toggleKey = m.toggleKey();
         pane.add(new KeybindWidget(toggleKey.name(), toggleKey::keyName, key -> { toggleKey.set(key); onChange.run(); })
-                .resets(toggleKey, onChange), ROW_H);
+                .resets(toggleKey, onChange), rowH);
         List<Setting<?>> settings = m.settings();
         boolean expandAll = settings.size() <= EXPAND_ALL_LIMIT;
         String currentGroup = null;
@@ -65,7 +81,7 @@ public final class SettingsBuilder {
                 // the heading goes too once nothing under it applies
                 List<Setting<?>> inGroup = members = new ArrayList<>();
                 header.visible = () -> inGroup.stream().anyMatch(Setting::visible);
-                pane.add(header, 22);
+                pane.add(header, headerH());
                 firstGroup = false;
             } else if (g == null) {
                 currentGroup = null;
@@ -74,7 +90,7 @@ public final class SettingsBuilder {
             if (header != null) members.add(s);
             row.group = header;
             row.visible = s::visible;
-            pane.add(row, ROW_H);
+            pane.add(row, rowH);
         }
     }
 
