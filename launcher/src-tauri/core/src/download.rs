@@ -188,9 +188,21 @@ async fn fetch_with_retries(client: &reqwest::Client, dl: &Download) -> Result<(
 
 const ATTEMPTS: u32 = 3;
 
+/// How long a download may go without a byte before it counts as dead. The
+/// app's client gives every request 30 seconds in all, which a big file
+/// (the Java runtime's 100 MB `lib/modules`) can't make on an ordinary
+/// connection, so a download lifts that and only gives up on a stall.
+const STALL: std::time::Duration = std::time::Duration::from_secs(30);
+const NO_DEADLINE: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
+
+fn stalled() -> Error {
+    Error::Io(std::io::Error::new(std::io::ErrorKind::TimedOut, "no data for 30 seconds"))
+}
+
 fn is_transient(e: &Error) -> bool {
     match e {
         Error::Checksum { .. } => true,
+        Error::Io(e) => e.kind() == std::io::ErrorKind::TimedOut,
         Error::Http(e) => e
             .status()
             .is_none_or(|s| s.is_server_error() || s == reqwest::StatusCode::TOO_MANY_REQUESTS),
@@ -199,7 +211,8 @@ fn is_transient(e: &Error) -> bool {
 }
 
 async fn fetch_and_write(client: &reqwest::Client, dl: &Download) -> Result<()> {
-    let mut response = client.get(&dl.url).send().await?.error_for_status()?;
+    let request = client.get(&dl.url).timeout(NO_DEADLINE).send();
+    let mut response = tokio::time::timeout(STALL, request).await.map_err(|_| stalled())??.error_for_status()?;
     if let Some(parent) = dl.dest.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
@@ -210,7 +223,7 @@ async fn fetch_and_write(client: &reqwest::Client, dl: &Download) -> Result<()> 
     let written = async {
         let mut file = tokio::io::BufWriter::new(tokio::fs::File::create(&part).await?);
         let mut hasher = Sha1::new();
-        while let Some(chunk) = response.chunk().await? {
+        while let Some(chunk) = tokio::time::timeout(STALL, response.chunk()).await.map_err(|_| stalled())?? {
             hasher.update(&chunk);
             file.write_all(&chunk).await?;
         }
@@ -350,11 +363,37 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[tokio::test]
+    async fn a_slow_download_outlasts_the_clients_overall_timeout() {
+        // the app's client allows 30s per request; a big file on a normal
+        // connection takes longer, and only a stall should end it
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 1024];
+            let _ = tokio::io::AsyncReadExt::read(&mut sock, &mut buf).await;
+            sock.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 5\r\nconnection: close\r\n\r\n").await.unwrap();
+            for b in b"hello" {
+                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                sock.write_all(&[*b]).await.unwrap();
+            }
+        });
+        let dir = std::env::temp_dir().join(format!("dusk-slow-{}", std::process::id()));
+        let dest = dir.join("a.jar");
+        let dl = Download { url: format!("http://{addr}/a.jar"), dest: dest.clone(), sha1: None, size: None };
+        let client = reqwest::Client::builder().timeout(std::time::Duration::from_millis(500)).build().unwrap();
+        fetch_and_write(&client, &dl).await.unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), b"hello");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn retries_corrupt_bodies_but_not_local_failures() {
         let checksum = Error::Checksum { path: "a".into(), expected: "x".into(), actual: "y".into() };
         assert!(is_transient(&checksum));
         assert!(!is_transient(&Error::Io(std::io::Error::other("disk full"))));
         assert!(!is_transient(&Error::Other("nope".into())));
+        assert!(is_transient(&stalled()));
     }
 }
