@@ -21,6 +21,11 @@ use std::time::Duration;
 /// this machine and the cosmetics block is written by the launcher itself.
 const PREF_KEYS: &[&str] = &["showAccountTile", "uiStyle", "titleScene", "favorites", "recordingMode", "clipSeconds"];
 
+/// `config/duskclient-hud.json` modules that stay on this machine: Render
+/// Scale is picked for this screen and GPU, and a Mac's 50% shouldn't follow
+/// the account to a desktop.
+const LOCAL_MODULES: &[&str] = &["renderscale"];
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Master {
@@ -93,7 +98,7 @@ pub(crate) fn read_object(path: &Path) -> Map<String, Value> {
     }
 }
 
-fn write_object(path: &Path, doc: &Map<String, Value>) -> Result<(), String> {
+pub(crate) fn write_object(path: &Path, doc: &Map<String, Value>) -> Result<(), String> {
     fasterlauncher_core::write_atomic(path, &serde_json::to_vec_pretty(doc).unwrap()).map_err(|e| e.to_string())
 }
 
@@ -129,6 +134,9 @@ pub fn apply_to_instance(data_dir: &Path, instance_root: &Path) -> Result<Snapsh
 
     let mut hud = read_object(&hud_file(instance_root));
     for (module, opts) in &master.hud {
+        if LOCAL_MODULES.contains(&module.as_str()) {
+            continue;
+        }
         let Some(opts) = opts.as_object() else { continue };
         let mut merged = hud.get(module).and_then(Value::as_object).cloned().unwrap_or_default();
         for (k, v) in opts {
@@ -157,6 +165,9 @@ pub fn collect_from_instance(data_dir: &Path, instance_root: &Path, snap: &Snaps
     let mut changed = false;
 
     for (module, opts) in read_object(&hud_file(instance_root)) {
+        if LOCAL_MODULES.contains(&module.as_str()) {
+            continue;
+        }
         let Some(opts) = opts.as_object() else { continue };
         let before = snap.hud.get(&module).and_then(Value::as_object);
         for (k, v) in opts {

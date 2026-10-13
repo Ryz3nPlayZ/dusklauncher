@@ -948,6 +948,9 @@ pub async fn install_and_launch(
         None
     };
     seed_instance_config(&dirs.root);
+    if injects_client && crate::cosmetics::client_mod_jar_for(&profile.game_version) == Some("duskclient-1.21.11.jar") {
+        prefer_render_scale(&dirs.root);
+    }
     // a windowed start needs no file: the game opens windowed without one
     if let Some(full) = profile.fullscreen.filter(|f| *f || dirs.root.join("options.txt").exists()) {
         set_game_option(&dirs.root, "fullscreen", if full { "true" } else { "false" });
@@ -1571,6 +1574,52 @@ fn seed_instance_config(root: &std::path::Path) {
     }
 }
 
+/// On a Mac, Sodium Extra's `reduce_resolution_on_mac` (seeded above) lowers
+/// the whole window, so the HUD, chat and menus blur along with the world.
+/// Where DuskClient has Render Scale (1.21.11), the window goes back to full
+/// resolution and only the world draws at half per side: the same world
+/// pixels, sharp text. Once per instance, so turning either back on sticks.
+fn prefer_render_scale(root: &std::path::Path) {
+    if cfg!(target_os = "macos") {
+        switch_to_render_scale(root);
+    }
+}
+
+fn switch_to_render_scale(root: &std::path::Path) {
+    use serde_json::{json, Value};
+    let marker = root.join("config").join("duskclient").join("render-scale-switched");
+    if marker.exists() {
+        return;
+    }
+    let sodium = root.join("config").join("sodium-extra-options.json");
+    let mut doc = crate::client_settings::read_object(&sodium);
+    let extra = doc.get_mut("extra_settings").and_then(Value::as_object_mut);
+    if let Some(extra) = extra.filter(|e| e.get("reduce_resolution_on_mac").and_then(Value::as_bool) == Some(true)) {
+        extra.insert("reduce_resolution_on_mac".into(), false.into());
+        let hud_path = root.join("config").join("duskclient-hud.json");
+        let mut hud = crate::client_settings::read_object(&hud_path);
+        let entry = hud.entry("renderscale").or_insert_with(|| json!({}));
+        if !entry.is_object() {
+            *entry = json!({});
+        }
+        let module = entry.as_object_mut().unwrap();
+        module.insert("enabled".into(), true.into());
+        let settings = module.entry("settings").or_insert_with(|| json!({}));
+        if let Some(settings) = settings.as_object_mut() {
+            settings.insert("scale".into(), 50.into());
+        }
+        if let Err(e) = crate::client_settings::write_object(&hud_path, &hud)
+            .and_then(|_| crate::client_settings::write_object(&sodium, &doc))
+        {
+            tracing::warn!("couldn't switch the instance to Render Scale: {e}");
+            return;
+        }
+        tracing::info!("full-resolution window with the world at 50% (Render Scale) instead of Sodium Extra's lowered window");
+    }
+    let _ = std::fs::create_dir_all(marker.parent().unwrap());
+    let _ = std::fs::write(&marker, b"");
+}
+
 /// Set one `key:value` line of the instance's options.txt, keeping the
 /// rest. The game reads it as it starts, so a fullscreen chosen here holds
 /// even after F11 left the game the other way last time.
@@ -2017,6 +2066,36 @@ mod option_tests {
         std::fs::write(&path, "fullscreenResolution:x\n").unwrap();
         set_game_option(&root, "fullscreen", "true");
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "fullscreenResolution:x\nfullscreen:true\n");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+#[cfg(test)]
+mod render_scale_tests {
+    use super::switch_to_render_scale;
+
+    #[test]
+    fn swaps_a_lowered_window_for_render_scale_once() {
+        let root = std::env::temp_dir().join(format!("dusk-scale-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("config")).unwrap();
+        let sodium = root.join("config/sodium-extra-options.json");
+        let hud = root.join("config/duskclient-hud.json");
+        std::fs::write(&sodium, r#"{"extra_settings":{"reduce_resolution_on_mac":true,"other":1}}"#).unwrap();
+        std::fs::write(&hud, r#"{"fps":{"enabled":true}}"#).unwrap();
+        switch_to_render_scale(&root);
+        let s: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&sodium).unwrap()).unwrap();
+        assert_eq!(s["extra_settings"]["reduce_resolution_on_mac"], false);
+        assert_eq!(s["extra_settings"]["other"], 1);
+        let h: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&hud).unwrap()).unwrap();
+        assert_eq!(h["renderscale"]["enabled"], true);
+        assert_eq!(h["renderscale"]["settings"]["scale"], 50);
+        assert_eq!(h["fps"]["enabled"], true);
+        // the player turns the lowered window back on: it stays on
+        std::fs::write(&sodium, r#"{"extra_settings":{"reduce_resolution_on_mac":true}}"#).unwrap();
+        switch_to_render_scale(&root);
+        let s: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&sodium).unwrap()).unwrap();
+        assert_eq!(s["extra_settings"]["reduce_resolution_on_mac"], true);
         let _ = std::fs::remove_dir_all(&root);
     }
 }
