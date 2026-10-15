@@ -10,6 +10,7 @@ import dev.dusk.client.hud.HudElement;
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.Setting;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -26,9 +27,9 @@ import java.util.Set;
 /**
  * The Dusk menu: one window with a sidebar (the module categories with
  * their counts, then Preferences, the HUD layout, Styles, Wardrobe and
- * Friends & Chat) and the page on the right. The module list is one column
- * of rows, each with its switch; under All they sit in a card per category,
- * otherwise in one card. The older card grid is a toggle away. A module's
+ * Friends & Chat) and the page on the right. The modules show as a grid of
+ * cards, each with its switch, or a toggle away as one column of rows (under
+ * All a card of rows per category, otherwise one card). A module's
  * settings and Preferences open in the same window as cards of rows, Esc
  * going back to the list.
  */
@@ -39,6 +40,10 @@ public class DuskSettingsScreen extends MenuScreen {
     /** The modern list: a row, the heading over a category's card and the air between cards. */
     private static final int LIST_ROW_H = 36, HEADING_H = 26, GROUP_GAP = 6, SEARCH_H = 20;
     private static final int LEGACY_SWITCH_W = 49, LEGACY_SWITCH_H = 14;
+    /** The modern look: the header, the card size, the window's inner margin and the sidebar's inset panel. */
+    private static final int MODERN_HEAD_H = 48, MODERN_CARD_H = 80, MODERN_CARD_MIN_W = 124, MODERN_PAD = 14, PANEL_INSET = 7;
+    /** The lavender of the italic word in the headings. */
+    private static final int LAVENDER = 0xFFB4ACFF;
 
     /** Modules added since the previous release, listed under the NEW tab. Update this set every release. */
     private static final Set<String> NEW_IDS = Set.of("behindyou", "nametags", "particles", "hitbox",
@@ -53,10 +58,10 @@ public class DuskSettingsScreen extends MenuScreen {
             .map(m -> m.getMetadata().getVersion().getFriendlyString()).orElse("");
 
     private enum Tab {
-        ALL("All", "All modules", null, Icons.GRID), NEW("New", "New modules", null, Icons.STAR),
+        ALL("All", "All modules", null, Icons.GRID), NEW("New", "New modules", null, Icons.SPARKLE),
         HUD("HUD", "HUD", Module.Category.HUD, Icons.HUD), RENDER("Render", "Render", Module.Category.RENDER, Icons.EYE),
-        MOVEMENT("Movement", "Movement", Module.Category.MOVEMENT, Icons.ARROW),
-        UTILITY("Utility", "Utility", Module.Category.MISC, Icons.DOTS);
+        MOVEMENT("Movement", "Movement", Module.Category.MOVEMENT, Icons.RUN),
+        UTILITY("Utility", "Utility", Module.Category.MISC, Icons.WRENCH);
 
         final String label, title;
         @Nullable final Module.Category category;
@@ -80,8 +85,8 @@ public class DuskSettingsScreen extends MenuScreen {
 
     /** The sidebar's General links. */
     private enum Link {
-        PREFS("Preferences", Icons.GEAR), HUD("HUD layout", Icons.MOVE), STYLES("Styles", Icons.PACK),
-        WARDROBE("Wardrobe", Icons.PERSON), SOCIAL("Friends & Chat", Icons.CHAT);
+        PREFS("Preferences", Icons.GEAR), HUD("HUD layout", Icons.MOVE), STYLES("Styles", Icons.PALETTE),
+        WARDROBE("Wardrobe", Icons.SHIRT), SOCIAL("Friends & Chat", Icons.CHAT);
 
         final String label;
         final Icons icon;
@@ -106,7 +111,7 @@ public class DuskSettingsScreen extends MenuScreen {
 
     private static Tab tab = Tab.ALL;
     /** The card grid instead of the rows. */
-    private static boolean grid;
+    private static boolean grid = true;
 
     private final TextFieldWidget search;
     private final List<Module> shown = new ArrayList<>();
@@ -242,11 +247,13 @@ public class DuskSettingsScreen extends MenuScreen {
         layout();
     }
 
+    private static int inset() { return Theme.modern() ? MODERN_PAD : PAD; }
+    private static int headH() { return Theme.modern() ? MODERN_HEAD_H : HEAD_H; }
     private int mainX() { return px + sw; }
-    private int contentX() { return mainX() + PAD; }
-    private int contentW() { return pw - sw - 2 * PAD; }
-    private int bodyY() { return py + HEAD_H + 8; }
-    private int bodyBottom() { return py + ph - PAD; }
+    private int contentX() { return mainX() + inset(); }
+    private int contentW() { return pw - sw - 2 * inset(); }
+    private int bodyY() { return py + headH() + (Theme.modern() ? 4 : 8); }
+    private int bodyBottom() { return py + ph - inset(); }
     private int gridW() { return contentW() - BAR_W - 4; }
     private int titleX() { return page == Page.MODULE ? contentX() + BTN + 6 : contentX(); }
 
@@ -263,37 +270,48 @@ public class DuskSettingsScreen extends MenuScreen {
 
         // the sidebar: brand, Modules, General, the version at the foot
         int items = Tab.values().length + Link.values().length;
-        int foot = Theme.modern() ? 0 : FOOT_H;
-        itemH = Math.max(13, Math.min(Theme.modern() ? 20 : 18, (ph - brandH() - 2 * SECTION_H - 6 - foot - 8) / items));
+        boolean modern = Theme.modern();
+        int foot = modern ? PANEL_INSET + 4 : FOOT_H;
+        // the modern items sit inside the sidebar's panel
+        int ix = modern ? px + PANEL_INSET + 5 : px + 6, iw = modern ? sw - PANEL_INSET - 10 : sw - 12;
+        itemH = Math.max(modern ? 11 : 13, Math.min(modern ? 20 : 18, (ph - brandH() - 2 * SECTION_H - 6 - foot - (modern ? 0 : 8)) / items));
         side.clear();
         int y = modulesY = py + brandH();
         y += SECTION_H;
         for (Tab t : Tab.values()) {
-            side.add(new Hit("tab:" + t.name(), px + 6, y, sw - 12, itemH));
+            side.add(new Hit("tab:" + t.name(), ix, y, iw, itemH));
             y += itemH;
         }
         generalY = y += 6;
         y += SECTION_H;
         for (Link l : Link.values()) {
-            side.add(new Hit("link:" + l.name(), px + 6, y, sw - 12, itemH));
+            side.add(new Hit("link:" + l.name(), ix, y, iw, itemH));
             y += itemH;
         }
 
         // the header, from the right
         heads.clear();
-        int hy = py + (HEAD_H - BTN) / 2, right = px + pw - PAD;
+        int hy = py + (headH() - BTN) / 2, right = px + pw - inset();
         heads.add(new Hit("close", right - BTN, hy, BTN, BTN));
         right -= BTN + 6;
-        if (page == Page.LIST) {
+        if (page == Page.LIST && modern) {
+            // the list | cards switch, then the search field
+            int sy = py + (headH() - SEARCH_H) / 2, vw = 2 * SEARCH_H + 2;
+            heads.add(new Hit("view", right - vw, sy, vw, SEARCH_H));
+            right -= vw + 6;
+            int searchW = Math.min(210, right - contentX() - 130);
+            if (searchW >= 60) {
+                heads.add(new Hit("search", right - searchW, sy, searchW, SEARCH_H));
+                search.setBounds(right - searchW + 22, sy, searchW - 30, SEARCH_H);
+                right -= searchW + 8;
+            } else {
+                search.setBounds(0, 0, 0, 0);
+            }
+        } else if (page == Page.LIST) {
             heads.add(new Hit("view", right - BTN, hy, BTN, BTN));
             right -= BTN + 8;
-            int searchW = Math.min(Theme.modern() ? 170 : 150, right - contentX() - 110);
-            if (searchW >= 60 && Theme.modern()) {
-                int sy = py + (HEAD_H - SEARCH_H) / 2;
-                heads.add(new Hit("search", right - searchW, sy, searchW, SEARCH_H));
-                search.setBounds(right - searchW + 20, sy, searchW - 28, SEARCH_H);
-                right -= searchW + 8;
-            } else if (searchW >= 60) {
+            int searchW = Math.min(150, right - contentX() - 110);
+            if (searchW >= 60) {
                 heads.add(new Hit("search", right - searchW, hy, searchW, BTN));
                 search.setBounds(right - searchW + 15, hy + (BTN - 12) / 2, searchW - 20, 12);
                 right -= searchW + 8;
@@ -301,7 +319,7 @@ public class DuskSettingsScreen extends MenuScreen {
                 search.setBounds(0, 0, 0, 0);
             }
         } else if (page == Page.MODULE && module != null) {
-            heads.add(new Hit("switch", right - switchW(), py + (HEAD_H - switchH()) / 2, switchW(), switchH()));
+            heads.add(new Hit("switch", right - switchW(), py + (headH() - switchH()) / 2, switchW(), switchH()));
             right -= switchW() + 10;
             int rw = textW("Reset all") + 18;
             heads.add(new Hit("reset", right - rw, hy, rw, BTN));
@@ -318,13 +336,14 @@ public class DuskSettingsScreen extends MenuScreen {
         // the list: one column of rows, or cards
         rowW = gridW();
         buildItems();
-        cols = Math.max(1, Math.min(MAX_COLS, (gridW() + CARD_GAP) / (CARD_MIN_W + CARD_GAP)));
-        cardW = (gridW() - CARD_GAP * (cols - 1)) / cols;
-        cardH = Math.max(80, Math.min(115, Math.round(cardW * 0.72f)));
+        int gap = cardGap(), cardMin = modern ? MODERN_CARD_MIN_W : CARD_MIN_W;
+        cols = Math.max(1, Math.min(MAX_COLS, (gridW() + gap) / (cardMin + gap)));
+        cardW = (gridW() - gap * (cols - 1)) / cols;
+        cardH = modern ? MODERN_CARD_H : Math.max(80, Math.min(115, Math.round(cardW * 0.72f)));
         clampScroll();
     }
 
-    private int brandH() { return Theme.modern() ? 44 : BRAND_H; }
+    private int brandH() { return Theme.modern() ? ph >= 280 ? 54 : 44 : BRAND_H; }
 
     /**
      * The list's lines: under All with no search, a heading and a card per
@@ -363,15 +382,16 @@ public class DuskSettingsScreen extends MenuScreen {
     private int contentHeight() {
         if (!grid) return listH;
         int rows = (shown.size() + cols - 1) / cols;
-        return rows == 0 ? 0 : rows * (cardH + CARD_GAP) - CARD_GAP;
+        return rows == 0 ? 0 : rows * (cardH + cardGap()) - cardGap();
     }
 
     private int maxScroll() { return Math.max(0, contentHeight() - (bodyBottom() - bodyY())); }
 
     private void clampScroll() { scroll = Math.max(0, Math.min(maxScroll(), scroll)); }
 
-    private int cardX(int i) { return contentX() + (i % cols) * (cardW + CARD_GAP); }
-    private int cardY(int i) { return bodyY() + (i / cols) * (cardH + CARD_GAP) - scroll; }
+    private static int cardGap() { return Theme.modern() ? 8 : CARD_GAP; }
+    private int cardX(int i) { return contentX() + (i % cols) * (cardW + cardGap()); }
+    private int cardY(int i) { return bodyY() + (i / cols) * (cardH + cardGap()) - scroll; }
     private int barX() { return contentX() + contentW() - BAR_W; }
 
     private boolean inBody(double mx, double my) {
@@ -391,6 +411,11 @@ public class DuskSettingsScreen extends MenuScreen {
 
     /** {x, y, w, h} of the ENABLED button and the gear on the card at {@code (cx, cy)}. */
     private int[] toggleBox(int cx, int cy) {
+        if (Theme.modern()) {
+            // the switch at the top right, a little past its edges
+            int[] s = cardSwitch(cx, cy);
+            return new int[] {s[0] - 3, s[1] - 3, ToggleWidget.SWITCH_W + 6, ToggleWidget.SWITCH_H + 6};
+        }
         int m = margin(), bh = buttonH(), gap = Math.max(3, Math.round(8 * k()));
         return new int[] {cx + m, cy + cardH - m - bh, cardW - 2 * m - bh - gap, bh};
     }
@@ -399,6 +424,13 @@ public class DuskSettingsScreen extends MenuScreen {
         int m = margin(), bh = buttonH();
         return new int[] {cx + cardW - m - bh, cy + cardH - m - bh, bh, bh};
     }
+
+    /** {x, y} of the switch on the modern card at {@code (cx, cy)}. */
+    private int[] cardSwitch(int cx, int cy) {
+        return new int[] {cx + cardW - CARD_MARGIN - ToggleWidget.SWITCH_W, cy + CARD_MARGIN + 1};
+    }
+
+    private static final int CARD_MARGIN = 11;
 
     private static boolean in(int[] b, double mx, double my) {
         return Vanilla.inside(mx, my, b[0], b[1], b[2], b[3]);
@@ -427,7 +459,7 @@ public class DuskSettingsScreen extends MenuScreen {
     protected void drawMenu(Canvas c, int mouseX, int mouseY, float delta) {
         layout();
         tip = null;
-        if (inWorld()) c.fill(0, 0, this.width, this.height, Theme.pick(0x660B0B0D, 0x4D000000));
+        if (inWorld()) c.fill(0, 0, this.width, this.height, Theme.pick(0x660A0B1C, 0x4D000000));
         drawWindow(c);
         drawSidebar(c, mouseX, mouseY);
         drawHeader(c, mouseX, mouseY);
@@ -441,24 +473,21 @@ public class DuskSettingsScreen extends MenuScreen {
     }
 
     /**
-     * The window: in the modern look a rounded graphite sheet on a soft
-     * shadow with the sidebar a shade darker; in the legacy one a black
-     * outline round the 90% body, the sidebar darker behind a black rule.
+     * The window: in the modern look a rounded night-blue sheet on a soft
+     * shadow, the sidebar an inset panel of its own; in the legacy one a
+     * black outline round the 90% body, the sidebar darker behind a black rule.
      */
     private void drawWindow(Canvas c) {
         if (Theme.modern()) {
-            int r = Px.radius(ph, 22);
+            int r = Px.radius(ph, 18);
             Round.begin(c);
             int x0 = Round.w(px), y0 = Round.w(py), x1 = Round.w(px + pw), y1 = Round.w(py + ph);
-            Round.softW(c, x0, y0, x1, y1, r, Round.w(10), Round.w(3), 0x73000000);
-            Round.fillW(c, x0, y0, x1, y1, r, 0xF5141417);
+            Round.softW(c, x0, y0, x1, y1, r, Round.w(12), Round.w(4), 0x80000000);
+            Round.fillW(c, x0, y0, x1, y1, r, 0xF70D0E22);
             Round.end(c);
-            c.scissor(px, py, px + sw, py + ph);
-            Round.fill(c, px, py, sw + 40, ph, r, 0x2E000000);
-            c.unscissor();
-            c.fill(px + sw, py, px + sw + 1, py + ph, Theme.LINE);
             Round.ring(c, px, py, pw, ph, r, Theme.LINE_2);
-            c.fill(mainX() + PAD, py + HEAD_H, px + pw - PAD, py + HEAD_H + 1, Theme.LINE);
+            int in = PANEL_INSET;
+            Round.fill(c, px + in, py + in, sw - in, ph - 2 * in, Px.radius(ph, 13), 0x66050611, Theme.LINE);
             return;
         }
         c.outline(px, py, pw, ph, 0xFF000000);
@@ -470,13 +499,17 @@ public class DuskSettingsScreen extends MenuScreen {
 
     private void drawSidebar(Canvas c, int mouseX, int mouseY) {
         boolean modern = Theme.modern();
-        int ms = Theme.markSize(modern ? 16 : 14), bx = px + (modern ? 12 : 10);
-        Theme.mark(c, bx, py + (brandH() - ms) / 2, ms, 0xFF);
+        int ms = Theme.markSize(modern ? 16 : 14), bx = px + (modern ? PANEL_INSET + 9 : 10);
+        // the modern brand block sits in the sidebar panel, below its top edge
+        int brandTop = modern ? py + PANEL_INSET : py, brandRoom = modern ? brandH() - PANEL_INSET : brandH();
+        Theme.mark(c, bx, brandTop + (brandRoom - ms) / 2, ms, 0xFF);
         int nx = bx + ms + (modern ? 7 : 6) - Px.pad(), nw = sw - (nx - px) - 6;
         if (modern && !VERSION.isEmpty()) {
             // the name over the version, as one block centred on the mark
-            int by = py + (brandH() - 24) / 2;
-            Px.sans(c, "Dusk", nx, by, nw, 14, Px.Size.S20, Theme.TEXT, true, true);
+            int by = brandTop + (brandRoom - 24) / 2;
+            Component name = Component.empty().append(Component.literal("Dusk ").withStyle(ChatFormatting.BOLD))
+                    .append(Component.literal("Client").withStyle(st -> st.withItalic(true).withColor(LAVENDER)));
+            Px.sans(c, name, nx, by, nw, 14, Px.Size.S20, Theme.TEXT, true);
             Px.sans(c, "v" + VERSION, nx, by + 14, nw, 10, Px.Size.S11, Theme.TEXT_FAINT, false, true);
         } else if (modern) {
             Px.sans(c, "Dusk", nx, py, nw, brandH(), Px.Size.S20, Theme.TEXT, true, true);
@@ -505,7 +538,10 @@ public class DuskSettingsScreen extends MenuScreen {
 
     private void section(Canvas c, String label, int y) {
         int x = px + 12 - Px.pad();
-        if (Theme.modern()) Px.sans(c, label, x, y, sw - 20, SECTION_H, Px.Size.S11, Theme.TEXT_FAINT, true, true);
+        if (Theme.modern()) {
+            x = px + PANEL_INSET + 11 - Px.pad();
+            Px.sans(c, label.toUpperCase(Locale.ROOT), x, y, sw - 24, SECTION_H, Px.Size.S11, Theme.TEXT_FAINT, true, true);
+        }
         else Px.label(c, label, x, y, sw - 20, SECTION_H, Px.Size.S11, Px.Tone.DIM, false, false, true, 0xFF);
     }
 
@@ -515,19 +551,20 @@ public class DuskSettingsScreen extends MenuScreen {
         int iy = y + (ih - icon.height()) / 2, ix = x + 6 + (7 - icon.width()) / 2;
         int tx = x + 18 - Px.pad(), tw = w - 18 - countW + Px.pad();
         if (Theme.modern()) {
-            // a raised pill under the page shown, a faint wash under the pointer
-            if (selected) Round.fill(c, x, y + 1, w, ih - 2, 64, Theme.RAISED, Theme.LINE);
-            else if (hover && !off) Round.fill(c, x, y + 1, w, ih - 2, 64, Theme.HOVER);
+            // the accent under the page shown, a faint wash under the pointer
+            int r = Px.radius(ih - 2, 8);
+            if (selected) Round.fill(c, x, y + 1, w, ih - 2, r, Theme.ACCENT);
+            else if (hover && !off) Round.fill(c, x, y + 1, w, ih - 2, r, Theme.HOVER);
             int col = off ? Theme.TEXT_FAINT : selected || hover ? Theme.TEXT : Theme.TEXT_MUTED;
             ix = x + 8 + (7 - icon.width()) / 2;
-            icon.draw(c, ix, iy, off ? Theme.TEXT_FAINT : selected ? Theme.TEXT : Theme.GLYPH);
+            icon.draw(c, ix, iy, off ? Theme.TEXT_FAINT : selected ? Theme.INK : hover ? Theme.TEXT : Theme.GLYPH);
             int cw = count.isEmpty() ? 0 : Math.round(Px.sansWidth(c, count, Px.Size.S11, false)) + 4;
             tx = x + 21 - Px.pad();
-            Px.sans(c, label, tx, y, w - 21 - cw - 8 + 2 * Px.pad(), ih, Px.Size.S16, col, selected, true);
+            Px.sans(c, label, tx, y, w - 21 - cw - 8 + 2 * Px.pad(), ih, Px.Size.S16, selected ? Theme.INK : col, selected, true);
             if (!count.isEmpty()) {
                 int cx = x + w - 9 - cw + 4;
                 Px.sans(c, count, cx - Px.pad(), y, cw - 4 + 2 * Px.pad(), ih, Px.Size.S11,
-                        selected ? Theme.TEXT_MUTED : Theme.TEXT_FAINT, false, true);
+                        selected ? 0xD9FFFFFF : Theme.TEXT_FAINT, false, true);
             }
             return;
         }
@@ -555,11 +592,20 @@ public class DuskSettingsScreen extends MenuScreen {
                     : shown.size() + (shown.size() == 1 ? " module" : " modules") + " · " + on + " enabled";
         }
         if (Theme.modern()) {
+            // the list's title leads with its category in lavender italics: "Render modules"
+            Component heading = Component.literal(title).withStyle(ChatFormatting.BOLD);
+            if (page == Page.LIST) {
+                String word = query.isEmpty() ? tab.label : "Search", rest = query.isEmpty() ? " modules" : " results";
+                heading = Component.empty()
+                        .append(Component.literal(word).withStyle(st -> st.withBold(true).withItalic(true).withColor(LAVENDER)))
+                        .append(Component.literal(rest).withStyle(ChatFormatting.BOLD));
+            }
+            int hx = tx - Px.pad(), hw = tw + 2 * Px.pad();
             if (sub.isEmpty()) {
-                Px.sans(c, title, tx - Px.pad(), py, tw + 2 * Px.pad(), HEAD_H, Px.Size.S20, Theme.TEXT, true, true);
+                Px.sans(c, heading, hx, py, hw, headH(), Px.Size.S20, Theme.TEXT, true);
             } else {
-                Px.sans(c, title, tx - Px.pad(), py + 7, tw + 2 * Px.pad(), 14, Px.Size.S20, Theme.TEXT, true, true);
-                Px.sans(c, sub, tx - Px.pad(), py + 22, tw + 2 * Px.pad(), 11, Px.Size.S11, Theme.TEXT_MUTED, false, true);
+                Px.sans(c, heading, hx, py + 9, hw, 16, Px.Size.S20, Theme.TEXT, true);
+                Px.sans(c, sub, hx, py + 27, hw, 11, Px.Size.S11, Theme.TEXT_MUTED, false, true);
             }
         } else if (sub.isEmpty()) {
             Px.label(c, title, tx - Px.pad(), py, tw + Px.pad(), HEAD_H, Px.Size.S20, Px.Tone.ACTIVE, false, false, true, 0xFF);
@@ -576,6 +622,11 @@ public class DuskSettingsScreen extends MenuScreen {
                     if (hover) tip = "Close";
                 }
                 case "view" -> {
+                    if (Theme.modern()) {
+                        drawViewSwitch(c, h, mouseX, mouseY);
+                        if (hover) tip = mouseX < h.x() + h.w() / 2 ? "Show as a list" : "Show as cards";
+                        break;
+                    }
                     iconButton(c, h, grid ? Icons.LIST : Icons.GRID, hover, false);
                     if (hover) tip = grid ? "Show as a list" : "Show as cards";
                 }
@@ -598,14 +649,29 @@ public class DuskSettingsScreen extends MenuScreen {
 
     private void drawSearch(Canvas c, Hit h, int mouseX, int mouseY) {
         if (Theme.modern()) {
-            boolean hot = search.focused() || h.in(mouseX, mouseY);
-            Round.fill(c, h.x(), h.y(), h.w(), h.h(), 64, Theme.SURFACE, search.focused() ? Theme.LINE_3 : hot ? Theme.LINE_2 : Theme.LINE);
-            Icons.SEARCH.draw(c, h.x() + 8, h.y() + (h.h() - 7) / 2, search.focused() ? Theme.TEXT_MUTED : Theme.TEXT_FAINT);
+            boolean hot = h.in(mouseX, mouseY);
+            int ring = search.focused() ? Theme.ACCENT & 0xFFFFFF | 0xB3 << 24 : hot ? Theme.LINE_3 : Theme.LINE_2;
+            Round.fill(c, h.x(), h.y(), h.w(), h.h(), Px.radius(h.h(), 9), 0x0AFFFFFF, ring);
+            Icons.SEARCH.draw(c, h.x() + 9, h.y() + (h.h() - 7) / 2, search.focused() ? Theme.TEXT : Theme.TEXT_FAINT);
         } else {
             Theme.cell(c, h.x(), h.y(), h.w(), h.h(), false);
             Icons.SEARCH.draw(c, h.x() + 5, h.y() + (h.h() - 7) / 2, 0xFF7B7B7B);
         }
         search.render(c, mouseX, mouseY);
+    }
+
+    /** The modern list | cards switch: two icons in an outlined box, the view shown raised. */
+    private static void drawViewSwitch(Canvas c, Hit h, int mouseX, int mouseY) {
+        int r = Px.radius(h.h(), 9), half = h.w() / 2;
+        Round.fill(c, h.x(), h.y(), h.w(), h.h(), r, 0x0AFFFFFF, Theme.LINE_2);
+        for (boolean cards : new boolean[] {false, true}) {
+            int sx = h.x() + (cards ? half : 0) + 2, sy = h.y() + 2, sw = half - 3, sh = h.h() - 4;
+            boolean sel = cards == grid, hover = Vanilla.inside(mouseX, mouseY, sx, sy, sw, sh);
+            if (sel) Round.fill(c, sx, sy, sw, sh, Px.radius(sh, 7), Theme.RAISED_2);
+            Icons icon = cards ? Icons.GRID : Icons.LIST;
+            icon.draw(c, sx + (sw - icon.width()) / 2, sy + (sh - icon.height()) / 2,
+                    sel ? Theme.TEXT : hover ? Theme.TEXT_MUTED : Theme.TEXT_FAINT);
+        }
     }
 
     /** A round icon button (a square cell in the legacy look); {@code danger} reddens it on hover. */
@@ -683,7 +749,7 @@ public class DuskSettingsScreen extends MenuScreen {
             int h = bottom - top, barH = Math.max(16, h * h / contentHeight());
             int barY = top + (h - barH) * scroll / maxScroll();
             if (Theme.modern()) {
-                Round.pill(c, barX(), barY, BAR_W, barH, draggingBar ? 0xFF6A6A72 : 0xFF45454C);
+                Round.pill(c, barX(), barY, BAR_W, barH, draggingBar ? 0xFF6A6C9E : 0xFF35375F);
             } else {
                 c.fill(barX(), top, barX() + BAR_W, bottom, 0xFF141414);
                 c.fill(barX(), barY, barX() + BAR_W, barY + barH, draggingBar ? Theme.LABEL_UP : Theme.LABEL_LO);
@@ -703,12 +769,12 @@ public class DuskSettingsScreen extends MenuScreen {
         }
     }
 
-    /** The neutral New tag: faint text on a raised pill, its width returned. */
+    /** The New tag: lavender on a faint accent pill, its width returned. */
     private int newTag(Canvas c, int x, int y, boolean right) {
         int tw = Math.round(Px.sansWidth(c, "New", Px.Size.S11, true)) + 10, th = 11;
         int tx = right ? x - tw : x;
-        Round.fill(c, tx, y, tw, th, 64, Theme.RAISED, Theme.LINE_2);
-        Px.sans(c, "New", tx, y, tw, th, Px.Size.S11, Theme.TEXT_MUTED, true, false);
+        Round.fill(c, tx, y, tw, th, 64, Theme.ACCENT & 0xFFFFFF | 0x38 << 24, Theme.ACCENT & 0xFFFFFF | 0x66 << 24);
+        Px.sans(c, "New", tx, y, tw, th, Px.Size.S11, LAVENDER, true, false);
         return tw;
     }
 
@@ -741,9 +807,9 @@ public class DuskSettingsScreen extends MenuScreen {
         } else {
             Theme.plate(c, rx, ry, rowW, rh, Theme.SURFACE, Theme.SURFACE, hot && !onSwitch);
         }
-        drawIcon(c, m, rx + (modern ? 12 : 7), ry + (rh - 16) / 2, modern ? Theme.TEXT_FAINT : Theme.LABEL_LO);
+        if (!modern) drawIcon(c, m, rx + 7, ry + (rh - 16) / 2, Theme.LABEL_LO);
 
-        int tx = rx + (modern ? 38 : 30), right = s[0] - (modern ? 10 : 18);
+        int tx = rx + (modern ? 14 : 30), right = s[0] - (modern ? 10 : 18);
         if (modern) {
             if (hot && !onSwitch) {
                 Icons.NEXT.draw(c, right - Icons.NEXT.width(), ry + (rh - Icons.NEXT.height()) / 2, Theme.TEXT_MUTED);
@@ -884,35 +950,65 @@ public class DuskSettingsScreen extends MenuScreen {
     }
 
     /**
-     * The modern card: a rounded tile with the name in the sans at the top
-     * left, the module's icon in the middle, and an Enabled pill (white when
-     * on) beside a round settings button.
+     * The modern card: a rounded tile with the name and its switch along the
+     * top, two lines of the description under it, and the category (or a
+     * New tag) and a chevron along the foot. Enabled cards take a faint
+     * accent edge; anywhere off the switch opens the settings.
      */
     private void drawCardModern(Canvas c, Module m, int cx, int cy, int[] tb, int[] gb, boolean hot, boolean onToggle, boolean onGear) {
-        int cw = cardW, mg = margin();
-        boolean on = m.enabled();
-        boolean lit = hot && !onToggle && !onGear;
-        Round.fill(c, cx, cy, cw, cardH, Px.radius(cardH, 18), lit ? 0x14FFFFFF : 0x0AFFFFFF, lit ? Theme.LINE_2 : Theme.LINE);
+        int cw = cardW, mg = CARD_MARGIN;
+        boolean on = m.enabled(), lit = hot && !onToggle;
+        int ring = on ? Theme.ACCENT & 0xFFFFFF | (lit ? 0x8C : 0x59) << 24 : lit ? Theme.LINE_3 : Theme.LINE_2;
+        Round.fill(c, cx, cy, cw, cardH, Px.radius(cardH, 12), lit ? 0xFF1B1D3D : Theme.SURFACE, ring);
 
-        // name and the NEW tag on one line
-        int lineH = Math.max(12, Math.round(22 * k()));
-        int nameW = cw - 2 * mg;
-        if (NEW_IDS.contains(m.id())) nameW -= newTag(c, cx + cw - mg, cy + mg + (lineH - 11) / 2, true) + 4;
-        Px.sans(c, m.name(), cx + mg - Px.pad(), cy + mg, nameW + Px.pad(), lineH,
-                cw >= 150 ? Px.Size.S20 : Px.Size.S16, Theme.TEXT, true, true);
+        int[] s = cardSwitch(cx, cy);
+        int tx = cx + mg, nameW = s[0] - 8 - tx;
+        Px.sans(c, m.name(), tx - Px.pad(), cy + mg - 1, nameW + 2 * Px.pad(), 16, Px.Size.S16, Theme.TEXT, true, true);
+        knobs.put(m, ToggleWidget.drawSwitch(c, s[0], s[1], on, onToggle, knobs.getOrDefault(m, -1f)));
 
-        drawCardIcon(c, m, cx, cy + mg + lineH + 2, tb[1] - 2, Theme.TEXT_FAINT);
+        int textW = cw - 2 * mg, dy = cy + mg + 19;
+        for (String line : lines(c, m.description(), textW, 2)) {
+            Px.sans(c, line, tx - Px.pad(), dy, textW + 2 * Px.pad(), 11, Px.Size.S11, Theme.TEXT_MUTED, false, true);
+            dy += 11;
+        }
 
-        // Enabled / Disabled
-        int fill = on ? (onToggle ? 0xFFFFFFFF : Theme.ACCENT) : onToggle ? Theme.RAISED_2 : Theme.RAISED;
-        Round.fill(c, tb[0], tb[1], tb[2], tb[3], 64, fill, on ? fill : onToggle ? Theme.LINE_3 : Theme.LINE_2);
-        Px.sans(c, on ? "Enabled" : "Disabled", tb[0], tb[1], tb[2], tb[3], Px.Size.S16,
-                on ? Theme.INK : onToggle ? Theme.TEXT : Theme.TEXT_MUTED, true, false);
+        int fy = cy + cardH - mg - 11;
+        if (NEW_IDS.contains(m.id())) newTag(c, tx, fy, false);
+        else Px.sans(c, m.category().label, tx - Px.pad(), fy, textW, 11, Px.Size.S11, Theme.TEXT_FAINT, false, true);
+        Icons.NEXT.draw(c, cx + cw - mg - Icons.NEXT.width(), fy + (11 - Icons.NEXT.height()) / 2, lit ? Theme.TEXT : Theme.TEXT_FAINT);
+    }
 
-        // settings
-        Round.fill(c, gb[0], gb[1], gb[2], gb[3], 64, onGear ? Theme.RAISED_2 : Theme.RAISED, onGear ? Theme.LINE_3 : Theme.LINE_2);
-        int gs = gb[2] >= 24 ? 2 : 1;
-        Icons.GEAR.draw(c, gb[0] + (gb[2] - 7 * gs) / 2, gb[1] + (gb[3] - 7 * gs) / 2, onGear ? Theme.TEXT : Theme.TEXT_MUTED, gs);
+    /** {@code text} broken at spaces into at most {@code max} lines {@code w} wide in the small sans, the last cut short. */
+    private static List<String> lines(Canvas c, String text, int w, int max) {
+        List<String> out = new ArrayList<>();
+        int room = w - 1;
+        String rest = text.trim();
+        while (!rest.isEmpty() && out.size() < max) {
+            if (out.size() == max - 1 || Px.sansWidth(c, rest, Px.Size.S11, false) <= room) {
+                String line = rest;
+                if (Px.sansWidth(c, line, Px.Size.S11, false) > room) {
+                    while (!line.isEmpty() && Px.sansWidth(c, line + "...", Px.Size.S11, false) > room) line = line.substring(0, line.length() - 1);
+                    line = line.stripTrailing() + "...";
+                }
+                out.add(line);
+                break;
+            }
+            int cut = rest.length();
+            while (cut > 0) {
+                int sp = rest.lastIndexOf(' ', cut - 1);
+                if (sp <= 0) { cut = -1; break; }
+                cut = sp;
+                if (Px.sansWidth(c, rest.substring(0, cut), Px.Size.S11, false) <= room) break;
+            }
+            if (cut <= 0) {
+                // one word too long for the line: leave it to the last-line cut
+                out.add(rest);
+                break;
+            }
+            out.add(rest.substring(0, cut));
+            rest = rest.substring(cut + 1).trim();
+        }
+        return out;
     }
 
     // ---- input --------------------------------------------------------------
@@ -1000,8 +1096,9 @@ public class DuskSettingsScreen extends MenuScreen {
         switch (h.id()) {
             case "close" -> exitMenu();
             case "view" -> {
-                grid = !grid;
-                scroll = 0;
+                boolean cards = !Theme.modern() ? !grid : mx >= h.x() + h.w() / 2.0;
+                if (cards != grid) scroll = 0;
+                grid = cards;
             }
             case "search" -> search.setFocused(true);
             case "back" -> back();

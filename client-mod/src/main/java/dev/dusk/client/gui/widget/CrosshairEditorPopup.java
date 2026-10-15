@@ -72,7 +72,7 @@ public class CrosshairEditorPopup implements Popup {
     @Override
     public void render(Canvas c, int mouseX, int mouseY, int screenW, int screenH) {
         place(screenW, screenH);
-        c.fill(0, 0, screenW, screenH, Theme.pick(0x990B0B0D, 0xA0000000));
+        c.fill(0, 0, screenW, screenH, Theme.pick(0x990A0B1C, 0xA0000000));
         Px.panel(c, px - 1, py - 1, pw + 2, ph + 2);
 
         int hx = -1, hy = -1;

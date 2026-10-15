@@ -54,7 +54,7 @@ public class SliderWidget extends SettingRow {
         Round.fillW(c, x0, ty, Math.max(x0 + th, kx), ty + th, 64, Theme.ACCENT);
         int d = Round.w(KNOB), ky = Round.w(mid) - d / 2;
         if (hot) Round.fillW(c, kx - d, ky - d / 2, kx + d, ky + d + d / 2, 64, Theme.HOVER);
-        Round.fillW(c, kx - d / 2, ky, kx - d / 2 + d, ky + d, 64, hot ? 0xFFFFFFFF : Theme.ACCENT);
+        Round.fillW(c, kx - d / 2, ky, kx - d / 2 + d, ky + d, 64, hot ? 0xFFFFFFFF : Theme.TEXT);
         Round.end(c);
         // the value, in a pill at the end of the slot
         int vx = controlX() + controlWidth() - VALUE_W;

@@ -1,6 +1,13 @@
 package dev.dusk.client.gui;
 
-/** Tiny pixel glyphs for the Dusk menus, drawn with fills so they work on every version. */
+import net.minecraft.network.chat.Component;
+
+/**
+ * The Dusk menus' icons. The modern look draws each as a Phosphor vector
+ * glyph from the ui fonts ({@code font/icons.ttf}, U+E000 on in declaration
+ * order, built by {@code tools/build-icon-font.py}: rebuild it when adding a
+ * constant); the pixel look draws the tiny bitmap below with fills.
+ */
 public enum Icons {
     GRID("###.###", "###.###", "###.###", ".......", "###.###", "###.###", "###.###"),
     PERSON("..###..", "..###..", "..###..", ".......", ".#####.", "#######", "#######"),
@@ -32,7 +39,13 @@ public enum Icons {
     PAUSE("##..##", "##..##", "##..##", "##..##", "##..##", "##..##", "##..##"),
     FOLDER("###....", "#..#...", "#######", "#.....#", "#.....#", "#.....#", "#######"),
     CHAT(".#####.", "#.....#", "#.#.#.#", "#.....#", ".#####.", "..#....", ".#....."),
-    GIFT("..#.#..", "...#...", "#######", "#..#..#", "#######", "#..#..#", "#######");
+    GIFT("..#.#..", "...#...", "#######", "#..#..#", "#######", "#..#..#", "#######"),
+    SPARKLE("...#...", "...#...", "..###..", "#######", "..###..", "...#...", "...#..."),
+    RUN("....##.", "....##.", "..###..", ".#.##..", "...#.#.", "..#...#", ".#....."),
+    WRENCH(".....##", "....#..", "....#.#", "...###.", "..#....", ".#.....", "#......"),
+    PALETTE("..###..", ".#...#.", "#.#...#", "#...#.#", "#....#.", ".#.##..", "..#...."),
+    SHIRT(".##.##.", "#######", "##...##", "..#.#..", "..#.#..", "..#.#..", "..###.."),
+    MONITOR("#######", "#.....#", "#.....#", "#.....#", "#######", "...#...", "..###..");
 
     private final String[] rows;
 
@@ -52,8 +65,42 @@ public enum Icons {
         draw(c, x, y, color, 1);
     }
 
-    /** Draws each glyph pixel as a {@code scale} x {@code scale} block. */
+    /** Draws the icon in the {@code width() * scale} by {@code height() * scale} box at x, y. */
     public void draw(Canvas c, int x, int y, int color, int scale) {
+        if (vectors()) {
+            vector(c, x + width() * scale / 2f, y + height() * scale / 2f, Math.max(7, Math.max(width(), height())) * scale, color);
+            return;
+        }
+        pixels(c, x, y, color, scale);
+    }
+
+    /** Whether icons draw as vector glyphs: the modern look, where the ui fonts (and so the glyphs) load. */
+    public static boolean vectors() {
+        return Theme.modern() && Sans.supported();
+    }
+
+    /** Font units the art of a glyph spans: its 256-unit Phosphor box is 8 units, the art about 6.5. */
+    private static final float ART = 6.5f;
+
+    /**
+     * The vector glyph centred on cx, cy with its art about {@code size}
+     * pixels across, in the current transform. The ui fonts are cut for the
+     * scale it draws at, so it stays sharp.
+     */
+    public void vector(Canvas c, float cx, float cy, float size, int color) {
+        float k = size / ART;
+        Theme.sansPush();
+        c.push();
+        // the glyph's box is 8 units wide from the origin, centred 3.5 units down on the cap height
+        c.translate(cx - 4 * k, cy - 3.5f * k);
+        c.scale(k, k);
+        c.text(Component.literal(String.valueOf((char) (0xE000 + ordinal()))), 0, 0, color, false);
+        c.pop();
+        Theme.sansPop();
+    }
+
+    /** Draws each glyph pixel as a {@code scale} x {@code scale} block. */
+    public void pixels(Canvas c, int x, int y, int color, int scale) {
         for (int ry = 0; ry < rows.length; ry++) {
             String r = rows[ry];
             int run = -1;

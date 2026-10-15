@@ -255,3 +255,10 @@ way these mods read and draw them:
   assignment of the sky pipelines to Iris's textured-sky program. The
   layering, time and cube-face conventions are OptiFine's. No source files
   were copied.
+
+Menu icons (assets/duskclient/font/icons.ttf, built by
+tools/build-icon-font.py) are the bold and fill weights of:
+
+- Phosphor Icons — https://github.com/phosphor-icons/core
+  MIT, Copyright (c) 2023 Phosphor Icons. The SVG paths are converted to
+  TrueType outlines unchanged.

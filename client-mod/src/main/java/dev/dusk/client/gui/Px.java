@@ -171,7 +171,7 @@ public final class Px {
             Round.begin(c);
             int x0 = Round.w(x), y0 = Round.w(y), x1 = Round.w(x + w), y1 = Round.w(y + h), r = Math.min(px(14), controlRadius(h));
             Round.softW(c, x0, y0, x1, y1, r, px(14), px(5), 0x66000000);
-            Round.fillW(c, x0, y0, x1, y1, r, 0xFA1C1C20);
+            Round.fillW(c, x0, y0, x1, y1, r, 0xFA1A1C3A);
             Round.ringW(c, x0, y0, x1, y1, r, line(), Theme.LINE_2);
             Round.end(c);
             return;
@@ -433,10 +433,10 @@ public final class Px {
         int fill, ring;
         switch (f) {
             case ACCENT -> {
-                fill = hot ? 0xFFFFFFFF : Theme.ACCENT;
+                fill = hot ? Theme.ACCENT_HOT : Theme.ACCENT;
                 ring = 0;
-                // the launcher's --glow-acc: a soft white haze under the pill
-                if (!disabled) Round.softW(c, x0, y0, x1, y1, r, px(10), px(3), hot ? 0x40FFFFFF : 0x26FFFFFF);
+                // the launcher's --glow-acc: a soft haze of the accent under the pill
+                if (!disabled) Round.softW(c, x0, y0, x1, y1, r, px(10), px(3), Theme.ACCENT & 0xFFFFFF | (hot ? 0x59 : 0x38) << 24);
                 if (!disabled) markInk(x, y, w, h);
             }
             case GREEN -> {
@@ -444,7 +444,7 @@ public final class Px {
                 ring = 0x735FD38A;
             }
             case PANEL -> {
-                fill = hot ? 0xFF1F1F23 : 0xFF18181B;
+                fill = hot ? 0xFF1E2042 : 0xFF161731;
                 ring = hot ? Theme.LINE_3 : Theme.LINE_2;
             }
             default -> {
@@ -539,6 +539,31 @@ public final class Px {
             while (!cut.isEmpty() && sansWidth(c, sansText(cut + "...", bold), e) * e > room) cut = cut.substring(0, cut.length() - 1);
             shown = sansText(cut + "...", bold);
         }
+        sansAt(c, shown, x, y, w, h, e, argb, left);
+    }
+
+    /**
+     * {@link #sans} for styled text, an italic or tinted run in it ({@code argb}
+     * the colour of the unstyled runs): stepped down to fit, never cut.
+     */
+    public static void sans(Canvas c, Component text, int x, int y, int w, int h, Size size, int argb, boolean left) {
+        if (w <= 0) return;
+        double s = gui();
+        float e = sansScale(size), min = e * 0.75f;
+        int room = (int) Math.round((w - 2 * (left ? pad() : Math.min(pad(), 4))) * s);
+        float step = Sans.supported() ? 0.25f : 1f;
+        while (e - step >= Math.max(0.5f, min) && sansWidth(c, text, e) * e > room) e -= step;
+        sansAt(c, text, x, y, w, h, e, argb, left);
+    }
+
+    /** {@code text}'s width in GUI pixels as {@link #sans} draws it at {@code size}. */
+    public static float sansWidth(Canvas c, Component text, Size size) {
+        float e = sansScale(size);
+        return (float) (sansWidth(c, text, e) * e / gui());
+    }
+
+    private static void sansAt(Canvas c, Component shown, int x, int y, int w, int h, float e, int argb, boolean left) {
+        double s = gui();
         int tw = Math.round(sansWidth(c, shown, e) * e);
         int wx = (int) Math.round(left ? (x + pad()) * s : (x + w / 2.0) * s - tw / 2.0);
         int baseline = (int) Math.round((y + h / 2.0) * s + 3.5 * e);

@@ -20,7 +20,7 @@ public final class Vanilla {
         Round.begin(c);
         int x0 = Round.w(x), y0 = Round.w(y), x1 = Round.w(x + w), y1 = Round.w(y + h), r = Round.w(6);
         Round.softW(c, x0, y0, x1, y1, r, Round.w(6), Round.w(2), 0x66000000);
-        Round.fillW(c, x0, y0, x1, y1, r, 0xF71C1C20);
+        Round.fillW(c, x0, y0, x1, y1, r, 0xF71A1C3A);
         Round.ringW(c, x0, y0, x1, y1, r, Px.line(), Theme.LINE_2);
         Round.end(c);
     }

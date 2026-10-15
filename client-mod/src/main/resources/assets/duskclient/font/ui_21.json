@@ -1,1 +1,1 @@
-{"providers":[{"type":"space","advances":{" ":2.2857}},{"type":"ttf","file":"duskclient:ui.ttf","size":9.4,"oversample":5.25,"shift":[0,0]},{"type":"reference","id":"minecraft:default"}]}
+{"providers":[{"type":"space","advances":{" ":2.2857}},{"type":"ttf","file":"duskclient:ui.ttf","size":9.4,"oversample":5.25,"shift":[0,0]},{"type":"ttf","file":"duskclient:icons.ttf","size":9.4,"oversample":5.25,"shift":[0,0]},{"type":"reference","id":"minecraft:default"}]}

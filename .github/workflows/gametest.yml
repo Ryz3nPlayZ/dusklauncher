@@ -49,4 +49,5 @@ jobs:
             client-mod/threads.txt
             client-mod/build/run/clientGameTest/logs/latest.log
             client-mod/build/run/clientGameTest/crash-reports/
+            client-mod/build/run/clientGameTest/screenshots/
           if-no-files-found: ignore

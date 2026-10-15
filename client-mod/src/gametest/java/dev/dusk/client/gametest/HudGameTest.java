@@ -3,6 +3,7 @@ package dev.dusk.client.gametest;
 import dev.dusk.client.DuskClient;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.gui.ConfigScreen;
+import dev.dusk.client.gui.DuskSettingsScreen;
 import dev.dusk.client.gui.HudEditorScreen;
 import dev.dusk.client.modules.hud.HeldItem;
 import dev.dusk.client.modules.render.ShieldTweaks;
@@ -81,6 +82,17 @@ public final class HudGameTest implements FabricClientGameTest {
             ctx.waitTicks(5);
             Path settings = ctx.takeScreenshot("hud-editor-settings");
             LOG.info("Screenshots: {} {} {}", hud, editor, settings);
+
+            // the Right Shift menu: the module list, then one module's settings, once
+            // the advancement toasts over its header have gone
+            ctx.waitTicks(220);
+            ctx.runOnClient(client -> Compat.setScreen(client, new DuskSettingsScreen(null)));
+            ctx.waitTicks(5);
+            Path menu = ctx.takeScreenshot("menu-list");
+            ctx.runOnClient(client -> Compat.setScreen(client, DuskSettingsScreen.module(null, CustomCrosshair.instance())));
+            ctx.waitTicks(5);
+            Path menuModule = ctx.takeScreenshot("menu-module");
+            LOG.info("Menu screenshots: {} {}", menu, menuModule);
 
             ctx.runOnClient(client -> Compat.setScreen(client, null));
             ctx.waitTicks(5);

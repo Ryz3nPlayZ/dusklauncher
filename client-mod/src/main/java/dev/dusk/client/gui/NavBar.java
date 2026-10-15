@@ -221,7 +221,7 @@ public final class NavBar {
             Round.begin(c);
             int x0 = Round.w(x), y0 = Round.w(y), x1 = Round.w(x + w), y1 = Round.w(y + h), r = Px.radius(h, 22);
             Round.softW(c, x0, y0, x1, y1, r, Round.w(10), Round.w(3), 0x73000000);
-            Round.fillW(c, x0, y0, x1, y1, r, 0xF5141417);
+            Round.fillW(c, x0, y0, x1, y1, r, 0xF513142B);
             Round.ringW(c, x0, y0, x1, y1, r, Px.line(), Theme.LINE_2);
             Round.end(c);
             c.fill(x + 6, y + H - 1, x + w - 6, y + H, Theme.LINE);

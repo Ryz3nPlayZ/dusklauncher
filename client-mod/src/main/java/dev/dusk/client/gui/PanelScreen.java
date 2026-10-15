@@ -100,7 +100,7 @@ public abstract class PanelScreen extends MenuScreen {
     protected void drawBackgroundOverlay(Canvas c) {
         super.drawBackgroundOverlay(c);
         relayout();
-        if (inWorld()) c.fill(0, 0, this.width, this.height, Theme.pick(0x660B0B0D, 0x4D000000));
+        if (inWorld()) c.fill(0, 0, this.width, this.height, Theme.pick(0x660A0B1C, 0x4D000000));
         NavBar.window(c, px, py, pw, ph);
         drawUnderWidgets(c);
     }

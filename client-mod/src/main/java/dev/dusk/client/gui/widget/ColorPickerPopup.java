@@ -112,7 +112,7 @@ public class ColorPickerPopup implements Popup {
 
     private static void marker(Canvas c, int barX, int my) {
         if (Theme.modern()) {
-            Round.pill(c, barX - 2, my - 2, BAR + 4, 5, 0xFF111113);
+            Round.pill(c, barX - 2, my - 2, BAR + 4, 5, 0xFF0F1024);
             Round.pill(c, barX - 1, my - 1, BAR + 2, 3, 0xFFFFFFFF);
             return;
         }

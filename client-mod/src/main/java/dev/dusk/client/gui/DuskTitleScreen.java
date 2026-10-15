@@ -251,7 +251,7 @@ public class DuskTitleScreen extends DuskScreen {
     @Override
     protected void drawBackgroundOverlay(Canvas c) {
         if (DuskConfig.get().titleScene) TitleScene.draw(c, this.width, this.height);
-        else c.fill(0, 0, this.width, this.height, Theme.pick(0x800B0B0D, 0x66000000));
+        else c.fill(0, 0, this.width, this.height, Theme.pick(0x800A0B1C, 0x66000000));
     }
 
     @Override

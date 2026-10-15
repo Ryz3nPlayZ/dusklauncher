@@ -309,7 +309,7 @@ public class MediaScreen extends PanelScreen {
 
     /** {@code e}'s image fitted inside the box, letterboxed; a placeholder while it loads or when there is none. */
     private void drawImage(Canvas c, RemoteImages images, Mcpr.Entry e, int x, int y, int w, int h) {
-        if (Theme.modern()) Round.fill(c, x, y, w, h, Round.w(4), 0xFF141417);
+        if (Theme.modern()) Round.fill(c, x, y, w, h, Round.w(4), 0xFF13142B);
         else c.fill(x, y, x + w, y + h, 0xFF101010);
         RemoteImages.Image img = images.get(key(e), () -> thumbBytes(e));
         if (img == null) {
@@ -365,7 +365,7 @@ public class MediaScreen extends PanelScreen {
             return;
         }
         Mcpr.Entry e = entries.get(viewing);
-        c.fill(0, 0, this.width, this.height, Theme.pick(0xEB0B0B0D, 0xE6000000));
+        c.fill(0, 0, this.width, this.height, Theme.pick(0xEB0A0B1C, 0xE6000000));
         int top = 12, bottom = this.height - 48;
         drawImage(c, full, e, 12, top, this.width - 24, bottom - top);
         String cap = title(e) + " · " + info(e) + " · " + (viewing + 1) + "/" + entries.size();

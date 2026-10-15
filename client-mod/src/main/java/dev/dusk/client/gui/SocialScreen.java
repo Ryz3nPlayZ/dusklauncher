@@ -974,7 +974,7 @@ public class SocialScreen extends PanelScreen {
             Heads.draw(c, heads, f.uuid(), colX + 5, y + 5, 16);
             if (f.online()) {
                 if (Theme.modern()) {
-                    Round.dot(c, colX + 16, y + 16, 8, 0xFF141417);
+                    Round.dot(c, colX + 16, y + 16, 8, 0xFF13142B);
                     Round.dot(c, colX + 17, y + 17, 6, Theme.OK);
                 } else {
                     c.fill(colX + 17, y + 17, colX + 23, y + 23, 0xFF000000);
