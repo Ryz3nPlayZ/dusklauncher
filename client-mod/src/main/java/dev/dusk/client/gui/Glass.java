@@ -11,7 +11,38 @@ public final class Glass {
     private Glass() {}
 
     /** The launcher's raised control surface (rgb 20 20 23), nearly opaque so the scene never muddies a label. */
-    private static final int FILL = 0xEB13142B, FILL_HOT = 0xF5242429, FILL_OFF = 0xB313142B;
+    private static final int FILL = 0xEB141417, FILL_HOT = 0xF5242429, FILL_OFF = 0xB3141417;
+
+    /** The menu window's frosted graphite, light enough that the blurred world shows through. */
+    public static final int SHEET = 0xD914141A;
+    /** A pane on the sheet (the sidebar, the cards, inner panels): a white wash with a hairline edge. */
+    public static final int PANE = 0x0DFFFFFF, PANE_HOT = 0x17FFFFFF, PANE_SEL = 0x1FFFFFFF;
+
+    /**
+     * The menu window: the frosted sheet on a soft shadow, a hairline round
+     * it and a faint highlight along the top edge, as glass catches light.
+     * {@code r} is in window pixels, as {@link Px#radius} gives it.
+     */
+    public static void sheet(Canvas c, int x, int y, int w, int h, int r) {
+        Round.begin(c);
+        int x0 = Round.w(x), y0 = Round.w(y), x1 = Round.w(x + w), y1 = Round.w(y + h);
+        int rw = Math.min(r, (y1 - y0) / 2);
+        Round.softW(c, x0, y0, x1, y1, rw, Round.w(12), Round.w(4), 0x66000000);
+        Round.fillW(c, x0, y0, x1, y1, rw, SHEET);
+        Round.ringW(c, x0, y0, x1, y1, rw, Px.line(), Theme.LINE_2);
+        c.fill(x0 + rw, y0 + Px.line(), x1 - rw, y0 + 2 * Px.line(), 0x14FFFFFF);
+        Round.end(c);
+    }
+
+    /**
+     * A pane on the sheet: the one surface every block of the menu uses, so
+     * the sidebar, the module tiles and a page's panels read as one material.
+     * {@code ring} replaces the hairline when not 0 (an enabled tile's edge).
+     */
+    public static void pane(Canvas c, int x, int y, int w, int h, int r, boolean hot, int ring) {
+        if (w <= 0 || h <= 0) return;
+        Round.fill(c, x, y, w, h, r, hot ? PANE_HOT : PANE, ring != 0 ? ring : hot ? Theme.LINE_3 : Theme.LINE_2);
+    }
 
     /** A pill: the dark surface, or the accent when {@code primary}. */
     public static void bar(Canvas c, int x, int y, int w, int h, boolean hot, boolean disabled, boolean primary) {

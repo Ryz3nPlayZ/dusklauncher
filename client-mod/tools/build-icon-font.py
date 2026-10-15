@@ -33,7 +33,7 @@ PHOSPHOR = {
     "DOWN": "CaretDown", "MEDIA": "MonitorPlay", "PLAY": ("Play", "fill"), "PAUSE": ("Pause", "fill"),
     "FOLDER": "Folder", "CHAT": "ChatCircle", "GIFT": "Gift", "SPARKLE": "Sparkle",
     "RUN": "PersonSimpleRun", "WRENCH": "Wrench", "PALETTE": "Palette", "SHIRT": "TShirt",
-    "MONITOR": "Monitor",
+    "MONITOR": "Monitor", "KEYBOARD": "Keyboard", "PIN": "MapPin", "CHART": "ChartBar", "FLAG": "Flag",
 }
 
 # Metrics copied from ui.ttf (1000 upm drawn at size 9.4) so the glyphs sit

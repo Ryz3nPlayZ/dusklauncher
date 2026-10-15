@@ -262,3 +262,13 @@ tools/build-icon-font.py) are the bold and fill weights of:
 - Phosphor Icons — https://github.com/phosphor-icons/core
   MIT, Copyright (c) 2023 Phosphor Icons. The SVG paths are converted to
   TrueType outlines unchanged.
+
+Styles looks (styles/StyleLooks.java) recolour a category's textures with
+the colour styles of:
+
+- Awerial's Pack Editor 1.42.1 (awerials-pack-editor-1.42.1.jar)
+  MIT (Awerial, per its fabric.mod.json). Copied: the twelve preset
+  recolours (their hue, saturation and brightness numbers, and the neon,
+  pastel, mono and inverted formulas) and the any-colour recolour formula.
+  The idea of tinting sky pictures and of saved setups also comes from it;
+  that code is written independently.

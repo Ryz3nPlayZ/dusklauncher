@@ -3,15 +3,23 @@ package dev.dusk.client.gui;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.dusk.client.DuskClient;
 import dev.dusk.client.compat.Input;
+import dev.dusk.client.gui.widget.ActionWidget;
+import dev.dusk.client.gui.widget.GroupHeaderWidget;
+import dev.dusk.client.gui.widget.KeybindWidget;
+import dev.dusk.client.gui.widget.LabelWidget;
 import dev.dusk.client.gui.widget.ScrollPane;
+import dev.dusk.client.gui.widget.SettingRow;
 import dev.dusk.client.gui.widget.TextFieldWidget;
 import dev.dusk.client.gui.widget.ToggleWidget;
 import dev.dusk.client.hud.HudElement;
 import dev.dusk.client.module.Module;
+import dev.dusk.client.module.setting.ActionSetting;
+import dev.dusk.client.module.setting.KeySetting;
 import dev.dusk.client.module.setting.Setting;
-import net.fabricmc.loader.api.FabricLoader;
+import dev.dusk.client.module.setting.ToggleKeySetting;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.options.controls.KeyBindsScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
@@ -25,25 +33,23 @@ import java.util.Set;
 
 /* Hallmark · pre-emit critique: P4 H4 E4 S4 R5 V4 */
 /**
- * The Dusk menu: one window with a sidebar (the module categories with
- * their counts, then Preferences, the HUD layout, Styles, Wardrobe and
- * Friends & Chat) and the page on the right. The modules show as a grid of
- * cards, each with its switch, or a toggle away as one column of rows (under
- * All a card of rows per category, otherwise one card). A module's
- * settings and Preferences open in the same window as cards of rows, Esc
- * going back to the list.
+ * The Dusk menu's module window, the page every other page of the menu
+ * opens over (see {@link MenuFrame}): the modules as a gallery of glass
+ * tiles, three to five across by the GUI scale, each with its switch, or a
+ * toggle away as one column of rows (under All a card of rows per
+ * category, otherwise one card). A module's settings, Keybinds and
+ * Preferences open in the same window as cards of rows, Esc going back to
+ * the list.
  */
 public class DuskSettingsScreen extends MenuScreen {
     private static final int CARD_GAP = 6, CARD_MIN_W = 110, MAX_COLS = 4, BAR_W = 4, SCROLL_STEP = 24;
     private static final int PAD = 10, HEAD_H = 40, ROW_H = 30, ROW_GAP = 4, BTN = 18;
-    private static final int BRAND_H = 30, SECTION_H = 14, FOOT_H = 14;
     /** The modern list: a row, the heading over a category's card and the air between cards. */
     private static final int LIST_ROW_H = 36, HEADING_H = 26, GROUP_GAP = 6, SEARCH_H = 20;
     private static final int LEGACY_SWITCH_W = 49, LEGACY_SWITCH_H = 14;
-    /** The modern look: the header, the card size, the window's inner margin and the sidebar's inset panel. */
-    private static final int MODERN_HEAD_H = 48, MODERN_CARD_H = 80, MODERN_CARD_MIN_W = 124, MODERN_PAD = 14, PANEL_INSET = 7;
-    /** The lavender of the italic word in the headings. */
-    private static final int LAVENDER = 0xFFB4ACFF;
+    /** The modern look: the header, the tile size, the gallery's column range and the window's inner margin. */
+    private static final int MODERN_HEAD_H = 48, MODERN_CARD_H = 82, MODERN_CARD_MIN_W = 132, MODERN_PAD = 14;
+    private static final int MIN_COLS = 3, MODERN_MAX_COLS = 5;
 
     /** Modules added since the previous release, listed under the NEW tab. Update this set every release. */
     private static final Set<String> NEW_IDS = Set.of("behindyou", "nametags", "particles", "hitbox",
@@ -53,9 +59,6 @@ public class DuskSettingsScreen extends MenuScreen {
             "blockhighlight", "backgroundfps", "namehider", "fovchanger", "totems", "crosshairindicator", "itemcounter", "bedwarsresources",
             "skyblockstats", "hypixel", "slotlock", "totemtweaks", "cooldowns", "glintcolor", "itempickups",
             "scrolltooltips");
-
-    private static final String VERSION = FabricLoader.getInstance().getModContainer("duskclient")
-            .map(m -> m.getMetadata().getVersion().getFriendlyString()).orElse("");
 
     private enum Tab {
         ALL("All", "All modules", null, Icons.GRID), NEW("New", "New modules", null, Icons.SPARKLE),
@@ -83,21 +86,7 @@ public class DuskSettingsScreen extends MenuScreen {
         }
     }
 
-    /** The sidebar's General links. */
-    private enum Link {
-        PREFS("Preferences", Icons.GEAR), HUD("HUD layout", Icons.MOVE), STYLES("Styles", Icons.PALETTE),
-        WARDROBE("Wardrobe", Icons.SHIRT), SOCIAL("Friends & Chat", Icons.CHAT);
-
-        final String label;
-        final Icons icon;
-
-        Link(String label, Icons icon) {
-            this.label = label;
-            this.icon = icon;
-        }
-    }
-
-    private enum Page { LIST, MODULE, PREFS }
+    private enum Page { LIST, MODULE, PREFS, KEYS }
 
     /** One line of the list, {@code y} from its top: a category heading, or a module row ({@code first} in its card). */
     private record Item(@Nullable Module module, String heading, int count, int y, int h, boolean first) {}
@@ -118,7 +107,8 @@ public class DuskSettingsScreen extends MenuScreen {
     private final int[] counts = new int[Tab.values().length];
     private final ScrollPane pane = new ScrollPane();
     private final Map<Module, Float> knobs = new HashMap<>();
-    private final List<Hit> side = new ArrayList<>(), heads = new ArrayList<>();
+    private final MenuFrame frame = new MenuFrame();
+    private final List<Hit> heads = new ArrayList<>();
     private final List<Item> items = new ArrayList<>();
     /** The cards behind the rows: {y, h} from the list's top. */
     private final List<int[]> runs = new ArrayList<>();
@@ -131,7 +121,7 @@ public class DuskSettingsScreen extends MenuScreen {
     private float headKnob = -1;
     private int scroll;
     private boolean draggingBar;
-    private int px, py, pw, ph, sw, itemH, modulesY, generalY, titleRight;
+    private int px, py, pw, ph, sw, titleRight;
     private int cols, cardW, cardH, rowW;
     @Nullable private String tip;
 
@@ -202,6 +192,61 @@ public class DuskSettingsScreen extends MenuScreen {
         search.setFocused(false);
     }
 
+    /**
+     * Every key the client listens for on one page: the menu's own keys,
+     * then each module's toggle key and its other keys, a group per
+     * category, and the way to Minecraft's Controls for the rest.
+     */
+    private void showKeybinds() {
+        leavePage();
+        int rowH = SettingsBuilder.rowH();
+        Runnable save = MenuScreen::saveModules;
+        pane.add(new KeybindWidget("Open the Dusk menu", DuskClient::settingsKey), rowH);
+        pane.add(new KeybindWidget("Friends & Chat", DuskClient::friendsKey), rowH);
+        pane.add(new KeybindWidget("Save a clip", DuskClient::clipKey), rowH);
+        pane.add(new ActionWidget(new ActionSetting("controls", "Minecraft controls", "Open", () -> {
+            if (this.minecraft != null) leaveTo(new KeyBindsScreen(this, this.minecraft.options));
+        }), () -> {}), rowH);
+        if (DuskClient.modules() != null) {
+            for (Module.Category cat : Module.Category.values()) {
+                GroupHeaderWidget header = new GroupHeaderWidget("keys/" + cat.name(), cat.label, false, () -> {});
+                pane.add(header, SettingsBuilder.headerH());
+                for (Module m : DuskClient.modules().all()) {
+                    if (m.category() != cat) continue;
+                    ToggleKeySetting key = m.toggleKey();
+                    SettingRow row = new KeybindWidget(m.name(), key::keyName, k -> { key.set(k); save.run(); }).resets(key, save);
+                    row.group = header;
+                    pane.add(row, rowH);
+                    for (Setting<?> s : m.settings()) {
+                        if (!(s instanceof KeySetting k)) continue;
+                        SettingRow extra = new KeybindWidget(m.name() + ": " + k.name(), k::mapping).resets(k, save);
+                        extra.group = header;
+                        pane.add(extra, rowH);
+                    }
+                }
+            }
+        }
+        pane.add(new LabelWidget(""), 6);
+        page = Page.KEYS;
+        search.setFocused(false);
+    }
+
+    /** Shows a sidebar entry this window holds: a module category, Keybinds or Preferences. */
+    void show(MenuFrame.Entry e) {
+        if (e.module()) showTab(Tab.valueOf(e.name()));
+        else if (e == MenuFrame.Entry.KEYBINDS) showKeybinds();
+        else if (e == MenuFrame.Entry.PREFERENCES) showPreferences();
+    }
+
+    /** The sidebar entry for what is shown: the category even on a module's settings. */
+    private MenuFrame.Entry entry() {
+        return switch (page) {
+            case PREFS -> MenuFrame.Entry.PREFERENCES;
+            case KEYS -> MenuFrame.Entry.KEYBINDS;
+            default -> MenuFrame.Entry.valueOf(tab.name());
+        };
+    }
+
     /** Back to the list, saving whatever the page changed. */
     private void leavePage() {
         if (page != Page.LIST) {
@@ -261,33 +306,13 @@ public class DuskSettingsScreen extends MenuScreen {
     private static int switchH() { return Theme.modern() ? ToggleWidget.SWITCH_H : LEGACY_SWITCH_H; }
 
     private void layout() {
-        int minW = Math.min(460, this.width - 16), minH = Math.min(240, this.height - 16);
-        pw = Math.max(minW, Math.min(this.width - 16, Math.round(this.width * 0.80f)));
-        ph = Math.max(minH, Math.min(this.height - 16, Math.round(this.height * 0.80f)));
-        px = (this.width - pw) / 2;
-        py = (this.height - ph) / 2;
-        sw = Math.max(96, Math.min(132, Math.round(pw * 0.24f)));
-
-        // the sidebar: brand, Modules, General, the version at the foot
-        int items = Tab.values().length + Link.values().length;
+        frame.layout(this.width, this.height, inWorld());
+        px = frame.x;
+        py = frame.y;
+        pw = frame.w;
+        ph = frame.h;
+        sw = frame.sw;
         boolean modern = Theme.modern();
-        int foot = modern ? PANEL_INSET + 4 : FOOT_H;
-        // the modern items sit inside the sidebar's panel
-        int ix = modern ? px + PANEL_INSET + 5 : px + 6, iw = modern ? sw - PANEL_INSET - 10 : sw - 12;
-        itemH = Math.max(modern ? 11 : 13, Math.min(modern ? 20 : 18, (ph - brandH() - 2 * SECTION_H - 6 - foot - (modern ? 0 : 8)) / items));
-        side.clear();
-        int y = modulesY = py + brandH();
-        y += SECTION_H;
-        for (Tab t : Tab.values()) {
-            side.add(new Hit("tab:" + t.name(), ix, y, iw, itemH));
-            y += itemH;
-        }
-        generalY = y += 6;
-        y += SECTION_H;
-        for (Link l : Link.values()) {
-            side.add(new Hit("link:" + l.name(), ix, y, iw, itemH));
-            y += itemH;
-        }
 
         // the header, from the right
         heads.clear();
@@ -337,13 +362,12 @@ public class DuskSettingsScreen extends MenuScreen {
         rowW = gridW();
         buildItems();
         int gap = cardGap(), cardMin = modern ? MODERN_CARD_MIN_W : CARD_MIN_W;
-        cols = Math.max(1, Math.min(MAX_COLS, (gridW() + gap) / (cardMin + gap)));
+        cols = (gridW() + gap) / (cardMin + gap);
+        cols = modern ? Math.max(MIN_COLS, Math.min(MODERN_MAX_COLS, cols)) : Math.max(1, Math.min(MAX_COLS, cols));
         cardW = (gridW() - gap * (cols - 1)) / cols;
         cardH = modern ? MODERN_CARD_H : Math.max(80, Math.min(115, Math.round(cardW * 0.72f)));
         clampScroll();
     }
-
-    private int brandH() { return Theme.modern() ? ph >= 280 ? 54 : 44 : BRAND_H; }
 
     /**
      * The list's lines: under All with no search, a heading and a card per
@@ -427,7 +451,7 @@ public class DuskSettingsScreen extends MenuScreen {
 
     /** {x, y} of the switch on the modern card at {@code (cx, cy)}. */
     private int[] cardSwitch(int cx, int cy) {
-        return new int[] {cx + cardW - CARD_MARGIN - ToggleWidget.SWITCH_W, cy + CARD_MARGIN + 1};
+        return new int[] {cx + cardW - CARD_MARGIN - ToggleWidget.SWITCH_W, cy + CARD_MARGIN - 1 + (16 - ToggleWidget.SWITCH_H) / 2};
     }
 
     private static final int CARD_MARGIN = 11;
@@ -459,9 +483,9 @@ public class DuskSettingsScreen extends MenuScreen {
     protected void drawMenu(Canvas c, int mouseX, int mouseY, float delta) {
         layout();
         tip = null;
-        if (inWorld()) c.fill(0, 0, this.width, this.height, Theme.pick(0x660A0B1C, 0x4D000000));
+        if (inWorld()) c.fill(0, 0, this.width, this.height, Theme.pick(0x660B0B0D, 0x4D000000));
         drawWindow(c);
-        drawSidebar(c, mouseX, mouseY);
+        frame.drawSidebar(c, mouseX, mouseY, entry(), e -> counts[Tab.valueOf(e.name()).ordinal()]);
         drawHeader(c, mouseX, mouseY);
         if (page == Page.LIST) {
             drawList(c, mouseX, mouseY);
@@ -472,106 +496,11 @@ public class DuskSettingsScreen extends MenuScreen {
         if (tip != null) Vanilla.tooltip(c, tip, mouseX, mouseY, this.width, this.height);
     }
 
-    /**
-     * The window: in the modern look a rounded night-blue sheet on a soft
-     * shadow, the sidebar an inset panel of its own; in the legacy one a
-     * black outline round the 90% body, the sidebar darker behind a black rule.
-     */
+    /** The shared frame (see {@link MenuFrame#drawWindow}) and the rule under the header. */
     private void drawWindow(Canvas c) {
-        if (Theme.modern()) {
-            int r = Px.radius(ph, 18);
-            Round.begin(c);
-            int x0 = Round.w(px), y0 = Round.w(py), x1 = Round.w(px + pw), y1 = Round.w(py + ph);
-            Round.softW(c, x0, y0, x1, y1, r, Round.w(12), Round.w(4), 0x80000000);
-            Round.fillW(c, x0, y0, x1, y1, r, 0xF70D0E22);
-            Round.end(c);
-            Round.ring(c, px, py, pw, ph, r, Theme.LINE_2);
-            int in = PANEL_INSET;
-            Round.fill(c, px + in, py + in, sw - in, ph - 2 * in, Px.radius(ph, 13), 0x66050611, Theme.LINE);
-            return;
-        }
-        c.outline(px, py, pw, ph, 0xFF000000);
-        c.fill(px + 1, py + 1, px + pw - 1, py + ph - 1, 0xE61E1E1E);
-        c.fill(px + 1, py + 1, px + sw, py + ph - 1, 0x59000000);
-        c.fill(px + sw, py + 1, px + sw + 1, py + ph - 1, 0xFF000000);
-        c.fill(mainX() + 1, py + HEAD_H, px + pw - 1, py + HEAD_H + 1, 0xFF000000);
-    }
-
-    private void drawSidebar(Canvas c, int mouseX, int mouseY) {
-        boolean modern = Theme.modern();
-        int ms = Theme.markSize(modern ? 16 : 14), bx = px + (modern ? PANEL_INSET + 9 : 10);
-        // the modern brand block sits in the sidebar panel, below its top edge
-        int brandTop = modern ? py + PANEL_INSET : py, brandRoom = modern ? brandH() - PANEL_INSET : brandH();
-        Theme.mark(c, bx, brandTop + (brandRoom - ms) / 2, ms, 0xFF);
-        int nx = bx + ms + (modern ? 7 : 6) - Px.pad(), nw = sw - (nx - px) - 6;
-        if (modern && !VERSION.isEmpty()) {
-            // the name over the version, as one block centred on the mark
-            int by = brandTop + (brandRoom - 24) / 2;
-            Component name = Component.empty().append(Component.literal("Dusk ").withStyle(ChatFormatting.BOLD))
-                    .append(Component.literal("Client").withStyle(st -> st.withItalic(true).withColor(LAVENDER)));
-            Px.sans(c, name, nx, by, nw, 14, Px.Size.S20, Theme.TEXT, true);
-            Px.sans(c, "v" + VERSION, nx, by + 14, nw, 10, Px.Size.S11, Theme.TEXT_FAINT, false, true);
-        } else if (modern) {
-            Px.sans(c, "Dusk", nx, py, nw, brandH(), Px.Size.S20, Theme.TEXT, true, true);
-        } else {
-            Px.label(c, "Dusk", nx, py, nw, BRAND_H, Px.Size.S20, Px.Tone.ACCENT, false, false, true, 0xFF);
-        }
-
-        section(c, "Modules", modulesY);
-        section(c, "General", generalY);
-        for (Hit h : side) {
-            boolean hover = h.in(mouseX, mouseY);
-            if (h.id().startsWith("tab:")) {
-                Tab t = Tab.valueOf(h.id().substring(4));
-                sideItem(c, h, t.icon, t.label, String.valueOf(counts[t.ordinal()]), page == Page.LIST && tab == t, hover, false);
-            } else {
-                Link l = Link.valueOf(h.id().substring(5));
-                boolean off = l == Link.HUD && !inWorld();
-                sideItem(c, h, l.icon, l.label, "", l == Link.PREFS && page == Page.PREFS, hover, off);
-                if (hover && off) tip = "Join a world to edit the HUD layout";
-            }
-        }
-        if (!modern && !VERSION.isEmpty() && generalY + SECTION_H + Link.values().length * itemH + FOOT_H <= py + ph - 4) {
-            small(c, "v" + VERSION, bx, py + ph - FOOT_H, modern ? Theme.TEXT_FAINT : Theme.DIM);
-        }
-    }
-
-    private void section(Canvas c, String label, int y) {
-        int x = px + 12 - Px.pad();
-        if (Theme.modern()) {
-            x = px + PANEL_INSET + 11 - Px.pad();
-            Px.sans(c, label.toUpperCase(Locale.ROOT), x, y, sw - 24, SECTION_H, Px.Size.S11, Theme.TEXT_FAINT, true, true);
-        }
-        else Px.label(c, label, x, y, sw - 20, SECTION_H, Px.Size.S11, Px.Tone.DIM, false, false, true, 0xFF);
-    }
-
-    private void sideItem(Canvas c, Hit h, Icons icon, String label, String count, boolean selected, boolean hover, boolean off) {
-        int x = h.x(), y = h.y(), w = h.w(), ih = h.h();
-        int countW = count.isEmpty() ? 0 : textW(count) + 6;
-        int iy = y + (ih - icon.height()) / 2, ix = x + 6 + (7 - icon.width()) / 2;
-        int tx = x + 18 - Px.pad(), tw = w - 18 - countW + Px.pad();
-        if (Theme.modern()) {
-            // the accent under the page shown, a faint wash under the pointer
-            int r = Px.radius(ih - 2, 8);
-            if (selected) Round.fill(c, x, y + 1, w, ih - 2, r, Theme.ACCENT);
-            else if (hover && !off) Round.fill(c, x, y + 1, w, ih - 2, r, Theme.HOVER);
-            int col = off ? Theme.TEXT_FAINT : selected || hover ? Theme.TEXT : Theme.TEXT_MUTED;
-            ix = x + 8 + (7 - icon.width()) / 2;
-            icon.draw(c, ix, iy, off ? Theme.TEXT_FAINT : selected ? Theme.INK : hover ? Theme.TEXT : Theme.GLYPH);
-            int cw = count.isEmpty() ? 0 : Math.round(Px.sansWidth(c, count, Px.Size.S11, false)) + 4;
-            tx = x + 21 - Px.pad();
-            Px.sans(c, label, tx, y, w - 21 - cw - 8 + 2 * Px.pad(), ih, Px.Size.S16, selected ? Theme.INK : col, selected, true);
-            if (!count.isEmpty()) {
-                int cx = x + w - 9 - cw + 4;
-                Px.sans(c, count, cx - Px.pad(), y, cw - 4 + 2 * Px.pad(), ih, Px.Size.S11,
-                        selected ? 0xD9FFFFFF : Theme.TEXT_FAINT, false, true);
-            }
-            return;
-        }
-        if (selected || hover && !off) Theme.cell(c, x, y, w, ih, hover && !off);
-        icon.draw(c, ix, iy, Theme.filter(selected ? Theme.ACTIVE_UP : Theme.GLYPH, hover, off));
-        Px.label(c, label, tx, y, tw, ih, Px.Size.S14, selected ? Px.Tone.ACTIVE : Px.Tone.GREY, hover, off, true, 0xFF);
-        if (!count.isEmpty()) c.text(count, x + w - 6 - textW(count), y + (ih - 7) / 2, Theme.DIM, false);
+        frame.drawWindow(c);
+        if (Theme.modern()) c.fill(contentX(), py + headH(), px + pw - inset(), py + headH() + 1, Theme.LINE);
+        else c.fill(mainX() + 1, py + HEAD_H, px + pw - 1, py + HEAD_H + 1, 0xFF000000);
     }
 
     private void drawHeader(Canvas c, int mouseX, int mouseY) {
@@ -583,6 +512,9 @@ public class DuskSettingsScreen extends MenuScreen {
         } else if (page == Page.PREFS) {
             title = "Preferences";
             sub = "";
+        } else if (page == Page.KEYS) {
+            title = "Keybinds";
+            sub = "Click a key, then press the new one. Backspace clears a module's key";
         } else {
             title = tab.title;
             int on = 0;
@@ -592,14 +524,7 @@ public class DuskSettingsScreen extends MenuScreen {
                     : shown.size() + (shown.size() == 1 ? " module" : " modules") + " · " + on + " enabled";
         }
         if (Theme.modern()) {
-            // the list's title leads with its category in lavender italics: "Render modules"
             Component heading = Component.literal(title).withStyle(ChatFormatting.BOLD);
-            if (page == Page.LIST) {
-                String word = query.isEmpty() ? tab.label : "Search", rest = query.isEmpty() ? " modules" : " results";
-                heading = Component.empty()
-                        .append(Component.literal(word).withStyle(st -> st.withBold(true).withItalic(true).withColor(LAVENDER)))
-                        .append(Component.literal(rest).withStyle(ChatFormatting.BOLD));
-            }
             int hx = tx - Px.pad(), hw = tw + 2 * Px.pad();
             if (sub.isEmpty()) {
                 Px.sans(c, heading, hx, py, hw, headH(), Px.Size.S20, Theme.TEXT, true);
@@ -651,7 +576,7 @@ public class DuskSettingsScreen extends MenuScreen {
         if (Theme.modern()) {
             boolean hot = h.in(mouseX, mouseY);
             int ring = search.focused() ? Theme.ACCENT & 0xFFFFFF | 0xB3 << 24 : hot ? Theme.LINE_3 : Theme.LINE_2;
-            Round.fill(c, h.x(), h.y(), h.w(), h.h(), Px.radius(h.h(), 9), 0x0AFFFFFF, ring);
+            Round.fill(c, h.x(), h.y(), h.w(), h.h(), Px.radius(h.h(), 9), hot ? Glass.PANE_HOT : Glass.PANE, ring);
             Icons.SEARCH.draw(c, h.x() + 9, h.y() + (h.h() - 7) / 2, search.focused() ? Theme.TEXT : Theme.TEXT_FAINT);
         } else {
             Theme.cell(c, h.x(), h.y(), h.w(), h.h(), false);
@@ -663,11 +588,11 @@ public class DuskSettingsScreen extends MenuScreen {
     /** The modern list | cards switch: two icons in an outlined box, the view shown raised. */
     private static void drawViewSwitch(Canvas c, Hit h, int mouseX, int mouseY) {
         int r = Px.radius(h.h(), 9), half = h.w() / 2;
-        Round.fill(c, h.x(), h.y(), h.w(), h.h(), r, 0x0AFFFFFF, Theme.LINE_2);
+        Round.fill(c, h.x(), h.y(), h.w(), h.h(), r, Glass.PANE, Theme.LINE_2);
         for (boolean cards : new boolean[] {false, true}) {
             int sx = h.x() + (cards ? half : 0) + 2, sy = h.y() + 2, sw = half - 3, sh = h.h() - 4;
             boolean sel = cards == grid, hover = Vanilla.inside(mouseX, mouseY, sx, sy, sw, sh);
-            if (sel) Round.fill(c, sx, sy, sw, sh, Px.radius(sh, 7), Theme.RAISED_2);
+            if (sel) Round.fill(c, sx, sy, sw, sh, Px.radius(sh, 7), Glass.PANE_SEL);
             Icons icon = cards ? Icons.GRID : Icons.LIST;
             icon.draw(c, sx + (sw - icon.width()) / 2, sy + (sh - icon.height()) / 2,
                     sel ? Theme.TEXT : hover ? Theme.TEXT_MUTED : Theme.TEXT_FAINT);
@@ -729,7 +654,7 @@ public class DuskSettingsScreen extends MenuScreen {
             if (Theme.modern()) {
                 for (int[] run : runs) {
                     if (y0 + run[0] + run[1] < top || y0 + run[0] > bottom) continue;
-                    Round.fill(c, x, y0 + run[0], rowW, run[1], Px.radius(LIST_ROW_H, 18), Theme.SURFACE, Theme.LINE);
+                    Glass.pane(c, x, y0 + run[0], rowW, run[1], Px.radius(LIST_ROW_H, 18), false, 0);
                 }
             }
             for (Item it : items) {
@@ -749,7 +674,7 @@ public class DuskSettingsScreen extends MenuScreen {
             int h = bottom - top, barH = Math.max(16, h * h / contentHeight());
             int barY = top + (h - barH) * scroll / maxScroll();
             if (Theme.modern()) {
-                Round.pill(c, barX(), barY, BAR_W, barH, draggingBar ? 0xFF6A6C9E : 0xFF35375F);
+                Round.pill(c, barX(), barY, BAR_W, barH, draggingBar ? 0xFF6A6A72 : 0xFF45454C);
             } else {
                 c.fill(barX(), top, barX() + BAR_W, bottom, 0xFF141414);
                 c.fill(barX(), barY, barX() + BAR_W, barY + barH, draggingBar ? Theme.LABEL_UP : Theme.LABEL_LO);
@@ -769,12 +694,12 @@ public class DuskSettingsScreen extends MenuScreen {
         }
     }
 
-    /** The New tag: lavender on a faint accent pill, its width returned. */
+    /** The neutral New tag: faint text on a raised pill, its width returned. */
     private int newTag(Canvas c, int x, int y, boolean right) {
         int tw = Math.round(Px.sansWidth(c, "New", Px.Size.S11, true)) + 10, th = 11;
         int tx = right ? x - tw : x;
-        Round.fill(c, tx, y, tw, th, 64, Theme.ACCENT & 0xFFFFFF | 0x38 << 24, Theme.ACCENT & 0xFFFFFF | 0x66 << 24);
-        Px.sans(c, "New", tx, y, tw, th, Px.Size.S11, LAVENDER, true, false);
+        Round.fill(c, tx, y, tw, th, 64, Theme.RAISED, Theme.LINE_2);
+        Px.sans(c, "New", tx, y, tw, th, Px.Size.S11, Theme.TEXT_MUTED, true, false);
         return tw;
     }
 
@@ -950,32 +875,37 @@ public class DuskSettingsScreen extends MenuScreen {
     }
 
     /**
-     * The modern card: a rounded tile with the name and its switch along the
-     * top, two lines of the description under it, and the category (or a
-     * New tag) and a chevron along the foot. Enabled cards take a faint
-     * accent edge; anywhere off the switch opens the settings.
+     * The modern tile, a pane of the window's glass: the module's item and
+     * its switch along the top, the name under them across the whole tile
+     * (a New tag beside the item) and two lines of the description. Enabled
+     * tiles take a white edge; anywhere off the switch opens the settings,
+     * the chevron showing it under the pointer.
      */
     private void drawCardModern(Canvas c, Module m, int cx, int cy, int[] tb, int[] gb, boolean hot, boolean onToggle, boolean onGear) {
         int cw = cardW, mg = CARD_MARGIN;
         boolean on = m.enabled(), lit = hot && !onToggle;
-        int ring = on ? Theme.ACCENT & 0xFFFFFF | (lit ? 0x8C : 0x59) << 24 : lit ? Theme.LINE_3 : Theme.LINE_2;
-        Round.fill(c, cx, cy, cw, cardH, Px.radius(cardH, 12), lit ? 0xFF1B1D3D : Theme.SURFACE, ring);
+        int ring = on ? Theme.ACCENT & 0xFFFFFF | (lit ? 0x8C : 0x59) << 24 : 0;
+        Glass.pane(c, cx, cy, cw, cardH, Px.radius(cardH, 16), lit, ring);
 
         int[] s = cardSwitch(cx, cy);
-        int tx = cx + mg, nameW = s[0] - 8 - tx;
-        Px.sans(c, m.name(), tx - Px.pad(), cy + mg - 1, nameW + 2 * Px.pad(), 16, Px.Size.S16, Theme.TEXT, true, true);
+        int tx = cx + mg, iy = cy + mg - 1;
+        drawIcon(c, m, tx, iy, on ? Theme.TEXT : Theme.GLYPH);
+        if (NEW_IDS.contains(m.id())) newTag(c, tx + 22, iy + 3, false);
         knobs.put(m, ToggleWidget.drawSwitch(c, s[0], s[1], on, onToggle, knobs.getOrDefault(m, -1f)));
 
-        int textW = cw - 2 * mg, dy = cy + mg + 19;
-        for (String line : lines(c, m.description(), textW, 2)) {
-            Px.sans(c, line, tx - Px.pad(), dy, textW + 2 * Px.pad(), 11, Px.Size.S11, Theme.TEXT_MUTED, false, true);
+        int textW = cw - 2 * mg, ny = iy + 16 + 7;
+        Px.sans(c, m.name(), tx - Px.pad(), ny, textW + 2 * Px.pad(), 14, Px.Size.S16, Theme.TEXT, true, true);
+        // the description stops short of the chevron's corner
+        int dy = ny + 16;
+        for (String line : lines(c, m.description(), textW - 10, 2)) {
+            Px.sans(c, line, tx - Px.pad(), dy, textW - 10 + 2 * Px.pad(), 11, Px.Size.S11, Theme.TEXT_MUTED, false, true);
             dy += 11;
         }
 
-        int fy = cy + cardH - mg - 11;
-        if (NEW_IDS.contains(m.id())) newTag(c, tx, fy, false);
-        else Px.sans(c, m.category().label, tx - Px.pad(), fy, textW, 11, Px.Size.S11, Theme.TEXT_FAINT, false, true);
-        Icons.NEXT.draw(c, cx + cw - mg - Icons.NEXT.width(), fy + (11 - Icons.NEXT.height()) / 2, lit ? Theme.TEXT : Theme.TEXT_FAINT);
+        if (lit) {
+            int fy = cy + cardH - mg - 11;
+            Icons.NEXT.draw(c, cx + cw - mg - Icons.NEXT.width(), fy + (11 - Icons.NEXT.height()) / 2, Theme.TEXT_MUTED);
+        }
     }
 
     /** {@code text} broken at spaces into at most {@code max} lines {@code w} wide in the small sans, the last cut short. */
@@ -1018,9 +948,9 @@ public class DuskSettingsScreen extends MenuScreen {
         layout();
         if (page == Page.LIST && search.w >= 22 && search.contains(mx, my)) return search.click(mx, my, button);
         search.setFocused(false);
-        for (Hit h : side) {
-            if (!h.in(mx, my)) continue;
-            if (button == 0) clickSide(h.id());
+        if (frame.inSidebar(mx, my)) {
+            MenuFrame.Entry e = frame.entryAt(mx, my);
+            if (e != null && button == 0) MenuFrame.go(this, entry(), e);
             return true;
         }
         for (Hit h : heads) {
@@ -1075,23 +1005,6 @@ public class DuskSettingsScreen extends MenuScreen {
         return mx >= x + (LEGACY_SWITCH_W - 1) / 2 + 1;
     }
 
-    private void clickSide(String id) {
-        if (id.startsWith("tab:")) {
-            showTab(Tab.valueOf(id.substring(4)));
-            return;
-        }
-        switch (Link.valueOf(id.substring(5))) {
-            case PREFS -> showPreferences();
-            case HUD -> { if (inWorld()) leaveTo(new HudEditorScreen(this)); }
-            case STYLES -> leaveTo(new StylesScreen(this));
-            case WARDROBE -> leaveTo(new WardrobeScreen(this));
-            case SOCIAL -> {
-                commit();
-                SocialScreen.show(this);
-            }
-        }
-    }
-
     private void clickHead(Hit h, double mx) {
         switch (h.id()) {
             case "close" -> exitMenu();
@@ -1144,6 +1057,7 @@ public class DuskSettingsScreen extends MenuScreen {
 
     @Override
     protected boolean menuScroll(double mx, double my, double amount) {
+        if (frame.scroll(mx, my, amount)) return true;
         if (page != Page.LIST) return pane.scroll(mx, my, amount);
         scroll -= (int) Math.signum(amount) * SCROLL_STEP;
         clampScroll();

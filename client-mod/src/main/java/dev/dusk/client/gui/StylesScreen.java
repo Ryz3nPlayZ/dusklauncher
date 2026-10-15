@@ -1,6 +1,10 @@
 package dev.dusk.client.gui;
 
 import dev.dusk.client.modules.render.Styles;
+import dev.dusk.client.gui.widget.ColorPickerPopup;
+import dev.dusk.client.gui.widget.DropdownPopup;
+import dev.dusk.client.module.setting.ColorSetting;
+import dev.dusk.client.styles.StyleLooks;
 import dev.dusk.client.styles.StylePacks;
 import dev.dusk.client.styles.StylePacks.Category;
 import dev.dusk.client.styles.StylePacks.Style;
@@ -25,11 +29,15 @@ import java.util.concurrent.Executors;
  * back to the normal look. The game's resources reload once, with the picks
  * on top, when the page closes, so trying several packs costs one reload.
  * Add-ons (packs that only add to a category, like an anchor glow) toggle
- * on and off on their own. See {@link StylePacks}.
+ * on and off on their own. A full pack lists under every category it
+ * changes and gives each only its part. Above the packs, a row of looks
+ * recolours the category, picked pack or not (Awerial's Pack Editor's
+ * idea), and SETUPS saves and brings back whole sets of picks and looks.
+ * See {@link StylePacks}.
  */
 public class StylesScreen extends PanelScreen {
     private static final String[] TABS = {"STYLES"};
-    private static final int GAP = 6, TILE = 74, LABEL_H = 12, SIDE_GAP = 2;
+    private static final int GAP = 6, TILE = 74, LABEL_H = 12, SIDE_GAP = 2, LOOK_H = 18;
     private static String lastCategory = "crystal";
 
     private record Cell(@Nullable Style style, int x, int y) {}
@@ -45,7 +53,13 @@ public class StylesScreen extends PanelScreen {
     private boolean loading;
     /** Something was clicked since the page opened; reload on close if the picks differ from {@link #before}. */
     private boolean changed;
-    private final List<String> before;
+    private final String before;
+    /** The colour the custom look's picker edits. */
+    private final ColorSetting custom = new ColorSetting("custom", "Custom", 0xFF4FA3FF).opaque();
+    private int lookX, lookY, lookS, lookCount;
+    private double lastMx, lastMy;
+    @Nullable
+    private String hoverLook;
     private String category = lastCategory;
     private final List<Category> shown = new ArrayList<>();
     private final List<Cell> cells = new ArrayList<>();
@@ -55,7 +69,7 @@ public class StylesScreen extends PanelScreen {
     public StylesScreen(@Nullable Screen parent) {
         super(Component.literal("Styles"), parent);
         Styles m = Styles.active();
-        before = m == null ? List.of() : m.pickedFiles();
+        before = m == null ? "" : m.signature();
         refresh();
     }
 
@@ -69,6 +83,14 @@ public class StylesScreen extends PanelScreen {
             Minecraft.getInstance().execute(() -> {
                 styles = found;
                 loading = false;
+                Styles m = Styles.get();
+                if (m != null && m.dropStale(file -> {
+                    Style s = byFile(file);
+                    return s == null ? null : s.categories();
+                })) {
+                    saveModules();
+                    changed = true;
+                }
             });
         });
     }
@@ -79,7 +101,7 @@ public class StylesScreen extends PanelScreen {
 
     private List<Style> inCategory(String id, boolean addons) {
         List<Style> out = new ArrayList<>();
-        for (Style s : styles) if (s.category().equals(id) && s.addon() == addons) out.add(s);
+        for (Style s : styles) if (s.in(id) && s.addon() == addons) out.add(s);
         return out;
     }
 
@@ -104,10 +126,15 @@ public class StylesScreen extends PanelScreen {
     private boolean picked(Style s) {
         Styles m = Styles.get();
         if (m == null) return false;
-        return s.addon() ? m.addonOn(s.file()) : s.file().equals(m.pick(s.category()));
+        return s.addon() ? m.addonOn(s.file()) : s.file().equals(m.pick(category));
     }
 
     // ---- layout -----------------------------------------------------------------
+
+    @Override
+    protected MenuFrame.Entry frameEntry() {
+        return MenuFrame.Entry.STYLES;
+    }
 
     @Override
     protected String[] tabs() {
@@ -127,6 +154,7 @@ public class StylesScreen extends PanelScreen {
         List<Tool> t = new ArrayList<>();
         t.add(new Tool("close", Icons.CLOSE, "", "Close"));
         t.add(new Tool("folder", null, "OPEN FOLDER", "Open the styles folder: put resource packs there"));
+        t.add(new Tool("setups", null, "SETUPS", "Save every pick and look as a setup, or bring one back"));
         t.add(new Tool("refresh", null, "REFRESH", "Look for new packs in the styles folder"));
         return t;
     }
@@ -143,20 +171,17 @@ public class StylesScreen extends PanelScreen {
                 PackBrowserScreen.openFolder(dir);
             }
             case "refresh" -> refresh();
+            case "setups" -> openSetups();
             default -> super.onTool(id);
         }
     }
 
     private void layout() {
         layoutPanel();
+        // Every category but Other can take a look, so all of them show; Other only with packs in it
         shown.clear();
         for (Category c : StylePacks.CATEGORIES) {
-            for (Style s : styles) {
-                if (s.category().equals(c.id())) {
-                    shown.add(c);
-                    break;
-                }
-            }
+            if (!c.id().equals(StylePacks.OTHER) || styles.stream().anyMatch(s -> s.in(c.id()))) shown.add(c);
         }
         if (!shown.isEmpty() && shown.stream().noneMatch(c -> c.id().equals(category))) category = shown.get(0).id();
 
@@ -168,7 +193,8 @@ public class StylesScreen extends PanelScreen {
 
         listX = sideX + sideW + pad;
         headerY = top;
-        listY = top + 16;
+        lookY = top + 15;
+        listY = lookY + LOOK_H + 4;
         listW = px + pw - pad - BAR_W - 4 - listX;
         listBottom = bottom;
 
@@ -208,11 +234,12 @@ public class StylesScreen extends PanelScreen {
     protected void drawMenu(Canvas c, int mouseX, int mouseY, float delta) {
         layout();
         drawPanel(c, mouseX, mouseY);
-        if (styles.isEmpty()) {
+        if (styles.isEmpty() && loading) {
             drawEmpty(c);
             return;
         }
         drawSide(c, mouseX, mouseY);
+        drawLooks(c, mouseX, mouseY);
         drawHeader(c, mouseX, mouseY);
 
         boolean hot = inList(mouseX, mouseY);
@@ -225,6 +252,15 @@ public class StylesScreen extends PanelScreen {
             int x = listX + cell.x, y = listY + cell.y - scroll;
             if (y + tileH < listY || y > listBottom) continue;
             drawTile(c, cell.style, cat, x, y, hot && Vanilla.inside(mouseX, mouseY, x, y, tileW, tileH));
+        }
+        if (styles.isEmpty()) {
+            int y = listY + tileH + 12 - scroll;
+            for (String line : wrap(c, "No packs in the styles folder yet. Put resource packs (zips or folders) there with OPEN FOLDER, "
+                    + "then press REFRESH: each is listed under every part of the game it changes, and you pick one per part. "
+                    + "The looks above work without any.", listW)) {
+                c.text(line, listX, y, Theme.TEXT_MUTED, false);
+                y += 11;
+            }
         }
         c.unscissor();
         drawScrollbar(c);
@@ -258,7 +294,7 @@ public class StylesScreen extends PanelScreen {
                 tx = sideX + 23;
             }
             c.text(Theme.ellipsize(c, cat.name(), sideX + sideW - 10 - tx), tx, y + (sideRow - 8) / 2, sel ? Theme.TEXT : Theme.TEXT_MUTED, false);
-            if (m != null && m.pick(cat.id()) != null) {
+            if (m != null && (m.pick(cat.id()) != null || m.look(cat.id()) != null)) {
                 c.fill(sideX + sideW - 7, y + sideRow / 2 - 2, sideX + sideW - 3, y + sideRow / 2 + 2, Theme.GREEN_LO);
             }
         }
@@ -272,7 +308,8 @@ public class StylesScreen extends PanelScreen {
         c.text(name, listX, headerY + 2, Theme.TEXT, false);
         Style pick = m == null ? null : byFile(m.pick(category));
         String now = pick != null ? "Using " + pick.name() : "Using the default look";
-        if (changed) now = "Shows when you close this";
+        if (hoverLook != null) now = hoverLook;
+        else if (changed) now = "Shows when you close this";
         else if (m != null && !m.enabled()) now = "Styles is off; picking one turns it on";
         int nx = listX + c.textWidth(name) + 8;
         int right = listX + listW;
@@ -294,6 +331,122 @@ public class StylesScreen extends PanelScreen {
 
     private static String seeThroughLabel(Styles m) {
         return "SEE-THROUGH: " + Theme.caps(m.seeThrough());
+    }
+
+    // ---- looks --------------------------------------------------------------------
+
+    /** Swatch {@code i}: 0 the category's own colours, then the presets, then any colour. */
+    @Nullable
+    private String lookIdAt(int i) {
+        if (i == 0) return null;
+        if (i <= StyleLooks.PRESETS.size()) return StyleLooks.PRESETS.get(i - 1).id();
+        return "custom";
+    }
+
+    private void layoutLooks(Canvas c) {
+        lookCount = StyleLooks.PRESETS.size() + 2;
+        int labelW = c.textWidth("LOOK") + 8;
+        lookS = Math.max(8, Math.min(LOOK_H - 4, (listW - labelW) / lookCount - 3));
+        lookX = listX + labelW;
+    }
+
+    private int lookAt(double mx, double my) {
+        if (my < lookY + 2 || my >= lookY + 2 + lookS) return -1;
+        for (int i = 0; i < lookCount; i++) {
+            int x = lookX + i * (lookS + 3);
+            if (mx >= x && mx < x + lookS) return i;
+        }
+        return -1;
+    }
+
+    private void drawLooks(Canvas c, int mouseX, int mouseY) {
+        layoutLooks(c);
+        Styles m = Styles.get();
+        String cur = m == null ? null : m.look(category);
+        StyleLooks.Look curLook = StyleLooks.byId(cur);
+        c.text("LOOK", listX, lookY + 2 + (lookS - 8) / 2, Theme.TEXT_FAINT, false);
+        int hover = lookAt(mouseX, mouseY);
+        hoverLook = null;
+        for (int i = 0; i < lookCount; i++) {
+            int x = lookX + i * (lookS + 3), y = lookY + 2;
+            String id = lookIdAt(i);
+            boolean custom = "custom".equals(id);
+            boolean sel = custom ? cur != null && cur.startsWith("#") : java.util.Objects.equals(id, cur);
+            if (i == 0) {
+                dev.dusk.client.gui.widget.ColorWidget.checker(c, x, y, lookS, lookS);
+            } else if (custom) {
+                int col = curLook != null && cur.startsWith("#") ? curLook.swatch() : custom().argb();
+                c.fill(x, y, x + lookS, y + lookS, col);
+                c.fill(x + lookS / 2 - 1, y + 2, x + lookS / 2 + 1, y + lookS - 2, 0xCCFFFFFF);
+                c.fill(x + 2, y + lookS / 2 - 1, x + lookS - 2, y + lookS / 2 + 1, 0xCCFFFFFF);
+            } else {
+                c.fill(x, y, x + lookS, y + lookS, StyleLooks.PRESETS.get(i - 1).swatch());
+            }
+            if (sel) {
+                c.outline(x - 2, y - 2, lookS + 4, lookS + 4, Theme.TEXT);
+            } else if (i == hover) {
+                c.outline(x - 1, y - 1, lookS + 2, lookS + 2, Theme.TEXT_MUTED);
+            }
+            if (i == hover) {
+                hoverLook = i == 0 ? "Look: its own colours" : custom ? "Look: any colour you pick" : "Look: " + StyleLooks.PRESETS.get(i - 1).name();
+            }
+        }
+    }
+
+    private ColorSetting custom() {
+        return custom;
+    }
+
+    private void chooseLook(int i) {
+        Styles m = Styles.get();
+        if (m == null) return;
+        String id = lookIdAt(i);
+        if ("custom".equals(id)) {
+            String cur = m.look(category);
+            StyleLooks.Look l = StyleLooks.byId(cur);
+            if (l != null && cur.startsWith("#")) custom.set(l.swatch());
+            String cat = category;
+            int x = lookX + i * (lookS + 3);
+            popups.open(new ColorPickerPopup(x, lookY + 2, lookS, custom, () -> {
+                m.setLook(cat, StyleLooks.customId(custom.argb()));
+                saveModules();
+                changed = true;
+            }));
+            m.setLook(cat, StyleLooks.customId(custom.argb()));
+        } else if (java.util.Objects.equals(id, m.look(category))) {
+            return;
+        } else {
+            m.setLook(category, id);
+        }
+        saveModules();
+        changed = true;
+    }
+
+    // ---- setups -------------------------------------------------------------------
+
+    private void openSetups() {
+        Styles m = Styles.get();
+        if (m == null) return;
+        List<String> names = m.setupNames();
+        List<String> options = new ArrayList<>();
+        options.add("Save current setup");
+        for (String n : names) options.add("Use " + n);
+        for (String n : names) options.add("Delete " + n);
+        int w = 140;
+        int x = (int) Math.max(2, Math.min(this.width - w - 2, lastMx - w / 2.0));
+        popups.open(new DropdownPopup(x, (int) lastMy, w, 8, options, -1, i -> {
+            if (i == 0) {
+                int n = names.size() + 1;
+                while (names.contains("Setup " + n)) n++;
+                m.saveSetup("Setup " + n);
+            } else if (i <= names.size()) {
+                if (!m.loadSetup(names.get(i - 1))) return;
+                changed = true;
+            } else {
+                m.deleteSetup(names.get(i - 1 - names.size()));
+            }
+            saveModules();
+        }));
     }
 
     private void drawTile(Canvas c, @Nullable Style s, @Nullable Category cat, int x, int y, boolean hover) {
@@ -331,9 +484,11 @@ public class StylesScreen extends PanelScreen {
 
     @Override
     protected boolean menuClick(double mx, double my, int button) {
+        lastMx = mx;
+        lastMy = my;
         layout();
         if (clickChrome(mx, my, button)) return true;
-        if (button != 0 || styles.isEmpty()) return Vanilla.inside(mx, my, px, py, pw, ph);
+        if (button != 0 || styles.isEmpty() && loading) return Vanilla.inside(mx, my, px, py, pw, ph);
         for (int i = 0; i < shown.size(); i++) {
             int y = sideY + i * (sideRow + SIDE_GAP);
             if (Vanilla.inside(mx, my, sideX, y, sideW, sideRow)) {
@@ -341,6 +496,11 @@ public class StylesScreen extends PanelScreen {
                 scroll = 0;
                 return true;
             }
+        }
+        int look = lookAt(mx, my);
+        if (look >= 0) {
+            chooseLook(look);
+            return true;
         }
         int[] st = seeThroughBox();
         if (st != null && Vanilla.inside(mx, my, st[0], st[1], st[2], st[3])) {
@@ -370,7 +530,7 @@ public class StylesScreen extends PanelScreen {
             if (!m.enabled()) {
                 m.setEnabled(true); // turning it on applies the picks
                 saveModules();
-            } else if (!m.pickedFiles().equals(before)) {
+            } else if (!m.signature().equals(before)) {
                 StylePacks.apply();
             }
         }

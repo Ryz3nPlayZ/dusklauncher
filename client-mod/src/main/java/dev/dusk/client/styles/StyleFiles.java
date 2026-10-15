@@ -37,8 +37,19 @@ import java.util.zip.ZipOutputStream;
  */
 final class StyleFiles {
     static final String MC = "assets/minecraft/";
-    /** Bump when the renames or the filter change, so old copies get rebuilt. */
-    private static final int VERSION = 1;
+    /** Bump when the renames, the filter or the pack info change, so old copies get rebuilt. */
+    private static final int VERSION = 2;
+    /**
+     * The pack info every copy gets in place of its own, which loads on every
+     * version Dusk runs on. 1.21.9 and later want min_format and max_format,
+     * and a pack that also reaches back to format 64 or below must list the
+     * same range as supported_formats with a pack_format inside it; older
+     * versions read only the last two. A pack made for an old version (say
+     * min_format 46 with nothing else) fails that check and the game drops it
+     * without a word, which left some sky picks doing nothing.
+     */
+    static final String PACK_INFO = "{\"pack\":{\"description\":\"Dusk style\",\"pack_format\":15,"
+            + "\"supported_formats\":[15,64],\"min_format\":15,\"max_format\":2147483647}}";
 
     // Checked in this order for each path under assets/minecraft/ (after renaming), first match
     // wins: deepslate ores are deepslate, not stone; snowy grass is snow, not grass; the hotbar
@@ -165,6 +176,13 @@ final class StyleFiles {
             return best;
         }
 
+        /** Every category the pack has textures for, in {@link #RULES} order: where it can be picked. */
+        List<String> categories() {
+            List<String> out = new ArrayList<>();
+            for (String[] rule : RULES) if (textures.getOrDefault(rule[0], 0) > 0) out.add(rule[0]);
+            return out;
+        }
+
         /** Only models for its category: a glow layer that stacks on another pick. */
         boolean addon() {
             String b = best();
@@ -210,11 +228,11 @@ final class StyleFiles {
         };
     }
 
-    /** Where the copy of {@code pack} goes. Its name is the pack's, so the game's pack id matches. */
-    static Path copyOf(Path pack) {
+    /** Where the copy of {@code pack} for {@code category} goes: one pack can be picked for several categories. */
+    static Path copyOf(Path pack, String category) {
         String name = pack.getFileName().toString();
-        if (!name.toLowerCase(Locale.ROOT).endsWith(".zip")) name += ".zip";
-        return cache(pack.getParent()).resolve(name);
+        if (name.toLowerCase(Locale.ROOT).endsWith(".zip")) name = name.substring(0, name.length() - 4);
+        return cache(pack.getParent()).resolve(name + "@" + category + ".zip");
     }
 
     /** The copies live in a hidden folder inside the styles folder. */
@@ -223,12 +241,15 @@ final class StyleFiles {
     }
 
     /**
-     * The pack the game should load for {@code pack}: the pack itself when it
-     * needs no changes, else a copy with old names added and other categories'
-     * files left out, rebuilt only when the pack changes.
+     * The pack the game should load for {@code pack} picked for
+     * {@code category} (null: the category it is mostly for): a copy with old
+     * names added, other categories' files left out and pack info the game
+     * accepts, rebuilt only when the pack changes. {@link StylePacks#OTHER}
+     * keeps every file.
      */
-    static Path prepare(Path pack) throws IOException {
-        Path copy = copyOf(pack);
+    static Path prepare(Path pack, @Nullable String category) throws IOException {
+        if (category == null) category = tally(pack).best();
+        Path copy = copyOf(pack, category);
         String stamp = "dusk-style " + VERSION + " " + Files.size(pack) + " " + Files.getLastModifiedTime(pack).toMillis();
         if (Files.isDirectory(pack)) stamp = "dusk-style " + VERSION + " dir " + Files.getLastModifiedTime(pack).toMillis();
         if (Files.isRegularFile(copy) && stamp.equals(comment(copy))) return copy;
@@ -240,18 +261,13 @@ final class StyleFiles {
             for (String p : paths) if (p.equals(names(p).get(0))) files.put(p, p);
             for (String p : paths) for (String n : names(p)) files.putIfAbsent(n, p);
 
-            Tally tally = new Tally();
-            files.keySet().forEach(tally::add);
-            String category = tally.best();
-
             Set<String> keep = new HashSet<>();
             if (category.equals(StylePacks.OTHER)) {
                 keep.addAll(files.keySet());
             } else {
                 Deque<String> todo = new ArrayDeque<>();
                 for (String p : files.keySet()) {
-                    if (p.equals("pack.mcmeta") || p.equals("pack.png")
-                            || p.startsWith(MC) && category.equals(category(p.substring(MC.length())))) {
+                    if (p.equals("pack.png") || p.startsWith(MC) && category.equals(category(p.substring(MC.length())))) {
                         keep.add(p);
                         if (p.endsWith(".json")) todo.add(p);
                     }
@@ -276,17 +292,15 @@ final class StyleFiles {
                 }
             }
 
-            boolean same = keep.size() == paths.size();
-            for (String p : keep) same &= files.get(p).equals(p);
-            if (same) {
-                Files.deleteIfExists(copy);
-                return pack;
-            }
+            keep.remove("pack.mcmeta");
 
             Files.createDirectories(copy.getParent());
             Path tmp = Files.createTempFile(copy.getParent(), "copy-", ".tmp");
             try {
                 try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(tmp))) {
+                    out.putNextEntry(new ZipEntry("pack.mcmeta"));
+                    out.write(PACK_INFO.getBytes(StandardCharsets.UTF_8));
+                    out.closeEntry();
                     for (Map.Entry<String, String> e : files.entrySet()) {
                         if (!keep.contains(e.getKey())) continue;
                         out.putNextEntry(new ZipEntry(e.getKey()));
@@ -303,6 +317,15 @@ final class StyleFiles {
             }
             return copy;
         }
+    }
+
+    /** A pack's files counted by category, under today's names. */
+    static Tally tally(Path pack) throws IOException {
+        Tally tally = new Tally();
+        try (Source src = source(pack)) {
+            for (String p : src.paths()) if (p.startsWith(MC)) tally.add(names(p).get(0));
+        }
+        return tally;
     }
 
     /** Finder and Explorer leftovers. */

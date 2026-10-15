@@ -1,6 +1,7 @@
 package dev.dusk.client.gui.widget;
 
 import dev.dusk.client.gui.Canvas;
+import dev.dusk.client.gui.Glass;
 import dev.dusk.client.gui.Px;
 import dev.dusk.client.gui.Round;
 import dev.dusk.client.gui.Theme;
@@ -124,7 +125,7 @@ public class ScrollPane {
     private void drawCard(Canvas c, int cx, int cy, int cw, int ch, java.util.List<Widget> run, int mx, int my) {
         if (cy > y + h || cy + ch < y) return;
         int r = Px.radius(ch, 18);
-        Round.fill(c, cx, cy, cw, ch, r, Theme.SURFACE, Theme.LINE);
+        Glass.pane(c, cx, cy, cw, ch, r, false, 0);
         Round.begin(c);
         int line = Px.line(), x0 = Round.w(cx + CARD_INSET), x1 = Round.w(cx + cw - CARD_INSET);
         for (int i = 0; i < run.size(); i++) {

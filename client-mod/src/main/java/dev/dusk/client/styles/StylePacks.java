@@ -1,5 +1,6 @@
 package dev.dusk.client.styles;
 
+import dev.dusk.client.DuskClient;
 import dev.dusk.client.compat.PackCompat;
 import dev.dusk.client.modules.render.Styles;
 import net.minecraft.client.Minecraft;
@@ -12,6 +13,8 @@ import net.minecraft.server.packs.repository.PackSource;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -27,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -45,8 +49,17 @@ import java.util.zip.ZipFile;
 public final class StylePacks {
     public record Category(String id, String name, Item icon) {}
 
-    /** One pack in the styles folder. {@code file} is its name in the folder. */
-    public record Style(String file, String name, String category, boolean addon, @Nullable byte[] icon) {}
+    /**
+     * One pack in the styles folder. {@code file} is its name in the folder,
+     * {@code category} what it is mostly for and {@code categories} every
+     * category it can be picked for: a full PvP pack is a sword, a totem, a
+     * sky and the rest, and picking it for one takes only that part.
+     */
+    public record Style(String file, String name, String category, List<String> categories, boolean addon, @Nullable byte[] icon) {
+        public boolean in(String id) {
+            return categories.contains(id);
+        }
+    }
 
     public static final String OTHER = "other";
     public static final List<Category> CATEGORIES = List.of(
@@ -76,6 +89,8 @@ public final class StylePacks {
             new Category(OTHER, "Other", Items.PAINTING));
 
     private static final String CRYSTAL_TEXTURE = "assets/minecraft/textures/entity/end_crystal/end_crystal.png";
+
+    private static final Logger LOGGER = LoggerFactory.getLogger("duskclient-styles");
 
     private static boolean ready;
     private static volatile boolean crystalSeeThrough;
@@ -153,7 +168,8 @@ public final class StylePacks {
         }
         String best = tally.best();
         boolean addon = tally.addon();
-        return new Style(file, prettyName(file, best), best, addon, icon);
+        List<String> cats = addon || best.equals(OTHER) ? List.of(best) : tally.categories();
+        return new Style(file, prettyName(file, cats.size() == 1 ? best : ""), best, cats, addon, icon);
     }
 
     /** Counts a file under today's name, so old packs sort like new ones. */
@@ -161,11 +177,12 @@ public final class StylePacks {
         if (path.startsWith(StyleFiles.MC)) tally.add(StyleFiles.names(path).get(0));
     }
 
-    /** "crystal_see_through.zip" in the crystal category reads "See Through". */
+    /** "crystal_see_through.zip" in the crystal category reads "See Through"; Minecraft's colour codes go. */
     static String prettyName(String file, String category) {
         String n = file.toLowerCase(Locale.ROOT).endsWith(".zip") ? file.substring(0, file.length() - 4) : file;
+        n = n.replaceAll("(?i)\\.zip$", "").replaceAll("[\u00A7\uFFFD].?", "").replaceAll("^[!\\s]+", "");
         String lower = n.toLowerCase(Locale.ROOT);
-        for (String prefix : new String[] {category + "_", category + "-", category + " "}) {
+        for (String prefix : category.isEmpty() ? new String[0] : new String[] {category + "_", category + "-", category + " "}) {
             if (lower.startsWith(prefix) && n.length() > prefix.length()) {
                 n = n.substring(prefix.length());
                 break;
@@ -209,39 +226,81 @@ public final class StylePacks {
         if (mc == null || repo != mc.getResourcePackRepository()) return selected;
         ready = true;
         Styles m = Styles.active();
-        List<String> picks = m == null ? List.of() : m.pickedFiles();
         crystalSeeThrough = false;
-        if (picks.isEmpty()) return selected;
-
-        // Each pick as the game should load it: the pack itself, or a copy with old texture
-        // names fixed and other categories' files left out (see StyleFiles)
+        if (m == null) return selected;
         Path dir = folder();
-        Map<String, Path> load = new LinkedHashMap<>();
-        for (String file : picks) {
-            Path pack = dir.resolve(file);
+        if (m.dropStale(file -> {
+            Style s = read(dir.resolve(file));
+            return s == null ? null : s.categories();
+        })) {
+            if (DuskClient.modules() != null) DuskClient.modules().saveConfig();
+        }
+        List<Map.Entry<String, String>> picks = m.picked();
+        Map<String, String> looks = m.allLooks();
+        if (picks.isEmpty() && looks.isEmpty()) {
+            StyleFiles.prune(dir, Set.of());
+            return selected;
+        }
+
+        // Each pick as the game should load it: a copy with old texture names fixed, other
+        // categories' files left out and pack info every version takes (see StyleFiles)
+        List<Path> load = new ArrayList<>();
+        Path crystal = null;
+        for (Map.Entry<String, String> pick : picks) {
+            Path pack = dir.resolve(pick.getValue());
             if (!Files.exists(pack)) continue;
             try {
-                load.put(file, StyleFiles.prepare(pack));
+                Path copy = StyleFiles.prepare(pack, pick.getKey());
+                load.add(copy);
+                if ("crystal".equals(pick.getKey())) crystal = copy;
             } catch (IOException | RuntimeException e) {
-                load.put(file, pack);
+                LOGGER.warn("Couldn't load style {}: {}", pick.getValue(), e.toString());
             }
         }
-        StyleFiles.prune(dir, new HashSet<>(load.values()));
+        Set<Path> inUse = new HashSet<>(load);
 
-        Map<Path, Pack> byPath = new HashMap<>();
-        for (Path from : new Path[] {dir, StyleFiles.cache(dir)}) {
-            if (!Files.isDirectory(from)) continue;
-            new FolderRepositorySource(from, PackType.CLIENT_RESOURCES, PackSource.DEFAULT, mc.directoryValidator())
-                    .loadPacks(p -> byPath.put(from.resolve(fileOf(p.getId())), p));
-        }
         List<PackResources> out = new ArrayList<>(selected);
-        for (Path path : load.values()) {
+        Map<Path, Pack> byPath = packsIn(StyleFiles.cache(dir), mc);
+        for (Path path : load) {
             Pack p = byPath.get(path);
             if (p != null) out.addAll(PackCompat.open(p));
+            else LOGGER.warn("The game turned down style pack {}", path.getFileName());
         }
-        String crystal = m.pick("crystal");
-        if (crystal != null && load.containsKey(crystal)) crystalSeeThrough = glassy(load.get(crystal));
+
+        // Looks go over everything: they recolour whatever ends up showing for their category
+        List<Path> lookPacks = new ArrayList<>();
+        for (Map.Entry<String, String> e : looks.entrySet()) {
+            StyleLooks.Look look = StyleLooks.byId(e.getValue());
+            if (look == null) continue;
+            Path path = StyleFiles.cache(dir).resolve("look@" + e.getKey() + ".zip");
+            try {
+                if (StyleLooks.build(path, e.getKey(), look, out)) {
+                    lookPacks.add(path);
+                    inUse.add(path);
+                }
+            } catch (IOException | RuntimeException ex) {
+                LOGGER.warn("Couldn't build the {} look for {}: {}", e.getValue(), e.getKey(), ex.toString());
+            }
+        }
+        if (!lookPacks.isEmpty()) {
+            byPath = packsIn(StyleFiles.cache(dir), mc);
+            for (Path path : lookPacks) {
+                Pack p = byPath.get(path);
+                if (p != null) out.addAll(PackCompat.open(p));
+            }
+        }
+        StyleFiles.prune(dir, inUse);
+        if (crystal != null) crystalSeeThrough = glassy(crystal);
         return out;
+    }
+
+    /** The packs the game finds in {@code from}, by file. */
+    private static Map<Path, Pack> packsIn(Path from, Minecraft mc) {
+        Map<Path, Pack> byPath = new HashMap<>();
+        if (!Files.isDirectory(from)) return byPath;
+        new FolderRepositorySource(from, PackType.CLIENT_RESOURCES, PackSource.DEFAULT, mc.directoryValidator())
+                .loadPacks(p -> byPath.put(from.resolve(fileOf(p.getId())), p));
+        return byPath;
     }
 
     private static String fileOf(String packId) {

@@ -167,6 +167,11 @@ public class DuskClient implements ClientModInitializer {
         return clipKey;
     }
 
+    /** Opens Friends & Chat. */
+    public static KeyMapping friendsKey() {
+        return friendsKey;
+    }
+
     @Override
     public void onInitializeClient() {
         modules = new ModuleManager();

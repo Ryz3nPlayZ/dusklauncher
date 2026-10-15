@@ -117,6 +117,11 @@ public class WaypointsScreen extends PanelScreen {
     // ---- layout -------------------------------------------------------------
 
     @Override
+    protected MenuFrame.Entry frameEntry() {
+        return MenuFrame.Entry.WAYPOINTS;
+    }
+
+    @Override
     protected String[] tabs() {
         return TABS;
     }

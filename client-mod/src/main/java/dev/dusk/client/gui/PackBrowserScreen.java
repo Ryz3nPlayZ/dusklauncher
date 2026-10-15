@@ -208,6 +208,11 @@ public class PackBrowserScreen extends PanelScreen {
     // ---- layout -------------------------------------------------------------
 
     @Override
+    protected MenuFrame.Entry frameEntry() {
+        return MenuFrame.Entry.PACKS;
+    }
+
+    @Override
     protected String[] tabs() {
         return TABS;
     }

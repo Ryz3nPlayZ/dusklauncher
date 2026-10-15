@@ -212,18 +212,15 @@ public final class NavBar {
     }
 
     /**
-     * The window under the bar (nav.css .win/.win__body): a black outline and
-     * the body at 90%. Draw it before anything that sits in the body.
+     * A panel with its own bar inside a page (the wardrobe's gallery, a
+     * friend's chat): in the modern look a pane of the menu's glass, in the
+     * legacy one a black outline and the body at 90%. Draw it before
+     * anything that sits in it.
      */
     public static void window(Canvas c, int x, int y, int w, int h) {
         if (Theme.modern()) {
-            // nav.css .win: a rounded graphite sheet on a soft shadow, a hairline under the tabs
-            Round.begin(c);
-            int x0 = Round.w(x), y0 = Round.w(y), x1 = Round.w(x + w), y1 = Round.w(y + h), r = Px.radius(h, 22);
-            Round.softW(c, x0, y0, x1, y1, r, Round.w(10), Round.w(3), 0x73000000);
-            Round.fillW(c, x0, y0, x1, y1, r, 0xF513142B);
-            Round.ringW(c, x0, y0, x1, y1, r, Px.line(), Theme.LINE_2);
-            Round.end(c);
+            // a pane of the menu's glass with a hairline under the tabs
+            Glass.pane(c, x, y, w, h, Px.radius(h, 16), false, 0);
             c.fill(x + 6, y + H - 1, x + w - 6, y + H, Theme.LINE);
             return;
         }

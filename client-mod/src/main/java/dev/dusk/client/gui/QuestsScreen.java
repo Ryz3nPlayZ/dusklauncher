@@ -102,6 +102,11 @@ public class QuestsScreen extends PanelScreen {
     // ---- layout -------------------------------------------------------------
 
     @Override
+    protected MenuFrame.Entry frameEntry() {
+        return MenuFrame.Entry.QUESTS;
+    }
+
+    @Override
     protected String[] tabs() {
         return TABS;
     }

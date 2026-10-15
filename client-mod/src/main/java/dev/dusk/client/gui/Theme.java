@@ -149,7 +149,7 @@ public final class Theme {
     public static int BG, RAISED, RAISED_2;
     /** Hairlines: faint, normal and strong; the hover wash; a slider track. */
     public static int LINE, LINE_2, LINE_3, HOVER, TRACK;
-    /** Text on an accent fill (white on the modern indigo); the status colours. */
+    /** Text on an accent fill (dark ink on the modern white); the status colours. */
     public static int INK, OK, BAD, INFO, WARN;
 
     static {
@@ -158,17 +158,17 @@ public final class Theme {
 
     private static void palette() {
         if (modern) {
-            // dusk: deep navy surfaces, cool text and one indigo accent with white type on it
-            TEXT = 0xFFF2F1FF; TEXT_MUTED = 0xFFA4A6CC; TEXT_FAINT = 0xFF6F729E; OVERLAY = 0x990A0B1C;
-            LABEL_UP = LABEL_LO = 0xFFA4A6CC;
-            ACTIVE_UP = ACTIVE_LO = 0xFFF2F1FF;
+            // the launcher's Clean tone: graphite surfaces, a white accent with dark ink on it
+            TEXT = 0xFFF4F4F5; TEXT_MUTED = 0xFFB4B4BB; TEXT_FAINT = 0xFF7F7F88; OVERLAY = 0x8C0B0B0D;
+            LABEL_UP = LABEL_LO = 0xFFB4B4BB;
+            ACTIVE_UP = ACTIVE_LO = 0xFFF4F4F5;
             MOSS_UP = MOSS_LO = 0xFF5FD38A; MOSS_BOT = 0x295FD38A;
-            RED_UP = 0xFFFF6B5E; SURFACE = 0xFF161731; SURFACE_BOT = 0xFF161731; ACCENT = 0xFF7465F6; ACCENT_HOT = 0xFF877AFF;
-            DIM = 0xFF6F729E; GREEN_UP = GREEN_LO = 0xFF5FD38A; GOLD_LO_TEXT = 0xFFC7C4F2;
-            RED_CORNER = 0xFFFF6B5E; GLYPH = 0xFFA4A6CC;
-            BG = 0xFF0A0B1C; RAISED = 0xFF1E2042; RAISED_2 = 0xFF272A52;
-            LINE = 0x16FFFFFF; LINE_2 = 0x24FFFFFF; LINE_3 = 0x3AFFFFFF; HOVER = 0x10FFFFFF; TRACK = 0xFF2A2C52;
-            INK = 0xFFFFFFFF; OK = 0xFF5FD38A; BAD = 0xFFFF6B5E; INFO = 0xFF7CB4FF; WARN = 0xFFF5C451;
+            RED_UP = 0xFFFF6B5E; SURFACE = 0xFF18181B; SURFACE_BOT = 0xFF18181B; ACCENT = 0xFFF4F4F5; ACCENT_HOT = 0xFFFFFFFF;
+            DIM = 0xFF7F7F88; GREEN_UP = GREEN_LO = 0xFF5FD38A; GOLD_LO_TEXT = 0xFFC4C4CC;
+            RED_CORNER = 0xFFFF6B5E; GLYPH = 0xFFB4B4BB;
+            BG = 0xFF0B0B0D; RAISED = 0xFF232327; RAISED_2 = 0xFF2C2C31;
+            LINE = 0x14FFFFFF; LINE_2 = 0x24FFFFFF; LINE_3 = 0x38FFFFFF; HOVER = 0x0FFFFFFF; TRACK = 0xFF333338;
+            INK = 0xFF111113; OK = 0xFF5FD38A; BAD = 0xFFFF6B5E; INFO = 0xFF7CB4FF; WARN = 0xFFF5C451;
         } else {
             TEXT = 0xFFF4F4F4; TEXT_MUTED = 0xFFB8B8B8; TEXT_FAINT = 0xFF828282; OVERLAY = 0x66000000;
             LABEL_UP = 0xFFC6C6C6; LABEL_LO = 0xFF7B7B7B;

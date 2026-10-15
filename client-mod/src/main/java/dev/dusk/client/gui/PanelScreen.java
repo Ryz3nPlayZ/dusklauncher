@@ -11,9 +11,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The module list's chrome for other full pages (wardrobe, pack browser): a
- * centred panel, a tab bar with tools and an optional search box on the
- * right, and one scrollable area the page lays out.
+ * The chrome for the Dusk menu's other pages (styles, wardrobe, friends and
+ * the rest): the menu's own window and sidebar (see {@link MenuFrame}), so
+ * every page sits in the same frame, and on the right a tab bar with tools
+ * and an optional search box over one scrollable area the page lays out.
  */
 public abstract class PanelScreen extends MenuScreen {
     protected static final int TAB_H = NavBar.H, BAR_W = 4, SCROLL_STEP = 24;
@@ -27,6 +28,7 @@ public abstract class PanelScreen extends MenuScreen {
     protected int scroll;
     private boolean draggingBar;
     private final NavBar bar = new NavBar();
+    private final MenuFrame frame = new MenuFrame();
 
     protected PanelScreen(Component title, @Nullable Screen parent) {
         super(title, parent);
@@ -55,16 +57,25 @@ public abstract class PanelScreen extends MenuScreen {
     /** Height of everything in the scrollable area. */
     protected abstract int contentHeight();
 
+    /** This page's entry in the menu's sidebar, lit while it shows. */
+    @Nullable
+    protected MenuFrame.Entry frameEntry() {
+        return null;
+    }
+
     // ---- layout -----------------------------------------------------------
 
     protected int bodyY() { return py + TAB_H - 1; }
 
     protected void layoutPanel() {
-        int minW = Math.min(400, this.width - 16), minH = Math.min(220, this.height - 16);
-        pw = Math.max(minW, Math.min(this.width - 16, Math.round(this.width * 0.76f)));
-        ph = Math.max(minH, Math.min(this.height - 16, Math.round(this.height * 0.72f)));
-        px = (this.width - pw) / 2;
-        py = (this.height - ph) / 2;
+        // the page is the frame's right-hand side, beside the sidebar; in the
+        // modern look the bar lines up with the top of the sidebar's pane
+        frame.layout(this.width, this.height, inWorld());
+        int g = Theme.modern() ? 4 : 0;
+        px = frame.contentX() + g;
+        py = frame.y + g;
+        pw = frame.contentW() - g;
+        ph = frame.h - g;
         pad = Math.max(6, Math.round(pw * 0.025f));
         List<NavBar.Tool> tools = new ArrayList<>();
         for (Tool t : tools()) tools.add(new NavBar.Tool(t.id, t.icon, t.text, t.tip));
@@ -100,16 +111,18 @@ public abstract class PanelScreen extends MenuScreen {
     protected void drawBackgroundOverlay(Canvas c) {
         super.drawBackgroundOverlay(c);
         relayout();
-        if (inWorld()) c.fill(0, 0, this.width, this.height, Theme.pick(0x660A0B1C, 0x4D000000));
-        NavBar.window(c, px, py, pw, ph);
+        if (inWorld()) c.fill(0, 0, this.width, this.height, Theme.pick(0x660B0B0D, 0x4D000000));
+        frame.drawWindow(c);
+        c.fill(px + 6, py + TAB_H - 1, px + pw - 6, py + TAB_H, Theme.modern() ? Theme.LINE : 0xFF000000);
         drawUnderWidgets(c);
     }
 
     /** Anything else that must sit under the page's vanilla widgets. */
     protected void drawUnderWidgets(Canvas c) {}
 
-    /** The tab bar; the body is already down (see {@link #drawBackgroundOverlay}). */
+    /** The sidebar and the tab bar; the body is already down (see {@link #drawBackgroundOverlay}). */
     protected void drawPanel(Canvas c, int mouseX, int mouseY) {
+        frame.drawSidebar(c, mouseX, mouseY, frameEntry(), null);
         bar.draw(c, activeTab(), mouseX, mouseY, this.width, this.height);
     }
 
@@ -129,9 +142,15 @@ public abstract class PanelScreen extends MenuScreen {
 
     // ---- input --------------------------------------------------------------
 
-    /** Tab bar and scrollbar clicks; true when handled. */
+    /** Sidebar, tab bar and scrollbar clicks; true when handled. */
     protected boolean clickChrome(double mx, double my, int button) {
         TextFieldWidget s = search();
+        if (frame.inSidebar(mx, my)) {
+            if (s != null) s.setFocused(false);
+            MenuFrame.Entry e = frame.entryAt(mx, my);
+            if (e != null && button == 0) MenuFrame.go(this, frameEntry(), e);
+            return true;
+        }
         if (s != null && s.w >= 22 && s.contains(mx, my)) return s.click(mx, my, button);
         if (s != null) s.setFocused(false);
         if (bar.contains(mx, my)) {
@@ -176,6 +195,7 @@ public abstract class PanelScreen extends MenuScreen {
 
     @Override
     protected boolean menuScroll(double mx, double my, double amount) {
+        if (frame.scroll(mx, my, amount)) return true;
         if (!inList(mx, my)) return false;
         scroll -= (int) Math.signum(amount) * SCROLL_STEP;
         clampScroll();

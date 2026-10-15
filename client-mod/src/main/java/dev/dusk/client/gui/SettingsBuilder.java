@@ -45,7 +45,7 @@ public final class SettingsBuilder {
     }
 
     /** A group heading's height: in the modern look it leaves air above the card it heads. */
-    private static int headerH() {
+    static int headerH() {
         return Theme.modern() ? 30 : 22;
     }
     /** Modules with more settings than this open with only their first group unfolded. */

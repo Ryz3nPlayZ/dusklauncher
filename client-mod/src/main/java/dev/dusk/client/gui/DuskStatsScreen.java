@@ -284,6 +284,11 @@ public class DuskStatsScreen extends PanelScreen {
     // ---- layout -------------------------------------------------------------
 
     @Override
+    protected MenuFrame.Entry frameEntry() {
+        return MenuFrame.Entry.STATS;
+    }
+
+    @Override
     protected String[] tabs() {
         return TABS;
     }

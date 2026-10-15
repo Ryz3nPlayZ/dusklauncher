@@ -171,7 +171,7 @@ public final class Px {
             Round.begin(c);
             int x0 = Round.w(x), y0 = Round.w(y), x1 = Round.w(x + w), y1 = Round.w(y + h), r = Math.min(px(14), controlRadius(h));
             Round.softW(c, x0, y0, x1, y1, r, px(14), px(5), 0x66000000);
-            Round.fillW(c, x0, y0, x1, y1, r, 0xFA1A1C3A);
+            Round.fillW(c, x0, y0, x1, y1, r, 0xFA1C1C20);
             Round.ringW(c, x0, y0, x1, y1, r, line(), Theme.LINE_2);
             Round.end(c);
             return;
@@ -444,7 +444,7 @@ public final class Px {
                 ring = 0x735FD38A;
             }
             case PANEL -> {
-                fill = hot ? 0xFF1E2042 : 0xFF161731;
+                fill = hot ? 0xFF1F1F23 : 0xFF18181B;
                 ring = hot ? Theme.LINE_3 : Theme.LINE_2;
             }
             default -> {

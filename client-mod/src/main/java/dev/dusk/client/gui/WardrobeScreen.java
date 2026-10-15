@@ -738,6 +738,11 @@ public class WardrobeScreen extends PanelScreen {
     // ---- layout ---------------------------------------------------------------
 
     @Override
+    protected MenuFrame.Entry frameEntry() {
+        return MenuFrame.Entry.WARDROBE;
+    }
+
+    @Override
     protected String[] tabs() {
         return giftTo != null ? new String[] {"GIFT FOR " + Theme.caps(giftName)} : TABS;
     }
