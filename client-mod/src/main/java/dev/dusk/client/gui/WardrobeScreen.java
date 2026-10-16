@@ -53,7 +53,7 @@ public class WardrobeScreen extends PanelScreen {
     private static final String[] TABS = {"SKINS", "CAPES", "ACCESSORIES", "OUTFITS", "STORE"};
     private static final int SKINS = 0, CAPES = 1, ACCESSORIES = 2, OUTFITS = 3, STORE = 4;
     private static final String[] FILTERS = {"ALL", "CAPES", "ACCESSORIES"};
-    private static final int GAP = 4, TILE_MIN_W = 64, ACTIONS_H = 20, NAME_H = 10, ROW_H = 28, BTN_H = 18, OUTFIT_NAME_MAX = 32;
+    private static final int GAP = 4, TILE_MIN_W = 84, ACTIONS_H = 20, NAME_H = 10, ROW_H = 28, BTN_H = 18, OUTFIT_NAME_MAX = 32;
     private static final long CONFIRM_MS = 4000;
 
     private static int tab;
@@ -122,6 +122,8 @@ public class WardrobeScreen extends PanelScreen {
     private final NavBar gallery = new NavBar();
     /** Viewer box, the model's stage inside it, the gallery window. */
     private int vx, vy, vw, vh, stageX, stageY, stageW, stageH, gx, gy, gw, gh;
+    /** The model widget's band of the stage: the vanilla widget scales the player to its height. */
+    private int modelY, modelH;
     private int cols, tileW, tileH;
 
     public WardrobeScreen(@Nullable Screen parent) {
@@ -699,19 +701,36 @@ public class WardrobeScreen extends PanelScreen {
 
     /** A skin's front view, flat: head, body, arms and legs with their outer layers. */
     private static void skinFront(Canvas c, String tex, boolean slim, int x, int y, int w, int h) {
-        float s = Math.min(w / 16f, h / 32f);
-        if (s >= 1) s = (float) Math.floor(s);
+        // 17 x 33 with the hat standing off
+        float s = Math.min(w / 17f, h / 33f);
+        if (s >= 2) s = (float) Math.floor(s * 2) / 2;
         int ox = x + Math.round((w - 16 * s) / 2), oy = y + Math.round((h - 32 * s) / 2);
         int aw = slim ? 3 : 4;
         c.push();
         c.translate(ox, oy);
         c.scale(s, s);
+        // {x, y, u, v, w, h}: the base layer, the arms a shade darker for depth
         int[][] parts = {
                 {4, 0, 8, 8, 8, 8}, {4, 8, 20, 20, 8, 12}, {4 - aw, 8, 44, 20, aw, 12}, {12, 8, 36, 52, aw, 12},
-                {4, 20, 4, 20, 4, 12}, {8, 20, 20, 52, 4, 12},
+                {4, 20, 4, 20, 4, 12}, {8, 20, 20, 52, 4, 12}};
+        int[][] outer = {
                 {4, 0, 40, 8, 8, 8}, {4, 8, 20, 36, 8, 12}, {4 - aw, 8, 44, 36, aw, 12}, {12, 8, 52, 52, aw, 12},
                 {4, 20, 4, 36, 4, 12}, {8, 20, 4, 52, 4, 12}};
-        for (int[] p : parts) c.blit(tex, p[0], p[1], p[2], p[3], p[4], p[5], 64, 64);
+        for (int i = 0; i < parts.length; i++) {
+            int[] p = parts[i];
+            c.blit(tex, p[0], p[1], p[2], p[3], p[4], p[5], 64, 64, i == 2 || i == 3 ? 0xFFD8D8D8 : 0xFFFFFFFF);
+        }
+        // the outer layer stands off the body as it does on the model: the hat
+        // by half a pixel each side, the jacket, sleeves and trousers by a quarter
+        for (int i = 0; i < outer.length; i++) {
+            int[] p = outer[i];
+            float d = i == 0 ? 0.5f : 0.25f;
+            c.push();
+            c.translate(p[0] - d, p[1] - d);
+            c.scale((p[4] + 2 * d) / p[4], (p[5] + 2 * d) / p[5]);
+            c.blit(tex, 0, 0, p[2], p[3], p[4], p[5], 64, 64, i == 2 || i == 3 ? 0xFFD8D8D8 : 0xFFFFFFFF);
+            c.pop();
+        }
         c.pop();
     }
 
@@ -773,9 +792,9 @@ public class WardrobeScreen extends PanelScreen {
     @Override
     protected void init() {
         layout();
-        model = SkinCompat.widget(Minecraft.getInstance(), stageW, stageH, this::preview);
+        model = SkinCompat.widget(Minecraft.getInstance(), stageW, modelH, this::preview);
         model.setX(stageX);
-        model.setY(stageY);
+        model.setY(modelY);
         this.addRenderableWidget(model);
     }
 
@@ -810,6 +829,10 @@ public class WardrobeScreen extends PanelScreen {
         stageY = vy + in;
         stageW = vw - 2 * in;
         stageH = vh - 2 * in - ACTIONS_H - GAP;
+        // the player stands about half the stage tall, like the launcher's, and
+        // never wider than two thirds of it (the model is ~0.46 of the widget's height wide)
+        modelH = Math.max(40, Math.min(Math.round(stageH * 0.68f), Math.round(stageW * 1.45f)));
+        modelY = stageY + (stageH - modelH) / 2;
 
         gx = vx + vw + GAP;
         gy = top;
@@ -1014,13 +1037,19 @@ public class WardrobeScreen extends PanelScreen {
     }
 
     private void drawTile(Canvas c, Tile t, int x, int y, boolean hot) {
-        Theme.box(c, x, y, tileW, tileH, t.family, hot, false);
+        if (Theme.modern()) {
+            // the launcher's tile: the menu's glass, a bright ring on the picked one
+            int ring = t.family == Theme.Family.ACCENT ? 0xD9FFFFFF : t.family == Theme.Family.GREEN ? Theme.GREEN_UP & 0xFFFFFF | 0x8C000000 : 0;
+            Glass.pane(c, x, y, tileW, tileH, Px.radius(tileH, 14), hot, ring);
+        } else {
+            Theme.box(c, x, y, tileW, tileH, t.family, hot, false);
+        }
         int m = 2 + Math.max(2, tileW / 28);
-        t.thumb.draw(c, x + m, y + m, tileW - 2 * m, tileH - 2 * m - NAME_H);
-        String label = Theme.ellipsize(c, Theme.caps(t.label), tileW - 2 * m);
+        t.thumb.draw(c, x + m, y + m, tileW - 2 * m, tileH - 2 * m - NAME_H - 2);
+        String label = Theme.ellipsize(c, Theme.caps(Theme.sentence(t.label)), tileW - 2 * m);
         int lx = x + (tileW - Theme.labelWidth(c, label, 1f)) / 2, ly = y + tileH - m - NAME_H + (NAME_H - 7) / 2;
         if (t.worn) Theme.label(c, label, lx, ly, Theme.GREEN_UP, Theme.GREEN_LO, 1f);
-        else c.text(label, lx, ly, Theme.DIM, false);
+        else c.text(label, lx, ly, t.picked && Theme.modern() ? Theme.TEXT : Theme.DIM, false);
         if (t.badge != null) {
             String b = Theme.ellipsize(c, Theme.sentence(t.badge), tileW - 8);
             int bw = c.textWidth(b) + 6, bx = x + tileW - 3 - bw;

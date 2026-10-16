@@ -129,7 +129,7 @@ public final class NavBar {
                 continue;
             } else if (t.icon != null) {
                 Theme.cell(c, tx, cy, tw, CELL_H, hover);
-                t.icon.draw(c, tx + (tw - t.icon.width()) / 2, cy + (CELL_H - t.icon.height()) / 2, Theme.filter(Theme.GLYPH, hover, false));
+                t.icon.drawCentered(c, tx + tw / 2f, cy + CELL_H / 2f, Theme.filter(Theme.GLYPH, hover, false), 1);
             } else {
                 cellLabel(c, t.text, tx, cy, tw, false, hover);
             }
@@ -170,7 +170,7 @@ public final class NavBar {
                 int d = ph, dx = tx + (tw - d) / 2;
                 if (hover) Round.dot(c, dx, py, d, t.id.equals("close") ? 0x33FF6B5E : 0x1FFFFFFF);
                 int col = t.id.equals("close") && hover ? Theme.BAD : hover ? Theme.TEXT : Theme.GLYPH;
-                t.icon.draw(c, tx + (tw - t.icon.width()) / 2, cy + (CELL_H - t.icon.height()) / 2, col);
+                t.icon.drawCentered(c, tx + tw / 2f, cy + CELL_H / 2f, col, 1);
             } else {
                 if (hover) Round.pill(c, tx, py, tw, ph, Theme.HOVER);
                 pillText(c, t.text, tx, cy, tw, hover ? Theme.TEXT : Theme.TEXT_MUTED);

@@ -40,7 +40,7 @@ public final class Px {
 
     /** TT sizes: font-size in launcher pixels at the reference window (26t, 30t...). */
     public enum Size {
-        S11(18, 0.7), S14(23, 0.8), S16(26, 0.85), S20(30, 0.95);
+        S11(18, 0.7), S14(23, 0.8), S16(26, 0.85), S18(28, 0.92), S20(30, 0.95);
 
         /** Cap height in launcher pixels: Monocraft's caps are 0.8em. */
         final double cap;

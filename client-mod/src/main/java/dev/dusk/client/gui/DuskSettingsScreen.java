@@ -594,8 +594,7 @@ public class DuskSettingsScreen extends MenuScreen {
             boolean sel = cards == grid, hover = Vanilla.inside(mouseX, mouseY, sx, sy, sw, sh);
             if (sel) Round.fill(c, sx, sy, sw, sh, Px.radius(sh, 7), Glass.PANE_SEL);
             Icons icon = cards ? Icons.GRID : Icons.LIST;
-            icon.draw(c, sx + (sw - icon.width()) / 2, sy + (sh - icon.height()) / 2,
-                    sel ? Theme.TEXT : hover ? Theme.TEXT_MUTED : Theme.TEXT_FAINT);
+            icon.drawCentered(c, sx + sw / 2f, sy + sh / 2f, sel ? Theme.TEXT : hover ? Theme.TEXT_MUTED : Theme.TEXT_FAINT, 1);
         }
     }
 
@@ -758,11 +757,11 @@ public class DuskSettingsScreen extends MenuScreen {
         if (modern) {
             w += Px.pad();
             if (desc.isEmpty()) {
-                Px.sans(c, m.name(), tx - Px.pad(), ry, w, rh, Px.Size.S16, Theme.TEXT, true, true);
+                Px.sans(c, m.name(), tx - Px.pad(), ry, w, rh, Px.Size.S18, Theme.TEXT, true, true);
             } else {
-                int by = ry + (rh - 25) / 2;
-                Px.sans(c, m.name(), tx - Px.pad(), by, w, 13, Px.Size.S16, Theme.TEXT, true, true);
-                Px.sans(c, desc, tx - Px.pad(), by + 14, w, 11, Px.Size.S11, Theme.TEXT_MUTED, false, true);
+                int by = ry + (rh - 26) / 2;
+                Px.sans(c, m.name(), tx - Px.pad(), by, w, 14, Px.Size.S18, Theme.TEXT, true, true);
+                Px.sans(c, desc, tx - Px.pad(), by + 15, w, 11, Px.Size.S11, Theme.TEXT_MUTED, false, true);
             }
             knobs.put(m, ToggleWidget.drawSwitch(c, s[0], s[1], m.enabled(), onSwitch, knobs.getOrDefault(m, -1f)));
         } else {
@@ -894,9 +893,9 @@ public class DuskSettingsScreen extends MenuScreen {
         knobs.put(m, ToggleWidget.drawSwitch(c, s[0], s[1], on, onToggle, knobs.getOrDefault(m, -1f)));
 
         int textW = cw - 2 * mg, ny = iy + 16 + 7;
-        Px.sans(c, m.name(), tx - Px.pad(), ny, textW + 2 * Px.pad(), 14, Px.Size.S16, Theme.TEXT, true, true);
+        Px.sans(c, m.name(), tx - Px.pad(), ny, textW + 2 * Px.pad(), 15, Px.Size.S18, Theme.TEXT, true, true);
         // the description stops short of the chevron's corner
-        int dy = ny + 16;
+        int dy = ny + 17;
         for (String line : lines(c, m.description(), textW - 10, 2)) {
             Px.sans(c, line, tx - Px.pad(), dy, textW - 10 + 2 * Px.pad(), 11, Px.Size.S11, Theme.TEXT_MUTED, false, true);
             dy += 11;

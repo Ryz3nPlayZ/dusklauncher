@@ -643,6 +643,25 @@
   background: rgb(var(--tint-rgb) / 0.06);
   color: var(--text-2);
 }
+.home__jump-icon.has-art {
+  overflow: hidden;
+  background: none;
+}
+.home__jump-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+/* the server's MOTD in its own colours, one line under the name */
+.home__jump-motd {
+  font-size: calc(16 * var(--t));
+  line-height: 1.3;
+  color: var(--text-2);
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .home__jump-go {
   flex: none;
 }
@@ -1963,6 +1982,211 @@
 }
 .editor__dep-warn {
   color: var(--warn);
+}
+/* the warnings as chips in one wrapping row: the headline and its fix; a
+   click on the headline opens the explanation under them */
+.editor__chips {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(8 * var(--u));
+}
+.editor__chip {
+  display: flex;
+  align-items: center;
+  gap: calc(6 * var(--u));
+  max-width: 100%;
+  min-width: 0;
+  padding: calc(4 * var(--u)) calc(4 * var(--u)) calc(4 * var(--u)) calc(14 * var(--u));
+  border: 1px solid rgb(var(--warn-rgb) / 0.3);
+  border-radius: 999px;
+  background: rgb(var(--warn-rgb) / 0.07);
+}
+.editor__chip.is-open {
+  border-color: rgb(var(--warn-rgb) / 0.6);
+}
+.editor__chip-text {
+  display: flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  min-width: 0;
+  padding: calc(6 * var(--u)) calc(4 * var(--u));
+  border: 0;
+  background: none;
+  color: var(--warn);
+  font: inherit;
+  font-size: calc(18 * var(--t));
+  font-weight: 600;
+  cursor: pointer;
+}
+.editor__chip-text svg {
+  flex: none;
+}
+.editor__chip-text span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.editor__chip-fix.px {
+  height: calc(var(--h-sm) * 0.78);
+  padding: 0 calc(16 * var(--u));
+  border-radius: 999px;
+}
+.editor__chip-more {
+  flex: 1 0 100%;
+  padding: 0 calc(6 * var(--u));
+}
+/* GET FROM MODRINTH: the strip's one green action */
+.editor__get {
+  gap: calc(8 * var(--u));
+  padding: 0 calc(22 * var(--u));
+  color: var(--ok);
+}
+
+/* list | gallery, at the end of the filter row */
+.editor__views {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.editor__views button {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: max(30px, calc(56 * var(--u)));
+  height: max(26px, calc(44 * var(--u)));
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+  transition:
+    background var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
+}
+.editor__views svg {
+  flex: none;
+}
+.editor__views button:hover {
+  color: var(--text-1);
+}
+.editor__views button.is-on {
+  background: rgb(var(--tint-rgb) / 0.1);
+  color: var(--text-1);
+}
+
+/* the gallery: tiles across, as many as fit */
+.editor__list--gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(max(176px, calc(300 * var(--u))), 1fr));
+  align-content: start;
+  gap: calc(12 * var(--u));
+}
+.editor__list--gallery > :not(.editor__tile) {
+  grid-column: 1 / -1;
+}
+.editor__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(6 * var(--u));
+  min-width: 0;
+  padding: calc(20 * var(--u)) calc(14 * var(--u)) calc(12 * var(--u));
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: rgb(var(--tint-rgb) / 0.03);
+  text-align: center;
+  transition: background var(--t-med) var(--ease-out);
+}
+.editor__tile:hover {
+  background: rgb(var(--tint-rgb) / 0.05);
+}
+.editor__tile.is-off .editor__tile-icon,
+.editor__tile.is-off .editor__tile-name {
+  opacity: 0.45;
+}
+.editor__tile-icon {
+  flex: none;
+  width: max(52px, calc(96 * var(--u)));
+  height: max(52px, calc(96 * var(--u)));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: calc(6 * var(--u));
+  border-radius: 14px;
+  background: var(--well);
+  overflow: hidden;
+}
+.editor__tile-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+.editor__tile-name {
+  max-width: 100%;
+  font-size: calc(20 * var(--t));
+  font-weight: 650;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.editor__tile-meta {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.editor__tile-new {
+  color: var(--ok);
+}
+.editor__tile-foot {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: calc(4 * var(--u));
+  margin-top: calc(8 * var(--u));
+  padding-top: calc(10 * var(--u));
+  border-top: 1px solid var(--line);
+}
+.editor__tile-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: max(28px, calc(48 * var(--u)));
+  height: max(28px, calc(48 * var(--u)));
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+  transition:
+    background var(--t-fast) var(--ease-out),
+    color var(--t-fast) var(--ease-out);
+}
+.editor__tile-btn svg {
+  flex: none;
+}
+.editor__tile-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text-1);
+}
+.editor__tile-btn.is-update {
+  color: var(--ok);
+}
+.editor__tile-btn.is-remove:hover:not(:disabled) {
+  color: var(--bad);
+}
+.editor__tile-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 /* the content filter: shorter than the browse search, same stack */
 .editor__search {

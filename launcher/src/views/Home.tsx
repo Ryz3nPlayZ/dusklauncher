@@ -25,6 +25,7 @@ import {
   type Friend,
   type GameState,
   type LaunchTarget,
+  type MotdPart,
   type Profile,
   type Progress,
   type RecentPlay,
@@ -33,6 +34,13 @@ import { LEGACY } from '../lib/ui';
 import HomeLegacy from './legacy/HomeLegacy';
 
 const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** a world name without its § formatting codes */
+const plain = (name: string) => name.replace(/§./g, '').trim() || name;
+const recentKey = (r: RecentPlay) => `${r.profileId}|${r.kind}|${r.id}`;
+
+/** what Jump back in shows of a recent play once it's been read: the world's
+    or server's icon, and the server's MOTD and player count from a ping */
+type RecentLook = { icon: string | null; name?: string; motd?: MotdPart[]; online?: string };
 /** the friends column refreshes this often while Home is open */
 const FRIENDS_POLL_MS = 15_000;
 /** instances the side panel lists, most recently played first */
@@ -88,6 +96,55 @@ export default function Home(props: HomeProps) {
       .then(setRecent)
       .catch(() => setRecent([]));
   }, [game?.state]);
+  /* the icons and MOTDs, as the instance's Worlds tab shows them */
+  const [looks, setLooks] = useState<Record<string, RecentLook>>({});
+  useEffect(() => {
+    let cancelled = false;
+    const put = (k: string, l: Partial<RecentLook>) =>
+      !cancelled && setLooks((m) => ({ ...m, [k]: { ...(m[k] ?? { icon: null }), ...l } }));
+    const profilesOf = (kind: RecentPlay['kind']) => [
+      ...new Set(recent.filter((r) => r.kind === kind).map((r) => r.profileId)),
+    ];
+    for (const pid of profilesOf('world')) {
+      void api
+        .listWorlds(pid)
+        .then((ws) => {
+          for (const r of recent) {
+            const w = r.kind === 'world' && r.profileId === pid ? ws.find((x) => x.name === r.id) : undefined;
+            if (w) put(recentKey(r), { icon: w.icon, name: w.levelName ? plain(w.levelName) : undefined });
+          }
+        })
+        .catch(() => {});
+    }
+    // the icon the game cached shows until the ping answers with a fresh one
+    for (const pid of profilesOf('server')) {
+      void api
+        .listServers(pid)
+        .then((ss) => {
+          for (const r of recent) {
+            const sv = r.kind === 'server' && r.profileId === pid ? ss.find((x) => x.address === r.id) : undefined;
+            if (sv?.icon) put(recentKey(r), { icon: sv.icon });
+          }
+        })
+        .catch(() => {});
+    }
+    for (const r of recent) {
+      if (r.kind !== 'server') continue;
+      void api
+        .pingServer(r.id)
+        .then((st) =>
+          put(recentKey(r), {
+            ...(st.icon ? { icon: st.icon } : {}),
+            motd: st.motd,
+            online: `${st.online}/${st.max} online`,
+          }),
+        )
+        .catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [recent]);
   // the switcher is a light menu, not a modal: a click anywhere else or
   // Escape closes it
   useEffect(() => {
@@ -293,9 +350,12 @@ export default function Home(props: HomeProps) {
             {recent.length > 0 && (
               <>
                 <span className="home__friends-group">Jump back in</span>
-                {recent.map((r) => (
+                {recent.map((r) => {
+                  const look = looks[recentKey(r)];
+                  const motd = look?.motd?.filter((m) => m.text.trim()).length ? look.motd : null;
+                  return (
                   <button
-                    key={`${r.profileId}|${r.kind}|${r.id}`}
+                    key={recentKey(r)}
                     className="home__jump"
                     disabled={live !== null}
                     title={
@@ -305,20 +365,38 @@ export default function Home(props: HomeProps) {
                     }
                     onClick={() => onLaunch(r.profileId, r.kind === 'server' ? { server: r.id } : { world: r.id })}
                   >
-                    <span className="home__jump-icon">
-                      {r.kind === 'server' ? <Globe size={18} weight="bold" /> : <Cube size={18} weight="bold" />}
+                    <span className={['home__jump-icon', look?.icon ? 'has-art' : ''].join(' ')}>
+                      {look?.icon ? (
+                        <img src={look.icon} alt="" draggable={false} />
+                      ) : r.kind === 'server' ? (
+                        <Globe size={22} weight="bold" />
+                      ) : (
+                        <Cube size={22} weight="bold" />
+                      )}
                     </span>
                     <span className="home__menu-text">
-                      <span className="home__menu-name">{r.name}</span>
+                      <span className="home__menu-name">{look?.name ?? plain(r.name)}</span>
+                      {motd ? (
+                        <span className="home__jump-motd">
+                          {motd.map((m, i) => (
+                            <span key={i} style={m.color ? { color: m.color } : undefined}>
+                              {m.text.replace(/\s*\n\s*/g, '  ')}
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
                       <span className="home__menu-meta">
-                        {r.kind === 'server' ? 'Server' : 'World'} · {r.profileName}
+                        {r.kind === 'server'
+                          ? [look?.online ?? 'Server', r.profileName].join(' · ')
+                          : [r.gamemode ? sentence(r.gamemode) : 'World', r.profileName].join(' · ')}
                       </span>
                     </span>
                     <span className="home__jump-go">
                       <Play size={13} weight="fill" />
                     </span>
                   </button>
-                ))}
+                  );
+                })}
               </>
             )}
           </div>

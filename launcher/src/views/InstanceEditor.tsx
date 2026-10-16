@@ -8,6 +8,8 @@ import BrowseProjects, { fmtCount } from './Browse';
 import Project from './Project';
 import InstallModpack from './InstallModpack';
 import { mdLinkClick, renderMarkdown } from '../lib/markdown';
+import { LEGACY } from '../lib/ui';
+import { ArrowsClockwise, Info, ListBullets, Plus, SquaresFour, Trash } from '@phosphor-icons/react';
 import {
   ago,
   api,
@@ -57,6 +59,8 @@ type Tab = (typeof TABS)[number];
 
 /* the nested strip under CONTENT (172:626) */
 const KINDS = ['ALL', 'MODS', 'RESOURCE PACKS', 'SHADERS'] as const;
+/** where the Content tab remembers list or gallery */
+const CONTENT_VIEW_KEY = 'dusk.content.view';
 type KindTab = (typeof KINDS)[number];
 
 type ContentInfo = {
@@ -1108,6 +1112,24 @@ function ContentTab({
   /* what would stop the mods loading: missing or wrong-version libraries,
      a mod twice, mods that break each other (Fabric only) */
   const [problems, setProblems] = useState<ModProblems | null>(null);
+  /* the files as a list or a gallery of tiles; the pick is remembered */
+  const [gallery, setGallery] = useState(() => {
+    try {
+      return !LEGACY && localStorage.getItem(CONTENT_VIEW_KEY) === 'gallery';
+    } catch {
+      return false;
+    }
+  });
+  const pickView = (g: boolean) => {
+    setGallery(g);
+    try {
+      localStorage.setItem(CONTENT_VIEW_KEY, g ? 'gallery' : 'list');
+    } catch {
+      /* private window: the pick lasts this visit */
+    }
+  };
+  /* the warning chip whose whole explanation is open */
+  const [depOpen, setDepOpen] = useState<string | null>(null);
   /* OptiFine features (custom skies, connected textures, …) the resource
      packs use that no mod draws yet (Fabric only) */
   const [packNeeds, setPackNeeds] = useState<PackNeed[]>([]);
@@ -1355,7 +1377,23 @@ function ContentTab({
         {content && isTauri && (
           <NavCell label="ADD FILES" onClick={() => void act(() => api.importLocalContent(profile.id, content.kind))} />
         )}
-        {content && <NavCell label="GET FROM MODRINTH" onClick={() => onBrowse(content)} />}
+        {content &&
+          (LEGACY ? (
+            <NavCell label="GET FROM MODRINTH" onClick={() => onBrowse(content)} />
+          ) : (
+            <PxButton
+              family="install"
+              height="sm"
+              className="editor__get"
+              title={`Find ${noun} on Modrinth and install them here`}
+              onClick={() => onBrowse(content)}
+            >
+              <Plus size={15} weight="bold" aria-hidden="true" />
+              <TT size={16} tone="green">
+                GET FROM MODRINTH
+              </TT>
+            </PxButton>
+          ))}
       </div>
 
       {vanilla && (
@@ -1364,7 +1402,50 @@ function ContentTab({
         </span>
       )}
       {note && <span className="meta">{note}</span>}
-      {problemRows.length > 0 && (
+      {problemRows.length > 0 && !LEGACY && (
+        /* one chip each, side by side: the headline and its fix; the
+           explanation opens under the chips on a click */
+        <div className="editor__chips">
+          {problemRows.map((p) => (
+            <div key={p.key} className={['editor__chip', depOpen === p.key ? 'is-open' : ''].join(' ')}>
+              <button
+                type="button"
+                className="editor__chip-text"
+                title={`${p.warn}${p.text}`}
+                aria-expanded={depOpen === p.key}
+                onClick={() => setDepOpen(depOpen === p.key ? null : p.key)}
+              >
+                <Info size={15} weight="bold" aria-hidden="true" />
+                <span>{p.warn}</span>
+              </button>
+              {p.fix && (
+                <PxButton
+                  family={p.fix.label === 'INSTALL' || p.fix.label === 'UPDATE' ? 'install' : 'grey'}
+                  height="sm"
+                  className="editor__chip-fix"
+                  disabled={fixing !== null}
+                  title={p.fix.title}
+                  onClick={() => fix(p.key, p.fix!.run)}
+                >
+                  <TT size={14} tone={p.fix.label === 'INSTALL' || p.fix.label === 'UPDATE' ? 'green' : undefined}>
+                    {fixing === p.key ? 'WORKING…' : p.fix.label}
+                  </TT>
+                </PxButton>
+              )}
+            </div>
+          ))}
+          {(() => {
+            const open = problemRows.find((p) => p.key === depOpen);
+            return open ? (
+              <span className="meta editor__chip-more">
+                <span className="editor__dep-warn">{open.warn}</span>
+                {open.text}
+              </span>
+            ) : null;
+          })()}
+        </div>
+      )}
+      {problemRows.length > 0 && LEGACY && (
         <div className="editor__deps">
           {problemRows.map((p) => (
             <div key={p.key} className="editor__dep">
@@ -1415,10 +1496,32 @@ function ContentTab({
                 ? ` · ${pending.length} ${pending.length === 1 ? 'UPDATE' : 'UPDATES'}`
                 : ' · UP TO DATE'}
           </span>
+          {!LEGACY && (
+            <span className="editor__views" role="group" aria-label="Show as">
+              <button
+                type="button"
+                className={!gallery ? 'is-on' : ''}
+                aria-pressed={!gallery}
+                title="List"
+                onClick={() => pickView(false)}
+              >
+                <ListBullets size={18} weight="bold" />
+              </button>
+              <button
+                type="button"
+                className={gallery ? 'is-on' : ''}
+                aria-pressed={gallery}
+                title="Gallery"
+                onClick={() => pickView(true)}
+              >
+                <SquaresFour size={18} weight="bold" />
+              </button>
+            </span>
+          )}
         </div>
       )}
 
-      <div className="editor__list scroll">
+      <div className={['editor__list scroll', gallery ? 'editor__list--gallery' : ''].join(' ')}>
         {rows && rows.length === 0 && (
           <PxBox family="panel" className="empty">
             <TT size={20} tone="dim">
@@ -1449,6 +1552,72 @@ function ContentTab({
           const upd = updates?.get(key);
           const projectId = projects.get(key);
           const notes = upd?.changelog && notesOpen === key ? upd.changelog : null;
+          const toggle = () => void act(() => api.setContentEnabled(profile.id, fileKind, m.filename, !m.enabled));
+          if (gallery) {
+            return (
+              /* a gallery tile: the icon large, the name under it, then the
+                 switch and the actions as glyphs along the foot */
+              <div key={key} className={['editor__tile', m.enabled ? '' : 'is-off'].join(' ')}>
+                <span className="editor__tile-icon">
+                  {m.icon ? (
+                    <img src={m.icon} alt="" draggable={false} />
+                  ) : (
+                    <PixelGlyph glyph="box" size={48} color="var(--text-3)" />
+                  )}
+                </span>
+                <span className="editor__tile-name" title={m.filename}>
+                  {m.name || displayName(m.filename)}
+                </span>
+                <span className="meta editor__tile-meta">
+                  {`${label.charAt(0)}${label.slice(1).toLowerCase()} · ${fmtBytes(m.size)}`}
+                  {upd && <span className="editor__tile-new">{` · update`}</span>}
+                </span>
+                <span className="editor__tile-foot">
+                  <button
+                    className="check"
+                    title={m.enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
+                    onClick={toggle}
+                  >
+                    <span className={['px px--grey check__box', m.enabled ? 'is-on' : ''].join(' ')}>
+                      <span className="check__tick" />
+                    </span>
+                  </button>
+                  <span className="win__fill" />
+                  {upd && (
+                    <button
+                      type="button"
+                      className="editor__tile-btn is-update"
+                      title={`Update: ${upd.currentVersion} → ${upd.versionNumber}`}
+                      disabled={updating.size > 0}
+                      onClick={() => void update([[key, fileKind, upd]])}
+                    >
+                      <ArrowsClockwise size={17} weight="bold" />
+                    </button>
+                  )}
+                  {projectId && (
+                    <button
+                      type="button"
+                      className="editor__tile-btn"
+                      title="Versions — open on Modrinth to pick one"
+                      disabled={updating.has(key)}
+                      onClick={() => onOpenProject(CONTENT_BY_KIND[fileKind], projectId)}
+                    >
+                      <ListBullets size={17} weight="bold" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="editor__tile-btn is-remove"
+                    title="Remove"
+                    disabled={updating.has(key)}
+                    onClick={() => void act(() => api.removeContent(profile.id, fileKind, m.filename))}
+                  >
+                    <Trash size={17} weight="bold" />
+                  </button>
+                </span>
+              </div>
+            );
+          }
           return (
             <Fragment key={key}>
               <div className={['editor__row', m.enabled ? '' : 'is-off'].join(' ')}>
@@ -1456,7 +1625,7 @@ function ContentTab({
                 <button
                   className="check"
                   title={m.enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
-                  onClick={() => void act(() => api.setContentEnabled(profile.id, fileKind, m.filename, !m.enabled))}
+                  onClick={toggle}
                 >
                   <span className={['px px--grey check__box', m.enabled ? 'is-on' : ''].join(' ')}>
                     <span className="check__tick" />

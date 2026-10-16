@@ -78,6 +78,18 @@ public enum Icons {
         pixels(c, x, y, color, scale);
     }
 
+    /**
+     * Draws the icon centred on cx, cy: exact for the vector glyph, where a
+     * floored corner would sit it up to half a GUI pixel up and left.
+     */
+    public void drawCentered(Canvas c, float cx, float cy, int color, int scale) {
+        if (vectors()) {
+            vector(c, cx, cy, Math.max(7, Math.max(width(), height())) * scale, color);
+            return;
+        }
+        pixels(c, Math.round(cx - width() * scale / 2f), Math.round(cy - height() * scale / 2f), color, scale);
+    }
+
     /** Whether icons draw as vector glyphs: the modern look, where the ui fonts (and so the glyphs) load. */
     public static boolean vectors() {
         return Theme.modern() && Sans.supported();

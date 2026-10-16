@@ -313,8 +313,7 @@ public class DuskTitleScreen extends DuskScreen {
                     drawAccountModern(c, a, hover);
                     continue;
                 }
-                int iw = a.icon.width() * iconScale, ih = a.icon.height() * iconScale;
-                a.icon.draw(c, a.x + (a.w - iw) / 2, a.y + (a.h - ih) / 2, Glass.glyph(hover), iconScale);
+                a.icon.drawCentered(c, a.x + a.w / 2f, a.y + a.h / 2f, Glass.glyph(hover), iconScale);
                 if (a.icon == Icons.CHAT) badge(c, a, SocialNotifier.badge());
                 if (a.icon == Icons.STAR) badge(c, a, SocialNotifier.ready());
                 continue;
