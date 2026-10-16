@@ -22,6 +22,12 @@ public final class Input {
     public static final InputConstants.Type KEYBOARD = InputConstants.Type.KEYSYM;
     /** No key: what an unbound key holds. */
     public static final int UNKNOWN = InputConstants.UNKNOWN.getValue();
+    /** Keys InputConstants has no name for on every version: the Windows (Cmd) keys, Menu and three numpad keys. */
+    public static final int KEY_LSUPER = GLFW.GLFW_KEY_LEFT_SUPER, KEY_RSUPER = GLFW.GLFW_KEY_RIGHT_SUPER, KEY_MENU = GLFW.GLFW_KEY_MENU,
+            KEY_NUM_DIVIDE = GLFW.GLFW_KEY_KP_DIVIDE, KEY_NUM_SUBTRACT = GLFW.GLFW_KEY_KP_SUBTRACT, KEY_NUM_DECIMAL = GLFW.GLFW_KEY_KP_DECIMAL;
+
+    /** Mouse button {@code button} as a screen reports it (0 is left; 3 and 4 the side buttons) as a key a mapping can hold. */
+    public static InputConstants.Key mouse(int button) { return InputConstants.Type.MOUSE.getOrCreate(button); }
 
     private static long window() { return GLFW.glfwGetCurrentContext(); }
 

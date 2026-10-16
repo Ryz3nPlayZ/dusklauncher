@@ -35,6 +35,25 @@ public final class DuskConfig {
     public String recordingMode = "off";
     /** How far back a clip reaches, in seconds. */
     public int clipSeconds = 30;
+    /** Screen recording: "off", "manual" (the record key starts and stops it) or "buffer" (also keeps the last stretch for the clip key). */
+    public String videoMode = "off";
+    /** How much the screen buffer keeps, in seconds. */
+    public int videoSeconds = 30;
+    public int videoFps = 60;
+    /** "standard", "high" or "ultra": the bitrate per pixel. */
+    public String videoQuality = "high";
+    /** The tallest the video gets: "native", "1440", "1080" or "720" (never upscaled). */
+    public String videoResolution = "1440";
+    /** "h264", or "hevc" where the GPU encodes it (smaller files, same look). */
+    public String videoCodec = "h264";
+    /** Whether videos show the HUD and menus, or the world alone. */
+    public boolean videoHud = true;
+    /** Whether videos carry the game's sound. */
+    public boolean videoAudio = true;
+    /** The red REC mark in the corner while a recording runs (videos with the HUD show it too). */
+    public boolean videoIndicator = true;
+    /** The Keybinds keyboard's size: "60", "75" or "100" (with the numpad). */
+    public String keyboardLayout = "100";
     /** In game: a toast when a friend messages you, comes online or sends a request. */
     public boolean friendToasts = true;
 

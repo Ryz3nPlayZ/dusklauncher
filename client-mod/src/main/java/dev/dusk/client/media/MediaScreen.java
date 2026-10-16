@@ -27,18 +27,28 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 /**
- * MEDIA: this instance's screenshots, saved clips and full replays as
- * thumbnail grids, and the recording settings. Screenshots open full size
- * here (← / → step through); clips and replays play in the replay viewer.
+ * MEDIA: this instance's screenshots, screen recordings, saved clips and
+ * full replays as thumbnail grids, and the recording settings. Screenshots
+ * open full size here (← / → step through); videos open in the system's
+ * player; clips and replays play in the replay viewer.
  */
 public class MediaScreen extends PanelScreen {
-    public static final int SCREENSHOTS = 0, CLIPS = 1, REPLAYS = 2, SETTINGS = 3;
-    private static final String[] TABS = {"SCREENSHOTS", "CLIPS", "REPLAYS", "SETTINGS"};
-    private static final int GAP = 6, MIN_TILE = 132, INFO_H = 22, BTN_H = 16, DEL_W = 42, ROW_H = 34;
+    public static final int SCREENSHOTS = 0, VIDEOS = 1, CLIPS = 2, REPLAYS = 3, SETTINGS = 4;
+    private static final String[] TABS = {"SCREENSHOTS", "VIDEOS", "CLIPS", "REPLAYS", "SETTINGS"};
+    private static final int GAP = 6, MIN_TILE = 132, INFO_H = 22, BTN_H = 16, DEL_W = 42, ROW_H = 34, SECTION_H = 18;
     private static final int[] CLIP_LENGTHS = {15, 30, 60, 90, 120, 300};
+    private static final int[] VIDEO_LENGTHS = {15, 30, 60, 120, 300};
     private static final String[][] MODES = {{"off", "OFF"}, {"clips", "CLIPS"}, {"full", "FULL REPLAY"}};
+    private static final String[][] VIDEO_MODES = {{"off", "OFF"}, {"manual", "MANUAL"}, {"buffer", "BUFFER"}};
+    private static final String[][] FPS = {{"30", "30"}, {"60", "60"}};
+    private static final String[][] QUALITIES = {{"standard", "STANDARD"}, {"high", "HIGH"}, {"ultra", "ULTRA"}};
+    private static final String[][] RESOLUTIONS = {{"native", "NATIVE"}, {"1440", "1440P"}, {"1080", "1080P"}, {"720", "720P"}};
+    private static final String[][] CODECS = {{"h264", "H.264"}, {"hevc", "HEVC"}};
+    private static final String[][] SHOWS = {{"true", "HUD + MENUS"}, {"false", "WORLD ONLY"}};
+    private static final String[][] OFF_ON = {{"false", "OFF"}, {"true", "ON"}};
 
     private final RemoteImages thumbs = new RemoteImages(320);
     private final RemoteImages full = new RemoteImages(2048);
@@ -68,6 +78,7 @@ public class MediaScreen extends PanelScreen {
 
     private Path dir() {
         return switch (tab) {
+            case VIDEOS -> Mcpr.videosDir();
             case CLIPS -> Mcpr.clipsDir();
             case REPLAYS -> Mcpr.replaysDir();
             default -> Mcpr.screenshotsDir();
@@ -86,7 +97,7 @@ public class MediaScreen extends PanelScreen {
         if (tab == SETTINGS) return;
         int gen = generation;
         Path dir = dir();
-        String ext = recordings() ? ".mcpr" : ".png";
+        String ext = recordings() ? ".mcpr" : tab == VIDEOS ? ".mp4" : ".png";
         worker.execute(() -> {
             List<Mcpr.Entry> list = Mcpr.list(dir, ext);
             Minecraft.getInstance().execute(() -> {
@@ -99,6 +110,7 @@ public class MediaScreen extends PanelScreen {
         confirming = null;
         try {
             Files.deleteIfExists(e.path());
+            if (tab == VIDEOS) Files.deleteIfExists(e.path().resolveSibling(".thumbs").resolve(e.name() + ".png"));
             thumbs.invalidate(key(e));
             full.invalidate(key(e));
             if (entries != null) {
@@ -129,6 +141,7 @@ public class MediaScreen extends PanelScreen {
     }
 
     private byte @Nullable [] thumbBytes(Mcpr.Entry e) throws IOException {
+        if (tab == VIDEOS) return MediaBackend.videoThumb(e.path());
         return recordings() ? Mcpr.readThumb(e.path()) : Files.readAllBytes(e.path());
     }
 
@@ -143,6 +156,10 @@ public class MediaScreen extends PanelScreen {
     }
 
     private String info(Mcpr.Entry e) {
+        if (tab == VIDEOS) {
+            String s = when(e.modified()) + " · " + Mcpr.size(e.size());
+            return e.durationMs() > 0 ? Mcpr.duration(e.durationMs()) + " · " + s : s;
+        }
         if (!recordings()) return when(e.modified()) + " · " + Mcpr.size(e.size());
         String s = Mcpr.duration(e.durationMs());
         if (!e.server().isEmpty()) s += " · " + e.server();
@@ -152,6 +169,11 @@ public class MediaScreen extends PanelScreen {
     static String clipKeyName() {
         KeyMapping k = DuskClient.clipKey();
         return k == null ? "the clip key" : k.getTranslatedKeyMessage().getString();
+    }
+
+    static String recordKeyName() {
+        KeyMapping k = DuskClient.recordKey();
+        return k == null ? "the record key" : k.getTranslatedKeyMessage().getString();
     }
 
     // ---- layout -------------------------------------------------------------
@@ -215,7 +237,11 @@ public class MediaScreen extends PanelScreen {
 
     @Override
     protected int contentHeight() {
-        if (tab == SETTINGS) return 4 * (ROW_H + GAP);
+        if (tab == SETTINGS) {
+            int h = 0;
+            for (Row r : rows()) h += r.height() + GAP;
+            return h - GAP;
+        }
         int n = entries == null ? 0 : entries.size();
         int rows = (n + cols - 1) / Math.max(1, cols);
         return rows == 0 ? 0 : rows * (tileH + GAP) - GAP;
@@ -258,6 +284,7 @@ public class MediaScreen extends PanelScreen {
         String foot = note;
         if (foot == null && recordings() && !MediaBackend.supported()) foot = "Replays need Minecraft 1.21.11 or newer.";
         else if (foot == null && recordings() && inWorld()) foot = "Leave the world to watch a recording.";
+        else if (foot == null && tab == VIDEOS) foot = MediaBackend.videoStatus();
         else if (foot == null && tab != SETTINGS) foot = MediaBackend.status();
         if (foot != null) c.text(Theme.ellipsize(c, foot, listW), listX, py + ph - pad - 8, Theme.TEXT_MUTED, false);
 
@@ -267,6 +294,13 @@ public class MediaScreen extends PanelScreen {
     private void drawEmpty(Canvas c) {
         String head, body;
         switch (tab) {
+            case VIDEOS -> {
+                head = "NO VIDEOS YET";
+                body = MediaBackend.videoSupported()
+                        ? "Turn on SCREEN RECORDING in SETTINGS, then press " + recordKeyName() + " in game to start and stop, or "
+                                + clipKeyName() + " to save the buffer."
+                        : "Screen recording needs Minecraft 1.21.11 or newer.";
+            }
             case CLIPS -> {
                 head = "NO CLIPS YET";
                 body = "Set RECORDING to CLIPS in SETTINGS, then press " + clipKeyName() + " in game to save the last "
@@ -295,7 +329,7 @@ public class MediaScreen extends PanelScreen {
         Theme.plate(c, x, y, tileW, tileH, Theme.SURFACE, Theme.SURFACE, hot);
         int tx = x + 4, ty = y + 4, tw = tileW - 8;
         drawImage(c, thumbs, e, tx, ty, tw, thumbH);
-        if (recordings()) {
+        if (recordings() || tab == VIDEOS) {
             int bx = tx + 4, by = ty + thumbH - 15;
             if (Theme.modern()) Round.dot(c, bx, by, 11, 0xB0101012);
             else c.fill(bx, by, bx + 11, by + 11, 0xAA000000);
@@ -306,7 +340,7 @@ public class MediaScreen extends PanelScreen {
         c.text(Theme.ellipsize(c, info(e), tw), tx, iy + 10, Theme.TEXT_FAINT, false);
         int[] open = openBox(x, y), del = deleteBox(x, y);
         boolean openEnabled = !recordings() || canWatch();
-        boxButton(c, recordings() ? "WATCH" : "VIEW", open[0], open[1], open[2], open[3], mx, my,
+        boxButton(c, recordings() ? "WATCH" : tab == VIDEOS ? "OPEN" : "VIEW", open[0], open[1], open[2], open[3], mx, my,
                 Theme.Family.GREY, false, openEnabled);
         boolean sure = e.path().equals(confirming);
         boxButton(c, sure ? "SURE?" : "DELETE", del[0], del[1], del[2], del[3], mx, my,
@@ -319,8 +353,9 @@ public class MediaScreen extends PanelScreen {
         else c.fill(x, y, x + w, y + h, 0xFF101010);
         RemoteImages.Image img = images.get(key(e), () -> thumbBytes(e));
         if (img == null) {
-            Icons icon = recordings() ? Icons.MEDIA : Icons.FOLDER;
-            if (images.failed(key(e)) || !recordings()) {
+            boolean moving = recordings() || tab == VIDEOS;
+            Icons icon = moving ? Icons.MEDIA : Icons.FOLDER;
+            if (images.failed(key(e)) || !moving) {
                 icon.draw(c, x + (w - icon.width() * 2) / 2, y + (h - icon.height() * 2) / 2, Theme.pick(0xFF4A4A52, 0xFF3A3A3A), 2);
             }
             return;
@@ -424,74 +459,147 @@ public class MediaScreen extends PanelScreen {
 
     // ---- settings -----------------------------------------------------------
 
-    private interface ChoiceSink {
-        /** @return true to stop */
-        boolean choice(int row, String value, String label, int x, int y, int w, int h, boolean on, boolean enabled);
+    /** A settings row: a section heading, or a label with a line of help and its choices (none for a note). */
+    private record Row(boolean heading, String label, String desc, String[][] opts, String current, boolean enabled,
+                       @Nullable Consumer<String> pick) {
+        static Row section(String title) {
+            return new Row(true, title, "", new String[0][], "", false, null);
+        }
+
+        static Row note(String label, String desc) {
+            return new Row(false, label, desc, new String[0][], "", false, null);
+        }
+
+        int height() {
+            return heading ? SECTION_H : ROW_H;
+        }
     }
 
-    /** Walks the settings rows' choice buttons, right-aligned, so drawing and clicking share one layout. */
-    private boolean choices(ChoiceSink sink) {
+    private static String[][] lengths(int[] seconds) {
+        String[][] out = new String[seconds.length][];
+        for (int i = 0; i < seconds.length; i++) {
+            int s = seconds[i];
+            out[i] = new String[] {Integer.toString(s), s < 60 || s % 60 != 0 ? s + "S" : s / 60 + "M"};
+        }
+        return out;
+    }
+
+    private static Consumer<String> video(Consumer<String> set) {
+        return v -> {
+            set.accept(v);
+            DuskConfig.save();
+            MediaBackend.videoSettingsChanged();
+        };
+    }
+
+    private static Consumer<String> world(Consumer<String> set) {
+        return v -> {
+            set.accept(v);
+            DuskConfig.save();
+            MediaBackend.settingsChanged();
+        };
+    }
+
+    private List<Row> rows() {
         DuskConfig cfg = DuskConfig.get();
+        List<Row> rows = new ArrayList<>();
+        boolean video = MediaBackend.videoSupported();
+        boolean buffer = "buffer".equals(cfg.videoMode);
+        rows.add(Row.section("SCREEN RECORDING"));
+        rows.add(new Row(false, "MODE", video
+                ? "Manual: " + recordKeyName() + " starts and stops. Buffer: also keeps the last stretch for " + clipKeyName() + "."
+                : "Needs Minecraft 1.21.11 or newer.",
+                VIDEO_MODES, cfg.videoMode, video, video(v -> cfg.videoMode = v)));
+        rows.add(new Row(false, "BUFFER LENGTH", "How far back " + clipKeyName() + " reaches.", lengths(VIDEO_LENGTHS),
+                Integer.toString(cfg.videoSeconds), video && buffer, video(v -> cfg.videoSeconds = Integer.parseInt(v))));
+        rows.add(new Row(false, "FRAME RATE", "Frames a second.", FPS, Integer.toString(cfg.videoFps), video,
+                video(v -> cfg.videoFps = Integer.parseInt(v))));
+        rows.add(new Row(false, "QUALITY", "Higher keeps fast motion sharp and takes more space.", QUALITIES, cfg.videoQuality, video,
+                video(v -> cfg.videoQuality = v)));
+        rows.add(new Row(false, "RESOLUTION", "The tallest the video gets, never above the window.", RESOLUTIONS, cfg.videoResolution, video,
+                video(v -> cfg.videoResolution = v)));
+        rows.add(new Row(false, "CODEC", "HEVC is smaller where the GPU encodes it; H.264 plays anywhere.", CODECS, cfg.videoCodec, video,
+                video(v -> cfg.videoCodec = v)));
+        rows.add(new Row(false, "SHOWS", "The HUD and menus as you see them, or the world alone.", SHOWS, Boolean.toString(cfg.videoHud), video,
+                video(v -> cfg.videoHud = Boolean.parseBoolean(v))));
+        rows.add(new Row(false, "SOUND", "The game's sound, as you hear it.", OFF_ON, Boolean.toString(cfg.videoAudio), video,
+                video(v -> cfg.videoAudio = Boolean.parseBoolean(v))));
+        rows.add(new Row(false, "REC MARK", "The red mark in the corner while recording.", OFF_ON, Boolean.toString(cfg.videoIndicator), video,
+                video(v -> cfg.videoIndicator = Boolean.parseBoolean(v))));
+        rows.add(Row.note("KEYS", "Record: " + recordKeyName() + " · save the buffer: " + clipKeyName() + ". Change them in Controls."));
+        rows.add(Row.note("STATUS", MediaBackend.videoStatus()));
+
         boolean supported = MediaBackend.supported();
-        for (int row = 0; row < 2; row++) {
-            List<String[]> opts = new ArrayList<>();
-            if (row == 0) {
-                for (String[] m : MODES) opts.add(m);
-            } else {
-                for (int s : CLIP_LENGTHS) opts.add(new String[] {Integer.toString(s), s < 60 || s % 60 != 0 ? s + "S" : s / 60 + "M"});
-            }
-            int y = listY + row * (ROW_H + GAP) - scroll + (ROW_H - BTN_H) / 2;
+        rows.add(Row.section("WORLD REPLAY"));
+        rows.add(new Row(false, "RECORDING", supported ? "Off, a rolling buffer the clip key saves, or every session as a full replay."
+                : "Needs Minecraft 1.21.11 or newer.", MODES, cfg.recordingMode, supported, world(v -> cfg.recordingMode = v)));
+        rows.add(new Row(false, "CLIP LENGTH", "How far back a clip reaches.", lengths(CLIP_LENGTHS), Integer.toString(cfg.clipSeconds),
+                supported && "clips".equals(cfg.recordingMode), world(v -> cfg.clipSeconds = Integer.parseInt(v))));
+        rows.add(Row.note("SAVE A CLIP", "Press " + clipKeyName() + " in game; it saves the screen buffer too when that's on."));
+        rows.add(Row.note("STATUS", MediaBackend.status()));
+        return rows;
+    }
+
+    private interface ChoiceSink {
+        /** @return true to stop */
+        boolean choice(Row row, String value, String label, int x, int y, int w, int h, boolean on);
+    }
+
+    private int choicesWidth(Row row) {
+        int w = 0;
+        for (String[] o : row.opts()) w += this.font.width(o[1]) + 14 + 3;
+        return w;
+    }
+
+    /** Walks the rows' choice buttons, right-aligned, so drawing and clicking share one layout. */
+    private boolean choices(List<Row> rows, ChoiceSink sink) {
+        int top = listY - scroll;
+        for (Row row : rows) {
+            int y = top + (ROW_H - BTN_H) / 2;
             int x = listX + listW - 6;
-            for (int i = opts.size() - 1; i >= 0; i--) {
-                String[] o = opts.get(i);
+            for (int i = row.opts().length - 1; i >= 0; i--) {
+                String[] o = row.opts()[i];
                 int w = this.font.width(o[1]) + 14;
                 x -= w;
-                boolean on = row == 0 ? o[0].equals(cfg.recordingMode) : Integer.parseInt(o[0]) == cfg.clipSeconds;
-                boolean enabled = supported && (row == 0 || "clips".equals(cfg.recordingMode));
-                if (sink.choice(row, o[0], o[1], x, y, w, BTN_H, on, enabled)) return true;
+                if (sink.choice(row, o[0], o[1], x, y, w, BTN_H, o[0].equals(row.current()))) return true;
                 x -= 3;
             }
+            top += row.height() + GAP;
         }
         return false;
     }
 
     private void drawSettings(Canvas c, int mx, int my) {
-        DuskConfig cfg = DuskConfig.get();
-        boolean supported = MediaBackend.supported();
-        String[][] rows = {
-                {"RECORDING", supported ? "Off, a rolling buffer the clip key saves, or every session as a full replay."
-                        : "Needs Minecraft 1.21.11 or newer."},
-                {"CLIP LENGTH", "How far back a clip reaches."},
-                {"SAVE A CLIP", "Press " + clipKeyName() + " in game. Change it in Controls."},
-                {"STATUS", MediaBackend.status()},
-        };
-        for (int r = 0; r < rows.length; r++) {
-            int y = listY + r * (ROW_H + GAP) - scroll;
-            Theme.plate(c, listX, y, listW, ROW_H, Theme.SURFACE, Theme.SURFACE, false);
-            Theme.label(c, rows[r][0], listX + 8, y + 7, Theme.LABEL_UP, Theme.LABEL_LO, 1f);
-            int textW = r < 2 ? listW / 2 : listW - 16;
-            c.text(Theme.ellipsize(c, rows[r][1], textW), listX + 8, y + 20, Theme.TEXT_FAINT, false);
+        List<Row> rows = rows();
+        int y = listY - scroll;
+        for (Row r : rows) {
+            if (r.heading()) {
+                Theme.label(c, r.label(), listX + 2, y + 6, Theme.LABEL_UP, Theme.LABEL_LO, 1f);
+                c.fill(listX + Theme.labelWidth(c, r.label(), 1f) + 8, y + 9, listX + listW, y + 10, Theme.pick(0x22FFFFFF, 0x33FFFFFF));
+            } else {
+                Theme.plate(c, listX, y, listW, ROW_H, Theme.SURFACE, Theme.SURFACE, false);
+                Theme.label(c, r.label(), listX + 8, y + 7, Theme.LABEL_UP, Theme.LABEL_LO, 1f);
+                int textW = listW - 16 - (r.opts().length == 0 ? 0 : choicesWidth(r) + 6);
+                c.text(Theme.ellipsize(c, r.desc(), Math.max(40, textW)), listX + 8, y + 20, Theme.TEXT_FAINT, false);
+            }
+            y += r.height() + GAP;
         }
         boolean hot = inList(mx, my);
-        choices((row, value, label, x, y, w, h, on, enabled) -> {
-            boxButton(c, label, x, y, w, h, hot ? mx : -1, hot ? my : -1, on ? Theme.Family.ACCENT : Theme.Family.GREY, false, enabled);
+        choices(rows, (row, value, label, x, by, w, h, on) -> {
+            boxButton(c, label, x, by, w, h, hot ? mx : -1, hot ? my : -1, on ? Theme.Family.ACCENT : Theme.Family.GREY, false, row.enabled());
             return false;
         });
         // the picked choice reads through the disabled filter too
-        choices((row, value, label, x, y, w, h, on, enabled) -> {
-            if (on && !Theme.modern()) c.outline(x - 1, y - 1, w + 2, h + 2, enabled ? Theme.ACCENT : 0x66FFFFFF);
+        choices(rows, (row, value, label, x, by, w, h, on) -> {
+            if (on && !Theme.modern()) c.outline(x - 1, by - 1, w + 2, h + 2, row.enabled() ? Theme.ACCENT : 0x66FFFFFF);
             return false;
         });
     }
 
     private boolean clickSettings(double mx, double my) {
-        return choices((row, value, label, x, y, w, h, on, enabled) -> {
-            if (!enabled || !Vanilla.inside(mx, my, x, y, w, h)) return false;
-            DuskConfig cfg = DuskConfig.get();
-            if (row == 0) cfg.recordingMode = value;
-            else cfg.clipSeconds = Integer.parseInt(value);
-            DuskConfig.save();
-            MediaBackend.settingsChanged();
+        return choices(rows(), (row, value, label, x, y, w, h, on) -> {
+            if (!row.enabled() || row.pick() == null || !Vanilla.inside(mx, my, x, y, w, h)) return false;
+            row.pick().accept(value);
             return true;
         });
     }
@@ -524,6 +632,7 @@ public class MediaScreen extends PanelScreen {
             boolean onThumb = Vanilla.inside(mx, my, x + 4, y + 4, tileW - 8, thumbH);
             if (onThumb || Vanilla.inside(mx, my, open[0], open[1], open[2], open[3])) {
                 if (recordings()) watch(e);
+                else if (tab == VIDEOS) Mcpr.openInOs(e.path());
                 else viewing = i;
             }
             return true;

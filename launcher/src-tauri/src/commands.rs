@@ -753,6 +753,9 @@ pub async fn install_and_launch(
     let replay = match watch_replay.as_deref() {
         Some(path) => {
             let path = crate::recordings::resolve(&state, path)?;
+            if !crate::recordings::is_mcpr(&path) {
+                return Err("Only a clip or replay opens in the replay viewer.".into());
+            }
             let root = std::fs::canonicalize(&profile.dirs(&state.data_dir).root).map_err(|e| e.to_string())?;
             if !path.starts_with(&root) {
                 return Err("That recording belongs to another instance.".into());

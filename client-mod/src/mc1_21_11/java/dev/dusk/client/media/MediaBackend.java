@@ -1,11 +1,13 @@
 package dev.dusk.client.media;
 
 import dev.dusk.client.compat.Compat;
+import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.gui.Canvas;
 import dev.dusk.client.gui.Theme;
 import dev.dusk.client.hud.HudContext;
 import dev.dusk.client.media.impl.Recorder;
 import dev.dusk.client.media.impl.ReplayPlayer;
+import dev.dusk.client.media.impl.ScreenRecorder;
 import dev.dusk.client.media.impl.VideoExporter;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -45,6 +47,10 @@ public final class MediaBackend {
         });
         ClientTickEvents.START_CLIENT_TICK.register(ReplayPlayer::tick);
         ClientTickEvents.END_CLIENT_TICK.register(Recorder::tick);
+        ClientTickEvents.END_CLIENT_TICK.register(mc -> {
+            // a replay plays the world back, so the screen buffer would only fill with that
+            if (!ReplayPlayer.active() || ScreenRecorder.recording()) ScreenRecorder.tick(mc);
+        });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             Recorder.onDisconnect(handler.getConnection());
             ReplayPlayer.onDisconnect(handler.getConnection());
@@ -55,11 +61,30 @@ public final class MediaBackend {
 
     public static boolean recording() { return Recorder.recording(); }
 
+    /** The clip key: the screen buffer's last stretch to an MP4, and/or the world clip, whichever are on. */
     public static void saveClip() {
-        if (!ReplayPlayer.active()) Recorder.saveClip();
+        boolean screen = ScreenRecorder.bufferOn();
+        if (screen) ScreenRecorder.saveBuffer();
+        if (ReplayPlayer.active()) return;
+        // with only the screen buffer on, the world clip's "clips are off" note would be noise
+        if (!screen || "clips".equals(DuskConfig.get().recordingMode)) Recorder.saveClip();
     }
 
     public static void settingsChanged() { Recorder.settingsChanged(); }
+
+    public static boolean videoSupported() { return true; }
+
+    /** The record key. */
+    public static void toggleVideoRecording() { ScreenRecorder.toggleRecording(); }
+
+    public static void videoSettingsChanged() { ScreenRecorder.settingsChanged(); }
+
+    public static boolean videoRecording() { return ScreenRecorder.recording(); }
+
+    public static String videoStatus() { return ScreenRecorder.status(); }
+
+    /** A PNG frame from early in {@code video}, or null without ffmpeg. Blocking. */
+    public static byte @Nullable [] videoThumb(Path video) { return ScreenRecorder.thumbnail(video); }
 
     /** @return why it could not start, or null once the replay is loading */
     @Nullable
@@ -101,9 +126,15 @@ public final class MediaBackend {
             c.text(right, ctx.width() - 6 - c.textWidth(right), y + 4, Theme.TEXT_FAINT, false);
             return;
         }
+        int y = 6;
+        if (ScreenRecorder.recording() && DuskConfig.get().videoIndicator) {
+            String s = "● REC " + Mcpr.duration(ScreenRecorder.recordingMs());
+            c.text(s, ctx.width() - 6 - c.textWidth(s), y, Theme.RED_UP, true);
+            y += 11;
+        }
         if (Recorder.recording()) {
-            String s = "● REC " + Mcpr.duration(Recorder.elapsedMs());
-            c.text(s, ctx.width() - 6 - c.textWidth(s), 6, Theme.RED_UP, true);
+            String s = "● REPLAY " + Mcpr.duration(Recorder.elapsedMs());
+            c.text(s, ctx.width() - 6 - c.textWidth(s), y, Theme.RED_UP, true);
         }
     }
 

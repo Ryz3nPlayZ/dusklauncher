@@ -39,7 +39,27 @@ back sessions the way ReplayMod does:
   files in ReplayMod itself is untested. No source files were copied;
   the rolling clip buffer, the replay filter and all UI are Dusk's own.
 
-ffmpeg is not bundled. When the player has none, EXPORT VIDEO downloads
+Screen recording (media/impl/ScreenRecorder, FrameGrab, FrameScale,
+GameAudio, TsBuffer, VideoEncoders and mixin/media/Sound*Mixin) captures
+what the player sees, live, the way a desktop recorder does. Its
+replay buffer (the last stretch kept on disk and saved on a key, without
+re-encoding) follows OBS Studio's Replay Buffer
+(https://github.com/obsproject/obs-studio, GPL-2.0), behaviour only; no
+source was copied. Game sound
+is taken from an OpenAL Soft loopback device (ALC_SOFT_loopback,
+https://openal-soft.org) and played on to the real output. The encoder is
+the ffmpeg described below, given MPEG-TS to write so the buffer can be cut
+at keyframes.
+
+The Keybinds keyboard (gui/KeyboardScreen) follows Studious Keybinds by
+StudiousGoose (https://www.curseforge.com/minecraft/mc-mods/studious-keybinds,
+All Rights Reserved), behaviour only: every binding on a drawn 60%, 75% or
+full-size keyboard, outlines for one action, a conflict or none, hover to
+list a key's actions, click a key to change them, and search by action,
+category or key. Its source is not public and none was used; the drawing,
+layouts and code are Dusk's own.
+
+ffmpeg is not bundled. When the player has none, EXPORT VIDEO or screen recording downloads
 the static build the ffmpeg-static project publishes
 (https://github.com/eugeneware/ffmpeg-static, release b6.1.1), checks its
 SHA-256 and runs it as a separate program. FFmpeg — https://ffmpeg.org —

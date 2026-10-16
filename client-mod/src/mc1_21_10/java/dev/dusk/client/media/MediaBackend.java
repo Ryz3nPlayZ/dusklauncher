@@ -28,6 +28,18 @@ public final class MediaBackend {
 
     public static void settingsChanged() {}
 
+    public static boolean videoSupported() { return false; }
+
+    public static void toggleVideoRecording() {}
+
+    public static void videoSettingsChanged() {}
+
+    public static boolean videoRecording() { return false; }
+
+    public static String videoStatus() { return "Screen recording needs Minecraft 1.21.11 or newer."; }
+
+    public static byte @Nullable [] videoThumb(Path video) { return null; }
+
     /** @return why it could not start, or null once the replay is loading */
     @Nullable
     public static String watch(Path file) { return UNSUPPORTED; }

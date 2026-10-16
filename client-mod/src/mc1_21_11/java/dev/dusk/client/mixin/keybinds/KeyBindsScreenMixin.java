@@ -1,6 +1,8 @@
 package dev.dusk.client.mixin.keybinds;
 
+import dev.dusk.client.compat.Compat;
 import dev.dusk.client.gui.KeybindSearch;
+import dev.dusk.client.gui.KeyboardScreen;
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -19,7 +21,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * Controlling-style search for Controls → Key Binds: a search box and a
  * filter button (all / by key / conflicts / unbound) between the title and
- * the list, which moves down to make room.
+ * the list, which moves down to make room, and a way to the same bindings
+ * on a drawn keyboard.
  */
 @Mixin(KeyBindsScreen.class)
 public abstract class KeyBindsScreenMixin extends OptionsSubScreen {
@@ -33,6 +36,8 @@ public abstract class KeyBindsScreenMixin extends OptionsSubScreen {
     private EditBox dusk$search;
     @Unique
     private Button dusk$mode;
+    @Unique
+    private Button dusk$keyboard;
 
     private KeyBindsScreenMixin(Screen parent, Options options, Component title) {
         super(parent, options, title);
@@ -58,8 +63,12 @@ public abstract class KeyBindsScreenMixin extends OptionsSubScreen {
             b.setMessage(Component.literal(KeybindSearch.mode.label));
             dusk$apply();
         }).bounds(0, 0, BUTTON_WIDTH, 20).build();
+        // the same bindings on a drawn keyboard (see KeyboardScreen)
+        dusk$keyboard = Button.builder(Component.literal("Keyboard"),
+                b -> Compat.setScreen(minecraft, new KeyboardScreen(this))).bounds(0, 0, BUTTON_WIDTH, 20).build();
         addRenderableWidget(dusk$search);
         addRenderableWidget(dusk$mode);
+        addRenderableWidget(dusk$keyboard);
         setInitialFocus(dusk$search);
         dusk$apply();
     }
@@ -68,9 +77,10 @@ public abstract class KeyBindsScreenMixin extends OptionsSubScreen {
     private void dusk$layout(CallbackInfo ci) {
         if (dusk$search == null) return;
         int top = layout.getHeaderHeight();
-        int left = width / 2 - (BOX_WIDTH + GAP + BUTTON_WIDTH) / 2;
+        int left = width / 2 - (BOX_WIDTH + 2 * (GAP + BUTTON_WIDTH)) / 2;
         dusk$search.setPosition(left, top);
         dusk$mode.setPosition(left + BOX_WIDTH + GAP, top);
+        dusk$keyboard.setPosition(left + BOX_WIDTH + 2 * GAP + BUTTON_WIDTH, top);
         keyBindsList.updateSizeAndPosition(width, layout.getContentHeight() - ROW, top + ROW);
     }
 

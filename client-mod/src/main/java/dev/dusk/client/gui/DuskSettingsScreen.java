@@ -204,6 +204,8 @@ public class DuskSettingsScreen extends MenuScreen {
         pane.add(new KeybindWidget("Open the Dusk menu", DuskClient::settingsKey), rowH);
         pane.add(new KeybindWidget("Friends & Chat", DuskClient::friendsKey), rowH);
         pane.add(new KeybindWidget("Save a clip", DuskClient::clipKey), rowH);
+        pane.add(new KeybindWidget("Record video", DuskClient::recordKey), rowH);
+        pane.add(new ActionWidget(new ActionSetting("keyboard", "Every key on a keyboard", "Open", () -> leaveTo(new KeyboardScreen(this))), () -> {}), rowH);
         pane.add(new ActionWidget(new ActionSetting("controls", "Minecraft controls", "Open", () -> {
             if (this.minecraft != null) leaveTo(new KeyBindsScreen(this, this.minecraft.options));
         }), () -> {}), rowH);

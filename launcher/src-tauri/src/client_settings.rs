@@ -19,7 +19,24 @@ use std::time::Duration;
 
 /// `config/duskclient.json` keys that sync. The background is a path on
 /// this machine and the cosmetics block is written by the launcher itself.
-const PREF_KEYS: &[&str] = &["showAccountTile", "uiStyle", "titleScene", "favorites", "recordingMode", "clipSeconds"];
+const PREF_KEYS: &[&str] = &[
+    "showAccountTile",
+    "uiStyle",
+    "titleScene",
+    "favorites",
+    "recordingMode",
+    "clipSeconds",
+    "videoMode",
+    "videoSeconds",
+    "videoFps",
+    "videoQuality",
+    "videoResolution",
+    "videoCodec",
+    "videoHud",
+    "videoAudio",
+    "videoIndicator",
+    "keyboardLayout",
+];
 
 /// `config/duskclient-hud.json` modules that stay on this machine: Render
 /// Scale is picked for this screen and GPU, and a Mac's 50% shouldn't follow

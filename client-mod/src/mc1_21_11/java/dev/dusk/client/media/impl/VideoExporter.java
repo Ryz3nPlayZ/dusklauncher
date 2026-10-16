@@ -181,7 +181,7 @@ public final class VideoExporter {
         });
     }
 
-    private static String encoders(Path exe) {
+    static String encoders(Path exe) {
         try {
             Process p = new ProcessBuilder(exe.toString(), "-hide_banner", "-encoders")
                     .redirectErrorStream(true)

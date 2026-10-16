@@ -27,6 +27,12 @@ public final class Input {
     public static final InputConstants.Type KEYBOARD = InputConstants.Type.KEYBOARD;
     /** No key: what an unbound key holds. */
     public static final int UNKNOWN = InputConstants.UNKNOWN.getValue();
+    /** Keys InputConstants has no name for on every version (SDL scancodes): the Windows (Cmd) keys, Menu and three numpad keys. */
+    public static final int KEY_LSUPER = InputConstants.KEY_LGUI, KEY_RSUPER = InputConstants.KEY_RGUI, KEY_MENU = 101,
+            KEY_NUM_DIVIDE = 84, KEY_NUM_SUBTRACT = 86, KEY_NUM_DECIMAL = 99;
+
+    /** Mouse button {@code button} as a screen reports it (0 is left; 3 and 4 the side buttons) as a key a mapping can hold; SDL counts from 1. */
+    public static InputConstants.Key mouse(int button) { return InputConstants.Type.MOUSE.getOrCreate(button + 1); }
 
     /** False with no window (still starting). */
     public static boolean hasWindow() {

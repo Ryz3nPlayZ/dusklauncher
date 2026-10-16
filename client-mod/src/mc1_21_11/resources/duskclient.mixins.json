@@ -140,6 +140,8 @@
     "media.ReplayPauseMixin",
     "media.ReplayViewerMixin",
     "media.RotateHeadAccessor",
+    "media.SoundDeviceNameMixin",
+    "media.SoundLoopbackMixin",
     "media.SynchedEntityDataAccessor",
     "media.VideoClockMixin",
     "media.VideoFrameMixin"

@@ -7,14 +7,15 @@ import { api, isTauri, type Friend, type Recording, type Screenshot } from '../l
 import { fileSize, stamp } from '../lib/time';
 
 /* ── MEDIA ────────────────────────────────────────────────────────────────
-   Every instance's screenshots, clips and replays, newest first: the
-   instances layout again, one tile each. A screenshot's VIEW opens it full
-   size (← / → step through), the star keeps it under FAVORITES, SEND drops
-   it into a friend's chat. A clip or replay's WATCH launches the instance
-   that recorded it straight into the replay viewer — no menus on the way.
+   Every instance's screenshots, screen recordings, clips and replays,
+   newest first: the instances layout again, one tile each. A screenshot's
+   VIEW opens it full size (← / → step through), the star keeps it under
+   FAVORITES, SEND drops it into a friend's chat. A video's PLAY opens it in
+   the system's player. A clip or replay's WATCH launches the instance that
+   recorded it straight into the replay viewer — no menus on the way.
    The red square always moves the file to the OS trash. */
 
-const FILTERS = ['SCREENSHOTS', 'FAVORITES', 'CLIPS', 'REPLAYS'] as const;
+const FILTERS = ['SCREENSHOTS', 'FAVORITES', 'VIDEOS', 'CLIPS', 'REPLAYS'] as const;
 type Filter = (typeof FILTERS)[number];
 
 const errText = (e: unknown) => String(e).replace(/^Error: /, '');
@@ -63,7 +64,7 @@ export default function Screenshots({
   }, []);
   useEffect(refresh, [refresh]);
 
-  const recordingTab = filter === 'CLIPS' || filter === 'REPLAYS';
+  const recordingTab = filter === 'VIDEOS' || filter === 'CLIPS' || filter === 'REPLAYS';
   useEffect(() => {
     if (!recordingTab || recordings) return;
     void api
@@ -76,7 +77,7 @@ export default function Screenshots({
   }, [recordingTab, recordings]);
 
   const shown = (shots ?? []).filter((s) => filter === 'SCREENSHOTS' || s.favorite);
-  const kind = filter === 'CLIPS' ? 'clip' : 'replay';
+  const kind = filter === 'VIDEOS' ? 'video' : filter === 'CLIPS' ? 'clip' : 'replay';
   const takes = (recordings ?? []).filter((r) => r.kind === kind);
   const viewIndex = viewing ? shown.findIndex((s) => s.path === viewing) : -1;
   const current = viewIndex >= 0 ? shown[viewIndex] : null;
@@ -138,6 +139,11 @@ export default function Screenshots({
     }
   };
 
+  const playVideo = (r: Recording) => {
+    setError(null);
+    void api.openRecording(r.path).catch((e) => setError(errText(e)));
+  };
+
   const revealRecording = (r: Recording) => {
     setError(null);
     void api.revealRecording(r.path).catch((e) => setError(errText(e)));
@@ -181,7 +187,7 @@ export default function Screenshots({
                 setNote(null);
                 setError(null);
                 // a fresh look each time: the game may have saved more since
-                if (f === 'CLIPS' || f === 'REPLAYS') setRecordings(null);
+                if (f === 'VIDEOS' || f === 'CLIPS' || f === 'REPLAYS') setRecordings(null);
               }}
             />
           ))}
@@ -195,10 +201,12 @@ export default function Screenshots({
             recordings && takes.length === 0 ? (
               <PxBox family="panel" className="empty">
                 <TT size={20} tone="dim">
-                  {filter === 'CLIPS' ? 'NO CLIPS YET' : 'NO REPLAYS YET'}
+                  {filter === 'VIDEOS' ? 'NO VIDEOS YET' : filter === 'CLIPS' ? 'NO CLIPS YET' : 'NO REPLAYS YET'}
                 </TT>
                 <span className="meta">
-                  {filter === 'CLIPS'
+                  {filter === 'VIDEOS'
+                    ? 'In game, turn on SCREEN RECORDING under MEDIA → SETTINGS. F9 starts and stops a recording; in BUFFER mode F8 saves the last 30 seconds (or however long you set). Needs Minecraft 1.21.11 or newer.'
+                    : filter === 'CLIPS'
                     ? 'In game, set RECORDING to CLIPS under MEDIA → SETTINGS, then press F8 to save the last 30 seconds (or however long you set).'
                     : 'In game, set RECORDING to FULL REPLAY under MEDIA → SETTINGS. Every session is saved here when you leave.'}
                 </span>
@@ -213,24 +221,37 @@ export default function Screenshots({
                       {stamp(r.recordedAt, clock24h)} · {length(r.durationMs)} · {fileSize(r.size)}
                     </span>
                     <span className="card__info">
-                      {r.server || 'Singleplayer'}
+                      {r.kind === 'video' ? 'Screen recording' : r.server || 'Singleplayer'}
                       {r.mcVersion && ` · ${r.mcVersion}`}
                     </span>
                     <div className="card__row">
-                      <PxButton
-                        family="install"
-                        height="fill"
-                        className="card__play"
-                        disabled={!isTauri || gameBusy}
-                        title={
-                          gameBusy
-                            ? 'Close the game first'
-                            : `Opens ${r.profileName} straight into this ${r.kind}`
-                        }
-                        onClick={() => onWatch(r.profileId, r.path)}
-                      >
-                        <TT size={16}>WATCH</TT>
-                      </PxButton>
+                      {r.kind === 'video' ? (
+                        <PxButton
+                          family="install"
+                          height="fill"
+                          className="card__play"
+                          disabled={!isTauri}
+                          title="Play it in your video player"
+                          onClick={() => playVideo(r)}
+                        >
+                          <TT size={16}>PLAY</TT>
+                        </PxButton>
+                      ) : (
+                        <PxButton
+                          family="install"
+                          height="fill"
+                          className="card__play"
+                          disabled={!isTauri || gameBusy}
+                          title={
+                            gameBusy
+                              ? 'Close the game first'
+                              : `Opens ${r.profileName} straight into this ${r.kind}`
+                          }
+                          onClick={() => onWatch(r.profileId, r.path)}
+                        >
+                          <TT size={16}>WATCH</TT>
+                        </PxButton>
+                      )}
                       <PxButton
                         family="grey"
                         height="fill"

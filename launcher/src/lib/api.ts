@@ -731,11 +731,11 @@ export interface RecentPlay {
   gamemode: string;
 }
 
-/** a clip or replay the Dusk client recorded (an `.mcpr`) */
+/** a clip or replay the Dusk client recorded (an `.mcpr`), or a screen recording (an `.mp4`) */
 export interface Recording {
   path: string;
   name: string;
-  kind: 'clip' | 'replay';
+  kind: 'clip' | 'replay' | 'video';
   profileId: string;
   profileName: string;
   /** unix millis */
@@ -1386,6 +1386,7 @@ const sideEffects = new Set([
   'backup_world',
   'delete_world',
   'reveal_recording',
+  'open_recording',
   'send_screenshot',
   'notify',
 ]);
@@ -1998,6 +1999,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     const t = Date.now();
     return [
       { path: '/preview/clips/clip_2026-09-25_21-20-11.mcpr', name: 'clip_2026-09-25_21-20-11.mcpr', kind: 'clip', profileId: 'p-dusk', profileName: 'DUSK 1.21.11', recordedAt: t - 2 * HOUR, size: 1_900_000, durationMs: 30_000, server: 'play.example.net', mcVersion: '1.21.11' },
+      { path: '/preview/videos/recording_2026-09-25_21-31-40.mp4', name: 'recording_2026-09-25_21-31-40.mp4', kind: 'video', profileId: 'p-dusk', profileName: 'DUSK 1.21.11', recordedAt: t - 1 * HOUR, size: 212_000_000, durationMs: 184_000, server: '', mcVersion: '' },
       { path: '/preview/replays/replay_2026-09-24_17-40-02.mcpr', name: 'replay_2026-09-24_17-40-02.mcpr', kind: 'replay', profileId: 'p-dusk', profileName: 'DUSK 1.21.11', recordedAt: t - 28 * HOUR, size: 41_000_000, durationMs: 1_512_000, server: '', mcVersion: '1.21.11' },
     ] satisfies Recording[] as T;
   }
@@ -2277,6 +2279,8 @@ export const api = {
   /** moves it to the OS trash */
   deleteRecording: (path: string) => invoke<void>('delete_recording', { path }),
   revealRecording: (path: string) => invoke<void>('reveal_recording', { path }),
+  /** plays a screen recording in the system's player */
+  openRecording: (path: string) => invoke<void>('open_recording', { path }),
   revealCrashReport: (profileId: string, report: string) =>
     invoke<void>('reveal_crash_report', { profileId, report }),
   getAppInfo: () => invoke<AppInfo>('get_app_info'),

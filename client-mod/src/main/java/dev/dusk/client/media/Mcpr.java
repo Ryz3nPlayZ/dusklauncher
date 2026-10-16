@@ -34,7 +34,7 @@ public final class Mcpr {
     private static final Gson GSON = new Gson();
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss", Locale.ROOT);
 
-    /** One screenshot, clip or replay on disk. {@code durationMs} and {@code server} are only set for recordings. */
+    /** One screenshot, video, clip or replay on disk. {@code durationMs} is set for videos and recordings, {@code server} for recordings. */
     public record Entry(Path path, String name, long modified, long size, long durationMs, String server) {}
 
     private Mcpr() {}
@@ -75,7 +75,9 @@ public final class Mcpr {
                 try {
                     long duration = 0;
                     String server = "";
-                    if (ext.equals(".mcpr")) {
+                    if (ext.equals(".mp4")) {
+                        duration = mp4Duration(p);
+                    } else if (ext.equals(".mcpr")) {
                         JsonObject meta = readMeta(p);
                         if (meta != null) {
                             if (meta.has("duration")) duration = meta.get("duration").getAsLong();
@@ -91,6 +93,58 @@ public final class Mcpr {
         }
         out.sort(Comparator.comparingLong(Entry::modified).reversed());
         return out;
+    }
+
+    /** An .mp4's length in ms from its {@code moov/mvhd} box, or 0. Blocking. */
+    static long mp4Duration(Path file) {
+        try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(file)) {
+            long end = ch.size(), at = 0;
+            String[] want = {"moov", "mvhd"};
+            int depth = 0;
+            java.nio.ByteBuffer b = java.nio.ByteBuffer.allocate(32);
+            while (at + 8 <= end) {
+                b.clear().limit(16);
+                if (ch.read(b, at) < 8) return 0;
+                b.flip();
+                long size = b.getInt() & 0xFFFFFFFFL;
+                byte[] type = new byte[4];
+                b.get(type);
+                long body = at + 8;
+                if (size == 1) {
+                    if (b.remaining() < 8) return 0;
+                    size = b.getLong();
+                    body += 8;
+                } else if (size == 0) {
+                    size = end - at;
+                }
+                if (size < body - at || at + size > end) return 0;
+                if (new String(type, StandardCharsets.ISO_8859_1).equals(want[depth])) {
+                    if (depth == want.length - 1) {
+                        b.clear();
+                        if (ch.read(b, body) < 20) return 0;
+                        b.flip();
+                        int version = b.get(0);
+                        long scale, dur;
+                        if (version == 1) {
+                            if (b.limit() < 32) return 0;
+                            scale = b.getInt(20) & 0xFFFFFFFFL;
+                            dur = b.getLong(24);
+                        } else {
+                            scale = b.getInt(12) & 0xFFFFFFFFL;
+                            dur = b.getInt(16) & 0xFFFFFFFFL;
+                        }
+                        return scale > 0 ? dur * 1000 / scale : 0;
+                    }
+                    depth++;
+                    end = at + size;
+                    at = body;
+                    continue;
+                }
+                at += size;
+            }
+        } catch (IOException | RuntimeException ignored) {
+        }
+        return 0;
     }
 
     @Nullable

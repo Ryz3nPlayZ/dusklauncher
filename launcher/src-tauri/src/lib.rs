@@ -156,6 +156,7 @@ pub fn run() {
             recordings::recording_thumb,
             recordings::delete_recording,
             recordings::reveal_recording,
+            recordings::open_recording,
             // modpacks
             modpacks::search_modpacks,
             modpacks::search_projects,

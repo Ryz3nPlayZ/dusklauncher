@@ -151,6 +151,7 @@ public class DuskClient implements ClientModInitializer {
     private static ModuleManager modules;
     private static KeyMapping settingsKey;
     private static KeyMapping clipKey;
+    private static KeyMapping recordKey;
     private static KeyMapping friendsKey;
 
     public static ModuleManager modules() {
@@ -165,6 +166,11 @@ public class DuskClient implements ClientModInitializer {
     /** Saves the clip buffer (Media → Clips). */
     public static KeyMapping clipKey() {
         return clipKey;
+    }
+
+    /** Starts and stops a screen recording (Media → Videos). */
+    public static KeyMapping recordKey() {
+        return recordKey;
     }
 
     /** Opens Friends & Chat. */
@@ -332,6 +338,7 @@ public class DuskClient implements ClientModInitializer {
             LOGGER.info("[DuskPresence] menu");
         });
         clipKey = Compat.registerKey("key.duskclient.save_clip", InputConstants.KEY_F8);
+        recordKey = Compat.registerKey("key.duskclient.record_video", InputConstants.KEY_F9);
         friendsKey = Compat.registerKey("key.duskclient.friends", Input.UNKNOWN);
         MediaBackend.init();
         SocialNotifier.start();
@@ -363,6 +370,7 @@ public class DuskClient implements ClientModInitializer {
             changed |= modules.tickToggleKeys(client);
             if (changed) modules.saveConfig();
             while (clipKey.consumeClick()) MediaBackend.saveClip();
+            while (recordKey.consumeClick()) MediaBackend.toggleVideoRecording();
             while (friendsKey.consumeClick()) {
                 Screen current = Compat.currentScreen(client);
                 if (!(current instanceof SocialScreen)) SocialScreen.show(current);
