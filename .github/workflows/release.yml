@@ -77,7 +77,7 @@ jobs:
   # failed here. 1.21.1/1.21.3 have no client gametest API.
   client-gametest:
     runs-on: ubuntu-latest
-    # a game that can't open its window hangs instead of failing
+    # a game that can't open its window hangs on an error box instead of failing
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -100,10 +100,15 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 9.7.1
-      - name: Virtual display + software GL
-        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri
+      # 26.3 asks SDL for an sRGB GL window, which Xvfb's GLX has no visual
+      # for, so it falls back to Vulkan: lavapipe gives it a software one
+      # (Fabric API's CI does the same)
+      - name: Virtual display + software GL and Vulkan
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri mesa-vulkan-drivers
       - name: Run the client gametests
         working-directory: client-mod
+        # a game with no backend shows a modal error box and waits on it
+        timeout-minutes: 12
         run: xvfb-run -a -s "-screen 0 1920x1080x24" gradle runClientGameTest -Pmc=${{ matrix.mc }} --console=plain
       - uses: actions/upload-artifact@v4
         if: failure()
