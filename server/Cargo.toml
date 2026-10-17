@@ -6,7 +6,8 @@ license = "GPL-3.0-or-later"
 description = "Dusk cosmetics + wallet service: who wears what, who owns what, and the coins that buy it."
 
 [dependencies]
-axum = "0.8"
+axum = { version = "0.8", features = ["ws"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 tokio = { version = "1", features = ["full"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }

@@ -117,6 +117,14 @@ public final class DuskAccount {
         }
     }
 
+    /**
+     * The session token, for connections that send it themselves (the voice
+     * socket). {@code fresh} signs in again, for after the service refused it.
+     */
+    public static String bearer(boolean fresh) throws IOException {
+        return fresh ? signIn() : token();
+    }
+
     // ---- auth -----------------------------------------------------------------
 
     /** The session token this game last used, so polling doesn't re-join Mojang every call. */

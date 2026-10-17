@@ -205,7 +205,6 @@ public class DuskSettingsScreen extends MenuScreen {
         pane.add(new KeybindWidget("Friends & Chat", DuskClient::friendsKey), rowH);
         pane.add(new KeybindWidget("Save a clip", DuskClient::clipKey), rowH);
         pane.add(new KeybindWidget("Record video", DuskClient::recordKey), rowH);
-        pane.add(new ActionWidget(new ActionSetting("keyboard", "Every key on a keyboard", "Open", () -> leaveTo(new KeyboardScreen(this))), () -> {}), rowH);
         pane.add(new ActionWidget(new ActionSetting("controls", "Minecraft controls", "Open", () -> {
             if (this.minecraft != null) leaveTo(new KeyBindsScreen(this, this.minecraft.options));
         }), () -> {}), rowH);
@@ -357,6 +356,11 @@ public class DuskSettingsScreen extends MenuScreen {
                 right -= lw + 6;
             }
             heads.add(new Hit("back", contentX(), hy, BTN, BTN));
+        } else if (page == Page.KEYS) {
+            // List | Keyboard: this page, or the same keys on a drawn keyboard
+            int kh = modern ? SEARCH_H : BTN, kw = keysSegW("List") + keysSegW("Keyboard") + 4;
+            heads.add(new Hit("keysview", right - kw, py + (headH() - kh) / 2, kw, kh));
+            right -= kw + 6;
         }
         titleRight = right;
 
@@ -562,6 +566,10 @@ public class DuskSettingsScreen extends MenuScreen {
                     if (hover) tip = direct ? "Back" : "Back to the modules";
                 }
                 case "search" -> drawSearch(c, h, mouseX, mouseY);
+                case "keysview" -> {
+                    drawKeysSwitch(c, h, mouseX, mouseY);
+                    if (hover && mouseX >= h.x() + 2 + keysSegW("List")) tip = "Every key on a drawn keyboard";
+                }
                 case "reset" -> textButton(c, h, "Reset all", hover);
                 case "layout" -> textButton(c, h, "Edit layout", hover);
                 case "switch" -> {
@@ -597,6 +605,39 @@ public class DuskSettingsScreen extends MenuScreen {
             if (sel) Round.fill(c, sx, sy, sw, sh, Px.radius(sh, 7), Glass.PANE_SEL);
             Icons icon = cards ? Icons.GRID : Icons.LIST;
             icon.drawCentered(c, sx + sw / 2f, sy + sh / 2f, sel ? Theme.TEXT : hover ? Theme.TEXT_MUTED : Theme.TEXT_FAINT, 1);
+        }
+    }
+
+    /** A segment's width in the Keybinds page's List | Keyboard switch. */
+    private int keysSegW(String label) {
+        return textW(label) + (label.equals("Keyboard") ? Icons.KEYBOARD.width() + 22 : 18);
+    }
+
+    /** The Keybinds page's List | Keyboard switch: List raised, as the page shown, Keyboard with its icon. */
+    private void drawKeysSwitch(Canvas c, Hit h, int mouseX, int mouseY) {
+        int lw = keysSegW("List");
+        int[][] segs = {{h.x() + 2, lw}, {h.x() + 2 + lw, h.w() - lw - 4}};
+        if (Theme.modern()) Round.fill(c, h.x(), h.y(), h.w(), h.h(), Px.radius(h.h(), 9), Glass.PANE, Theme.LINE_2);
+        for (int i = 0; i < 2; i++) {
+            int sx = segs[i][0], sw = segs[i][1], sy = h.y() + 2, sh = h.h() - 4;
+            boolean sel = i == 0, hover = Vanilla.inside(mouseX, mouseY, sx, sy, sw, sh);
+            String label = sel ? "List" : "Keyboard";
+            int color;
+            if (Theme.modern()) {
+                if (sel) Round.fill(c, sx, sy, sw, sh, Px.radius(sh, 7), Glass.PANE_SEL);
+                else if (hover) Round.fill(c, sx, sy, sw, sh, Px.radius(sh, 7), Glass.PANE_HOT);
+                color = sel || hover ? Theme.TEXT : Theme.TEXT_MUTED;
+            } else {
+                Px.button(c, sx, h.y(), sw, h.h(), hover || sel, true);
+                color = sel || hover ? Theme.TEXT : Theme.DIM;
+            }
+            int tx = sx;
+            if (!sel) {
+                Icons.KEYBOARD.draw(c, sx + 8, h.y() + (h.h() - Icons.KEYBOARD.height()) / 2, color);
+                tx += Icons.KEYBOARD.width() + 4;
+                sw -= Icons.KEYBOARD.width() + 4;
+            }
+            Px.sans(c, label, tx, h.y(), sw, h.h(), Px.Size.S14, color, true, false);
         }
     }
 
@@ -1015,6 +1056,9 @@ public class DuskSettingsScreen extends MenuScreen {
                 grid = cards;
             }
             case "search" -> search.setFocused(true);
+            case "keysview" -> {
+                if (mx >= h.x() + 2 + keysSegW("List")) leaveTo(new KeyboardScreen(this));
+            }
             case "back" -> back();
             case "reset" -> resetModule();
             case "layout" -> leaveTo(new HudEditorScreen(this));

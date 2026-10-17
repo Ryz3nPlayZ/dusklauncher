@@ -34,7 +34,9 @@ group = project.maven_group
 
 base { archivesName = project.archives_base_name }
 
-repositories {}
+repositories {
+    mavenCentral()
+}
 
 dependencies {
     minecraft "com.mojang:minecraft:${mc}"
@@ -45,6 +47,9 @@ dependencies {
     def modConfig = unobfuscated ? 'implementation' : 'modImplementation'
     "$modConfig"("net.fabricmc:fabric-loader:${loaderVersion}")
     "$modConfig"("net.fabricmc.fabric-api:fabric-api:${fabricVersion}")
+    // Opus in pure Java (BSD, see NOTICE) for voice chat, nested in the jar
+    implementation "io.github.jaredmdobson:concentus:1.0.2"
+    include "io.github.jaredmdobson:concentus:1.0.2"
 }
 
 def layeredDir = layout.buildDirectory.dir("layered/${mcKey}")

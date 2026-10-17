@@ -315,13 +315,18 @@ public class DuskClient implements ClientModInitializer {
         Waypoints waypoints = new Waypoints();
         modules.register(waypoints);
         ClientCommandRegistrationCallback.EVENT.register(WaypointCommands::register);
+        modules.register(new dev.dusk.client.voice.VoiceChat());
+        modules.register(new dev.dusk.client.voice.VoiceHud());
+        ClientCommandRegistrationCallback.EVENT.register(dev.dusk.client.voice.VoiceCommands::register);
         modules.loadConfig();
         DuskConfig.get(); // ensure duskclient.json exists for the launcher bridge
         CosmeticsManager.init();
         HudHooks.register();
         ServerApi.init();
+        dev.dusk.client.voice.Voice.init();
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             TpsTracker.reset();
+            dev.dusk.client.voice.Voice.join();
             dev.dusk.client.hud.PingTracker.reset();
             ServerApi.greetIfListening();
             // the launcher reads these lines to show friends where you are; a replay is not a server
@@ -335,6 +340,7 @@ public class DuskClient implements ClientModInitializer {
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             ServerApi.reset();
+            dev.dusk.client.voice.Voice.leave();
             LOGGER.info("[DuskPresence] menu");
         });
         clipKey = Compat.registerKey("key.duskclient.save_clip", InputConstants.KEY_F8);
@@ -387,6 +393,7 @@ public class DuskClient implements ClientModInitializer {
                 Raycast.tick(client);
             }
             modules.tick();
+            dev.dusk.client.voice.Voice.tick(client);
         });
         LOGGER.info("DuskClient initialized with {} modules", modules.all().size());
     }

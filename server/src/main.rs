@@ -45,6 +45,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod quests;
+mod voice;
 
 const CATALOG_JSON: &str = include_str!("../catalog.json");
 const PRICE_ANIMATED: i64 = 750;
@@ -150,6 +151,7 @@ struct App {
     catalog: BTreeMap<u32, PricedItem>,
     codes: BTreeMap<String, i64>,
     dev_auth: bool,
+    voice: Mutex<voice::Hub>,
 }
 
 type Shared = Arc<App>;
@@ -2146,6 +2148,7 @@ async fn main() {
         catalog: load_catalog(),
         codes,
         dev_auth: std::env::var("DUSK_DEV_AUTH").as_deref() == Ok("1"),
+        voice: Mutex::new(voice::Hub::default()),
     });
     tracing::info!("catalog: {} items, {} code(s), db {db_path}", app.catalog.len(), app.codes.len());
     if app.dev_auth {
@@ -2204,6 +2207,7 @@ async fn main() {
             post(share_pack).layer(axum::extract::DefaultBodyLimit::max(PACK_MAX_BYTES + 1024)),
         )
         .route("/v1/packs/{code}", get(get_pack))
+        .route("/v1/voice", get(voice::voice_ws))
         .layer(axum::extract::DefaultBodyLimit::max(16 * 1024))
         .with_state(app);
 

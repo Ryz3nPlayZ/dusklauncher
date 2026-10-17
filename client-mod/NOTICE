@@ -292,3 +292,22 @@ the colour styles of:
   pastel, mono and inverted formulas) and the any-colour recolour formula.
   The idea of tinting sky pictures and of saved setups also comes from it;
   that code is written independently.
+
+Voice chat (voice/) decodes and encodes voice with:
+
+- Concentus 1.0.2 — https://github.com/jaredmdobson/concentus
+  (Jared Dobson's Maven release of https://github.com/lostromb/concentus)
+  BSD 3-Clause, Copyright (c) 2016 Logan Stromberg, and the Xiph.Org,
+  Skype Limited, Octasic, Jean-Marc Valin, Timothy B. Terriberry, CSIRO,
+  Gregory Maxwell, Mark Borgerding and Erik de Castro Lopo copyrights it
+  carries from libopus. A pure Java port of the Opus codec, bundled
+  unchanged inside the mod jar.
+
+and talks to servers running:
+
+- Simple Voice Chat — https://github.com/henkelmax/simple-voice-chat
+  By Max Henkel. Interop only: the client speaks Simple Voice Chat's network
+  protocol (its handshake, secret, UDP packet layout and encryption) so Dusk
+  players can talk on servers that run it. That protocol was reimplemented
+  from how the mod behaves; none of its source files were copied, and none
+  of its code is bundled.

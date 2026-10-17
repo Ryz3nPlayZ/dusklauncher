@@ -201,6 +201,7 @@ public class SocialScreen extends PanelScreen {
             rw = px + pw - pad - rx;
             rh = bottom - top;
             List<NavBar.Tool> tools = List.of(
+                    new NavBar.Tool("call", Icons.MIC, "", "Voice call"),
                     new NavBar.Tool("shot", Icons.MEDIA, "", "Send a screenshot"),
                     new NavBar.Tool("invite", Icons.ARROW, "", "Invite them to the server you're on"),
                     new NavBar.Tool("gift", Icons.GIFT, "", "Send a gift"));
@@ -478,6 +479,29 @@ public class SocialScreen extends PanelScreen {
                 });
             }
         });
+    }
+
+    /** Rings them, picks up when they're ringing you, or hangs up when you're already talking. */
+    private void voiceCall(Social.Friend f) {
+        dev.dusk.client.voice.VoiceChat voice = dev.dusk.client.DuskClient.modules() == null ? null : dev.dusk.client.DuskClient.modules().get(dev.dusk.client.voice.VoiceChat.class);
+        if (voice == null || !voice.enabled()) {
+            note("Turn on Voice Chat in the Dusk menu (Utility) to call friends.", true);
+            return;
+        }
+        java.util.UUID them = dev.dusk.client.voice.DuskVoice.parse(f.uuid());
+        var ring = dev.dusk.client.voice.DuskVoice.ringing();
+        if (ring != null && ring.from().equals(them)) {
+            dev.dusk.client.voice.DuskVoice.accept();
+            note("In a call with " + f.username() + ".", false);
+        } else if (dev.dusk.client.voice.DuskVoice.inCall(them)) {
+            dev.dusk.client.voice.DuskVoice.hangUp();
+            note("Left the call.", false);
+        } else if (!dev.dusk.client.voice.DuskVoice.connected()) {
+            note("Voice is still connecting — try again in a moment.", true);
+        } else {
+            dev.dusk.client.voice.DuskVoice.call(them);
+            note("Calling " + f.username() + "...", false);
+        }
     }
 
     private void invite() {
@@ -1104,6 +1128,7 @@ public class SocialScreen extends PanelScreen {
                 NavBar.Tool tool = sub.toolAt(mx, my);
                 if (tool != null) {
                     switch (tool.id()) {
+                        case "call" -> voiceCall(f);
                         case "shot" -> openView(View.SHOTS);
                         case "invite" -> invite();
                         case "gift" -> giftStore();

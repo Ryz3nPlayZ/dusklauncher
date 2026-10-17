@@ -53,6 +53,11 @@ public final class SocialNotifier {
     private static volatile int unread, requests;
     /** Last snapshot by undashed uuid; null until the first poll (which never toasts). */
     private static Map<String, Social.Friend> last;
+
+    /** Your friends as of the last poll; empty before the first one. */
+    public static synchronized java.util.Collection<Social.Friend> knownFriends() {
+        return last == null ? List.of() : List.copyOf(last.values());
+    }
     private static java.util.Set<Long> knownRequests;
     private static int failures;
     private static long skipUntil;
