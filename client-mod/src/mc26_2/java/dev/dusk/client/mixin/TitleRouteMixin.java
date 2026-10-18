@@ -1,5 +1,6 @@
 package dev.dusk.client.mixin;
 
+import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.gui.DuskTitleScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
@@ -26,7 +27,8 @@ public abstract class TitleRouteMixin {
     @Inject(method = "setScreen", at = @At("HEAD"), cancellable = true)
     private void duskclient$routeTitle(Screen screen, CallbackInfo ci) {
         Gui self = (Gui) (Object) this;
-        if ((screen instanceof TitleScreen || screen == null) && Minecraft.getInstance().level == null && !duskclient$GAMETEST) {
+        if ((screen instanceof TitleScreen || screen == null) && Minecraft.getInstance().level == null && !duskclient$GAMETEST
+                && DuskConfig.get().duskTitle) {
             ci.cancel();
             self.setScreen(new DuskTitleScreen());
         }

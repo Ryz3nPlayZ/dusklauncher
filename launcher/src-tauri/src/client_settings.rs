@@ -23,6 +23,7 @@ const PREF_KEYS: &[&str] = &[
     "showAccountTile",
     "uiStyle",
     "titleScene",
+    "duskTitle",
     "favorites",
     "recordingMode",
     "clipSeconds",

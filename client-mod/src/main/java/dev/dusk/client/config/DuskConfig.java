@@ -25,6 +25,8 @@ public final class DuskConfig {
     public String uiStyle = "dusk";
     /** Title screen: the launcher's animated scene (true) or the vanilla panorama. */
     public boolean titleScene = true;
+    /** Title screen: Dusk's menu (true), or the vanilla one, which another mod's own menus can then replace. */
+    public boolean duskTitle = true;
     /** HUD text in the smooth sans, sharp at any GUI scale (true), or the Minecraft font. */
     public boolean hudSmoothFont = true;
     /** Cosmetics loadout + toggles (docs/COSMETICS.md). Written by the launcher. */

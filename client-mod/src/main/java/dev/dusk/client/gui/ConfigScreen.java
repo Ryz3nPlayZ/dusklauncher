@@ -62,6 +62,10 @@ public class ConfigScreen extends MenuScreen {
             DuskConfig.get().hudSmoothFont = v;
             DuskConfig.save();
         }), SettingsBuilder.rowH());
+        p.add(new ToggleWidget("Dusk title screen", () -> DuskConfig.get().duskTitle, v -> {
+            DuskConfig.get().duskTitle = v;
+            DuskConfig.save();
+        }), SettingsBuilder.rowH());
         p.add(new ToggleWidget("Animated title scene", () -> DuskConfig.get().titleScene, v -> {
             DuskConfig.get().titleScene = v;
             DuskConfig.save();
