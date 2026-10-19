@@ -52,6 +52,7 @@ public final class MonitorInfoProvider {
         if (monitors != null) {
             for (int i = 0; i < monitors.limit(); i++) {
                 long m = monitors.get(i);
+                if (m == 0) continue;
                 int[] mx = new int[1], my = new int[1];
                 GLFW.glfwGetMonitorPos(m, mx, my);
                 GLFWVidMode mode = GLFW.glfwGetVideoMode(m);
@@ -67,6 +68,8 @@ public final class MonitorInfoProvider {
     }
 
     private static int detectRefreshRate(long monitor) {
+        // no monitor at all while a display sleeps or is unplugged; LWJGL throws on a null handle
+        if (monitor == 0) return 60;
         GLFWVidMode vidMode = GLFW.glfwGetVideoMode(monitor);
         return (vidMode != null) ? vidMode.refreshRate() : 60;
     }

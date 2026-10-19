@@ -1100,6 +1100,9 @@ function ContentTab({
   const [filter, setFilter] = useState('');
   /* newer Modrinth versions, keyed `kind/filename`; null while checking */
   const [updates, setUpdates] = useState<Map<string, ContentUpdate> | null>(null);
+  /* newer versions another mod's pin rules out (Voxy takes only some
+     Sodium builds), keyed the same → why, so they get no UPDATE */
+  const [held, setHeld] = useState<Map<string, string>>(() => new Map());
   /* which Modrinth project each file is, keyed `kind/filename`; files Modrinth
      doesn't know (hand-made packs) have no entry and no VERSIONS button */
   const [projects, setProjects] = useState<Map<string, string>>(() => new Map());
@@ -1151,7 +1154,9 @@ function ContentTab({
           .catch(() => []),
       ),
     );
-    setUpdates(new Map(found.flat()));
+    const all = found.flat();
+    setUpdates(new Map(all.filter(([, u]) => !u.held)));
+    setHeld(new Map(all.flatMap(([key, u]) => (u.held ? [[key, `${u.versionNumber} held back — ${u.held}`] as const] : []))));
   };
 
   const lookupProjects = async () => {
@@ -1234,15 +1239,22 @@ function ContentTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile.id, kindTab]);
 
-  /* one at a time: two downloads racing into one folder buys nothing, and a
-     failure stops the batch where it is */
+  /* one at a time: two downloads racing into one folder buys nothing. One
+     that fails (or is undone because it would break another mod) is
+     reported and the rest still go */
   const update = async (list: [string, ContentKind, ContentUpdate][]) => {
     setNote(null);
     setUpdating((cur) => new Set([...cur, ...list.map(([key]) => key)]));
     let done = 0;
+    const failed: string[] = [];
     try {
       for (const [key, k, u] of list) {
-        await api.updateContent(profile.id, k, u.filename, u.versionId);
+        try {
+          await api.updateContent(profile.id, k, u.filename, u.versionId);
+        } catch (e) {
+          failed.push(String(e));
+          continue;
+        }
         done++;
         setUpdates((cur) => {
           const next = new Map(cur);
@@ -1250,9 +1262,8 @@ function ContentTab({
           return next;
         });
       }
-    } catch (e) {
-      setNote(`${done ? `Updated ${done}, then: ` : ''}${String(e)}`);
     } finally {
+      if (failed.length) setNote(`${done ? `Updated ${done}. ` : ''}${failed.join(' · ')}`);
       setUpdating(new Set());
       await reload();
     }
@@ -1565,7 +1576,7 @@ function ContentTab({
                     <PixelGlyph glyph="box" size={48} color="var(--text-3)" />
                   )}
                 </span>
-                <span className="editor__tile-name" title={m.filename}>
+                <span className="editor__tile-name" title={held.get(key) ? `${m.filename} · ${held.get(key)}` : m.filename}>
                   {m.name || displayName(m.filename)}
                 </span>
                 <span className="meta editor__tile-meta">
@@ -1646,6 +1657,7 @@ function ContentTab({
                   <span className="meta editor__filename">
                     {m.filename} · {fmtBytes(m.size)}
                     {upd && ` · ${upd.currentVersion} → ${upd.versionNumber}`}
+                    {!upd && held.get(key) && ` · ${held.get(key)}`}
                   </span>
                   {upd?.changelog && (
                     <button

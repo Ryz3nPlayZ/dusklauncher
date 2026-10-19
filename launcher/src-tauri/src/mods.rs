@@ -285,6 +285,8 @@ pub struct ContentUpdateDto {
     pub version_number: String,
     /// what the new version says changed, as its author wrote it (markdown)
     pub changelog: Option<String>,
+    /// why it isn't offered: another mod pins the version installed now
+    pub held: Option<String>,
 }
 
 /// The Modrinth loader slugs a kind's files are published under: mods follow
@@ -341,26 +343,47 @@ pub async fn check_content_updates(
     );
     let current = current.map_err(|e| e.to_string())?;
     let latest = latest.map_err(|e| e.to_string())?;
-    let mut out: Vec<ContentUpdateDto> = files
+    let mut found: Vec<(ContentUpdateDto, Option<String>)> = files
         .into_iter()
         .filter_map(|(filename, hash)| {
             let (cur, new) = (current.get(&hash)?, latest.get(&hash)?);
-            is_update(cur, new).then(|| ContentUpdateDto {
-                filename,
-                project_id: new.project_id.clone(),
-                current_version: cur.version_number.clone(),
-                version_id: new.id.clone(),
-                version_number: new.version_number.clone(),
-                changelog: new.changelog.as_deref().map(str::trim).filter(|c| !c.is_empty()).map(str::to_owned),
+            let file = new.files.iter().find(|f| f.primary).or_else(|| new.files.first()).map(|f| f.filename.clone());
+            is_update(cur, new).then(|| {
+                let dto = ContentUpdateDto {
+                    filename,
+                    project_id: new.project_id.clone(),
+                    current_version: cur.version_number.clone(),
+                    version_id: new.id.clone(),
+                    version_number: new.version_number.clone(),
+                    changelog: new.changelog.as_deref().map(str::trim).filter(|c| !c.is_empty()).map(str::to_owned),
+                    held: None,
+                };
+                (dto, file)
             })
         })
         .collect();
+    // an update another mod's pin rules out stays put (Voxy and Sodium)
+    if kind == "mod" && profile.loader.as_str() == "fabric" && !found.is_empty() {
+        let names: Vec<(String, Option<String>)> = found.iter().map(|(d, f)| (d.filename.clone(), f.clone())).collect();
+        let held = tokio::task::spawn_blocking(move || {
+            let folder = crate::deps::ModsFolder::read(&dir);
+            names.iter().map(|(old, new)| folder.held_back(old, new.as_deref()?)).collect::<Vec<_>>()
+        })
+        .await
+        .unwrap_or_default();
+        for ((dto, _), why) in found.iter_mut().zip(held) {
+            dto.held = why;
+        }
+    }
+    let mut out: Vec<ContentUpdateDto> = found.into_iter().map(|(d, _)| d).collect();
     out.sort_by(|a, b| a.filename.cmp(&b.filename));
     Ok(out)
 }
 
 /// Replace an installed file with another version of its project: download
-/// the new file, drop the old one, and keep it disabled if it was.
+/// the new file, drop the old one, and keep it disabled if it was. A mod
+/// update that would stop the game loading (another mod pins the version
+/// it replaces) is undone, the old file kept, and the error says why.
 #[tauri::command]
 pub async fn update_profile_content(
     app: AppHandle,
@@ -372,13 +395,31 @@ pub async fn update_profile_content(
 ) -> Result<ProfileModDto, String> {
     let kind = content_kind(&kind)?;
     let old = sanitize_filename(&filename)?;
-    let (_, dir) = profile_and_content(&state, &profile_id, kind)?;
+    let (profile, dir) = profile_and_content(&state, &profile_id, kind)?;
     let was_enabled = dir.join(&old).exists();
     if !was_enabled && !dir.join(format!("{old}.disabled")).exists() {
         return Err("that file is no longer in the instance".into());
     }
     let ver = mr::version(&state.client, &version_id).await.map_err(|e| e.to_string())?;
+    // a file already there under the new name isn't this update's to take back
+    let landed_before = ver
+        .files
+        .iter()
+        .find(|f| f.primary)
+        .or_else(|| ver.files.first())
+        .is_some_and(|f| dir.join(&f.filename).exists());
     let added = install_version_file(app, state.clone(), profile_id.clone(), kind, dir.clone(), ver).await?;
+    if kind == "mod" && was_enabled && !landed_before && added.filename != old && profile.loader.as_str() == "fabric" {
+        let (d, o, n, game) = (dir.clone(), old.clone(), added.filename.clone(), profile.game_version.clone());
+        let broken = tokio::task::spawn_blocking(move || crate::deps::update_problems(&d, &o, &n, &game))
+            .await
+            .unwrap_or_default();
+        if !broken.is_empty() {
+            let _ = std::fs::remove_file(dir.join(&added.filename));
+            let _ = state.patch_profile(&profile_id, |p| p.mod_filenames.retain(|f| f != &added.filename));
+            return Err(format!("Kept {old}: {}.", broken.join("; ")));
+        }
+    }
     // the new file landed enabled at its own name; clear what it replaces
     let _ = std::fs::remove_file(dir.join(format!("{old}.disabled")));
     if added.filename != old {

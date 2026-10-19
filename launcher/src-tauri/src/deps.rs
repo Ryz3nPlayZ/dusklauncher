@@ -247,6 +247,7 @@ fn predicate_text(predicate: &serde_json::Value) -> String {
 }
 
 /// One jar in mods/: what it provides and, when enabled, what it needs.
+#[derive(Clone)]
 struct Jar {
     filename: String,
     enabled: bool,
@@ -473,28 +474,144 @@ pub async fn mod_problems(state: State<'_, AppState>, profile_id: String) -> Res
     if !fabric {
         return Ok(ModProblems::default());
     }
-    tokio::task::spawn_blocking(move || {
-        let jars: Vec<Jar> = std::fs::read_dir(&dir)
-            .map(|rd| {
-                rd.flatten()
-                    .filter_map(|e| {
-                        let filename = e.file_name().to_string_lossy().into_owned();
-                        let enabled = filename.ends_with(".jar");
-                        // disabled jars go by the name they have when on, like the CONTENT list
-                        let logical = match filename.strip_suffix(".disabled") {
-                            Some(base) if base.ends_with(".jar") => base.to_string(),
-                            _ if enabled => filename,
-                            _ => return None,
-                        };
-                        read_jar(&e.path(), logical, enabled)
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        find_problems(&jars, Some(&game))
-    })
-    .await
-    .map_err(|e| e.to_string())
+    tokio::task::spawn_blocking(move || find_problems(&read_folder(&dir), Some(&game)))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Every jar in a mods folder, on or off.
+fn read_folder(dir: &std::path::Path) -> Vec<Jar> {
+    std::fs::read_dir(dir)
+        .map(|rd| {
+            rd.flatten()
+                .filter_map(|e| {
+                    let filename = e.file_name().to_string_lossy().into_owned();
+                    let enabled = filename.ends_with(".jar");
+                    // disabled jars go by the name they have when on, like the CONTENT list
+                    let logical = match filename.strip_suffix(".disabled") {
+                        Some(base) if base.ends_with(".jar") => base.to_string(),
+                        _ if enabled => filename,
+                        _ => return None,
+                    };
+                    read_jar(&e.path(), logical, enabled)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// A version range the way players read it: `0.8.4 or 0.8.12`, `>=0.8.1`.
+fn plain_range(range: &str) -> String {
+    range
+        .split(' ')
+        .map(|t| t.strip_prefix('=').unwrap_or(t).split('+').next().unwrap_or(t))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn short_version(v: &str) -> &str {
+    v.split('+').next().unwrap_or(v)
+}
+
+/// What would stop the game loading with `new` in place of `old` that
+/// wasn't already stopping it with `old`, one plain line each: a mod that
+/// pins another version of it, a library it needs in another version, mods
+/// that say they break each other. Both are enabled jars in `jars`.
+fn new_problems(jars: &[Jar], old: &str, new: &str, game: Option<&str>) -> Vec<String> {
+    let without = |skip: &str| jars.iter().filter(|j| j.filename != skip).cloned().collect::<Vec<_>>();
+    // the new file stands where the old one did, so its own old problems match
+    let at = |f: &str| if f == new { old.to_string() } else { f.to_string() };
+    let lines = |p: &ModProblems| {
+        let mut out = Vec::new();
+        for m in &p.mismatched {
+            for n in &m.needed_by {
+                out.push((
+                    format!("needs|{}|{}|{}", at(&n.file), m.name, n.wants),
+                    format!("{} needs {} {}, not {}", n.name, m.name, plain_range(&n.wants), short_version(&m.version)),
+                ));
+            }
+        }
+        for c in &p.clashes {
+            out.push((
+                format!("breaks|{}|{}", at(&c.file), at(&c.other_file)),
+                format!("{} doesn't work with {} {}", c.name, c.other, short_version(&c.other_version)),
+            ));
+        }
+        out
+    };
+    let before: std::collections::HashSet<String> =
+        lines(&find_problems(&without(new), game)).into_iter().map(|(k, _)| k).collect();
+    let mut out: Vec<String> = Vec::new();
+    for (key, text) in lines(&find_problems(&without(old), game)) {
+        if !before.contains(&key) && !out.contains(&text) {
+            out.push(text);
+        }
+    }
+    out
+}
+
+/// After a mod update has downloaded `new` next to `old` in `mods_dir`, what
+/// it would break (see [`new_problems`]). Empty when nothing, or when the
+/// two can't be told apart.
+pub fn update_problems(mods_dir: &std::path::Path, old: &str, new: &str, game: &str) -> Vec<String> {
+    if old == new {
+        return Vec::new();
+    }
+    let jars: Vec<Jar> = read_folder(mods_dir).into_iter().filter(|j| j.enabled).collect();
+    if !jars.iter().any(|j| j.filename == old) || !jars.iter().any(|j| j.filename == new) {
+        return Vec::new();
+    }
+    new_problems(&jars, old, new, Some(game))
+}
+
+/// The version in a new file's name, read the way the installed file's name
+/// holds its version: `sodium-fabric-0.8.12+mc1.21.11.jar` at 0.8.12 makes
+/// `sodium-fabric-0.8.14+mc1.21.11.jar` 0.8.14. None when the names don't
+/// line up.
+fn version_from_name(old_name: &str, old_version: &str, new_name: &str) -> Option<String> {
+    let core = short_version(old_version);
+    if core.is_empty() {
+        return None;
+    }
+    let at = old_name.find(core)?;
+    let (prefix, suffix) = (&old_name[..at], &old_name[at + core.len()..]);
+    let mid = new_name.strip_prefix(prefix)?.strip_suffix(suffix)?;
+    parse_semver(mid)?;
+    Some(mid.to_string())
+}
+
+/// The enabled jars of a mods folder, read once to vet a list of updates
+/// before any of them download.
+pub struct ModsFolder(Vec<Jar>);
+
+impl ModsFolder {
+    pub fn read(dir: &std::path::Path) -> Self {
+        Self(read_folder(dir).into_iter().filter(|j| j.enabled).collect())
+    }
+
+    /// Why updating `old` to the file `new` would stop the game loading,
+    /// because another mod pins the version it has now (Voxy takes only
+    /// certain Sodium builds). None when it wouldn't, or when the new
+    /// version can't be read off its name; the download is checked again.
+    pub fn held_back(&self, old: &str, new: &str) -> Option<String> {
+        let target = self.0.iter().find(|j| j.filename == old)?;
+        let id = target.id.as_deref()?;
+        let next = version_from_name(old, &target.version, new)?;
+        let mut why = Vec::new();
+        for j in self.0.iter().filter(|j| j.filename != old) {
+            for (_, range) in j.depends.iter().filter(|(d, _)| d == id) {
+                if satisfies(&target.version, range) != Some(false) && satisfies(&next, range) == Some(false) {
+                    why.push(format!("{} needs {} {}", j.name, target.name, plain_range(&predicate_text(range))));
+                }
+            }
+            for (_, range) in j.breaks.iter().filter(|(d, _)| d == id) {
+                if satisfies(&target.version, range) != Some(true) && satisfies(&next, range) == Some(true) {
+                    why.push(format!("{} doesn't work with {} {}", j.name, target.name, short_version(&next)));
+                }
+            }
+        }
+        (!why.is_empty()).then(|| why.join("; "))
+    }
 }
 
 /// The ranges the enabled jars in `mods_dir`, and the jars they bundle (two
@@ -633,6 +750,70 @@ mod tests {
         let out = read_jar(&tmp, filename.into(), enabled).unwrap();
         let _ = std::fs::remove_file(&tmp);
         out
+    }
+
+    fn voxy_folder(sodium: &str) -> Vec<Jar> {
+        vec![
+            jar(
+                jar_bytes(r#"{"id":"voxy","name":"Voxy","version":"0.2.16-beta","depends":{"sodium":["=0.8.4","=0.8.11","=0.8.12"]}}"#, &[]),
+                "voxy-0.2.16-beta+1.21.11.jar",
+                true,
+            ),
+            jar(
+                jar_bytes(r#"{"id":"reeses-sodium-options","name":"Reese's Sodium Options","version":"2.2.3","depends":{"sodium":">=0.8.11"}}"#, &[]),
+                "reeses-sodium-options-fabric-2.2.3+mc1.21.11.jar",
+                true,
+            ),
+            jar(
+                jar_bytes(&format!(r#"{{"id":"sodium","name":"Sodium","version":"{sodium}+mc1.21.11"}}"#), &[]),
+                &format!("sodium-fabric-{sodium}+mc1.21.11.jar"),
+                true,
+            ),
+        ]
+    }
+
+    #[test]
+    fn update_a_pinned_mod_is_held_back_by_its_name() {
+        let folder = ModsFolder(voxy_folder("0.8.12"));
+        let old = "sodium-fabric-0.8.12+mc1.21.11.jar";
+        assert_eq!(
+            folder.held_back(old, "sodium-fabric-0.8.14+mc1.21.11.jar").as_deref(),
+            Some("Voxy needs Sodium 0.8.4 or 0.8.11 or 0.8.12")
+        );
+        // a newer one Voxy takes, and names that don't line up, go through
+        assert_eq!(ModsFolder(voxy_folder("0.8.11")).held_back("sodium-fabric-0.8.11+mc1.21.11.jar", old), None);
+        assert_eq!(folder.held_back(old, "sodium-0.8.14.jar"), None);
+        assert_eq!(version_from_name("voxy-0.2.15-beta+1.21.11.jar", "0.2.15-beta", "voxy-0.2.16-beta+1.21.11.jar").as_deref(), Some("0.2.16-beta"));
+    }
+
+    #[test]
+    fn update_problems_are_only_the_new_ones() {
+        let mut jars = voxy_folder("0.8.12");
+        jars.push(jar(
+            jar_bytes(r#"{"id":"sodium","name":"Sodium","version":"0.8.14+mc1.21.11"}"#, &[]),
+            "sodium-fabric-0.8.14+mc1.21.11.jar",
+            true,
+        ));
+        let old = "sodium-fabric-0.8.12+mc1.21.11.jar";
+        assert_eq!(
+            new_problems(&jars, old, "sodium-fabric-0.8.14+mc1.21.11.jar", None),
+            vec!["Voxy needs Sodium 0.8.4 or 0.8.11 or 0.8.12, not 0.8.14".to_string()]
+        );
+        // Reese's asking for a Sodium the folder doesn't have, after its update
+        let mut jars = voxy_folder("0.8.12");
+        jars.push(jar(
+            jar_bytes(r#"{"id":"reeses-sodium-options","name":"Reese's Sodium Options","version":"2.2.4","depends":{"sodium":"=0.8.14+mc1.21.11"}}"#, &[]),
+            "reeses-sodium-options-fabric-2.2.4+mc1.21.11.jar",
+            true,
+        ));
+        assert_eq!(
+            new_problems(&jars, "reeses-sodium-options-fabric-2.2.3+mc1.21.11.jar", "reeses-sodium-options-fabric-2.2.4+mc1.21.11.jar", None),
+            vec!["Reese's Sodium Options needs Sodium 0.8.14, not 0.8.12".to_string()]
+        );
+        // an update that fits says nothing
+        let mut jars = voxy_folder("0.8.11");
+        jars.push(jar(jar_bytes(r#"{"id":"sodium","name":"Sodium","version":"0.8.12+mc1.21.11"}"#, &[]), old, true));
+        assert!(new_problems(&jars, "sodium-fabric-0.8.11+mc1.21.11.jar", old, None).is_empty());
     }
 
     #[test]
