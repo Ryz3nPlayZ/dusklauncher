@@ -100,3 +100,8 @@ java/dev/dusk/client/mixin/styles/CrystalSeeThroughMixin.java
 # the sampler cache); the versions below it and 26.x leave it off for now
 java/dev/dusk/client/render/WorldScale.java
 java/dev/dusk/client/mixin/scale/**
+
+# Fancy Third Person drives the 1.21.11+ camera (setup / alignWithEntity) and
+# HUD; older targets don't register the module
+java/dev/dusk/client/render/thirdperson/**
+java/dev/dusk/client/mixin/thirdperson/**

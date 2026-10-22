@@ -204,6 +204,18 @@ Movement and camera modules ported from permissively licensed mods:
   compat/AppleSkinChannel, mixin/hunger and
   assets/duskclient/textures/hud/appleskin_icons.png).
 
+- Leawind's Third Person — https://github.com/LEAWIND/Third-Person
+  MIT, Copyright (c) 2023-2024 Leawind. Ported, altered: the
+  over-the-shoulder camera that the mouse turns instead of the player, the
+  camera-relative movement and the player turning toward where it walks,
+  the screen-space shoulder offset, the half-life smoothing of the camera
+  centre, offset and distance (and their defaults), the closer view while
+  aiming a bow, crossbow or trident, the crosshair-point picks and facing
+  that point to hit and use, the wall clipping, the crosshair in third
+  person and skipping the front view on F5 (modules/render/
+  FancyThirdPerson.java, render/thirdperson and mixin/thirdperson).
+  Distributed under the MIT licence quoted above for Shield Tweaks.
+
 Modules whose behaviour follows LGPL mods (no source files were copied):
 
 - Confirm Disconnect — https://codeberg.org/MicrocontrollersDev/Confirm-Disconnect

@@ -96,7 +96,7 @@ public class CustomCrosshair extends Module {
     public boolean shouldDraw(Minecraft mc) {
         if (!enabled()) return false;
         if (mc.player == null) return false;
-        if (mc.options.getCameraType() != CameraType.FIRST_PERSON) return false;
+        if (mc.options.getCameraType() != CameraType.FIRST_PERSON && !FancyThirdPerson.showCrosshair()) return false;
         if (mc.getDebugOverlay().showDebugScreen()) return false;
         // An empty grid draws zero fragments; fall back to vanilla rather
         // than suppressing it into total invisibility. The grid can end up

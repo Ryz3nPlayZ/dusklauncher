@@ -110,6 +110,7 @@ import dev.dusk.client.modules.hud.SkyblockStats;
 import dev.dusk.client.modules.misc.HypixelTweaks;
 import dev.dusk.client.modules.misc.ScrollTransfer;
 import dev.dusk.client.modules.misc.ScrollableTooltips;
+import dev.dusk.client.modules.render.FancyThirdPerson;
 import dev.dusk.client.modules.render.ItemPhysics;
 import dev.dusk.client.modules.misc.SlotLock;
 import dev.dusk.client.modules.render.NoNightVision;
@@ -260,6 +261,7 @@ public class DuskClient implements ClientModInitializer {
             modules.register(new ShieldTweaks());
             modules.register(new ItemScale());
             modules.register(new ItemPhysics());
+            modules.register(new FancyThirdPerson());
             modules.register(new FogControl());
             modules.register(new BoatMap());
             modules.register(new GameModeSwitcher());
