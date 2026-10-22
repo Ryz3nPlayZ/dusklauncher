@@ -10,6 +10,7 @@ import dev.dusk.client.modules.render.BlockHighlight.Faces;
 import dev.dusk.client.modules.render.BlockHighlight.Layer;
 import dev.dusk.client.modules.render.BlockHighlight.Paint;
 import dev.dusk.client.modules.render.BlockHighlight.Shape;
+import dev.dusk.client.perf.Perf;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -132,7 +133,10 @@ public final class HighlightEngine {
     /** The feature pass's draw, into whatever HighlightGpu.begin hands out. */
     public static void drawFeature() {
         BlockHighlight m = BlockHighlight.active();
-        if (m != null) draw(m, new PoseStack(), featureObstructed);
+        if (m == null) return;
+        long t0 = Perf.start();
+        draw(m, new PoseStack(), featureObstructed);
+        Perf.end(m.perf(), Perf.WORLD, t0);
     }
 
     // ---- per frame ----

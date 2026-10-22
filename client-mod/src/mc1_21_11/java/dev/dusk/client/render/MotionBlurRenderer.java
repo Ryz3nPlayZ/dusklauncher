@@ -1,5 +1,6 @@
 package dev.dusk.client.render;
 
+import dev.dusk.client.perf.Perf;
 import dev.dusk.client.render.motionblur.MotionBlurPipeline;
 
 /**
@@ -18,9 +19,15 @@ public final class MotionBlurRenderer {
      * level render, then the colour grade, which wants the blurred frame and
      * has to be done before the GUI is drawn over it.
      */
+    private static final Perf.Section BLUR = Perf.part("Motion Blur"), SATURATION = Perf.part("Color Saturation");
+
     public static void afterLevelRender() {
+        long t0 = Perf.start();
         MotionBlurPipeline.applyDeferredTemporalBlur();
+        Perf.end(BLUR, Perf.WORLD, t0);
+        t0 = Perf.start();
         ColorSaturationRenderer.render(MotionBlurPipeline.frameAllocator());
+        Perf.end(SATURATION, Perf.WORLD, t0);
         MotionBlurPipeline.clearFrameAllocator();
     }
 

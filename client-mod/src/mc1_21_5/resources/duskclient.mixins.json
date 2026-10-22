@@ -24,6 +24,7 @@
     "keybinds.KeyBindsScreenMixin",
     "keybinds.KeyEntryAccessor",
     "TitleRouteMixin",
+    "PerfFrameMixin",
     "TpsMixin",
     "PingMixin",
     "FullbrightMixin",

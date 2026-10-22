@@ -90,6 +90,7 @@ import dev.dusk.client.modules.render.TotemTweaks;
 import dev.dusk.client.modules.render.GlintColor;
 import dev.dusk.client.modules.render.ShieldTweaks;
 import dev.dusk.client.modules.misc.Waypoints;
+import dev.dusk.client.perf.Perf;
 import dev.dusk.client.waypoints.WaypointCommands;
 import dev.dusk.client.modules.render.MotionBlur;
 import dev.dusk.client.modules.render.Nametags;
@@ -357,7 +358,9 @@ public class DuskClient implements ClientModInitializer {
             }
         });
 
+        Perf.Section housekeeping = Perf.part("Keybinds & housekeeping"), voice = Perf.part("Voice chat");
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            long t0 = Perf.start();
             LoadoutWatcher.tick();
             // vanilla's Statistics screen reached some other way than the pause menu
             if (Statistics.on() && Compat.currentScreen(client) instanceof Screen stats
@@ -394,8 +397,11 @@ public class DuskClient implements ClientModInitializer {
             if (modules.get(Distance.class).enabled() || modules.get(SignReader.class).enabled()) {
                 Raycast.tick(client);
             }
+            Perf.end(housekeeping, Perf.TICK, t0);
             modules.tick();
+            t0 = Perf.start();
             dev.dusk.client.voice.Voice.tick(client);
+            Perf.end(voice, Perf.TICK, t0);
         });
         LOGGER.info("DuskClient initialized with {} modules", modules.all().size());
     }

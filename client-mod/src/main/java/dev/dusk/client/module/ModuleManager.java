@@ -6,6 +6,7 @@ import com.google.gson.reflect.TypeToken;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.compat.Input;
 import dev.dusk.client.hud.HudElement;
+import dev.dusk.client.perf.Perf;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -83,7 +84,10 @@ public class ModuleManager {
 
     public void tick() {
         for (Module m : modules) {
-            if (m.enabled()) m.tick();
+            if (!m.enabled()) continue;
+            long t0 = Perf.start();
+            m.tick();
+            Perf.end(m.perf(), Perf.TICK, t0);
         }
     }
 

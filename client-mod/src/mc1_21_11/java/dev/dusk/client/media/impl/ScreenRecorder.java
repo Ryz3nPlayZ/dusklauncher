@@ -4,6 +4,7 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.media.Mcpr;
+import dev.dusk.client.perf.Perf;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
@@ -169,6 +170,8 @@ public final class ScreenRecorder {
         if (want && !starting && failures < MAX_FAILURES && System.currentTimeMillis() >= retryAt) begin(mc);
     }
 
+    private static final Perf.Section RECORDER = Perf.part("Screen recorder");
+
     /** The render hooks: after the world is drawn ({@code hud} false), and once the HUD is on it too. */
     public static void onFrame(boolean hud) {
         Session s = session;
@@ -177,7 +180,9 @@ public final class ScreenRecorder {
         boolean world = mc.level != null && !DuskConfig.get().videoHud;
         // in the menus there is no world pass, so the finished frame it is
         if (hud == world) return;
+        long t0 = Perf.start();
         s.frame(mc);
+        Perf.end(RECORDER, Perf.WORLD, t0);
     }
 
     // ---- keys -------------------------------------------------------------------------

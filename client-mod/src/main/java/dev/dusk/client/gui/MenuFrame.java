@@ -45,6 +45,7 @@ public final class MenuFrame {
         FRIENDS(Section.SOCIAL, "Friends & Chat", Icons.CHAT), QUESTS(Section.SOCIAL, "Quests", Icons.FLAG),
         MEDIA(Section.SOCIAL, "Media", Icons.MEDIA),
         WAYPOINTS(Section.GAME, "Waypoints", Icons.PIN), STATS(Section.GAME, "Stats", Icons.CHART, true),
+        PERFORMANCE(Section.GAME, "Performance", Icons.MONITOR),
         KEYBINDS(Section.GAME, "Keybinds", Icons.KEYBOARD), PREFERENCES(Section.GAME, "Preferences", Icons.GEAR);
 
         final Section section;
@@ -296,6 +297,7 @@ public final class MenuFrame {
             case MEDIA -> new MediaScreen(hub, MediaScreen.SCREENSHOTS);
             case WAYPOINTS -> new WaypointsScreen(hub);
             case STATS -> new DuskStatsScreen(hub);
+            case PERFORMANCE -> new PerformanceScreen(hub);
             default -> hub;
         });
     }

@@ -4,6 +4,7 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.NativeImage;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.media.Mcpr;
+import dev.dusk.client.perf.Perf;
 import net.minecraft.client.InactivityFpsLimit;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
@@ -212,8 +213,13 @@ public final class VideoExporter {
     /** Right after the world is drawn, before the HUD goes over it. */
     public static void onFrame() {
         VideoExporter e = current;
-        if (e != null) e.frame(Minecraft.getInstance());
+        if (e == null) return;
+        long t0 = Perf.start();
+        e.frame(Minecraft.getInstance());
+        Perf.end(EXPORT, Perf.WORLD, t0);
     }
+
+    private static final Perf.Section EXPORT = Perf.part("Video export");
 
     private void frame(Minecraft mc) {
         String why = failure;

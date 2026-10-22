@@ -2,6 +2,7 @@ package dev.dusk.client.module;
 
 import dev.dusk.client.module.setting.Setting;
 import dev.dusk.client.module.setting.ToggleKeySetting;
+import dev.dusk.client.perf.Perf;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,6 +26,7 @@ public abstract class Module {
     private boolean enabled;
     /** Switched off by the connected server (see ServerApi); the player's own choice is kept. */
     private boolean blocked;
+    private Perf.Section perf;
 
     /** HUD anchor, in scaled pixels, for Category.HUD modules. */
     private int x, y;
@@ -38,6 +40,12 @@ public abstract class Module {
         this.name = name;
         this.category = category;
         this.description = description;
+    }
+
+    /** This module's row on the Performance page. */
+    public Perf.Section perf() {
+        if (perf == null) perf = Perf.section(name, category.label);
+        return perf;
     }
 
     public String id() { return id; }

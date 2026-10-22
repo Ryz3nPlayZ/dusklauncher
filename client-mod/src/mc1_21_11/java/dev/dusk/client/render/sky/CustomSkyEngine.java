@@ -2,6 +2,7 @@ package dev.dusk.client.render.sky;
 
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.modules.render.CustomSkies;
+import dev.dusk.client.perf.Perf;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
@@ -89,6 +90,17 @@ public final class CustomSkyEngine {
 
     /** Draws each showing layer of the overworld's (or End's) sky over {@code base}, the sky's model-view. */
     public static void draw(boolean end, Matrix4fc base, Sink sink) {
+        long t0 = Perf.start();
+        try {
+            drawLayers(end, base, sink);
+        } finally {
+            Perf.end(SKY, Perf.WORLD, t0);
+        }
+    }
+
+    private static final Perf.Section SKY = Perf.part("Custom skies");
+
+    private static void drawLayers(boolean end, Matrix4fc base, Sink sink) {
         ClientLevel level = frameLevel.get();
         if (level == null) return;
         List<SkyLayer> layers = end ? skies.end() : skies.overworld();

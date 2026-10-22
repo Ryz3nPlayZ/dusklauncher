@@ -4,6 +4,7 @@ import dev.dusk.client.DuskClient;
 import dev.dusk.client.compat.Compat;
 import dev.dusk.client.config.DuskConfig;
 import dev.dusk.client.gui.widget.PopupStack;
+import dev.dusk.client.perf.Perf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.client.gui.screens.Screen;
 import org.jetbrains.annotations.Nullable;
@@ -14,6 +15,8 @@ import org.jetbrains.annotations.Nullable;
  * the page's popups: they draw last and take all input while open.
  */
 public abstract class MenuScreen extends DuskScreen {
+    private static final Perf.Section MENU = Perf.part("Dusk menu");
+
     @Nullable protected final Screen parent;
     protected final PopupStack popups = new PopupStack();
 
@@ -56,9 +59,12 @@ public abstract class MenuScreen extends DuskScreen {
 
     @Override
     protected final void drawOverlay(Canvas c, int mouseX, int mouseY, float delta) {
+        long t0 = Perf.start();
+        Perf.menuOpen();
         boolean blocked = popups.any();
         drawMenu(c, blocked ? -1 : mouseX, blocked ? -1 : mouseY, delta);
         popups.render(c, mouseX, mouseY, this.width, this.height);
+        Perf.end(MENU, Perf.OTHER, t0);
     }
 
     protected boolean menuClick(double mx, double my, int button) { return false; }

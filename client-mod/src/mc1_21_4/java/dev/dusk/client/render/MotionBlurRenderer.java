@@ -12,6 +12,7 @@ import dev.dusk.client.compat.Compat;
 import dev.dusk.client.mixin.PostChainAccessor;
 import dev.dusk.client.mixin.PostPassAccessor;
 import dev.dusk.client.modules.render.MotionBlur;
+import dev.dusk.client.perf.Perf;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.CompiledShaderProgram;
 import net.minecraft.client.renderer.LevelTargetBundle;
@@ -62,6 +63,17 @@ public final class MotionBlurRenderer {
 
     /** Called at the tail of GameRenderer.renderLevel on the render thread. */
     public static void afterLevelRender() {
+        long t0 = Perf.start();
+        try {
+            blurFrame();
+        } finally {
+            Perf.end(BLUR, Perf.WORLD, t0);
+        }
+    }
+
+    private static final Perf.Section BLUR = Perf.part("Motion Blur");
+
+    private static void blurFrame() {
         MotionBlur module = MotionBlur.instance();
         if (module == null || !module.enabled() || failed) {
             if (history != null) release();

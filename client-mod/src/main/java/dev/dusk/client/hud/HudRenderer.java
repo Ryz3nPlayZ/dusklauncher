@@ -11,11 +11,22 @@ import dev.dusk.client.module.ModuleManager;
 import dev.dusk.client.modules.misc.Waypoints;
 import dev.dusk.client.modules.render.LightOverlay;
 import dev.dusk.client.modules.render.Zoom;
+import dev.dusk.client.perf.Perf;
 import dev.dusk.client.social.SocialNotifier;
 
 /** Draws every enabled {@link HudElement} at its anchor with its scale. */
 public final class HudRenderer {
+    private static final Perf.Section ZOOM = Perf.part("Zoom"), LIGHT = Perf.part("Light Overlay"),
+            WAYPOINTS = Perf.part("Waypoints"), MEDIA = Perf.part("Recording HUD"), POPUPS = Perf.part("Friend popups");
+
     private HudRenderer() {}
+
+    /** Books the time since {@code t0} to {@code s}'s HUD slot; the new start. */
+    private static long lap(Perf.Section s, long t0) {
+        long now = Perf.start();
+        s.acc(Perf.HUD, now - t0);
+        return now;
+    }
 
     /** Whether HUD text takes the smooth sans (Preferences, on versions that have it). */
     public static boolean smooth() {
@@ -27,20 +38,29 @@ public final class HudRenderer {
         if (modules == null) return;
         Theme.sync();
         if (!ctx.editing()) {
+            long t0 = Perf.start();
             Zoom.drawOverlay(c, ctx);
+            t0 = lap(ZOOM, t0);
             LightOverlay.draw(c, ctx);
+            t0 = lap(LIGHT, t0);
             Waypoints.drawMarkers(c, ctx);
+            lap(WAYPOINTS, t0);
         }
         boolean f3 = !ctx.editing() && ctx.mc().getDebugOverlay().showDebugScreen();
         for (HudElement e : modules.hudElements()) {
             if (!e.enabled()) continue;
             if (f3 && e.hideInF3()) continue;
             if (!ctx.editing() && !e.visible(ctx)) continue;
+            long t0 = Perf.start();
             draw(c, e, ctx);
+            Perf.end(e.perf(), Perf.HUD, t0);
         }
         if (!ctx.editing()) {
+            long t0 = Perf.start();
             MediaBackend.drawHud(c, ctx);
+            t0 = lap(MEDIA, t0);
             SocialNotifier.draw(c, ctx.width());
+            lap(POPUPS, t0);
         }
     }
 
