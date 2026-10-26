@@ -1,16 +1,28 @@
 (() => {
   const REPO = 'Ryz3nPlayZ/dusklauncher';
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  /* ---------- Overworld / Nether toggle ---------- */
-  const stack = document.querySelector('.shot-stack');
-  document.querySelectorAll('[data-world-btn]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const world = btn.dataset.worldBtn;
-      stack.dataset.world = world;
-      document.querySelectorAll('[data-world-btn]').forEach((b) =>
-        b.setAttribute('aria-pressed', String(b === btn)));
-    });
-  });
+  /* ---------- Nav hairline once the page moves ---------- */
+  const nav = document.querySelector('.nav');
+  const stuck = () => nav.classList.toggle('is-stuck', scrollY > 8);
+  stuck();
+  addEventListener('scroll', stuck, { passive: true });
+
+  /* ---------- The sun sets as you scroll past the hero ---------- */
+  const sun = document.querySelector('[data-sun]');
+  if (sun && !calm) {
+    let ticking = false;
+    const set = () => {
+      ticking = false;
+      const k = Math.min(1, scrollY / (innerHeight * 1.1));
+      sun.style.transform = `translateY(${k * 220}px) scale(${1 - k * 0.12})`;
+      sun.style.opacity = String(0.9 * (1 - k * 0.85));
+    };
+    addEventListener('scroll', () => {
+      if (!ticking) { ticking = true; requestAnimationFrame(set); }
+    }, { passive: true });
+    set();
+  }
 
   /* ---------- Keystrokes demo ---------- */
   const stage = document.getElementById('keystrokes');
@@ -18,7 +30,7 @@
   stage.querySelectorAll('[data-key]').forEach((el) => { keyEls[el.dataset.key] = el; });
   const clicks = { 0: [], 2: [] };
   if (matchMedia('(pointer: coarse)').matches) {
-    stage.querySelector('.ks__hint').textContent = 'Try it: tap LMB and RMB as fast as you can.';
+    stage.querySelector('.hud__hint').textContent = 'Try it: tap LMB and RMB as fast as you can.';
   }
   const cpsEls = { 0: stage.querySelector('[data-cps="0"]'), 2: stage.querySelector('[data-cps="2"]') };
 
@@ -72,64 +84,61 @@
     if (inView) cpsTimer = setInterval(renderCps, 100);
   }).observe(stage);
 
-  /* ---------- Scroll reveals ---------- */
-  const reveals = document.querySelectorAll('.reveal');
-  if ('IntersectionObserver' in window) {
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        entry.target.classList.add('in');
-        io.unobserve(entry.target);
-      });
-    }, { rootMargin: '0px 0px -8% 0px' });
-    // Siblings that enter together stagger slightly.
-    document.querySelectorAll('.bento, .facts').forEach((parent) => {
-      [...parent.children].forEach((child, i) => child.style.setProperty('--rd', `${i * 80}ms`));
-    });
-    reveals.forEach((el) => io.observe(el));
-  } else {
-    reveals.forEach((el) => el.classList.add('in'));
-  }
-
-  /* ---------- Lunar vs Dusk count-up ---------- */
+  /* ---------- Lunar vs Dusk: bars grow and numbers count up together ---------- */
   const race = document.querySelector('[data-race]');
-  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (race && !calm && 'IntersectionObserver' in window) {
+  if (race) {
     const nums = race.querySelectorAll('[data-count]');
-    nums.forEach((el) => { el.textContent = '0'; });
-    new MutationObserver((_, obs) => {
-      if (!race.classList.contains('in')) return;
-      obs.disconnect();
-      nums.forEach((el) => {
-        const end = Number(el.dataset.count);
-        const plus = 'plus' in el.dataset;
-        // Same length as the bar's CSS transition, ticking in whole steps like the bar.
-        const dur = plus ? 1900 : 1400;
-        const steps = plus ? 40 : 28;
-        const t0 = performance.now();
-        const tick = (now) => {
-          const k = Math.min(1, Math.ceil(((now - t0) / dur) * steps) / steps);
-          el.textContent = Math.round(end * k) + (k === 1 && plus ? '+' : '');
-          if (k < 1) requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
-      });
-    }).observe(race, { attributes: true, attributeFilter: ['class'] });
+    const finish = (el) => { el.textContent = el.dataset.count + ('plus' in el.dataset ? '+' : ''); };
+    if (calm) {
+      race.classList.add('in');
+      nums.forEach(finish);
+    } else {
+      nums.forEach((el) => { el.textContent = '0'; });
+      const easeOut = (t) => 1 - Math.pow(1 - t, 4);
+      new IntersectionObserver(([entry], io) => {
+        if (!entry.isIntersecting) return;
+        io.disconnect();
+        race.classList.add('in');
+        nums.forEach((el) => {
+          const end = Number(el.dataset.count);
+          // Same length as the bar's CSS transition.
+          const dur = 'plus' in el.dataset ? 1900 : 1400;
+          const t0 = performance.now();
+          const tick = (now) => {
+            const t = Math.min(1, (now - t0) / dur);
+            if (t === 1) return finish(el);
+            el.textContent = Math.round(end * easeOut(t));
+            requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        });
+      }, { threshold: 0.5 }).observe(race);
+    }
   }
 
-  /* ---------- Copy Homebrew command ---------- */
+  /* ---------- Copy install commands ---------- */
   document.querySelectorAll('[data-copy]').forEach((btn) => {
     const label = btn.querySelector('span');
+    let timer;
     btn.addEventListener('click', async () => {
-      const text = document.querySelector(btn.dataset.copy).textContent.trim();
+      const code = document.querySelector(btn.dataset.copy);
+      let ok = false;
       try {
-        await navigator.clipboard.writeText(text);
-        label.textContent = 'Copied';
-        btn.classList.add('is-done');
+        await navigator.clipboard.writeText(code.textContent.trim());
+        ok = true;
       } catch {
-        label.textContent = 'Select it';
+        // No clipboard permission: select the command so the old copy path,
+        // or the visitor's own shortcut, can take it.
+        const range = document.createRange();
+        range.selectNodeContents(code);
+        getSelection().removeAllRanges();
+        getSelection().addRange(range);
+        try { ok = document.execCommand('copy'); } catch { ok = false; }
       }
-      setTimeout(() => { label.textContent = 'Copy'; btn.classList.remove('is-done'); }, 1800);
+      label.textContent = ok ? 'Copied' : 'Selected';
+      btn.classList.toggle('is-done', ok);
+      clearTimeout(timer);
+      timer = setTimeout(() => { label.textContent = 'Copy'; btn.classList.remove('is-done'); }, 1800);
     });
   });
 
@@ -145,6 +154,9 @@
     group.classList.add('is-mine');
     group.querySelector('.tag').hidden = false;
     group.parentElement.prepend(group);
+    const names = { mac: 'macOS', win: 'Windows', linux: 'Linux' };
+    const hero = document.querySelector('[data-hero-dl] span');
+    if (hero) hero.textContent = `Download for ${names[os]}`;
   }
 
   /* ---------- Latest release from GitHub ---------- */

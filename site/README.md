@@ -12,5 +12,7 @@ releases API and fall back to the releases page if that call fails, so a new rel
 needs no site change as long as asset names keep their suffixes
 (`_aarch64.dmg`, `_x64.dmg`, `_x64-setup.exe`, `_amd64.AppImage`, `_amd64.deb`).
 
-Screenshots in `img/` were captured from the launcher's web preview at 1440x900 @2x.
+Screenshots in `img/` (`launcher-home.webp`, `launcher-instances.webp`) were captured from
+the launcher's web preview at 1440x900 @2x. Colours, radii and fonts mirror
+`launcher/src/design/tokens.css`; keep the two in step.
 `og:image` is an absolute URL on the Vercel domain; update it if the site moves.
