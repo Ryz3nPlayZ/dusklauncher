@@ -66,8 +66,11 @@ impl Master {
     }
 }
 
-/// What the instance held right after the overlay.
-#[derive(Debug, Clone, Default)]
+/// What the instance held right after the overlay. Also kept on disk
+/// until the game's exit is collected, so a session the launcher didn't see
+/// end (it was closed or restarted meanwhile) is folded in before the next
+/// overlay instead of being written over.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Snapshot {
     hud: Map<String, Value>,
     prefs: Map<String, Value>,
@@ -95,6 +98,10 @@ fn hud_file(instance_root: &Path) -> PathBuf {
 
 fn prefs_file(instance_root: &Path) -> PathBuf {
     instance_root.join("config").join("duskclient.json")
+}
+
+fn pending_file(instance_root: &Path) -> PathBuf {
+    instance_root.join("config").join("duskclient-sync-pending.json")
 }
 
 /// A config file as a JSON object, empty when there is none. One that is
@@ -145,6 +152,11 @@ fn synced_prefs(doc: &Map<String, Value>) -> Map<String, Value> {
 /// instance is left alone and an empty snapshot is returned, so the first
 /// exit adopts the instance's settings wholesale.
 pub fn apply_to_instance(data_dir: &Path, instance_root: &Path) -> Result<Snapshot, String> {
+    // the last session here ended without the launcher watching: keep what
+    // the player changed in it before overlaying the master
+    if let Some(snap) = std::fs::read(pending_file(instance_root)).ok().and_then(|b| serde_json::from_slice(&b).ok()) {
+        collect_from_instance(data_dir, instance_root, &snap)?;
+    }
     let master = load(data_dir);
     if master.is_empty() {
         return Ok(Snapshot::default());
@@ -172,7 +184,11 @@ pub fn apply_to_instance(data_dir: &Path, instance_root: &Path) -> Result<Snapsh
     }
     write_object(&prefs_file(instance_root), &doc)?;
 
-    Ok(Snapshot { hud, prefs: synced_prefs(&doc) })
+    let snap = Snapshot { hud, prefs: synced_prefs(&doc) };
+    if let Err(e) = fasterlauncher_core::write_atomic(&pending_file(instance_root), &serde_json::to_vec(&snap).unwrap()) {
+        tracing::warn!("couldn't note the client settings snapshot: {e}");
+    }
+    Ok(snap)
 }
 
 /// Fold what the player changed in the instance since `snap` into the
@@ -188,6 +204,13 @@ pub fn collect_from_instance(data_dir: &Path, instance_root: &Path, snap: &Snaps
         }
         let Some(opts) = opts.as_object() else { continue };
         let before = snap.hud.get(&module).and_then(Value::as_object);
+        // a key the mod stopped writing for a module it still has was
+        // cleared (an unbound toggle key): drop it so the overlay can't bring it back
+        for k in before.into_iter().flat_map(|b| b.keys()).filter(|k| !opts.contains_key(*k)) {
+            if let Some(slot) = master.hud.get_mut(&module).and_then(Value::as_object_mut) {
+                changed |= slot.remove(k).is_some();
+            }
+        }
         for (k, v) in opts {
             if before.and_then(|b| b.get(k)).is_some_and(|old| same(old, v)) {
                 continue;
@@ -220,6 +243,7 @@ pub fn collect_from_instance(data_dir: &Path, instance_root: &Path, snap: &Snaps
         master.dirty = true;
         save(data_dir, &master)?;
     }
+    let _ = std::fs::remove_file(pending_file(instance_root));
     Ok(changed)
 }
 
@@ -376,6 +400,40 @@ mod tests {
         put(hud_file(&inst), json!({ "fps": { "x": 3.0 } }));
         assert!(!collect_from_instance(&data, &inst, &snap).unwrap());
         assert_eq!(load(&data), master);
+    }
+
+    #[test]
+    fn a_cleared_toggle_key_stays_cleared() {
+        let (data, inst) = (tmp("clear-d"), tmp("clear-i"));
+        let master = Master {
+            hud: json!({ "zoom": { "enabled": true, "toggleKey": "key.keyboard.z" } }).as_object().unwrap().clone(),
+            ..Default::default()
+        };
+        save(&data, &master).unwrap();
+        let snap = apply_to_instance(&data, &inst).unwrap();
+        // unbound, the mod leaves the key out; another module this version lacks isn't touched
+        put(hud_file(&inst), json!({ "zoom": { "enabled": true } }));
+        assert!(collect_from_instance(&data, &inst, &snap).unwrap());
+        assert!(!load(&data).hud["zoom"].as_object().unwrap().contains_key("toggleKey"));
+        apply_to_instance(&data, &inst).unwrap();
+        assert!(!read_object(&hud_file(&inst))["zoom"].as_object().unwrap().contains_key("toggleKey"));
+    }
+
+    #[test]
+    fn a_session_the_launcher_missed_is_kept() {
+        let (data, inst) = (tmp("missed-d"), tmp("missed-i"));
+        let master = Master {
+            hud: json!({ "freelook": { "toggleKey": "key.keyboard.v" } }).as_object().unwrap().clone(),
+            ..Default::default()
+        };
+        save(&data, &master).unwrap();
+        apply_to_instance(&data, &inst).unwrap();
+        assert!(pending_file(&inst).exists());
+        // rebound in game; the launcher restarted, so the exit was never collected
+        put(hud_file(&inst), json!({ "freelook": { "toggleKey": "key.keyboard.grave.accent" } }));
+        apply_to_instance(&data, &inst).unwrap();
+        assert_eq!(read_object(&hud_file(&inst))["freelook"]["toggleKey"], "key.keyboard.grave.accent");
+        assert_eq!(load(&data).hud["freelook"]["toggleKey"], "key.keyboard.grave.accent");
     }
 
     #[test]
