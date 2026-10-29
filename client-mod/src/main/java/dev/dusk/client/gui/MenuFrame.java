@@ -274,6 +274,13 @@ public final class MenuFrame {
             if (hub == null && m instanceof DuskSettingsScreen d) hub = d;
             root = m.parent;
         }
+        // Keybinds opens on the drawn keyboard; its LIST tool comes back here from it
+        if (to == Entry.KEYBINDS && !(from instanceof KeyboardScreen)) {
+            if (to == current && from != hub) return;
+            from.beforeClose();
+            Compat.setScreen(mc, new KeyboardScreen(hub != null ? hub : new DuskSettingsScreen(root)));
+            return;
+        }
         // the module window takes its own entries again (a category back from a module's settings)
         if (from == hub && to.onHub()) {
             hub.show(to);
