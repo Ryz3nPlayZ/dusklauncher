@@ -6,6 +6,7 @@ import dev.dusk.client.hud.HudElement;
 import dev.dusk.client.module.setting.BoolSetting;
 import dev.dusk.client.module.setting.IntSetting;
 import dev.dusk.client.modules.misc.Waypoints;
+import dev.dusk.client.render.MapColors;
 import dev.dusk.client.render.MapTexture;
 import dev.dusk.client.waypoints.WaypointStore;
 import net.minecraft.client.Minecraft;
@@ -20,16 +21,17 @@ import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.level.material.MapColor;
 
 import java.util.Arrays;
 
 /**
- * A small top-down map of the loaded chunks around you, in the colours a
- * vanilla map uses. One pixel per block column in a texture centred on the
- * player that follows you in steps; a few thousand columns are re-read
- * each tick, so the whole map refreshes about once a second and costs
- * nothing per frame but the draw.
+ * A small top-down map of the loaded chunks around you. Blocks take the
+ * colour of their top texture with biome tints, slopes are lit from the
+ * north-west so hills read in relief, and shallow water shows the ground
+ * under it (colours and water follow Pl3xMap, see NOTICE). One pixel per
+ * block column in a texture centred on the player that follows you in
+ * steps; a few thousand columns are re-read each tick, so the whole map
+ * refreshes about once a second and costs nothing per frame but the draw.
  */
 public class Minimap extends HudElement {
     /** Texture side in blocks; covers the widest view rotated (160 × √2). */
@@ -38,8 +40,11 @@ public class Minimap extends HudElement {
     private static final int STEP = 32;
     /** Column reads per tick (a full pass every 1.6 s); a ceiling (the Nether) costs more per column. */
     private static final int BUDGET = 2048, CEILING_BUDGET = 512;
-    /** Vanilla map shading: LOW, NORMAL, HIGH. */
-    private static final int[] SHADE = {180, 220, 255};
+    /** Brightness per block of rise toward the north-west light, and the steepest step that counts. */
+    private static final float RELIEF = 0.07f;
+    private static final int MAX_STEP = 2;
+    /** Water deeper than this is drawn as water only. */
+    private static final int MAX_DEPTH = 12;
 
     private final IntSetting size = add(new IntSetting("size", "Size", 96, 48, 160, 8, "px"));
     private final IntSetting range = add(new IntSetting("range", "Blocks across", 64, 32, 160, 16, ""));
@@ -49,6 +54,7 @@ public class Minimap extends HudElement {
     private final BoolSetting showMobs = add(new BoolSetting("mobs", "Show mobs", false));
     private final BoolSetting showCoords = add(new BoolSetting("coords", "Show coordinates", true));
 
+    private final MapColors palette = new MapColors();
     private MapTexture texture;
     private final int[] heights = new int[TEX * TEX];
     private final int[] colors = new int[TEX * TEX];
@@ -155,7 +161,8 @@ public class Minimap extends HudElement {
                 continue; // keep what was seen before it unloaded
             }
             int north = row > 0 ? heights[i - TEX] : Integer.MIN_VALUE;
-            int argb = column(x, z, ceiling, py, pos, i, north);
+            int west = col > 0 ? heights[i - 1] : Integer.MIN_VALUE;
+            int argb = column(x, z, ceiling, py, pos, i, north, west);
             if (argb != colors[i]) {
                 colors[i] = argb;
                 texture.set(col, row, argb);
@@ -164,8 +171,8 @@ public class Minimap extends HudElement {
         }
     }
 
-    /** The colour of the top of one column; stores its height for the column south of it. */
-    private int column(int x, int z, boolean ceiling, int py, BlockPos.MutableBlockPos pos, int i, int north) {
+    /** The colour of the top of one column; stores its height for the columns south and east of it. */
+    private int column(int x, int z, boolean ceiling, int py, BlockPos.MutableBlockPos pos, int i, int north, int west) {
         int y;
         if (ceiling) {
             // under a roof: down from head height to the floor, so walls round you show too
@@ -177,30 +184,45 @@ public class Minimap extends HudElement {
             pos.set(x, y, z);
         }
         BlockState state = level.getBlockState(pos);
-        // see through blocks maps leave out (glass, barriers, light)
-        for (int n = 0; n < 8 && state.getMapColor(level, pos) == MapColor.NONE && !state.isAir(); n++) {
+        boolean water = state.getFluidState().is(FluidTags.WATER);
+        int rgb = water ? 0 : palette.color(state, level, pos);
+        // see through plants, glass, torches and the like
+        for (int n = 0; n < 8 && rgb == MapColors.CLEAR && !state.isAir(); n++) {
             pos.setY(--y);
             state = level.getBlockState(pos);
+            water = state.getFluidState().is(FluidTags.WATER);
+            rgb = water ? 0 : palette.color(state, level, pos);
         }
         heights[i] = y;
-        MapColor color = state.getMapColor(level, pos);
-        if (color == MapColor.NONE) return 0xFF000000;
+        if (water) return water(y, pos);
+        if (rgb == MapColors.CLEAR) return 0xFF000000;
 
-        int shade;
-        if (state.getFluidState().is(FluidTags.WATER)) {
-            // deeper water is darker, dithered like a map
-            int depth = 0;
-            while (depth < 10 && level.getFluidState(pos.setY(y - depth - 1)).is(FluidTags.WATER)) depth++;
-            double d = depth * 0.1 + ((x + z & 1) * 0.2);
-            shade = d < 0.5 ? 2 : d > 0.9 ? 0 : 1;
-        } else if (north == Integer.MIN_VALUE || north == y) {
-            shade = 1;
-        } else {
-            shade = y > north ? 2 : 0;
-        }
-        int rgb = color.col, m = SHADE[shade];
-        int r = (rgb >> 16 & 0xFF) * m / 255, g = (rgb >> 8 & 0xFF) * m / 255, b = (rgb & 0xFF) * m / 255;
-        return 0xFF000000 | r << 16 | g << 8 | b;
+        // lit from the north-west: rising toward the light is brighter, falling away darker
+        int rise = step(y, north) + step(y, west);
+        return MapColors.shade(rgb, 0.9f + RELIEF * rise);
+    }
+
+    private static int step(int y, int neighbour) {
+        return neighbour == Integer.MIN_VALUE ? 0 : Mth.clamp(y - neighbour, -MAX_STEP, MAX_STEP);
+    }
+
+    /** Water over its floor: clear when shallow, bluer and darker as it deepens (Pl3xMap's fancy fluids). */
+    private int water(int surface, BlockPos.MutableBlockPos pos) {
+        int tint = MapColors.water(level, pos);
+        int depth = 1;
+        pos.setY(surface - 1);
+        while (depth < MAX_DEPTH && level.getFluidState(pos).is(FluidTags.WATER)) pos.setY(surface - ++depth);
+        int floor = depth < MAX_DEPTH ? palette.color(level.getBlockState(pos), level, pos) : MapColors.CLEAR;
+
+        float d = depth * 0.025f;
+        float dark = Math.min(0.45f, 1 - cube(1 - d / 1.5f));
+        float cover = 1 - (float) Math.pow(1 - Math.min(1, d * 5), 5);
+        int deep = MapColors.mix(tint, 0, dark);
+        return MapColors.shade(floor == MapColors.CLEAR ? deep : MapColors.mix(floor, deep, cover), 1);
+    }
+
+    private static float cube(float v) {
+        return v * v * v;
     }
 
     /* ── drawing ── */

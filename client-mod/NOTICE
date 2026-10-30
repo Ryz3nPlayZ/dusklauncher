@@ -143,7 +143,7 @@ Totem Tweaks (modules/render/TotemTweaks.java) ports from:
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
 
-Chat and HUD modules ported from MIT-licensed mods:
+Chat, HUD and map modules ported from MIT-licensed mods:
 
 - Compact Chat — https://github.com/caoimhebyrne/compact-chat
   MIT, Copyright (c) 2025 Caoimhe Byrne. Ported: the occurrence counting,
@@ -163,7 +163,15 @@ Chat and HUD modules ported from MIT-licensed mods:
   coloured XP bar with its white bar texture (modules/hud/TotemCounter.java,
   mixin/totem and textures/hud/totem_xp_bar.png).
 
-  All four are distributed under the MIT licence quoted above for Shield
+- Pl3xMap — https://github.com/granny/Pl3xMap
+  MIT, Copyright (c) 2020-2023 William Blake Galbreath. Ported: the table of
+  block top colours (resources/assets/duskclient/minimap/block_colors.txt,
+  from ColorsConfig.BLOCK_COLORS), its grass, leaf and water tint lists and
+  half-and-half biome mixing, and the "fancy fluids" water depth colour and
+  cover curves (render/MapColors.java, modules/hud/Minimap.java). The
+  north-west relief shading follows its "modern" heightmap.
+
+  All five are distributed under the MIT licence quoted above for Shield
   Tweaks.
 
 Crosshair Indicator — https://modrinth.com/mod/crosshair-indicator
