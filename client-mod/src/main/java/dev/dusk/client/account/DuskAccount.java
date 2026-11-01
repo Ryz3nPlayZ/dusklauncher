@@ -131,6 +131,11 @@ public final class DuskAccount {
     @Nullable
     private static volatile String cached;
 
+    /** Another account signed in: drop the old one's token. */
+    public static void forget() {
+        cached = null;
+    }
+
     private static JsonElement call(String method, String path, @Nullable JsonElement body) throws IOException {
         String token = token();
         for (int attempt = 0; ; attempt++) {

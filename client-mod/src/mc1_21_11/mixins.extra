@@ -11,3 +11,5 @@ totem.TotemNameMixin
 totem.TotemTabMixin
 # Styles: the picked style packs load on top, on every version
 styles.StylePacksMixin
+# Account switching from the title screen, on every version
+account.MinecraftAccountAccessor

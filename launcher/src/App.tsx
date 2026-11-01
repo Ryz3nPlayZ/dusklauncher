@@ -217,6 +217,8 @@ export default function App() {
       }),
       listen<GameActivity | null>('game-activity', setActivity),
       listen<CrashInfo>('game-crash', setCrash),
+      // the game switched account through the launcher link
+      listen('account-changed', () => void refreshAccount()),
     ];
     return () => {
       void Promise.all(unlisten).then((fns) => fns.forEach((f) => f?.()));

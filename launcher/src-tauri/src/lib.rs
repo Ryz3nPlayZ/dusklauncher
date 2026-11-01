@@ -8,6 +8,7 @@ mod cosmetics;
 mod crash;
 mod discord;
 mod dusk;
+mod game_link;
 mod friends;
 mod hosting;
 mod icons;

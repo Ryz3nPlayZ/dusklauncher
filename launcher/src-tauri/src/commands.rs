@@ -893,6 +893,7 @@ pub async fn install_and_launch(
                 && !a.starts_with("-Ddusk.replay=")
                 && !a.starts_with("-Ddusk.tools=")
                 && !a.starts_with("-Ddusk.host=")
+                && !a.starts_with("-Ddusk.link=")
         });
         if p.loader == Loader::Fabric {
             let in_mods = crate::cosmetics::client_mod_in_mods(&dirs.mods);
@@ -933,6 +934,10 @@ pub async fn install_and_launch(
             // where the mod keeps tools it fetches itself (ffmpeg for video
             // export), shared by every instance instead of one copy each
             p.jvm_args.push(format!("-Ddusk.tools={}", state.data_dir.join("tools").display()));
+            // lets the game switch accounts through the launcher
+            if let Some(link) = crate::game_link::start(&app, &state.data_dir) {
+                p.jvm_args.push(format!("-Ddusk.link={}", link.display()));
+            }
             if let Err(e) = crate::cosmetics::write_loadout_to_instance(&state.data_dir, &dirs.root) {
                 tracing::warn!("could not write cosmetics loadout to instance: {e}");
             }

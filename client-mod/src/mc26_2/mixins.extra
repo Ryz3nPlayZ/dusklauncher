@@ -4,3 +4,5 @@
 -scale.LevelRendererOutlineAccessor
 -scale.RenderScaleMixin
 -scale.MainTargetMixin
+# 26.2+ keeps a friends list poller per account
+account.FriendListAccessor

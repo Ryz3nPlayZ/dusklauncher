@@ -39,6 +39,14 @@ public final class SkinCompat {
     @Nullable private static Preview lastPreview;
     @Nullable private static PlayerSkin lastPreviewSkin;
 
+    /** Another account signed in: look its skin up afresh. */
+    public static void reset() {
+        lookup = null;
+        fallback = null;
+        lastPreview = null;
+        lastPreviewSkin = null;
+    }
+
     public static PlayerSkin current(Minecraft mc) {
         if (lookup == null) {
             lookup = mc.getSkinManager().createLookup(mc.getGameProfile(), false);

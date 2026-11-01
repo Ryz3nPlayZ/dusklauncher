@@ -2,7 +2,10 @@ package dev.dusk.client.gui;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.realmsclient.RealmsMainScreen;
+import dev.dusk.client.account.AccountSwitcher;
+import dev.dusk.client.account.LauncherLink;
 import dev.dusk.client.compat.Compat;
+import dev.dusk.client.social.Heads;
 import dev.dusk.client.social.SocialNotifier;
 import dev.dusk.client.compat.SkinCompat;
 import dev.dusk.client.config.DuskConfig;
@@ -18,6 +21,7 @@ import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,6 +49,17 @@ public class DuskTitleScreen extends DuskScreen {
     /** Modern look: the version line's left edge. */
     private int edge;
 
+    // the account menu under the pill: the launcher's saved accounts, then Skin Customization
+    private static final int MENU_W = 168, ROW_H = 20;
+    private static final RemoteImages HEADS = new RemoteImages(0);
+    private record Row(int y, @Nullable LauncherLink.Account account, String text, @Nullable Runnable run) {}
+    private boolean menuOpen;
+    /** Null while the launcher is being asked. */
+    @Nullable private List<LauncherLink.Account> menuAccounts;
+    @Nullable private String menuStatus, switching;
+    private boolean menuError;
+    private int menuGen, menuX, menuY, menuH;
+
     public DuskTitleScreen() {
         super(Component.literal("DUSK"));
     }
@@ -70,7 +85,7 @@ public class DuskTitleScreen extends DuskScreen {
             // 5 | 28 face | 10 | name | 14
             faceScale = Math.max(1, Math.round(28 * v / 8));
             int pw = px(5, v) + 8 * faceScale + px(10, v) + this.font.width(username()) + px(14, v);
-            account = new Action(ix - ig - pw, top, pw, ib, "", null, "Skin Customization", Theme.Kind.NORMAL, this::openSkins);
+            account = new Action(ix - ig - pw, top, pw, ib, "", null, "Account", Theme.Kind.NORMAL, this::toggleMenu);
             actions.add(account);
         }
         int topH = top * 2 + ib;
@@ -118,7 +133,7 @@ public class DuskTitleScreen extends DuskScreen {
             int faceGui = (int) Math.ceil(faceWindowPx(ib) / Px.gui());
             int inset = (ib - faceGui) / 2;
             int pw = inset + faceGui + Math.max(4, px(10, v)) + this.font.width(username()) * 17 / 20 + ib / 2;
-            account = new Action(ix - ig - pw, top, pw, ib, "", null, "Skin Customization", Theme.Kind.NORMAL, this::openSkins);
+            account = new Action(ix - ig - pw, top, pw, ib, "", null, "Account", Theme.Kind.NORMAL, this::toggleMenu);
             actions.add(account);
         }
         int topH = top * 2 + ib;
@@ -150,6 +165,82 @@ public class DuskTitleScreen extends DuskScreen {
 
     private void openSkins() {
         if (this.minecraft != null) open(new SkinCustomizationScreen(this, this.minecraft.options));
+    }
+
+    private void toggleMenu() {
+        menuOpen = !menuOpen;
+        if (switching == null) menuStatus = null;
+        if (menuOpen) loadAccounts();
+    }
+
+    private void loadAccounts() {
+        if (!LauncherLink.available() || this.minecraft == null) return;
+        Minecraft mc = this.minecraft;
+        int gen = ++menuGen;
+        Thread t = new Thread(() -> {
+            List<LauncherLink.Account> list;
+            String err = null;
+            try {
+                list = LauncherLink.accounts();
+            } catch (IOException e) {
+                list = List.of();
+                err = e.getMessage();
+            }
+            List<LauncherLink.Account> l = list;
+            String e = err;
+            mc.execute(() -> {
+                if (gen != menuGen) return;
+                menuAccounts = l;
+                if (e != null) {
+                    menuStatus = e;
+                    menuError = true;
+                }
+            });
+        }, "duskclient-accounts");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void switchTo(LauncherLink.Account a) {
+        if (switching != null) return;
+        switching = a.uuid();
+        menuStatus = "Signing in as " + a.username() + "\u2026";
+        menuError = false;
+        AccountSwitcher.switchTo(a.uuid(), err -> {
+            switching = null;
+            if (err == null) {
+                menuOpen = false;
+                menuStatus = null;
+                menuAccounts = null;
+                init();
+            } else {
+                menuStatus = err;
+                menuError = true;
+            }
+        });
+    }
+
+    /** The menu's rows from {@code menuY} down; only rows with a {@code run} can be clicked. */
+    private List<Row> menuRows() {
+        List<Row> rows = new ArrayList<>();
+        int y = menuY + 4;
+        if (!LauncherLink.available()) {
+            rows.add(new Row(y, null, "Start the game from the launcher to switch", null));
+            y += ROW_H;
+        } else if (menuAccounts == null) {
+            rows.add(new Row(y, null, "Loading accounts\u2026", null));
+            y += ROW_H;
+        } else if (menuAccounts.isEmpty()) {
+            rows.add(new Row(y, null, "No saved accounts", null));
+            y += ROW_H;
+        } else {
+            for (LauncherLink.Account a : menuAccounts) {
+                rows.add(new Row(y, a, a.username(), a.active() ? null : () -> switchTo(a)));
+                y += ROW_H;
+            }
+        }
+        rows.add(new Row(y + 5, null, "Skin Customization", this::openSkins));
+        return rows;
     }
 
     private void openWorlds() {
@@ -295,10 +386,11 @@ public class DuskTitleScreen extends DuskScreen {
             if (a.icon != null) a.icon.draw(c, lx - iw, a.y + (a.h - a.icon.height() * labelScale) / 2, up, labelScale);
             Theme.label(c, a.label, lx, ly, up, lo, labelScale);
         }
-        if (tipFor != null) tip(c, tipFor);
+        if (tipFor != null && !menuOpen) tip(c, tipFor);
 
         String version = version();
         c.text(version, cx - c.textWidth(version) / 2, versionY, Theme.TEXT_FAINT, !Theme.modern());
+        if (menuOpen) drawMenu(c, mouseX, mouseY);
     }
 
     private void drawModern(Canvas c, int mouseX, int mouseY) {
@@ -322,8 +414,67 @@ public class DuskTitleScreen extends DuskScreen {
             Glass.bar(c, a.x, a.y, a.w, a.h, hover, false, primary);
             Glass.label(c, a.label, a.x, a.y, a.w, a.h, Glass.text(hover, false, primary));
         }
-        if (tipFor != null) tip(c, tipFor);
+        if (tipFor != null && !menuOpen) tip(c, tipFor);
         c.text(version(), edge, versionY, 0x8CFFFFFF, false);
+        if (menuOpen) drawMenu(c, mouseX, mouseY);
+    }
+
+    /** The account menu, right-aligned under the pill. */
+    private void drawMenu(Canvas c, int mouseX, int mouseY) {
+        if (account == null) return;
+        menuX = Math.max(4, account.x + account.w - MENU_W);
+        menuY = account.y + account.h + 4;
+        List<Row> rows = menuRows();
+        List<String> status = menuStatus == null ? List.of() : wrap(c, menuStatus, MENU_W - 16);
+        Row last = rows.get(rows.size() - 1);
+        int bottom = last.y + ROW_H + (status.isEmpty() ? 0 : 3 + 10 * status.size()) + 4;
+        menuH = bottom - menuY;
+        Vanilla.popBox(c, menuX, menuY, MENU_W, menuH);
+        c.fill(menuX + 8, last.y - 3, menuX + MENU_W - 8, last.y - 2, Theme.modern() ? Theme.LINE_2 : 0x33FFFFFF);
+        for (Row r : rows) {
+            boolean hover = r.run != null && Vanilla.inside(mouseX, mouseY, menuX, r.y, MENU_W, ROW_H);
+            if (hover) {
+                if (Theme.modern()) Round.fill(c, menuX + 3, r.y, MENU_W - 6, ROW_H, 4, Theme.HOVER);
+                else c.fill(menuX + 1, r.y, menuX + MENU_W - 1, r.y + ROW_H, 0x22FFFFFF);
+            }
+            int ty = r.y + (ROW_H - 7) / 2, tx = menuX + 26, max = menuX + MENU_W - 8 - tx;
+            if (r.account != null) {
+                LauncherLink.Account a = r.account;
+                Heads.draw(c, HEADS, a.uuid(), menuX + 8, r.y + (ROW_H - 12) / 2, 12);
+                String side = a.uuid().equals(switching) ? "\u2026" : a.active() ? "In use" : "";
+                int sw = side.isEmpty() ? 0 : c.textWidth(side) + 6;
+                if (!side.isEmpty()) c.text(side, menuX + MENU_W - 8 - c.textWidth(side), ty, Theme.TEXT_FAINT, false);
+                c.text(Theme.ellipsize(c, r.text, max - sw), tx, ty, a.active() ? Theme.ACCENT : Theme.TEXT, false);
+            } else if (r.run != null) {
+                Icons.PERSON.draw(c, menuX + 8 + (12 - Icons.PERSON.width()) / 2, r.y + (ROW_H - Icons.PERSON.height()) / 2,
+                        hover ? Theme.TEXT : Theme.TEXT_MUTED, 1);
+                c.text(Theme.ellipsize(c, r.text, max), tx, ty, Theme.TEXT, false);
+            } else {
+                c.text(Theme.ellipsize(c, r.text, MENU_W - 16), menuX + 8, ty, Theme.TEXT_MUTED, false);
+            }
+        }
+        int sy = last.y + ROW_H + 3;
+        for (String line : status) {
+            c.text(line, menuX + 8, sy, menuError ? Theme.BAD : Theme.TEXT_MUTED, false);
+            sy += 10;
+        }
+    }
+
+    /** {@code text} broken at spaces into lines at most {@code max} wide. */
+    private static List<String> wrap(Canvas c, String text, int max) {
+        List<String> lines = new ArrayList<>();
+        StringBuilder line = new StringBuilder();
+        for (String word : text.split(" ")) {
+            String next = line.isEmpty() ? word : line + " " + word;
+            if (c.textWidth(next) > max && !line.isEmpty()) {
+                lines.add(line.toString());
+                line = new StringBuilder(word);
+            } else {
+                line = new StringBuilder(next);
+            }
+        }
+        if (!line.isEmpty()) lines.add(line.toString());
+        return lines;
     }
 
     private void tip(Canvas c, Action a) {
@@ -411,6 +562,21 @@ public class DuskTitleScreen extends DuskScreen {
     @Override
     protected boolean onClick(double mx, double my, int button) {
         if (button != 0) return false;
+        if (menuOpen) {
+            if (Vanilla.inside(mx, my, menuX, menuY, MENU_W, menuH)) {
+                for (Row r : menuRows()) {
+                    if (r.run != null && Vanilla.inside(mx, my, menuX, r.y, MENU_W, ROW_H)) {
+                        if (r.account == null) menuOpen = false;
+                        r.run.run();
+                        break;
+                    }
+                }
+                return true;
+            }
+            // anywhere else closes it, the pill included
+            menuOpen = false;
+            return true;
+        }
         for (Action a : actions) {
             if (a.contains(mx, my)) {
                 a.run.run();
@@ -422,6 +588,10 @@ public class DuskTitleScreen extends DuskScreen {
 
     @Override
     protected boolean onKey(int key, int scancode, int modifiers) {
+        if (menuOpen && key == InputConstants.KEY_ESCAPE) {
+            menuOpen = false;
+            return true;
+        }
         if (isSettingsKey(key, scancode)) {
             open(new DuskSettingsScreen(this));
             return true;

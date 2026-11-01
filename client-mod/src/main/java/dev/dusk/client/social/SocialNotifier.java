@@ -150,6 +150,19 @@ public final class SocialNotifier {
         }
     }
 
+    /** Another account signed in: start over, quietly, like a fresh launch. */
+    public static synchronized void forget() {
+        last = null;
+        knownRequests = null;
+        toasted = null;
+        unread = 0;
+        requests = 0;
+        ready = 0;
+        failures = 0;
+        skipUntil = 0;
+        questsAt = 0;
+    }
+
     /** Messages waiting across every conversation. */
     public static int unread() {
         return unread;
