@@ -114,6 +114,7 @@ import dev.dusk.client.modules.misc.ScrollableTooltips;
 import dev.dusk.client.modules.render.FancyThirdPerson;
 import dev.dusk.client.modules.render.ItemPhysics;
 import dev.dusk.client.modules.misc.SlotLock;
+import dev.dusk.client.modules.misc.EnchantOracle;
 import dev.dusk.client.modules.render.NoNightVision;
 import dev.dusk.client.modules.render.NoPumpkinBlur;
 import dev.dusk.client.modules.render.TimeChanger;
@@ -243,6 +244,7 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new NameHider());
         modules.register(new FovChanger());
         modules.register(new SlotLock());
+        modules.register(new EnchantOracle());
         modules.register(new ScrollTransfer());
         modules.register(new ScrollableTooltips());
         // Hypixel: chat tweaks, Bed Wars and SkyBlock HUDs
@@ -309,6 +311,7 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new ChatHistory());
         modules.register(new ChatSearch());
         ChatSearch.register();
+        EnchantOracle.register();
         if (Compat.MODERN_CLIENT_HOOKS) modules.register(new ChatCopy());
         ChatMacros chatMacros = new ChatMacros();
         modules.register(chatMacros);

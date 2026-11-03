@@ -12,4 +12,9 @@ public final class Clicks {
     public static void pickup(int containerId, int slot, int button, Player player) {
         Minecraft.getInstance().gameMode.handleInventoryMouseClick(containerId, slot, button, ClickType.PICKUP, player);
     }
+
+    /** Drops one item out of menu slot {@code slot}, as Q over it does. */
+    public static void throwOne(int containerId, int slot, Player player) {
+        Minecraft.getInstance().gameMode.handleInventoryMouseClick(containerId, slot, 0, ClickType.THROW, player);
+    }
 }

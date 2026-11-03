@@ -13,3 +13,5 @@ totem.TotemTabMixin
 styles.StylePacksMixin
 # Account switching from the title screen, on every version
 account.MinecraftAccountAccessor
+# Enchant Oracle panel beside the enchanting table, on every version
+enchant.EnchantScreenMixin
