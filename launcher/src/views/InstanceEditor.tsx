@@ -59,6 +59,8 @@ type Tab = (typeof TABS)[number];
 
 /* the nested strip under CONTENT (172:626) */
 const KINDS = ['ALL', 'MODS', 'RESOURCE PACKS', 'SHADERS'] as const;
+/** Modrinth's id for ViaFabricPlus, the mod that joins older servers */
+const VIA_FABRIC_PLUS = 'rIC2XJV4';
 /** where the Content tab remembers list or gallery */
 const CONTENT_VIEW_KEY = 'dusk.content.view';
 type KindTab = (typeof KINDS)[number];
@@ -1292,6 +1294,8 @@ function ContentTab({
   };
 
   const vanilla = kindTab === 'MODS' && profile.loader === 'vanilla';
+  const hasVia =
+    [...projects.values()].includes(VIA_FABRIC_PLUS) || rows?.some((r) => /viafabricplus/i.test(r.file.filename));
 
   const fix = (key: string, fn: () => Promise<unknown>) => {
     setFixing(key);
@@ -1385,6 +1389,19 @@ function ContentTab({
           <NavCell key={k} label={k} active={kindTab === k} onClick={() => onKindTab(k)} />
         ))}
         <div className="win__fill" />
+        {kindTab === 'MODS' && profile.loader === 'fabric' && rows && !hasVia && (
+          <NavCell
+            label={fixing === 'via' ? 'ADDING…' : '1.8 SERVERS'}
+            title="Add ViaFabricPlus, which lets this instance join servers on older versions like 1.8.9"
+            onClick={() => {
+              if (fixing !== null) return;
+              fix('via', async () => {
+                await api.installContent(profile.id, 'mod', VIA_FABRIC_PLUS);
+                setNote('ViaFabricPlus added. Pick the server’s version with its button on the multiplayer screen.');
+              });
+            }}
+          />
+        )}
         {content && isTauri && (
           <NavCell label="ADD FILES" onClick={() => void act(() => api.importLocalContent(profile.id, content.kind))} />
         )}
