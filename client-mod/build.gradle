@@ -34,6 +34,10 @@ group = project.maven_group
 
 base { archivesName = project.archives_base_name }
 
+configurations {
+    vfpJar { transitive = false }
+}
+
 repositories {
     mavenCentral()
     // only for the -Pvfp compatibility run below
@@ -56,7 +60,12 @@ dependencies {
     "$modConfig"("net.fabricmc.fabric-api:fabric-api:${fabricVersion}")
     // -Pvfp=<version>: run the gametests next to ViaFabricPlus (GPL, never shipped in the jar)
     if (project.hasProperty('vfp')) {
-        "${unobfuscated ? 'runtimeOnly' : 'modRuntimeOnly'}"("maven.modrinth:viafabricplus:${project.property('vfp')}")
+        if (unobfuscated) {
+            runtimeOnly "maven.modrinth:viafabricplus:${project.property('vfp')}"
+        } else {
+            // handed to Fabric Loader whole below: Loom's mod configs strip the nested libraries
+            vfpJar "maven.modrinth:viafabricplus:${project.property('vfp')}"
+        }
     }
     // Opus in pure Java (BSD, see NOTICE) for voice chat, nested in the jar
     implementation "io.github.jaredmdobson:concentus:1.0.2"
@@ -169,4 +178,9 @@ if (clientGameTests) {
     }
     // The gametest harness API moves between Fabric versions too.
     sourceSets.named("gametest") { java.srcDir layeredDir.map { it.dir('gametest') } }
+    tasks.matching { it.name == 'runClientGameTest' }.configureEach { task ->
+        task.doFirst {
+            if (!configurations.vfpJar.isEmpty()) task.jvmArgs "-Dfabric.addMods=${configurations.vfpJar.singleFile}"
+        }
+    }
 }
