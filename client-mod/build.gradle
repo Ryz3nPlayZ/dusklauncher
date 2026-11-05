@@ -36,6 +36,13 @@ base { archivesName = project.archives_base_name }
 
 repositories {
     mavenCentral()
+    // only for the -Pvfp compatibility run below
+    if (project.hasProperty('vfp')) {
+        maven {
+            url = 'https://api.modrinth.com/maven'
+            content { includeGroup 'maven.modrinth' }
+        }
+    }
 }
 
 dependencies {
@@ -47,6 +54,10 @@ dependencies {
     def modConfig = unobfuscated ? 'implementation' : 'modImplementation'
     "$modConfig"("net.fabricmc:fabric-loader:${loaderVersion}")
     "$modConfig"("net.fabricmc.fabric-api:fabric-api:${fabricVersion}")
+    // -Pvfp=<version>: run the gametests next to ViaFabricPlus (GPL, never shipped in the jar)
+    if (project.hasProperty('vfp')) {
+        "${unobfuscated ? 'runtimeOnly' : 'modRuntimeOnly'}"("maven.modrinth:viafabricplus:${project.property('vfp')}")
+    }
     // Opus in pure Java (BSD, see NOTICE) for voice chat, nested in the jar
     implementation "io.github.jaredmdobson:concentus:1.0.2"
     include "io.github.jaredmdobson:concentus:1.0.2"

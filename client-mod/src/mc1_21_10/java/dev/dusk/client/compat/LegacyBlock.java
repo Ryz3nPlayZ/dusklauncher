@@ -6,6 +6,10 @@ public final class LegacyBlock {
 
     private LegacyBlock() {}
 
+    public static boolean blocking() {
+        return false;
+    }
+
     public static void tick() {}
 
     public static void reset() {}
