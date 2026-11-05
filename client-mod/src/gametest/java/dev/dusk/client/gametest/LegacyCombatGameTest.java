@@ -1,12 +1,15 @@
 package dev.dusk.client.gametest;
 
 import dev.dusk.client.DuskClient;
+import dev.dusk.client.compat.Compat;
 import dev.dusk.client.compat.LegacyBlock;
 import dev.dusk.client.modules.render.LegacyCombat;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.CameraType;
+import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
 
 /**
  * Legacy Combat in a real world: holds right click with a sword and checks the
@@ -62,5 +65,13 @@ public final class LegacyCombatGameTest implements FabricClientGameTest {
             DuskClient.modules().get(LegacyCombat.class).setEnabled(false);
             client.options.setCameraType(CameraType.FIRST_PERSON);
         });
+
+        /* the version button joining older servers depends on */
+        if (FabricLoader.getInstance().isModLoaded("viafabricplus")) {
+            ctx.runOnClient(client -> Compat.setScreen(client, new JoinMultiplayerScreen(Compat.currentScreen(client))));
+            ctx.waitTicks(10);
+            ctx.takeScreenshot("legacy-multiplayer-version-button");
+            ctx.runOnClient(client -> Compat.currentScreen(client).onClose());
+        }
     }
 }
