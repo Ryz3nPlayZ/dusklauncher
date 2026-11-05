@@ -37,6 +37,7 @@ import dev.dusk.client.modules.hud.LightLevel;
 import dev.dusk.client.modules.hud.LookingAt;
 import dev.dusk.client.modules.hud.ServerLag;
 import dev.dusk.client.modules.misc.BackgroundFps;
+import dev.dusk.client.modules.misc.LowInputLag;
 import dev.dusk.client.modules.render.RenderScale;
 import dev.dusk.client.modules.misc.ChatSearch;
 import dev.dusk.client.modules.misc.SoundChanger;
@@ -317,6 +318,7 @@ public class DuskClient implements ClientModInitializer {
         modules.register(chatMacros);
         modules.register(new SoundChanger());
         modules.register(new AutoReconnect());
+        if (LowInputLag.available()) modules.register(new LowInputLag());
         AutoReconnect.register();
         Waypoints waypoints = new Waypoints();
         modules.register(waypoints);

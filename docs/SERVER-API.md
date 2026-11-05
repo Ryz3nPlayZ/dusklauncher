@@ -43,7 +43,7 @@ on 1.21.11 and later.
 | HUD | `armor` `bedwarsresources` `biome` `clock` `combo` `compass` `cooldowns` `coords` `cps` `day` `distance` `effects` `entities` `fps` `fullinventory` `gametime` `helditem` `inventorydisplay` `itemcounter` `itempickups` `keystrokes` `light` `lookingat` `lowdurability` `memory` `minimap` `nethercoords` `ping` `pitchdisplay` `playtime` `reach` `resourcepacks` `server` `serverlag` `signreader` `skyblockstats` `sneakstatus` `speed` `sprintstatus` `stopwatch` `totems` `tps` `weather` |
 | Movement | `togglesprint` |
 | Render | `behindyou` `blockhighlight` `bossbar` `capephysics` `colorsaturation` `containerpreview` `crosshair` `crosshairindicator` `customskies` `damagetint` `fogcontrol` `fovchanger` `freecam` `freelook` `fullbright` `glintcolor` `hitbox` `hungerinfo` `itemphysics` `itemscale` `lightoverlay` `lowfire` `motion_blur` `nametags` `nonightvision` `nopumpkinblur` `particles` `scoreboard` `shieldtweaks` `skinlayers3d` `tabping` `timechanger` `totemtweaks` `weatherchanger` `zoom` |
-| Utility | `autoreconnect` `backgroundfps` `boatmap` `chatcopy` `chatheads` `chathistory` `chatmacros` `chatmentions` `chatsearch` `chattimestamps` `compactchat` `confirmdisconnect` `gamemodeswitcher` `hypixel` `namehider` `scrolltooltips` `scrolltransfer` `slotlock` `soundchanger` `statistics` `tntcountdown` `waypoints` |
+| Utility | `autoreconnect` `backgroundfps` `boatmap` `chatcopy` `chatheads` `chathistory` `chatmacros` `chatmentions` `chatsearch` `chattimestamps` `compactchat` `confirmdisconnect` `gamemodeswitcher` `hypixel` `lowinputlag` `namehider` `scrolltooltips` `scrolltransfer` `slotlock` `soundchanger` `statistics` `tntcountdown` `waypoints` |
 
 ## Paper example
 

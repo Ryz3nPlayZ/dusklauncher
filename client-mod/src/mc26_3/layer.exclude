@@ -1,0 +1,2 @@
+# The event poll takes the SDL handler here; see lag.MinecraftSdlAccessor
+java/dev/dusk/client/mixin/lag/RenderSystemPollAccessor.java

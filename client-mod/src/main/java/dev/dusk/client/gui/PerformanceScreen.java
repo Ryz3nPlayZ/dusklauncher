@@ -160,7 +160,8 @@ public class PerformanceScreen extends PanelScreen {
         y = card(c, y, "FRAME RATE",
                 List.of(Math.round(v.fps()) + " fps, 1% low " + Math.round(v.lowFps()),
                         "Frame time avg " + ms(v.avgMs()) + " ms, worst " + ms(v.maxMs()) + " ms",
-                        "Graph: the last minute, live"),
+                        v.gpuWaitMs() >= 0.05 ? "Held " + ms(v.gpuWaitMs()) + " ms a frame for the GPU (Low Input Lag)"
+                                : "Graph: the last minute, live"),
                 Theme.INFO, Perf.history(0), 60, "fps");
 
         List<String> cpu = new ArrayList<>();

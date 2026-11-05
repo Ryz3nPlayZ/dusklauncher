@@ -5,3 +5,6 @@ FirstPersonHandsTickMixin
 slotlock.SlotLockGameModeMixin
 # Totem Tweaks pop length; the pop timer moved to ItemActivation
 ItemActivationMixin
+# Low Input Lag: 26.3 polls events through its SDL handler
+-lag.RenderSystemPollAccessor
+lag.MinecraftSdlAccessor

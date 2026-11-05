@@ -59,7 +59,7 @@ public final class Perf {
     }
 
     /** One window of frames: live (the last second) or the last seconds of play. */
-    public record View(int seconds, double fps, double avgMs, double lowFps, double maxMs, List<Row> rows) {
+    public record View(int seconds, double fps, double avgMs, double lowFps, double maxMs, double gpuWaitMs, List<Row> rows) {
         public double duskMs() {
             double t = 0;
             for (Row r : rows) t += r.total();
@@ -84,13 +84,14 @@ public final class Perf {
     /** A thread's CPU over the last second, as a fraction of one core. */
     public record ThreadRow(String name, Group group, double cpu) {}
 
-    private record Second(double fps, double avgMs, double lowFps, double maxMs, double[][] ms) {}
+    private record Second(double fps, double avgMs, double lowFps, double maxMs, double gpuWaitMs, double[][] ms) {}
 
     private static final Map<String, Section> byName = new HashMap<>();
     private static final List<Section> sections = new ArrayList<>();
 
     private static final long[] frames = new long[FRAME_CAP];
     private static int frameCount;
+    private static long gpuWaitNanos;
     private static long lastFrame, secondStart;
     private static boolean menuThisSecond;
     private static Second live;
@@ -152,6 +153,11 @@ public final class Perf {
 
     // ---- frames -------------------------------------------------------------------
 
+    /** Time Low Input Lag held a frame for the GPU to catch up. */
+    public static void gpuWait(long nanos) {
+        gpuWaitNanos += nanos;
+    }
+
     /** Start of each frame (Minecraft.runTick). */
     public static void frame() {
         long now = System.nanoTime();
@@ -210,7 +216,9 @@ public final class Perf {
     private static Second frameStats(double secs, double[][] ms) {
         int n = frameCount;
         frameCount = 0;
-        if (n == 0) return new Second(0, 0, 0, 0, ms);
+        long waited = gpuWaitNanos;
+        gpuWaitNanos = 0;
+        if (n == 0) return new Second(0, 0, 0, 0, 0, ms);
         long[] sorted = Arrays.copyOf(frames, n);
         Arrays.sort(sorted);
         long sum = 0;
@@ -218,7 +226,7 @@ public final class Perf {
         double avg = sum / 1e6 / n;
         // the 1% low: the frame rate the slowest 1% of frames ran at
         double p99 = sorted[Math.min(n - 1, (int) Math.floor(n * 0.99))] / 1e6;
-        return new Second(n / secs, avg, p99 > 0 ? 1000 / p99 : 0, sorted[n - 1] / 1e6, ms);
+        return new Second(n / secs, avg, p99 > 0 ? 1000 / p99 : 0, sorted[n - 1] / 1e6, waited / 1e6 / n, ms);
     }
 
     private static void sampleSystem(Minecraft mc, double secs) {
@@ -331,24 +339,25 @@ public final class Perf {
     /** The last second, or null before the first one ends. */
     public static View live() {
         Second s = live;
-        return s == null ? null : view(1, s.fps, s.avgMs, s.lowFps, s.maxMs, List.of(s));
+        return s == null ? null : view(1, s.fps, s.avgMs, s.lowFps, s.maxMs, s.gpuWaitMs, List.of(s));
     }
 
     /** The last ten seconds in a world with no Dusk menu open, or null before any. */
     public static View play() {
         if (play.isEmpty()) return null;
-        double fps = 0, avg = 0, low = 0, max = 0;
+        double fps = 0, avg = 0, low = 0, max = 0, wait = 0;
         for (Second s : play) {
             fps += s.fps;
             avg += s.avgMs;
             low += s.lowFps;
+            wait += s.gpuWaitMs;
             max = Math.max(max, s.maxMs);
         }
         int n = play.size();
-        return view(n, fps / n, avg / n, low / n, max, play);
+        return view(n, fps / n, avg / n, low / n, max, wait / n, play);
     }
 
-    private static View view(int n, double fps, double avg, double low, double max, Iterable<Second> secs) {
+    private static View view(int n, double fps, double avg, double low, double max, double gpuWait, Iterable<Second> secs) {
         Map<Section, double[]> sum = new LinkedHashMap<>();
         for (Second s : secs) {
             for (Section sec : sections) {
@@ -364,7 +373,7 @@ public final class Perf {
             if (r.total() > 0) rows.add(r);
         }
         rows.sort((a, b) -> Double.compare(b.total(), a.total()));
-        return new View(n, fps, avg, low, max, rows);
+        return new View(n, fps, avg, low, max, gpuWait, rows);
     }
 
     public static Sys sys() {

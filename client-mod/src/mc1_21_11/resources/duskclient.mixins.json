@@ -37,6 +37,8 @@
     "keybinds.KeyEntryAccessor",
     "TitleRouteMixin",
     "PerfFrameMixin",
+    "lag.LowInputLagMixin",
+    "lag.RenderSystemPollAccessor",
     "TpsMixin",
     "PingMixin",
     "FullbrightMixin",
