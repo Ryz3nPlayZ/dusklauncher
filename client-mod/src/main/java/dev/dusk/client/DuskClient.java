@@ -86,6 +86,7 @@ import dev.dusk.client.modules.render.CustomSkies;
 import dev.dusk.client.modules.render.LightOverlay;
 import dev.dusk.client.modules.render.Hitbox;
 import dev.dusk.client.modules.render.ItemScale;
+import dev.dusk.client.modules.render.LegacyCombat;
 import dev.dusk.client.modules.render.LowFire;
 import dev.dusk.client.modules.render.TotemTweaks;
 import dev.dusk.client.modules.render.GlintColor;
@@ -319,6 +320,9 @@ public class DuskClient implements ClientModInitializer {
         modules.register(new SoundChanger());
         modules.register(new AutoReconnect());
         if (LowInputLag.available()) modules.register(new LowInputLag());
+        if (LegacyCombat.available() && !fabric.isModLoaded("oldanimations") && !fabric.isModLoaded("animatium")) {
+            modules.register(new LegacyCombat());
+        }
         AutoReconnect.register();
         Waypoints waypoints = new Waypoints();
         modules.register(waypoints);

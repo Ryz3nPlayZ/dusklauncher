@@ -56,7 +56,7 @@ public class DuskSettingsScreen extends MenuScreen {
             "hungerinfo", "lookingat", "shieldtweaks", "freelook", "compactchat", "chattimestamps", "confirmdisconnect",
             "autoreconnect", "serverlag", "containerpreview", "chathistory", "freecam", "chatmacros",
             "stopwatch", "resourcepacks", "scoreboard", "bossbar", "tabping",
-            "blockhighlight", "backgroundfps", "lowinputlag", "namehider", "fovchanger", "totems", "crosshairindicator", "itemcounter", "bedwarsresources",
+            "blockhighlight", "backgroundfps", "lowinputlag", "legacycombat", "namehider", "fovchanger", "totems", "crosshairindicator", "itemcounter", "bedwarsresources",
             "skyblockstats", "hypixel", "slotlock", "totemtweaks", "cooldowns", "glintcolor", "itempickups",
             "scrolltooltips");
 

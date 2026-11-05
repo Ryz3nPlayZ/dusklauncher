@@ -108,3 +108,6 @@ java/dev/dusk/client/mixin/thirdperson/**
 
 # Low Input Lag starts at 1.21.11
 java/dev/dusk/client/mixin/lag/**
+
+# Legacy Combat starts at 1.21.11; this layer carries a LegacyBlock stub
+java/dev/dusk/client/mixin/legacy/**

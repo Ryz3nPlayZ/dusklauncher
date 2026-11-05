@@ -2,6 +2,7 @@ package dev.dusk.client.modules.misc;
 
 import dev.dusk.client.module.Module;
 import dev.dusk.client.module.setting.IntSetting;
+import dev.dusk.client.modules.render.LegacyCombat;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -59,6 +60,7 @@ public class SoundChanger extends Module {
 
     /** The volume to play a sound at, given its id path and the volume vanilla worked out. */
     public static float volume(String path, float vanilla) {
+        if (LegacyCombat.mutes(path)) return 0F;
         SoundChanger m = instance;
         if (m == null || !m.enabled() || vanilla <= 0F) return vanilla;
         int g = m.lookup.computeIfAbsent(path, m::groupOf);

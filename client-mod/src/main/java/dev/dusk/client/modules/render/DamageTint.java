@@ -72,7 +72,7 @@ public class DamageTint extends Module {
     /** Whether worn armour flashes with the entity (vanilla leaves it untinted). */
     public static boolean tintsArmor() {
         DamageTint m = instance;
-        return m != null && m.enabled() && m.armor.get();
+        return m != null && m.enabled() && m.armor.get() || LegacyCombat.oldHits();
     }
 
     public static float fadeDuration() {

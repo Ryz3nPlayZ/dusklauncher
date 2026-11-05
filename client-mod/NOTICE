@@ -180,6 +180,14 @@ Crosshair Indicator — https://modrinth.com/mod/crosshair-indicator
   (modules/render/CrosshairIndicator.java). No copyright is claimed on it,
   but credit is given here anyway.
 
+Legacy Combat (modules/render/LegacyCombat.java, compat/LegacyBlock.java,
+mixin/legacy) ports from:
+
+- old-animations — https://github.com/lukasbaxter/old-animations
+  MIT, Copyright (c) 2026 lukasbaxter. Ported: the sword block pose and its
+  swing, when a held sword counts as blocking, the crouch pose offsets and
+  the sneak camera snap.
+
 Movement and camera modules ported from permissively licensed mods:
 
 - toggle-toggle-sprint — https://codeberg.org/celestialfault/toggle-toggle-sprint

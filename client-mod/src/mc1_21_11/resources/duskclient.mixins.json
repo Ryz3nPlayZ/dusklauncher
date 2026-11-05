@@ -3,6 +3,12 @@
   "package": "dev.dusk.client.mixin",
   "compatibilityLevel": "${java_level}",
   "client": [
+    "legacy.LegacyArmPoseMixin",
+    "legacy.LegacyCameraMixin",
+    "legacy.LegacyCrouchMixin",
+    "legacy.LegacyFirstPersonMixin",
+    "legacy.LegacyParticleMixin",
+    "legacy.LegacyUseMixin",
     "gui.ModernButtonMixin",
     "sound.SoundChangerMixin",
     "namehider.NameHiderMixin",
