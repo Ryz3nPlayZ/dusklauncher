@@ -16,6 +16,13 @@ use std::path::PathBuf;
 /// Versioned Mojang java-runtime index. Rotated by Mojang; see module docs.
 const RUNTIME_INDEX_URL: &str = "https://piston-meta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
 
+/// Azul's Java 8 for Apple silicon. Mojang's Mac build of Java 8 is Intel-only.
+/// Unpacked as a bundle, where Mojang's own runtimes go.
+pub const ZULU_8: &str = "zulu-8";
+const ZULU_8_URL: &str = "https://cdn.azul.com/zulu/bin/zulu8.98.0.111-ca-jre8.0.512-macosx_aarch64.tar.gz";
+const ZULU_8_SHA1: &str = "f094cfaa96c36d1fb861f120078f2a38779e9f9f";
+const ZULU_8_SIZE: u64 = 40165545;
+
 #[derive(Debug, Deserialize)]
 struct RuntimeEntry {
     manifest: ManifestRef,
@@ -115,13 +122,49 @@ pub async fn provision(
     // an older install without the marker still starts the game offline,
     // as it did before the marker existed
     let had_java = java_candidates(&dir).iter().any(|p| p.exists());
-    match provision_files(client, component, &dir, on_progress).await {
+    let provisioned = if component == ZULU_8 {
+        provision_zulu_8(client, &dir, on_progress).await
+    } else {
+        provision_files(client, component, &dir, on_progress).await
+    };
+    match provisioned {
         Err(e) if had_java => {
             tracing::warn!("couldn't re-check the {component} runtime, using it as it is: {e}");
             Ok(dir)
         }
         r => r,
     }
+}
+
+async fn provision_zulu_8(
+    client: &reqwest::Client,
+    dir: &std::path::Path,
+    on_progress: impl FnMut(crate::download::ProgressEvent) + Send,
+) -> Result<PathBuf> {
+    let bundle = dir.join("jre.bundle");
+    tokio::fs::create_dir_all(&bundle).await?;
+    let tarball = dir.join("zulu-8.tar.gz");
+    let download = crate::download::Download {
+        url: ZULU_8_URL.into(),
+        dest: tarball.clone(),
+        sha1: Some(ZULU_8_SHA1.into()),
+        size: Some(ZULU_8_SIZE),
+    };
+    crate::download::download_all(client, vec![download], 1, on_progress).await?;
+    let status = tokio::process::Command::new("/usr/bin/tar")
+        .arg("-xzf")
+        .arg(&tarball)
+        .arg("-C")
+        .arg(&bundle)
+        .args(["--strip-components", "1"])
+        .status()
+        .await?;
+    if !status.success() {
+        return Err(Error::Other(format!("couldn't unpack Java 8 ({status})")));
+    }
+    let _ = tokio::fs::remove_file(&tarball).await;
+    tokio::fs::write(dir.join(COMPLETE_MARKER), b"").await?;
+    Ok(dir.to_path_buf())
 }
 
 async fn provision_files(

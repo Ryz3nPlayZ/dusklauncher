@@ -151,6 +151,10 @@ pub enum Loader {
     Vanilla,
     Fabric,
     NeoForge,
+    /// 1.8.9 only, see `forge.rs`
+    Forge,
+    /// the Rust game (Dusk Native), not a Java loader
+    Native,
 }
 
 impl Loader {
@@ -159,7 +163,14 @@ impl Loader {
             Loader::Vanilla => "vanilla",
             Loader::Fabric => "fabric",
             Loader::NeoForge => "neoforge",
+            Loader::Forge => "forge",
+            Loader::Native => "native",
         }
+    }
+
+    /// Whether jars in `mods/` mean anything to this loader.
+    pub fn takes_mods(&self) -> bool {
+        matches!(self, Loader::Fabric | Loader::NeoForge | Loader::Forge)
     }
 
     pub fn parse(s: &str) -> Loader {
@@ -167,28 +178,54 @@ impl Loader {
             Loader::Fabric
         } else if s.eq_ignore_ascii_case("neoforge") {
             Loader::NeoForge
+        } else if s.eq_ignore_ascii_case("forge") {
+            Loader::Forge
+        } else if s.eq_ignore_ascii_case("native") {
+            Loader::Native
         } else {
             Loader::Vanilla
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProfileStore {
     pub profiles: Vec<Profile>,
+    /// Entries this build can't read (a loader it doesn't know, say). They
+    /// stay out of the list but are written back untouched on save, so one
+    /// unfamiliar instance never costs the others.
+    #[serde(skip)]
+    pub unreadable: Vec<serde_json::Value>,
+}
+
+#[derive(Deserialize)]
+struct RawStore {
+    profiles: Vec<serde_json::Value>,
 }
 
 impl ProfileStore {
     pub fn load(path: &Path) -> std::io::Result<Self> {
-        if path.exists() {
-            Ok(serde_json::from_slice(&std::fs::read(path)?)?)
-        } else {
-            Ok(Self { profiles: Vec::new() })
+        if !path.exists() {
+            return Ok(Self::default());
         }
+        let raw: RawStore = serde_json::from_slice(&std::fs::read(path)?)?;
+        let mut store = Self::default();
+        for entry in raw.profiles {
+            match serde_json::from_value::<Profile>(entry.clone()) {
+                Ok(p) => store.profiles.push(p),
+                Err(_) => store.unreadable.push(entry),
+            }
+        }
+        Ok(store)
     }
 
     pub fn save(&self, path: &Path) -> std::io::Result<()> {
-        crate::write_atomic(path, &serde_json::to_vec_pretty(self)?)
+        let mut all: Vec<serde_json::Value> = Vec::with_capacity(self.profiles.len() + self.unreadable.len());
+        for p in &self.profiles {
+            all.push(serde_json::to_value(p)?);
+        }
+        all.extend(self.unreadable.iter().cloned());
+        crate::write_atomic(path, &serde_json::to_vec_pretty(&serde_json::json!({ "profiles": all }))?)
     }
 }
 
@@ -253,5 +290,27 @@ mod jvm_default_tests {
         let mut a = args("-Xmx4G -XX:+UseG1GC -XX:+ParallelRefProcEnabled");
         assert!(!migrate_g1_tuning(&mut a));
         assert_eq!(a, args("-Xmx4G -XX:+UseG1GC -XX:+ParallelRefProcEnabled"));
+    }
+
+    #[test]
+    fn an_unknown_loader_costs_only_its_own_entry() {
+        let dir = std::env::temp_dir().join(format!("fl-store-{}", std::process::id()));
+        let path = dir.join("profiles.json");
+        std::fs::create_dir_all(&dir).unwrap();
+        let known = r#"{"id":"a","name":"main","game_version":"1.21.11","loader":"Fabric","resolution":[1280,720],"created_at":1}"#;
+        let future = r#"{"id":"b","name":"later","game_version":"9.9","loader":"SomethingNew","resolution":[1280,720],"created_at":2}"#;
+        std::fs::write(&path, format!(r#"{{"profiles":[{known},{future}]}}"#)).unwrap();
+
+        let store = ProfileStore::load(&path).unwrap();
+        assert_eq!(store.profiles.len(), 1);
+        assert_eq!(store.profiles[0].id, "a");
+        assert_eq!(store.unreadable.len(), 1);
+
+        store.save(&path).unwrap();
+        let back: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        let ids: Vec<&str> = back["profiles"].as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, ["a", "b"]);
+        assert_eq!(back["profiles"][1]["loader"], "SomethingNew");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

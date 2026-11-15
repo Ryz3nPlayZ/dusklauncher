@@ -267,6 +267,7 @@ public class DuskClient implements ClientModInitializer {
             modules.register(new ItemScale());
             modules.register(new ItemPhysics());
             modules.register(new FancyThirdPerson());
+            if (!FabricLoader.getInstance().isModLoaded("emotecraft")) modules.register(new dev.dusk.client.modules.misc.Emotes());
             modules.register(new FogControl());
             modules.register(new BoatMap());
             modules.register(new GameModeSwitcher());

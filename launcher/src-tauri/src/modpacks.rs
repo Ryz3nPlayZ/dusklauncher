@@ -910,7 +910,8 @@ async fn pack_index(state: &AppState, profile: &Profile) -> Result<(mr::MrpackIn
     let loader_key = match profile.loader {
         Loader::Fabric => Some("fabric-loader"),
         Loader::NeoForge => Some("neoforge"),
-        Loader::Vanilla => None,
+        Loader::Forge => Some("forge"),
+        Loader::Vanilla | Loader::Native => None,
     };
     if let (Some(key), Some(v)) = (loader_key, &profile.loader_version) {
         dependencies.insert(key.to_string(), v.clone());

@@ -163,13 +163,11 @@ Chat, HUD and map modules ported from MIT-licensed mods:
   coloured XP bar with its white bar texture (modules/hud/TotemCounter.java,
   mixin/totem and textures/hud/totem_xp_bar.png).
 
-- Pl3xMap — https://github.com/granny/Pl3xMap
-  MIT, Copyright (c) 2020-2023 William Blake Galbreath. Ported: the table of
-  block top colours (resources/assets/duskclient/minimap/block_colors.txt,
-  from ColorsConfig.BLOCK_COLORS), its grass, leaf and water tint lists and
-  half-and-half biome mixing, and the "fancy fluids" water depth colour and
-  cover curves (render/MapColors.java, modules/hud/Minimap.java). The
-  north-west relief shading follows its "modern" heightmap.
+- Diorama — https://github.com/SunkenInTime/diorama
+  MIT, Copyright (c) 2026 Dara Adedeji. Ported: the tilted ray-traced map,
+  its lighting and default style, block colours for tops and sides, chunk
+  copies, background tile baking and the cave and Nether slices
+  (render/map/, modules/hud/Minimap.java).
 
   All five are distributed under the MIT licence quoted above for Shield
   Tweaks.

@@ -43,6 +43,8 @@ pub struct LaunchSpec {
     pub game_args: Vec<String>,
     pub cwd: PathBuf,
     pub env: Vec<(String, String)>,
+    /// written to the game's standard input, which then closes
+    pub stdin: Option<String>,
 }
 
 /// Expand one of the rule-based argument lists (jvm or game) from a version JSON.
@@ -153,6 +155,23 @@ fn strip_unsupported_flags(args: Vec<String>, java_major: u32) -> Vec<String> {
             }
         })
         .collect()
+}
+
+/// Java 19+ keeps the classes a launch loaded in a per-instance archive
+/// (written when the game quits) and maps it on the next launch instead of
+/// parsing those classes again. A different Java or classpath makes Java
+/// rebuild it on its own. Left out when the instance's own flags already
+/// pick an archive, or when the instance turned it off with -Xshare:off.
+fn class_data_cache(java_major: u32, game_dir: &Path, args: &[String]) -> Vec<String> {
+    let own = args.iter().any(|a| a.starts_with("-XX:SharedArchiveFile") || a.starts_with("-Xshare") || a.contains("AutoCreateSharedArchive") || a.starts_with("-XX:AOTCache"));
+    if java_major < 19 || own {
+        return vec![];
+    }
+    let file = game_dir.join(".dusk").join(format!("classes-java{java_major}.jsa"));
+    if let Some(dir) = file.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    vec!["-XX:+AutoCreateSharedArchive".into(), format!("-XX:SharedArchiveFile={}", file.display())]
 }
 
 fn substitute(s: &str, values: &HashMap<String, String>) -> String {
@@ -276,6 +295,7 @@ pub fn build_launch_spec(
     let mut jvm_args: Vec<String> = Vec::new();
     jvm_args.extend(strip_unsupported_flags(profile.jvm_args.clone(), java.major_version));
     jvm_args.extend(crate::profile::modern_jvm_extras(java.major_version));
+    jvm_args.extend(class_data_cache(java.major_version, &dirs.root, &jvm_args));
     jvm_args.extend(expand_arguments(jvm_entries, &values, &features));
     if version.arguments.is_none() {
         // Old JSON: no argument arrays at all — supply the legacy JVM set and
@@ -323,6 +343,7 @@ pub fn build_launch_spec(
         game_args,
         cwd: dirs.root.clone(),
         env: env.env_vars.clone(),
+        stdin: None,
     }
 }
 
@@ -396,6 +417,9 @@ pub async fn launch(spec: &LaunchSpec, env: &LaunchEnv) -> Result<tokio::process
         .current_dir(&spec.cwd)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if spec.stdin.is_some() {
+        command.stdin(Stdio::piped());
+    }
     for (k, v) in &spec.env {
         command.env(k, v);
     }
@@ -404,7 +428,11 @@ pub async fn launch(spec: &LaunchSpec, env: &LaunchEnv) -> Result<tokio::process
     #[cfg(windows)]
     command.creation_flags(CREATE_NO_WINDOW);
 
-    let child = command.spawn().map_err(|e| Error::Other(format!("spawn {}: {e}", java_bin.display())))?;
+    let mut child = command.spawn().map_err(|e| Error::Other(format!("spawn {}: {e}", java_bin.display())))?;
+    if let (Some(input), Some(mut pipe)) = (&spec.stdin, child.stdin.take()) {
+        use tokio::io::AsyncWriteExt;
+        pipe.write_all(input.as_bytes()).await?;
+    }
     Ok(child)
 }
 
@@ -422,7 +450,9 @@ fn command_line(spec: &LaunchSpec, env: &LaunchEnv) -> (PathBuf, Vec<String>) {
         }
     }
     args.extend(spec.jvm_args.iter().cloned());
-    args.push(spec.main_class.clone());
+    if !spec.main_class.is_empty() {
+        args.push(spec.main_class.clone());
+    }
     args.extend(spec.game_args.iter().cloned());
     (program, args)
 }
@@ -460,6 +490,7 @@ mod tests {
             game_args: vec!["--demo".into()],
             cwd: PathBuf::from("."),
             env: vec![],
+            stdin: None,
         };
         let (bin, args) = command_line(&spec, &LaunchEnv::default());
         assert_eq!(bin, PathBuf::from("/jre/bin/java"));
@@ -720,6 +751,17 @@ mod tests {
         assert_eq!(strip_unsupported_flags(args(), 17), vec!["-XX:+UseZGC"]);
         assert_eq!(strip_unsupported_flags(args(), 21), args());
         assert_eq!(strip_unsupported_flags(args(), 25), vec!["-XX:+UseZGC"]);
+    }
+
+    #[test]
+    fn class_data_cache_only_on_java_19_and_never_over_the_instance_s_own() {
+        let dir = Path::new("/nonexistent-dusk-test");
+        assert!(class_data_cache(17, dir, &[]).is_empty());
+        let on = class_data_cache(21, dir, &[]);
+        assert_eq!(on[0], "-XX:+AutoCreateSharedArchive");
+        assert!(on[1].ends_with("classes-java21.jsa"));
+        assert!(class_data_cache(21, dir, &["-Xshare:off".into()]).is_empty());
+        assert!(class_data_cache(25, dir, &["-XX:SharedArchiveFile=/x.jsa".into()]).is_empty());
     }
 
     #[test]

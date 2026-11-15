@@ -111,3 +111,6 @@ java/dev/dusk/client/mixin/lag/**
 
 # Legacy Combat starts at 1.21.11; this layer carries a LegacyBlock stub
 java/dev/dusk/client/mixin/legacy/**
+
+# Emotes pose the 1.21.11+ HumanoidModel/AvatarRenderer; older targets don't register the module
+java/dev/dusk/client/mixin/emote/**

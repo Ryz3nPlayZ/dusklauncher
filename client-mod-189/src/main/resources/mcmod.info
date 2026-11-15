@@ -1,0 +1,11 @@
+[
+  {
+    "modid": "duskclient",
+    "name": "Dusk Client",
+    "description": "Dusk Client for 1.8.9: HUD, toggle sprint, motion blur and more.",
+    "version": "${version}",
+    "mcversion": "${mcversion}",
+    "url": "https://github.com/dusklauncher",
+    "authorList": ["Dusk"]
+  }
+]

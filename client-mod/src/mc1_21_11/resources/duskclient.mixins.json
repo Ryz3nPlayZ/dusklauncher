@@ -3,6 +3,9 @@
   "package": "dev.dusk.client.mixin",
   "compatibilityLevel": "${java_level}",
   "client": [
+    "emote.EmoteStateMixin",
+    "emote.EmoteExtractMixin",
+    "emote.EmotePoseMixin",
     "legacy.LegacyArmPoseMixin",
     "legacy.LegacyCameraMixin",
     "legacy.LegacyCrouchMixin",

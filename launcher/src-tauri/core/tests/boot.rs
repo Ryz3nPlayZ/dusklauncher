@@ -118,7 +118,8 @@ async fn boot_to_menu() {
                 .await
                 .unwrap()
         }
-        profile::Loader::Vanilla => version,
+        profile::Loader::Forge => fasterlauncher_core::forge::forge_version(&version).unwrap(),
+        profile::Loader::Vanilla | profile::Loader::Native => version,
         profile::Loader::Fabric => panic!("the fabric boot is covered by the client-mod gametests"),
     };
     println!("effective version {}", version.id);

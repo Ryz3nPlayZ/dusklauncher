@@ -1281,6 +1281,45 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* the 1.8.9 tile: the one wide card over the version row */
+.vtile {
+  position: relative;
+  height: calc(200 * var(--u));
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--panel);
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  transition: transform var(--t-med) var(--ease-spring);
+}
+.vtile:hover {
+  transform: translateY(-2px);
+}
+.vtile:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 3px;
+}
+.vtile img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.vtile__info {
+  position: absolute;
+  inset: 0 45% 0 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: calc(6 * var(--u));
+  padding: calc(20 * var(--u));
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.82) 55%, transparent);
+}
 .vpick__form > .px:first-child {
   flex: 1 1 auto;
 }

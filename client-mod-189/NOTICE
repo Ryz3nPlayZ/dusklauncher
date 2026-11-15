@@ -1,0 +1,97 @@
+Dusk Client 1.8.9 — ported behaviours and their sources
+========================================================
+
+Each entry names what was borrowed and under what terms. Code carried over
+verbatim or adapted is marked "ported"; where only the behaviour was
+reimplemented from reading a project (or its licence forbids copying), the
+entry says "behaviour only" and no code from that project is included.
+
+Build setup
+-----------
+- nea89o's Forge1.8.9Template (Unlicense): the Gradle/Loom build this project
+  is assembled with.
+- Jabel (Apache-2.0, bsideup; pkware fork): javac plugin used at build time
+  so modern Java syntax compiles to Java 8 bytecode. Not shipped in the jar.
+
+Framework (ids, settings, config shape)
+---------------------------------------
+- Dusk's own client-mod for 1.21.11 (GPL-3.0, this repository): module and
+  setting framework, HUD renderer and every module's setting ids and saved
+  form, ported so configs copy between versions.
+
+Modules
+-------
+- ToggleSprint/ToggleSneak (Zlib, boogiemonster1o1's Mod Menu sibling
+  ToggleSprint options mods): latched sprint/sneak behaviour, ported.
+- Combo counter (MIT, Eymistaken's ComboCounter): combo tracking and reset
+  rules, ported.
+- Flex-HUD (crosshair presets, TNT countdown, TPS estimate): crosshair
+  preset grids and the TPS rolling average, ported with thanks.
+- PolyNametag (licence per repository): nametag scale/colour/background
+  settings, behaviour only where the licence is not permissive.
+- OverflowParticles: particle gating, recolouring and multiplier behaviour;
+  behaviour only.
+- DamageTint (part of Dusk's client-mod, GPL-3.0): hurt-tint replacement,
+  ported.
+- Custom Block Highlight (CBH): outline/fill/through-walls selection box,
+  behaviour only.
+- BactroMod (Low Fire): lowered first-person fire, behaviour only.
+- Gamma Utils (Fullbright): uncapped gamma via the lightmap hook, behaviour
+  only.
+- natural-motionblur (and Dusk's own 1.21.11 renderer, GPL-3.0): motion blur
+  accumulation/blend passes, ported from Dusk's renderer.
+- Sodium (LGPL-3.0) and Input Optimizer: CPU render-ahead limiting via GL
+  fences for Low Input Lag, behaviour only.
+- Zoomify / Ok Zoomer: zoom easing, scroll adjustment and cinematic camera
+  scaling, behaviour only.
+- Mouse Tweaks (BSD-3-Clause, Copyright (c) 2023 Ivan Molodetskikh / YaLTeR,
+  https://github.com/YaLTeR/MouseTweaks): drag and scroll-wheel inventory
+  logic, rewritten for 1.8.9's GuiContainer in modules/misc/MouseTweaks.java.
+
+Cosmetics
+---------
+- Dusk's own client-mod for 1.21.11 (GPL-3.0, this repository): the cape
+  registry, loadout format, Dusk service client and cosmetics manager,
+  ported to Java 8 in cosmetics/.
+- MinecraftCapes mod (LGPL-2.1,
+  https://github.com/MinecraftCapes/minecraftcapes-mod): behaviour only.
+  Replicated: the profile API contract (api.minecraftcapes.net), the
+  offline-UUID resolution rule, the on-disk cache layout
+  (<type>/<hash[0:2]>/<hash>), the animated-cape frame rule (height !=
+  width/2 -> frames of width/2 rows, 100 ms each), the static cape padding
+  rule and the 14x7 ears UVs. No source files were copied.
+- The cape glint reuses vanilla 1.8.9's armour-glint passes (LayerArmorBase).
+
+The 1.8.9 mappings for Minecraft itself come from MCP (mcp_stable 22-1.8.9),
+used under its licence; Forge 1.8.9 is LGPL-2.1.
+
+--- Mouse Tweaks licence ---
+
+BSD 3-Clause License
+
+Copyright (c) 2023, Ivan Molodetskikh
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

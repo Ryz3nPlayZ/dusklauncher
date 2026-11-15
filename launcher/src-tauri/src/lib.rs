@@ -12,12 +12,14 @@ mod game_link;
 mod friends;
 mod hosting;
 mod icons;
+mod hypixel;
 mod importer;
 mod deps;
 mod javas;
 mod logs;
 mod modpacks;
 mod mods;
+mod native_game;
 mod packfix;
 mod packmods;
 mod recordings;
@@ -90,6 +92,7 @@ pub fn run() {
             // versions
             commands::list_versions,
             commands::fabric_loader_version,
+            native_game::native_game_info,
             commands::fabric_loader_versions,
             // launch
             commands::install_and_launch,
@@ -132,6 +135,9 @@ pub fn run() {
             servers::remove_server,
             servers::edit_server,
             carry::copy_instance_settings,
+            hypixel::pick_optifine,
+            hypixel::create_hypixel_instance,
+            hypixel::download_optifine,
             worlds::backup_world,
             worlds::export_world,
             worlds::list_world_backups,

@@ -100,6 +100,7 @@ pub struct AssetIndex {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Downloads {
     pub client: Option<DownloadArtifact>,
+    pub server: Option<DownloadArtifact>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

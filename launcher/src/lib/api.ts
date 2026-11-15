@@ -1100,6 +1100,7 @@ const fixtures: Record<string, unknown> = {
     { id: 'b1.7.3', type: 'old_beta', releaseAt: '2011-07-07' },
   ] satisfies Version[],
   fabric_loader_version: '0.16.14',
+  native_game_info: { minecraft: '26.3', available: false },
   fabric_loader_versions: [
     { version: '0.18.0-beta.2', stable: false },
     { version: '0.17.3', stable: true },
@@ -1376,6 +1377,9 @@ const sideEffects = new Set([
   'import_shared_instance',
   'export_instance',
   'copy_instance_settings',
+  'pick_optifine',
+  'download_optifine',
+  'create_hypixel_instance',
   'install_bundled_pack',
   'import_wallpaper',
   'remove_wallpaper',
@@ -2055,6 +2059,13 @@ export const api = {
   updateProfile: (id: string, patch: ProfilePatch) =>
     invoke<Profile>('update_profile', { id, patch }),
   deleteProfile: (id: string) => invoke<void>('delete_profile', { id }),
+  /** ask for the OptiFine file; `null` when the picker is cancelled */
+  pickOptifine: () => invoke<OptifineFile | null>('pick_optifine'),
+  /** fetch OptiFine 1.8.9 from optifine.net in the background */
+  downloadOptifine: () => invoke<OptifineFile>('download_optifine'),
+  /** the 1.8.9 Forge instance; `note` says what didn't make it in */
+  createHypixelInstance: (name: string, optifine: string | null, copyFrom: string | null, pylon: boolean) =>
+    invoke<{ profile: Profile; note: string | null }>('create_hypixel_instance', { name, optifine, copyFrom, pylon }),
   /** a new instance with this one's settings and folder (not its logs or screenshots) */
   duplicateProfile: (id: string) => invoke<Profile>('duplicate_profile', { id }),
   repairProfile: (id: string) => invoke<void>('repair_profile', { id }),
@@ -2082,6 +2093,7 @@ export const api = {
   gameState: async () => (await invoke<GameState | null | undefined>('game_state')) ?? null,
   listVersions: () => invoke<Version[]>('list_versions'),
   fabricLoaderVersion: () => invoke<string>('fabric_loader_version'),
+  nativeGameInfo: () => invoke<NativeGameInfo>('native_game_info'),
   /** the Fabric Loader builds for a game version, newest first */
   fabricLoaderVersions: (gameVersion: string) => invoke<FabricLoader[]>('fabric_loader_versions', { gameVersion }),
   searchModpacks: (
@@ -2382,8 +2394,19 @@ export function playtime(secs: number): string {
   return h >= 100 || m % 60 === 0 ? `${h} h` : `${h} h ${m % 60} min`;
 }
 
+export interface NativeGameInfo {
+  minecraft: string;
+  available: boolean;
+}
+
+export interface OptifineFile {
+  path: string;
+  name: string;
+}
+
 export function loaderLabel(p: Profile) {
   if (p.loader === 'neoforge') return 'NeoForge';
+  if (p.loader === 'native') return 'Dusk Native';
   return p.loader.charAt(0).toUpperCase() + p.loader.slice(1);
 }
 

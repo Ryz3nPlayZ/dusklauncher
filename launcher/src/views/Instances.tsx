@@ -12,6 +12,7 @@ import Screenshots from './Screenshots';
 import instanceBanner from '../assets/brand/instance-banner.webp';
 import PixelArrow from '../components/px/PixelArrow';
 import PixelGlyph from '../components/px/PixelGlyph';
+import { openLink } from '../lib/markdown';
 import { LEGACY } from '../lib/ui';
 import {
   ago,
@@ -24,6 +25,8 @@ import {
   type ExternalInstance,
   type GameState,
   type LaunchTarget,
+  type NativeGameInfo,
+  type OptifineFile,
   type Profile,
   type ReleaseArt,
   type Version,
@@ -31,7 +34,7 @@ import {
 
 /* the loader tabs, then one per group (keyed `g:<name>` so a group called
    "Fabric" doesn't collide with the loader) */
-const FILTERS = ['ALL', 'VANILLA', 'FABRIC', 'NEOFORGE'] as const;
+const FILTERS = ['ALL', 'VANILLA', 'FABRIC', 'FORGE', 'NEOFORGE', 'NATIVE'] as const;
 
 export default function Instances({
   profiles,
@@ -400,7 +403,7 @@ function NewInstance({
   onBrowse: () => void;
   onCreated: (p: Profile) => void;
 }) {
-  const [step, setStep] = useState<'pick' | 'custom' | 'import'>('pick');
+  const [step, setStep] = useState<'pick' | 'custom' | 'import' | 'hypixel'>('pick');
   const [versions, setVersions] = useState<Version[]>([]);
   const [art, setArt] = useState<ReleaseArt[]>([]);
   /* the DUSK PROFILE's version and name; the name follows the version until
@@ -409,7 +412,8 @@ function NewInstance({
   const [duskName, setDuskName] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [version, setVersion] = useState('');
-  const [loader, setLoader] = useState<'fabric' | 'neoforge' | 'vanilla'>('fabric');
+  const [loader, setLoader] = useState<'fabric' | 'neoforge' | 'vanilla' | 'native'>('fabric');
+  const [native, setNative] = useState<NativeGameInfo | null>(null);
   const [perf, setPerf] = useState<'on' | 'off'>('on');
   const [fabricVer, setFabricVer] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -434,6 +438,10 @@ function NewInstance({
       .fabricLoaderVersion()
       .then(setFabricVer)
       .catch(() => setFabricVer(null));
+    void api
+      .nativeGameInfo()
+      .then(setNative)
+      .catch(() => setNative(null));
   }, []);
 
   const featured = useMemo(() => featuredVersions(versions), [versions]);
@@ -475,6 +483,15 @@ function NewInstance({
             <TT size={22}>NEW INSTANCE</TT>
             <span className="meta">Pick a version — every card is a Dusk profile.</span>
           </div>
+
+          <button type="button" className="vtile" onClick={() => setStep('hypixel')}>
+            <img src={instanceBanner} alt="" draggable={false} />
+            <span className="vtile__info">
+              <TT size={36} keep>1.8.9 for Hypixel</TT>
+              <span className="vcard__drop">OptiFine, your keys and your settings, built for fast texture packs.</span>
+            </span>
+            <span className="vcard__tag">Forge</span>
+          </button>
 
           <div className="vcards">
             {featured.length === 0
@@ -586,6 +603,10 @@ function NewInstance({
     return <ImportExternal onBack={() => setStep('pick')} onClose={onClose} onCreated={onCreated} />;
   }
 
+  if (step === 'hypixel') {
+    return <HypixelSetup onBack={() => setStep('pick')} onClose={onClose} onCreated={onCreated} />;
+  }
+
   return (
     <div className="modal-scrim" onClick={onClose}>
       <PxBox family="panel" className="px--window modal newinst" onClick={(e) => e.stopPropagation()}>
@@ -613,12 +634,16 @@ function NewInstance({
               MINECRAFT VERSION
             </TT>
           </span>
-          <Combobox
-            value={version}
-            options={releases}
-            onChange={setVersion}
-            placeholder={releases[0]?.value ?? '1.21.11'}
-          />
+          {loader === 'native' ? (
+            <TT size={16}>{native?.minecraft ?? ''}</TT>
+          ) : (
+            <Combobox
+              value={version}
+              options={releases}
+              onChange={setVersion}
+              placeholder={releases[0]?.value ?? '1.21.11'}
+            />
+          )}
         </div>
 
         <div className="modal__row">
@@ -634,6 +659,7 @@ function NewInstance({
                 { value: 'fabric', label: 'FABRIC' },
                 { value: 'neoforge', label: 'NEOFORGE' },
                 { value: 'vanilla', label: 'VANILLA' },
+                ...(native?.available ? [{ value: 'native' as const, label: 'DUSK NATIVE' }] : []),
               ]}
               onPick={setLoader}
             />
@@ -683,7 +709,9 @@ function NewInstance({
             ? 'Pinned automatically for that version; DuskClient rides along.'
             : loader === 'neoforge'
               ? 'The newest NeoForge build for that version, installed at first launch. DuskClient is Fabric-only.'
-              : 'Plain vanilla, no modloader.'}
+              : loader === 'native'
+                ? 'The Rust game. Faster, with its own build of Dusk; Java mods stay out.'
+                : 'Plain vanilla, no modloader.'}
         </span>
 
         {err && <span className="meta">{err}</span>}
@@ -704,7 +732,7 @@ function NewInstance({
               setBusy(true);
               setErr(null);
               try {
-                const created = await api.createProfile(name.trim(), version.trim(), loader);
+                const created = await api.createProfile(name.trim(), loader === 'native' ? (native?.minecraft ?? version.trim()) : version.trim(), loader);
                 // downloads in the background; the instance is usable meanwhile
                 if (loader === 'fabric' && perf === 'on') void api.installPerformanceMods(created.id).catch(() => {});
                 onCreated(created);
@@ -728,6 +756,197 @@ function NewInstance({
  *  launchers on this machine keep, each copied in (mods, config, worlds, packs, options)
  *  as a new Dusk instance on the same version and loader. The original is
  *  left as it was. */
+/* the 1.8.9 tile's form. OptiFine's terms keep it out of the launcher, so the
+   player brings the file; everything here can also change later on the
+   instance's own pages. */
+function HypixelSetup({
+  onBack,
+  onClose,
+  onCreated,
+}: {
+  onBack: () => void;
+  onClose: () => void;
+  onCreated: (p: Profile) => void;
+}) {
+  const [name, setName] = useState('Hypixel 1.8.9');
+  const [optifine, setOptifine] = useState<(OptifineFile & { from: 'download' | 'file' }) | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const [fetchErr, setFetchErr] = useState<string | null>(null);
+  const [instances, setInstances] = useState<Profile[]>([]);
+  const [copyFrom, setCopyFrom] = useState('');
+  const [pylon, setPylon] = useState<'off' | 'on'>('off');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  /* made, but something didn't make it in: say what before moving on */
+  const [made, setMade] = useState<{ profile: Profile; note: string } | null>(null);
+
+  useEffect(() => {
+    void api
+      .listProfiles()
+      .then((all) => {
+        const played = all.filter((p) => p.loader !== 'native').sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0));
+        setInstances(played);
+        setCopyFrom((cur) => cur || (played.find((p) => p.gameVersion !== '1.8.9') ?? played[0])?.id || '');
+      })
+      .catch(() => setInstances([]));
+  }, []);
+
+  const pick = async () => {
+    setErr(null);
+    try {
+      const file = await api.pickOptifine();
+      if (file) setOptifine({ ...file, from: 'file' });
+    } catch (e) {
+      setErr(String(e));
+    }
+  };
+
+  const download = async () => {
+    setFetching(true);
+    setFetchErr(null);
+    try {
+      setOptifine({ ...(await api.downloadOptifine()), from: 'download' });
+    } catch (e) {
+      setFetchErr(String(e));
+    }
+    setFetching(false);
+  };
+
+  const create = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const { profile, note } = await api.createHypixelInstance(name, optifine?.path ?? null, copyFrom || null, pylon === 'on');
+      if (note) setMade({ profile, note });
+      else onCreated(profile);
+    } catch (e) {
+      setErr(String(e));
+    }
+    setBusy(false);
+  };
+
+  if (made) {
+    return (
+      <div className="modal-scrim">
+        <PxBox family="panel" className="px--window modal extimport" onClick={(e) => e.stopPropagation()}>
+          <TT size={22}>INSTANCE CREATED</TT>
+          <span className="meta">{made.note}</span>
+          <div className="modal__row">
+            <span className="modal__spacer" />
+            <PxButton family="accent" height="md" onClick={() => onCreated(made.profile)}>
+              <TT size={16} tone="accent">OPEN INSTANCE</TT>
+            </PxButton>
+          </div>
+        </PxBox>
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-scrim" onClick={busy || fetching ? undefined : onClose}>
+      <PxBox family="panel" className="px--window modal newinst" onClick={(e) => e.stopPropagation()}>
+        <TT size={22} keep>1.8.9 for Hypixel</TT>
+
+        <div className="modal__row">
+          <span className="modal__label">
+            <TT size={16} tone="dim">INSTANCE NAME</TT>
+          </span>
+          <PxBox family="panel" height="md">
+            <input className="input" aria-label="Instance name" value={name} onChange={(e) => setName(e.target.value)} />
+          </PxBox>
+        </div>
+
+        <div className="modal__row">
+          <span className="modal__label">
+            <TT size={16} tone="dim">OPTIFINE</TT>
+          </span>
+          <div className="newinst__choice">
+            {fetchErr ? (
+              <PxButton family="grey" height="md" onClick={() => void openLink('https://optifine.net/downloads')}>
+                <TT size={16}>GET OPTIFINE</TT>
+              </PxButton>
+            ) : (
+              <PxButton
+                family={optifine?.from === 'download' ? 'accent' : 'grey'}
+                height="md"
+                disabled={busy || fetching || optifine?.from === 'download'}
+                onClick={() => void download()}
+              >
+                <TT size={16} tone={optifine?.from === 'download' ? 'accent' : undefined}>
+                  {fetching ? 'DOWNLOADING…' : optifine?.from === 'download' ? 'DOWNLOADED' : 'DOWNLOAD'}
+                </TT>
+              </PxButton>
+            )}
+            <PxButton
+              family={optifine?.from === 'file' ? 'accent' : 'grey'}
+              height="md"
+              disabled={busy || fetching}
+              title={optifine?.from === 'file' ? optifine.name : undefined}
+              onClick={() => void pick()}
+            >
+              <TT size={16} tone={optifine?.from === 'file' ? 'accent' : undefined}>{optifine?.from === 'file' ? 'FILE ADDED' : 'ADD THE FILE'}</TT>
+            </PxButton>
+          </div>
+        </div>
+        <span className="meta">
+          {fetchErr ??
+            (optifine?.from === 'download'
+              ? `${optifine.name}, downloaded from optifine.net.`
+              : optifine
+                ? optifine.name
+                : 'The launcher can download OptiFine 1.8.9 from optifine.net for you, or you can add a file you already have.')}
+        </span>
+
+        <div className="modal__row">
+          <span className="modal__label">
+            <TT size={16} tone="dim">SETTINGS FROM</TT>
+          </span>
+          <PxBox family="panel" height="md">
+            <select className="input select" aria-label="Copy settings from" value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)}>
+              <option value="">Start with default settings</option>
+              {instances.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </PxBox>
+        </div>
+        <span className="meta">Brings your keys, sensitivity, FOV, video and sound settings over. Resource packs stay out.</span>
+
+        <div className="modal__row">
+          <span className="modal__label">
+            <TT size={16} tone="dim">PYLON</TT>
+          </span>
+          <div className="newinst__choice">
+            <Choice
+              value={pylon}
+              options={[
+                { value: 'off', label: 'OFF' },
+                { value: 'on', label: 'ON' },
+              ]}
+              onPick={setPylon}
+            />
+          </div>
+        </div>
+        <span className="meta">Pylon aims to raise FPS. It stuttered once per run in testing, so it starts off. Switch it any time in the Mods tab.</span>
+
+        {err && <span className="meta">{err}</span>}
+
+        <div className="modal__row">
+          <PxButton family="grey" height="md" disabled={busy} onClick={onBack}>
+            <TT size={16}>BACK</TT>
+          </PxButton>
+          <span className="modal__spacer" />
+          <PxButton family="accent" height="md" disabled={busy || fetching || !name.trim()} onClick={() => void create()}>
+            <TT size={16} tone="accent">{busy ? 'CREATING…' : 'CREATE'}</TT>
+          </PxButton>
+        </div>
+      </PxBox>
+    </div>
+  );
+}
+
 function ImportExternal({
   onBack,
   onClose,

@@ -33,6 +33,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # screenshots are deleted to the OS trash, never for good
 trash = "5"
 flate2 = "1"
+sha2 = "0.10"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 hickory-resolver = "0.26.3"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }

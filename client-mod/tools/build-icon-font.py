@@ -74,7 +74,9 @@ def main():
     fb.setupGlyf(glyphs)
     fb.setupHorizontalMetrics({g: (w, glyphs[g].xMin if hasattr(glyphs[g], "xMin") else 0) for g, (w, _) in metrics.items()})
     fb.setupHorizontalHeader(ascent=ASC, descent=DESC)
-    fb.setupNameTable({"familyName": "Dusk Icons", "styleName": "Regular"})
+    # Java AWT (the 1.8.9 port) refuses a font without a full name (ID 4)
+    fb.setupNameTable({"familyName": "Dusk Icons", "styleName": "Regular", "uniqueFontIdentifier": "Dusk Icons Regular",
+                       "fullName": "Dusk Icons", "psName": "DuskIcons-Regular"})
     fb.setupOS2(sTypoAscender=ASC, sTypoDescender=DESC, sTypoLineGap=0, usWinAscent=1296, usWinDescent=356, sCapHeight=745)
     fb.setupPost()
     fb.save(OUT)

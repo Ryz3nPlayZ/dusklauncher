@@ -78,7 +78,7 @@ impl AppState {
             // unreadable: set it aside rather than let the next save write an
             // empty list over the only record of every instance
             let _ = std::fs::rename(&profiles_path, profiles_path.with_extension("json.bad"));
-            ProfileStore { profiles: Vec::new() }
+            ProfileStore::default()
         });
         let mut settings = Settings::load(&data_dir.join("settings.json"));
         if settings.jvm_defaults_rev < crate::settings::JVM_DEFAULTS_REV {

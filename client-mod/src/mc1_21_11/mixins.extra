@@ -15,3 +15,6 @@ styles.StylePacksMixin
 account.MinecraftAccountAccessor
 # Enchant Oracle panel beside the enchanting table, on every version
 enchant.EnchantScreenMixin
+# Minimap: block colours from sprites, and rebaking tiles when a block changes
+minimap.SpriteContentsAccessor
+minimap.MapBlockUpdateMixin

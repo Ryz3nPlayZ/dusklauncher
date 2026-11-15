@@ -44,6 +44,7 @@ import {
   type ServerStatus,
   type Version,
   type World,
+  type NativeGameInfo,
 } from '../lib/api';
 import { clearGameLog, useGameLog } from '../lib/gamelog';
 
@@ -196,7 +197,7 @@ export default function InstanceEditor({
         initialFacets={{
           categories: [],
           versions: [profile.gameVersion],
-          loaders: b.kind === 'mod' && profile.loader !== 'vanilla' ? [profile.loader] : [],
+          loaders: b.kind === 'mod' && profile.loader !== 'vanilla' && profile.loader !== 'native' ? [profile.loader] : [],
         }}
         search={(q, f, page, size, sort) => api.searchProjects(b.kind, q, f, page, size, sort)}
         install={async (hit) => {
@@ -379,6 +380,7 @@ function SettingsTab({
   const [name, setName] = useState(profile.name);
   const [version, setVersion] = useState(profile.gameVersion);
   const [loader, setLoader] = useState(profile.loader);
+  const [native, setNative] = useState<NativeGameInfo | null>(null);
   /** the pinned Fabric build; '' = the newest stable one */
   const [loaderVersion, setLoaderVersion] = useState(fabricPin(profile));
   const [loaderBuilds, setLoaderBuilds] = useState<FabricLoader[] | null>(null);
@@ -408,6 +410,7 @@ function SettingsTab({
   useEffect(() => {
     void api.listVersions().then(setVersions).catch(() => setVersions([]));
     void api.getSettings().then(setLauncher).catch(() => {});
+    void api.nativeGameInfo().then(setNative).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -706,7 +709,11 @@ function SettingsTab({
             ? `Fabric ${profile.loader === 'fabric' && profile.loaderVersion ? profile.loaderVersion : '— pinned automatically'}`
             : loader === 'neoforge'
               ? `NeoForge ${profile.loader === 'neoforge' && profile.loaderVersion ? profile.loaderVersion : '— newest build for the version'}. DuskClient is Fabric-only.`
-              : 'Plain vanilla, no modloader. Mods in the folder are ignored.'
+              : loader === 'forge'
+                ? 'Forge for 1.8.9. DuskClient is Fabric-only.'
+                : loader === 'native'
+                ? 'The Rust game, on the one Minecraft version it plays. Java mods in the folder are ignored.'
+                : 'Plain vanilla, no modloader. Mods in the folder are ignored.'
         }
       >
         <Choice
@@ -715,6 +722,8 @@ function SettingsTab({
             { value: 'vanilla', label: 'VANILLA' },
             { value: 'fabric', label: 'FABRIC' },
             { value: 'neoforge', label: 'NEOFORGE' },
+            ...(profile.loader === 'forge' ? [{ value: 'forge', label: 'FORGE' }] : []),
+            ...(native?.available || profile.loader === 'native' ? [{ value: 'native', label: 'DUSK NATIVE' }] : []),
           ]}
           onPick={setLoader}
         />
@@ -1293,7 +1302,7 @@ function ContentTab({
     }
   };
 
-  const vanilla = kindTab === 'MODS' && profile.loader === 'vanilla';
+  const vanilla = kindTab === 'MODS' && (profile.loader === 'vanilla' || profile.loader === 'native');
   const hasVia =
     [...projects.values()].includes(VIA_FABRIC_PLUS) || rows?.some((r) => /viafabricplus/i.test(r.file.filename));
 
@@ -1426,7 +1435,9 @@ function ContentTab({
 
       {vanilla && (
         <span className="meta">
-          This instance runs vanilla — switch the loader to Fabric or NeoForge in Settings for mods to load.
+          {profile.loader === 'native'
+            ? 'Dusk Native runs no Java mods — its features are built into the game.'
+            : 'This instance runs vanilla — switch the loader to Fabric or NeoForge in Settings for mods to load.'}
         </span>
       )}
       {note && <span className="meta">{note}</span>}

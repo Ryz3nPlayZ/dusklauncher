@@ -1,10 +1,12 @@
 pub mod auth;
 pub mod download;
 pub mod fabric;
+pub mod forge;
 pub mod java;
 pub mod launch;
 pub mod meta;
 pub mod modrinth;
+pub mod native;
 pub mod natives;
 pub mod pool;
 pub mod neoforge;

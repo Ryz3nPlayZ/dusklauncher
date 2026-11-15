@@ -1,0 +1,3 @@
+ui*.ttf: Plus Jakarta Sans (c) Tokotype, SIL Open Font License 1.1
+(https://github.com/tokotype/PlusJakartaSans). Static 500 and 700 weight
+instances of the variable font, latin and latin-ext subsets.

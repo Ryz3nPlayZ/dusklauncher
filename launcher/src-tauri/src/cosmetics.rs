@@ -395,7 +395,7 @@ pub fn save_loadout(data_dir: &Path, loadout: &Loadout) -> Result<(), String> {
 
 /// Merge the current loadout into an instance's `config/duskclient.json`
 /// (the file the mod and the launcher share), leaving every other key the
-/// mod stores there untouched. Called right before a Fabric launch.
+/// mod stores there untouched. Called right before a Fabric or Forge launch.
 pub fn write_loadout_to_instance(data_dir: &Path, instance_root: &Path) -> Result<(), String> {
     let cfg_dir = instance_root.join("config");
     let path = cfg_dir.join("duskclient.json");

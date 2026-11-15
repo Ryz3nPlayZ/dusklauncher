@@ -184,7 +184,7 @@ pub(crate) fn new_profile_id() -> String {
 }
 
 /// Emit progress at most ~15×/s per stage; the UI smooths the rest.
-struct ProgressEmitter {
+pub(crate) struct ProgressEmitter {
     app: AppHandle,
     profile_id: String,
     stage: String,
@@ -196,7 +196,7 @@ struct ProgressEmitter {
 }
 
 impl ProgressEmitter {
-    fn new(app: AppHandle, profile_id: &str, stage: &str, total: u64, total_bytes: u64) -> Self {
+    pub(crate) fn new(app: AppHandle, profile_id: &str, stage: &str, total: u64, total_bytes: u64) -> Self {
         Self {
             app,
             profile_id: profile_id.to_string(),
@@ -215,7 +215,19 @@ impl ProgressEmitter {
         self.flush(false);
     }
 
-    fn flush(&mut self, force: bool) {
+    /// How far along, for work that reports a position rather than steps.
+    pub(crate) fn set(&mut self, done: u64) {
+        self.done = done;
+        self.flush(false);
+    }
+
+    /// Bytes so far, for one download reporting as it goes.
+    pub(crate) fn set_bytes(&mut self, done_bytes: u64) {
+        self.done_bytes = done_bytes;
+        self.flush(false);
+    }
+
+    pub(crate) fn flush(&mut self, force: bool) {
         if !force && self.last_emit.elapsed() < Duration::from_millis(66) {
             return;
         }
@@ -765,9 +777,21 @@ pub async fn install_and_launch(
         None => None,
     };
     emit_state(&app, &profile_id, "starting", None);
+    // where the seconds between PLAY and the title screen go, for the log
+    let clicked = std::time::Instant::now();
+    let mut stages: Vec<(&str, u128)> = Vec::new();
+    let mark = |stages: &mut Vec<(&str, u128)>, name| stages.push((name, clicked.elapsed().as_millis()));
 
-    let profile = bump_loader_for_mods(&state, profile).await;
+    let mut profile = bump_loader_for_mods(&state, profile).await;
+    if profile.loader == Loader::Native {
+        // the one version the game build plays
+        profile.game_version = crate::native_game::pin().minecraft;
+    }
     let session = launch_session(&state).await?;
+    mark(&mut stages, "account");
+    if profile.loader == Loader::Native && session.access_token.is_empty() {
+        return Err("Dusk Native needs a signed-in Microsoft account that owns Minecraft: it's built from your own copy of the game.".into());
+    }
 
     let client = state.client.clone();
     let dirs = profile.dirs(&state.data_dir);
@@ -789,8 +813,10 @@ pub async fn install_and_launch(
         },
     };
 
+    mark(&mut stages, "files");
     let java = java_for_mods(&profile, &dirs, version.effective_java()).await;
     let java_bin = java_for(&app, &client, &state, &profile, &dirs, &java).await?;
+    mark(&mut stages, "java");
 
     let env = {
         let (env_vars, [prelaunch_hook, wrapper_hook, post_exit_hook]) = state.settings.lock().unwrap().launch_hooks(&profile);
@@ -894,7 +920,22 @@ pub async fn install_and_launch(
                 && !a.starts_with("-Ddusk.tools=")
                 && !a.starts_with("-Ddusk.host=")
                 && !a.starts_with("-Ddusk.link=")
+                && !a.starts_with("-Ddusk.scene=")
         });
+        // the title screen draws the launcher's background: tell it which
+        if state.settings.lock().unwrap().theme == "nether" {
+            p.jvm_args.push("-Ddusk.scene=nether".into());
+        }
+        if p.loader == Loader::Forge {
+            p.jvm_args.extend(fasterlauncher_core::forge::JVM_ARGS.iter().map(|a| a.to_string()));
+            // the 1.8.9 Dusk build wears the same loadout and asks the same
+            // service about other players' cosmetics
+            p.jvm_args.push(format!("-Ddusk.api={}", crate::dusk::api_base()));
+            p.jvm_args.push(format!("-Ddusk.loadout={}", crate::cosmetics::loadout_path(&state.data_dir).display()));
+            if let Err(e) = crate::cosmetics::write_loadout_to_instance(&state.data_dir, &dirs.root) {
+                tracing::warn!("could not write cosmetics loadout to instance: {e}");
+            }
+        }
         if p.loader == Loader::Fabric {
             let in_mods = crate::cosmetics::client_mod_in_mods(&dirs.mods);
             // jars the loader takes on top of mods/, one list
@@ -964,8 +1005,17 @@ pub async fn install_and_launch(
     if let Some(full) = profile.fullscreen.filter(|f| *f || dirs.root.join("options.txt").exists()) {
         set_game_option(&dirs.root, "fullscreen", if full { "true" } else { "false" });
     }
-    let spec = launch::build_launch_spec(&java_bin, &version, &profile, &dirs, &natives_dir, &session, &env);
+    let spec = if profile.loader == Loader::Native {
+        crate::native_game::launch_spec(&app, &state, &profile, &dirs, &version, &java_bin, &session, &env).await?
+    } else {
+        launch::build_launch_spec(&java_bin, &version, &profile, &dirs, &natives_dir, &session, &env)
+    };
     let mut child = launch::launch(&spec, &env).await.map_err(|e| e.to_string())?;
+    mark(&mut stages, "spawned");
+    tracing::info!(
+        "launch timing (ms since PLAY): {}",
+        stages.iter().map(|(n, ms)| format!("{n} {ms}")).collect::<Vec<_>>().join(", ")
+    );
     let started = std::time::SystemTime::now();
     // the last lines of output, for explaining a crash
     let tail = std::sync::Arc::new(std::sync::Mutex::new(std::collections::VecDeque::<String>::new()));
@@ -982,6 +1032,7 @@ pub async fn install_and_launch(
     let app3 = app.clone();
     let tail2 = tail.clone();
     let forwarder = tokio::spawn(async move {
+        let mut ready_logged = false;
         let mut lines: Vec<GameLogLine> = Vec::new();
         let mut last_flush = tokio::time::Instant::now();
         loop {
@@ -997,6 +1048,12 @@ pub async fn install_and_launch(
             };
             match recv {
                 Some(line) => {
+                    // the sound engine starts as the game finishes loading,
+                    // on every version from 1.8 up
+                    if !ready_logged && line.line.contains("Sound engine started") {
+                        ready_logged = true;
+                        tracing::info!("launch timing: game loaded {} ms after PLAY", clicked.elapsed().as_millis());
+                    }
                     if let Some(server) = presence_from_log(&line.line) {
                         set_activity_server(&app3, server, false);
                     } else if let Some(address) = crate::hosting::relay_address(&line.line) {
@@ -1407,7 +1464,9 @@ async fn install_profile(
             prog.flush(true);
             merged
         }
-        Loader::Vanilla => version,
+        Loader::Forge => fasterlauncher_core::forge::forge_version(&version).map_err(|e| e.to_string())?,
+        // the game reads the owner's vanilla files when it's prepared
+        Loader::Vanilla | Loader::Native => version,
     };
 
     // Libraries — both Mojang (`downloads.artifact`) and Fabric (maven `url`

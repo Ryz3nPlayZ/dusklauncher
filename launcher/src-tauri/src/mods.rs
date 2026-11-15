@@ -331,7 +331,7 @@ pub async fn check_content_updates(
 ) -> Result<Vec<ContentUpdateDto>, String> {
     let kind = content_kind(&kind)?;
     let (profile, dir) = profile_and_content(&state, &profile_id, kind)?;
-    if kind == "mod" && profile.loader == fasterlauncher_core::profile::Loader::Vanilla {
+    if kind == "mod" && !profile.loader.takes_mods() {
         return Ok(Vec::new());
     }
     let files = hash_content(&dir, kind).await;
@@ -497,7 +497,7 @@ pub fn set_content_enabled(
 }
 
 /// Copy one local file into the profile's folder for `kind`.
-fn copy_in(state: &AppState, profile_id: &str, kind: &'static str, path: &std::path::Path) -> Result<ProfileModDto, String> {
+pub(crate) fn copy_in(state: &AppState, profile_id: &str, kind: &'static str, path: &std::path::Path) -> Result<ProfileModDto, String> {
     let (_, dir) = profile_and_content(state, profile_id, kind)?;
     let filename = sanitize_filename(path.file_name().and_then(|s| s.to_str()).unwrap_or(""))?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -662,7 +662,7 @@ pub async fn install_content_to_profile(
 ) -> Result<ProfileModDto, String> {
     let kind = content_kind(&kind)?;
     let (profile, dir) = profile_and_content(&state, &profile_id, kind)?;
-    if kind == "mod" && profile.loader == fasterlauncher_core::profile::Loader::Vanilla {
+    if kind == "mod" && !profile.loader.takes_mods() {
         return Err("Mods need a mod-loader instance — switch it to Fabric or NeoForge first.".into());
     }
     let loader = (kind == "mod").then(|| profile.loader.as_str());
@@ -689,7 +689,7 @@ pub async fn install_content_version_to_profile(
 ) -> Result<ProfileModDto, String> {
     let kind = content_kind(&kind)?;
     let (profile, dir) = profile_and_content(&state, &profile_id, kind)?;
-    if kind == "mod" && profile.loader == fasterlauncher_core::profile::Loader::Vanilla {
+    if kind == "mod" && !profile.loader.takes_mods() {
         return Err("Mods need a mod-loader instance — switch it to Fabric or NeoForge first.".into());
     }
     let ver = mr::version(&state.client, &version_id).await.map_err(|e| e.to_string())?;

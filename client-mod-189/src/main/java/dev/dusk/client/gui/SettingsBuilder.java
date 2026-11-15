@@ -1,0 +1,131 @@
+package dev.dusk.client.gui;
+
+import dev.dusk.client.gui.widget.ActionWidget;
+import dev.dusk.client.gui.widget.ColorWidget;
+import dev.dusk.client.gui.widget.CrosshairWidget;
+import dev.dusk.client.gui.widget.DropdownWidget;
+import dev.dusk.client.gui.widget.GroupHeaderWidget;
+import dev.dusk.client.gui.widget.KeybindWidget;
+import dev.dusk.client.gui.widget.PopupHost;
+import dev.dusk.client.gui.widget.ScrollPane;
+import dev.dusk.client.gui.widget.SettingRow;
+import dev.dusk.client.gui.widget.SliderWidget;
+import dev.dusk.client.gui.widget.TextWidget;
+import dev.dusk.client.gui.widget.ToggleWidget;
+import dev.dusk.client.module.Module;
+import dev.dusk.client.module.setting.ActionSetting;
+import dev.dusk.client.module.setting.BoolSetting;
+import dev.dusk.client.module.setting.ChoiceSetting;
+import dev.dusk.client.module.setting.ColorSetting;
+import dev.dusk.client.module.setting.IntSetting;
+import dev.dusk.client.module.setting.KeySetting;
+import dev.dusk.client.module.setting.PixelGridSetting;
+import dev.dusk.client.module.setting.Setting;
+import dev.dusk.client.module.setting.TextSetting;
+import dev.dusk.client.module.setting.ToggleKeySetting;
+import dev.dusk.client.modules.render.CrosshairPresets;
+import dev.dusk.client.modules.render.CustomCrosshair;
+import net.minecraft.client.gui.FontRenderer;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+
+/**
+ * Fills a {@link ScrollPane} with one module's settings, Flex-HUD style:
+ * the enabled toggle, then every setting (grouped under folding headers),
+ * each with its own reset button.
+ */
+public final class SettingsBuilder {
+    public static final int ROW_H = 24;
+
+    /** A row's height: roomier in the modern look, where rows sit in cards with hairlines between. */
+    public static int rowH() {
+        return Theme.modern() ? 28 : ROW_H;
+    }
+
+    /** A group heading's height: in the modern look it leaves air above the card it heads. */
+    static int headerH() {
+        return Theme.modern() ? 30 : 22;
+    }
+    /** Modules with more settings than this open with only their first group unfolded. */
+    private static final int EXPAND_ALL_LIMIT = 40;
+
+    private SettingsBuilder() {}
+
+    /** @param onChange runs after any edit (the screen saves when it closes) */
+    public static void build(ScrollPane pane, Module m, PopupHost host, Runnable onChange) {
+        build(pane, m, host, onChange, true);
+    }
+
+    /** @param enabledRow false when the page shows the module's switch somewhere else */
+    public static void build(ScrollPane pane, Module m, PopupHost host, Runnable onChange, boolean enabledRow) {
+        int rowH = rowH();
+        if (enabledRow) pane.add(new ToggleWidget("Enabled", m::enabled, v -> { m.setEnabled(v); onChange.run(); }), rowH);
+        ToggleKeySetting toggleKey = m.toggleKey();
+        pane.add(new KeybindWidget(toggleKey.name(), toggleKey::keyName, key -> { toggleKey.set(key); onChange.run(); })
+                .resets(toggleKey, onChange), rowH);
+        List<Setting<?>> settings = m.settings();
+        boolean expandAll = settings.size() <= EXPAND_ALL_LIMIT;
+        String currentGroup = null;
+        GroupHeaderWidget header = null;
+        boolean firstGroup = true;
+        List<Setting<?>> members = new ArrayList<>();
+        for (Setting<?> s : settings) {
+            SettingRow row = rowFor(m, s, host, onChange);
+            if (row == null) continue;
+            String g = s.group();
+            if (g != null && !Objects.equals(g, currentGroup)) {
+                currentGroup = g;
+                header = new GroupHeaderWidget(m.id() + "/" + g, g, !expandAll && !firstGroup, () -> {});
+                // the heading goes too once nothing under it applies
+                List<Setting<?>> inGroup = members = new ArrayList<>();
+                header.visible = () -> inGroup.stream().anyMatch(Setting::visible);
+                pane.add(header, headerH());
+                firstGroup = false;
+            } else if (g == null) {
+                currentGroup = null;
+                header = null;
+            }
+            if (header != null) members.add(s);
+            row.group = header;
+            row.visible = s::visible;
+            pane.add(row, rowH);
+        }
+    }
+
+    private static SettingRow rowFor(Module module, Setting<?> s, PopupHost host, Runnable onChange) {
+        if (s instanceof BoolSetting b) {
+            return new ToggleWidget(b.name(), b::get, v -> { b.set(v); onChange.run(); }).resets(s, onChange);
+        }
+        if (s instanceof ActionSetting a) return new ActionWidget(a, onChange);
+        if (s instanceof IntSetting i) return new SliderWidget(i, onChange).resets(s, onChange);
+        if (s instanceof ChoiceSetting c) return new DropdownWidget(c, onChange, host).resets(s, onChange);
+        if (s instanceof KeySetting k) return new KeybindWidget(k.name(), k::mapping).resets(s, onChange);
+        if (s instanceof ColorSetting c) return new ColorWidget(c, onChange, host).resets(s, onChange);
+        if (s instanceof TextSetting t) return new TextWidget(t, onChange).resets(s, onChange);
+        if (s instanceof PixelGridSetting && module instanceof CustomCrosshair crosshair) {
+            return new CrosshairWidget(crosshair, onChange, host).resets(s, () -> {
+                crosshair.applyPreset(CrosshairPresets.NAMES[0]);
+                onChange.run();
+            });
+        }
+        return null;
+    }
+
+    public static List<String> wrap(FontRenderer font, String text, int maxWidth) {
+        List<String> lines = new ArrayList<>();
+        StringBuilder line = new StringBuilder();
+        for (String word : text.split(" ")) {
+            String candidate = line.length() == 0 ? word : line + " " + word;
+            if (font.getStringWidth(candidate) > maxWidth && line.length() != 0) {
+                lines.add(line.toString());
+                line = new StringBuilder(word);
+            } else {
+                line = new StringBuilder(candidate);
+            }
+        }
+        if (line.length() != 0) lines.add(line.toString());
+        return lines;
+    }
+}
