@@ -1088,6 +1088,10 @@ object LobbyScene {
         }
         val dimension = registries.lookupOrThrow(Registries.DIMENSION_TYPE).getOrThrow(dimensionKey)
         val root = loaded.root
+        val anchorData = checkNotNull(root.optIntArray("anchor"))
+        val anchor = BlockPos(anchorData[0], anchorData[1], anchorData[2])
+        val bottom = dimension.value().minY()
+        check(anchor.y >= bottom && anchor.y < bottom + dimension.value().height()) { "Scene ${loaded.entry.id} is outside the world height" }
         val radius = root.getIntOr("radius", LobbySnapshot.DEFAULT_RADIUS)
         val level = ClientLevel(
             listener,
@@ -1113,8 +1117,6 @@ object LobbyScene {
             mc.gameRenderer.setLevel(level)
             setReach(mc, 0)
         }
-        val anchorData = checkNotNull(root.optIntArray("anchor"))
-        val anchor = BlockPos(anchorData[0], anchorData[1], anchorData[2])
         val center = LobbyCompat.chunkOf(anchor)
         populate(level, root, center, radius)
         val gameMode = MultiPlayerGameMode(mc, listener)
@@ -1145,6 +1147,8 @@ object LobbyScene {
         val built = Live(listener, level, gameMode, rig, stage, stage.portraitShot(level), avatars, mood, captured, posts)
         //? if > 1.8.9
         built.props += runCatching { LobbyEntities.load(level, root, stage) }.getOrElse { emptyList() }
+        //? if > 1.8.9
+        LobbyCats.onSceneShown(level, stage, built.props, viewAspect(mc))
         runCatching { LobbyHerobrine.onSceneShown(level, stage) }
         built
     }
@@ -1278,6 +1282,7 @@ object LobbyScene {
             }
             tag.getListOrEmpty("block_entities").compounds().forEach { blockEntity ->
                 val blockPos = LobbyCompat.blockEntityPos(pos, blockEntity)
+                if (level.isOutsideBuildHeight(blockPos)) return@forEach
                 val state = chunk.getBlockState(blockPos)
                 BlockEntity.loadStatic(blockPos, state, blockEntity, level.registryAccess())?.let(chunk::addAndRegisterBlockEntity)
             }
@@ -1698,6 +1703,12 @@ object LobbyScene {
 
     private fun still(): Boolean = driven == null && Motion.reduced
 
+    fun strollHome(avatar: LobbyAvatar): Boolean {
+        val scene = live ?: return false
+        val mc = Minecraft.getInstance()
+        return LobbyEntrance.stroll(scene.level, avatar, scene.avatars, tick()) { restingView(mc, scene.stage, it) }
+    }
+
     private fun restingView(mc: Minecraft, stage: LobbyStage, time: Double): LobbyEntrance.View {
         val crane = if (still()) 0.0 else 1.0 - (time / CRANE_SECONDS).coerceIn(0.0, 1.0)
         val eased = 1.0 - crane * crane * crane
@@ -1949,6 +1960,7 @@ object LobbyScene {
             if (!rigFinite(scene)) restRig(mc, scene)
             scene.level.update()
             val camera = LobbyCompat.camera(renderer)
+            if (!camera.isInitialized) renderer.setLevel(scene.level)
             camera.update(deltaTracker)
             //? if < 26.2
             /*mc.levelRenderer.update(camera)*/
@@ -2165,7 +2177,7 @@ object LobbyScene {
         val headX = projector.x
         val headY = projector.y
         projector.project(feet.x + right.x * LobbyAntics.HALF_WIDTH, feet.y + middle, feet.z + right.z * LobbyAntics.HALF_WIDTH)
-        LobbyAntics.sight(avatar, feetX, feetY, headX, headY, projector.x)
+        if (avatar.arrival == LobbyAvatar.Arrival.LANDED && !LobbyGrab.handling(avatar)) LobbyAntics.sight(avatar, feetX, feetY, headX, headY, projector.x)
         LobbyGrab.sight(avatar, feetX, feetY, headX, headY, projector.x, eye, yaw)
     }
 
@@ -2185,7 +2197,7 @@ object LobbyScene {
         LobbyGrab.lose()
         projector.begin(renderer, currentFov)
         for (avatar in scene.avatars) {
-            if (avatar.arrival != LobbyAvatar.Arrival.LANDED || avatar.dismissed || !ahead(eye, look, avatar)) continue
+            if ((avatar.arrival != LobbyAvatar.Arrival.LANDED && !LobbyGrab.homeward(avatar)) || avatar.dismissed || !ahead(eye, look, avatar)) continue
             val sight = (if (driven == null) scene.sight[avatar] else null) ?: survey(scene, eye, avatar)
             if (!sight.clear) continue
             val feet = avatar.position()
@@ -2338,7 +2350,9 @@ object LobbyScene {
             if (driven == null) tickSceneEntities(scene.level)
             val local = scene.avatars.firstOrNull { it.isLocal }.takeIf { driven == null }
             LobbyAntics.tick(local)
-            LobbyGrab.tick(local)
+            LobbyGrab.tick(scene.level, local)
+            //? if > 1.8.9
+            if (driven == null) LobbyCats.tick(scene.level, Motion.reduced)
             LobbyHerobrine.tick(scene.level, scene.rig, driven == null && scene.started && !introPlaying() && selected == null && departNanos == 0L && !LobbyWardrobe.open)
             //? if >= 1.21.10
             scene.level.tickBlockEntities()
@@ -2550,6 +2564,8 @@ object LobbyScene {
         runCatching { LobbyFraming.reset() }
         runCatching { LobbyWardrobe.reset() }
         runCatching { LobbyHerobrine.stop() }
+        //? if > 1.8.9
+        runCatching { LobbyCats.stop() }
         runCatching { LobbyAntics.reset() }
         runCatching { LobbyGrab.reset() }
         runCatching { detach(mc) }
@@ -2611,6 +2627,8 @@ object LobbyScene {
         leftTag = null
         LobbyWardrobe.reset()
         LobbyHerobrine.stop()
+        //? if > 1.8.9
+        LobbyCats.stop()
         LobbyAntics.reset()
         LobbyGrab.reset()
         LobbyHologram.reset()

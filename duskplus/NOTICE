@@ -1,6 +1,6 @@
 Dusk+ is a modified version of PolyPlus.
 
-- PolyPlus 2.3.1 - https://github.com/Polyfrost/PolyPlus (commit c65c58b)
+- PolyPlus 2.4.1 - https://github.com/Polyfrost/PolyPlus (commit 483dc15; forked at 2.3.1, c65c58b)
   By Polyfrost and contributors. GPL-3.0, see LICENSE.md.
 
 Changes in this fork (November 2026), marked "Dusk:" in the source:
@@ -28,6 +28,10 @@ Changes in this fork (November 2026), marked "Dusk:" in the source:
 - Named "Dusk+", with Dusk's logos, wordmark, window title and menu text.
   Package names, mod ids, the built-in lobby scenes and the remaining
   artwork are still Polyfrost's.
+
+Upstream 2.3.2 to 2.4.1 is merged in, except its cosmetics fixes (Dusk's
+cosmetics replace that code) and its Gradle configuration-cache and Feather
+mapping changes to the build script.
 
 Not affiliated with or endorsed by Polyfrost.
 

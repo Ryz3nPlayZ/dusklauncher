@@ -10,7 +10,7 @@ Size guide: **S** is an afternoon, **M** is a day or two, **L** is most of a wee
 
 - In DUSK 1.21.11, DuskClient 0.2.0 and the fork (polyplus 2.3.1) both load, along with OneConfig 1.9.4, polycompose and Fabric Language Kotlin. That instance launches, and the log has no mixin errors.
 - The fork is built for 9 versions: 1.21.1, 1.21.4, 1.21.5, 1.21.8, 1.21.10, 1.21.11, 26.1, 26.2 and 26.3. **OneConfig has no 1.21.3 build**, so 1.21.3 stays Dusk-only. The fork's source also has a 1.8.9 Ornithe target that has never been built.
-- Upstream PolyPlus is now **2.4.1** (released today). Our fork is based on 2.3.1, and OneClient's 1.8.9 already runs 2.4.0.
+- The fork is on upstream PolyPlus **2.4.1** (merged 2026-11-26), minus upstream's cosmetics fixes and build-script changes.
 - The launcher **does not deliver the fork at all**. The 1.21.11 instance has it only because the jars were copied in by hand. Nothing in `launcher/src-tauri` mentions polyplus or OneConfig.
 - Only two things are coordinated between Dusk and the fork:
   1. The title screen: Dusk hands it over when polyplus is loaded.
@@ -49,7 +49,7 @@ The new cosmetics system: **emotes, cosmetics, capes** (and wardrobe/outfits as 
 Goal: keep OneClient's custom menus and make them look like Dusk.
 
 1. **Fork OneConfig** (LGPL-3.0; credit it in NOTICE). Our build replaces the Modrinth OneConfig jar. Its `fabric.mod.json` "breaks polyplus <2.3.0" rule has to keep working with our fork's version.
-2. **Dusk theme.** Done: Dusk Dark and Dusk Light (`client/dusk/DuskTheme.kt`) have the launcher's colours, shapes, font and logo, Dusk Dark is the default, and the choice is kept across starts. Still to do: swap the ~50 hard-coded `Color(0x…)` values for theme tokens.
+2. **Dusk theme.** Done: Dusk Dark and Dusk Light (`client/dusk/DuskTheme.kt`) have the launcher's colours, shapes, font and logo, Dusk Dark is the default, and the choice is kept across starts. The ~50 remaining `Color(0x…)` values were checked on 2026-11-26: they are danger, success and warning colours, scrims, the clock widget's sky gradient, colours the player picks, and image backdrops in onboarding cards that only show with Polyfrost's own mods installed. None of them are theme leaks.
 3. **Replace Polyfrost art and branding.** Done for logos, wordmark, window title and menu text, and the menu backgrounds go graphite under a Dusk theme. Polyfrost's bundled lobby scenes are still theirs and still credited to them.
 4. **Polish fixes in the OneConfig fork**: corner radius consistency, text that overflows or gets cut off, and ellipsis and min-widths on buttons and cards. Go screen by screen with screenshots.
 5. **Right shift goes back to Dusk.** Done (`client/dusk/DuskKeys`), see 0.1.
@@ -128,7 +128,7 @@ Its log shows the game on the Apple GL-over-Metal driver ("2.1 Metal") on your M
 
 ## Phase 7: Keeping up with upstream (S, recurring)
 
-- Rebase the fork from 2.3.1 to upstream 2.4.1, and repeat for each new release. Record what we changed (DuskBridge, the removed Polyfrost and Epic code, stubs) so a merge is mechanical.
+- Done for 2.4.1: upstream 2.3.1→2.4.1 applied as one diff (`git diff <old tag> <new tag>` applied with `git apply --directory=duskplus`), excluding cosmetics and build-script hunks; the two toast fixes in FriendsRepository and SessionsRepository were ported by hand because the fork changed their titles. Repeat for each new release. Record what we changed (DuskBridge, the removed Polyfrost and Epic code, stubs) so a merge is mechanical.
 - Do the same for the OneConfig fork from Phase 1.
 
 ---
