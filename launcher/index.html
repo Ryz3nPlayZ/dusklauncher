@@ -15,6 +15,12 @@
         overflow: hidden;
       }
     </style>
+    <script>
+      // Linux runs WebKitGTK on its CPU renderer (see run() in lib.rs), where
+      // blur costs seconds per repaint; base.css drops it under this class
+      if (/Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent))
+        document.documentElement.classList.add('os-linux');
+    </script>
   </head>
   <body>
     <div id="root"></div>

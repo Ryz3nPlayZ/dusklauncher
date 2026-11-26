@@ -64,6 +64,25 @@ canvas {
   }
 }
 
+/* Linux: WebKitGTK paints on the CPU there (the GPU path shows a blank window
+   on many setups), and a backdrop blur re-blurs everything behind it on every
+   repaint, so a click could take seconds to show. Panels keep their tint
+   without the blur; blurred image washes become a dimmed copy instead. */
+.os-linux *,
+.os-linux *::before,
+.os-linux *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  scroll-behavior: auto !important;
+}
+.os-linux .gcard__banner > .gcard__blur {
+  filter: none !important;
+  opacity: 0.35;
+}
+.os-linux .art .art__fill {
+  filter: brightness(0.55) !important;
+}
+
 /* the app is one rectangle: nav strip on top, view below, status foot. */
 .app {
   position: relative;
