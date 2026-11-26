@@ -338,7 +338,8 @@ object PauseRouter {
             classic = null
             return screen
         }
-        if (!showsMenu(screen) || ReplayProviders.inReplay) return screen
+        // Dusk: DuskClient's replays swap the pause menu for their own controls
+        if (!showsMenu(screen) || ReplayProviders.inReplay || org.polyfrost.polyplus.client.dusk.DuskBridge.inReplay) return screen
         val style = (if (ClientPlatform.windowFocused()) null else PolyPlusPauseConfig.focusLossPauseStyle.style) ?: PolyPlusPauseConfig.pauseScreenStyle
         shown = style
         return if (style == PauseScreenStyle.VANILLA) screen else OneClientPauseScreen(screen, style)

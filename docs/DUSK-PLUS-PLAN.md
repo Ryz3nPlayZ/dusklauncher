@@ -54,40 +54,35 @@ Goal: keep OneClient's custom menus and make them look like Dusk.
 4. **Polish fixes in the OneConfig fork**: corner radius consistency, text that overflows or gets cut off, and ellipsis and min-widths on buttons and cards. Go screen by screen with screenshots.
 5. **Right shift goes back to Dusk** and OneConfig's own key is turned off by default. This fixes 0.1.
 
-## Phase 2: One settings menu (L)
+## Phase 2: One settings menu (done in v0.7.28)
 
-OneConfig's menu becomes the only settings menu, and Dusk's modules show up inside it.
+`duskplus/.../client/dusk/DuskModules.kt` turns DuskClient's modules into one OneConfig page, "Dusk Client", listed in the Dusk+ settings screen right after General.
 
-1. Write an adapter that turns each Dusk `Module` into a OneConfig `Tree`, with each setting as `Properties.functional(getter, setter)`. Dusk keeps storing its own settings, so nothing migrates and nobody loses config.
-2. Map Dusk's 8 setting types (Bool 231, Int 109, Choice 45, Color 34, Key 25, Text 9, Action 5, PixelGrid 1) to OneConfig controls. **Not yet confirmed:** how OneConfig picks a control (slider, dropdown and so on) for a property. It uses `MetaKeys`, but I haven't tested it.
-3. Put the pages in Dusk groups (HUD, Render, Chat, Misc) with `PageGroup.create` and `OneConfigPages.register`.
-4. HUD: **keep Dusk's HUD system and editor** for now. OneConfig's HUD is a separate migration to decide on later. Link the HUD editor from the menu.
-5. Retire `DuskSettingsScreen` once the adapter covers everything.
+- Each module is a subcategory under its Dusk category (HUD, Movement, Render, Utility), with an Enabled switch first.
+- Setting types map to: Bool → switch, Int → slider (decimals and Dusk's own value text kept), Choice → dropdown, Color → colour picker, Text → text box, Action → button. Settings that hide on another's value still hide.
+- Values are read from and written to the Dusk setting directly, and saved to DuskClient's own config shortly after a change. Nothing migrates.
+- Key, ToggleKey and PixelGrid settings aren't on the page. Two buttons at the top open Dusk's HUD editor and Dusk's full menu for those.
+- Reached by class name, so neither mod needs the other to build. Without DuskClient the page doesn't appear.
 
-## Phase 3: Remove the double-ups (M total, S per area)
+Still open: retire `DuskSettingsScreen` once keys and the pixel grid have OneConfig controls, and move right shift over to this page then.
 
-Each area gets one owner. The other side checks for it and stays out.
+## Phase 3: Remove the double-ups (checked 2026-11-26)
 
-| Area | Owner | Work |
-|---|---|---|
-| Title / lobby | Fork, rebranded | Already handed over. Remove Dusk's lobby code paths once Phase 1 lands. |
-| Pause menu | Fork | Move Dusk's extra buttons (replay etc.) into the fork's pause screen, then drop Dusk's pause hooks |
-| Chat UI + emoji | Fork | Compare Dusk's ChatStack, History, Copy, CopyLines, Timestamps, Search and Mentions against the fork's chat. Keep what the fork lacks as fork-side features or Dusk modules that skip when the fork is loaded. |
-| Tab list ping | One of them | Both draw ping. Pick one; the files for it are another session's, so coordinate. |
-| Keybind screens | Fork + OneConfig | Drop Dusk's KeyBindsList/KeyBindsScreen mixins, or make them skip |
-| Confirm disconnect | Dusk | Turn off the fork's compat hook |
-| Fullbright / hitbox | Dusk | Fork compat hooks skip |
-| Social / friends | Fork screens, Dusk server | Already on Dusk's backend through DuskBridge. Retire `SocialScreen`. |
-| First-run defaults | Dusk modules | Remove the fork's onboarding toggles that duplicate Dusk modules (toggle sprint, motion blur, fire overlay, shield height and others) |
-| Cosmetics, emotes, capes | **You** | Your rework |
+Most rows turned out not to be double-ups:
 
-## Phase 4: The launcher delivers it (M)
+| Area | Finding |
+|---|---|
+| Confirm disconnect, fullbright, hitbox | The fork's hooks target Confirm Disconnect, PolyFullbright and PolyHitbox. We ship none of those, so the hooks never run. Nothing to do. |
+| First-run defaults | Every onboarding card is gated on its third-party mod being installed (PolySprint, Overlay Tweaks, Wavey Capes and so on). Without them the cards don't show. Nothing to do. |
+| Keybind screens | The fork doesn't touch Controls → Key Binds. Dusk's search and keyboard view are the only change there. Keep. |
+| Chat UI + emoji | They complement each other: the fork adds emoji, and Dusk adds copy, copy lines, longer history and stacking. Different injection points, no clash. Keep both. |
+| Title / lobby | The fork owns it. **Another session is building a Dusk lobby** (`DuskLobbyScreen`, `client/lobby/`, `LobbyCompat`, uncommitted), which would compete with the fork's. Decide which one stays before that lands. |
+| Tab list ping, `SocialScreen` | Real overlaps, but the files are another session's uncommitted work. Wait for it. |
+| Pause menu | The fork's pause menu is the only one drawn. Dusk's two pause hooks are fixed to work with it: the leave-game confirm (`ConfirmDisconnectMixin`) now sees the vanilla screen behind the fork's, and the fork leaves the pause screen alone while a Dusk replay plays, so Esc still opens the replay controls. |
 
-1. Ship the fork jar per version: either from our release assets or bundled in the client-mod releases.
-2. Fetch OneConfig (our fork), polycompose 3.0.9 and Fabric Language Kotlin per version, and inject them with `-Dfabric.addMods` like DuskClient. Skip them on 1.21.3.
-3. Only inject when the instance doesn't already have its own copy (same check e4mc uses).
-4. Make the release CI build the fork for all 9 versions next to client-mod.
-5. Build and check exit codes for every version. Smoke-test each one in game (you test).
+## Phase 4: The launcher delivers it (done in v0.7.27)
+
+`launcher/src-tauri/src/duskplus.rs` downloads `duskplus-<mc>.jar` from the release that matches the launcher's version, along with OneConfig, polycompose and Fabric Language Kotlin from Modrinth. It skips them when the instance already has its own copy, and skips 1.21.3. Release CI builds all 9 fork jars and attaches them.
 
 ## Phase 5: Server-backed features (only when you ask)
 

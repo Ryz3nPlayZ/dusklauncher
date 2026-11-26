@@ -33,6 +33,16 @@ object DuskBridge {
         MethodHandles.publicLookup().findStatic(account ?: return null, name, MethodType.methodType(returns, params))
     }.getOrNull()
 
+    // looked up without initialising it: the class is only on 1.21.11 and newer
+    private val replayActive: MethodHandle? = runCatching {
+        val player = Class.forName("dev.dusk.client.media.impl.ReplayPlayer", false, DuskBridge::class.java.classLoader)
+        MethodHandles.publicLookup().findStatic(player, "active", MethodType.methodType(Boolean::class.javaPrimitiveType!!))
+    }.getOrNull()
+
+    /** Whether DuskClient is playing one of its replays; Esc then opens its replay controls, not the pause menu. */
+    val inReplay: Boolean
+        get() = runCatching { replayActive?.invokeWithArguments() == true }.getOrDefault(false)
+
     /** Whether there's a Dusk account to act as. */
     val available: Boolean
         get() = api != null && runCatching { canSignIn?.invokeWithArguments() == true }.getOrDefault(false)

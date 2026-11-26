@@ -155,6 +155,7 @@ object PolyPlusClient {
         step("sodium settings") { SodiumSettingsPages.register() }
         step("argentum settings") { ArgentumSettingsPages.register() }
         step("oneclient settings") { OneClientSettingsPages.register() }
+        step("dusk modules") { org.polyfrost.polyplus.client.dusk.DuskModules.ensureRegistered() }
         step("widgets") { ShellWidgetRegistry.registerBuiltIns() }
         step("default mod order") { DefaultModOrder.initialize() }
         step("advanced mod cards") { AdvancedModCards.initialize() }

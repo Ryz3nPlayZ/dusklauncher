@@ -161,13 +161,16 @@ internal object SettingsPages {
 internal object OneClientConfigs {
     private const val MAIN = PolyPlusConstants.ID + ".json"
     private const val PREFIX = PolyPlusConstants.ID + "-"
+    private const val DUSK = org.polyfrost.polyplus.client.dusk.DuskModules.TREE_ID
     private val suffix = Regex("""\s*\([^)]*\)\s*$""")
 
     fun entries(): List<SettingsEntry> {
+        // Dusk: DuskClient's modules, once both mods have started
+        org.polyfrost.polyplus.client.dusk.DuskModules.ensureRegistered()
         val trees = runCatching { ConfigManager.active().trees().toList() }.getOrDefault(emptyList())
         return trees
             .filter { owned(it) }
-            .sortedWith(compareBy<Tree>({ it.id != MAIN }, { label(it) }))
+            .sortedWith(compareBy<Tree>({ it.id != MAIN }, { it.id != DUSK }, { label(it) }))
             .map { tree ->
                 val id = tree.id!!
                 SettingsEntry(
@@ -183,6 +186,7 @@ internal object OneClientConfigs {
 
     private fun owned(tree: Tree): Boolean {
         val id = tree.id ?: return false
+        if (id == DUSK) return true
         if (id != MAIN && !id.startsWith(PREFIX)) return false
         if (tree.title == null) return false
         return tree.getMetadata<Any?>("hidden").let { it == null || it == false }
@@ -198,7 +202,7 @@ internal object OneClientConfigs {
         return (listOf(words.first()) + words.drop(1).map { word -> if (word.drop(1).any { it.isUpperCase() }) word else word.lowercase() }).joinToString(" ")
     }
 
-    private fun icon(id: String): String = when (id.removePrefix(PREFIX).removeSuffix(".json")) {
+    private fun icon(id: String): String = if (id == DUSK) "assets/polyplus/brand/oneclient.svg" else when (id.removePrefix(PREFIX).removeSuffix(".json")) {
         MAIN.removeSuffix(".json") -> "settings"
         "cosmetics" -> "assets/polyplus/ico/stars.svg"
         "lobby" -> SOCIAL_ASSETS + "minecraft-block.svg"

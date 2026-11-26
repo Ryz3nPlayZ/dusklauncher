@@ -18,6 +18,9 @@ Changes in this fork (November 2026), marked "Dusk:" in the source:
 - Config loading and the main-menu config hash were changed so a fresh
   install starts cleanly.
 - The party invite button no longer shows while parties are off.
+- Dusk Client's modules are listed as a "Dusk Client" page in the settings
+  screen (client/dusk/DuskModules); it reads and saves Dusk Client's own
+  config. The pause menu stays out of the way while a Dusk replay plays.
 - Named "Dusk+", with Dusk's logos, wordmark, window title and menu text.
   Package names, mod ids, the built-in lobby scenes and the remaining
   artwork are still Polyfrost's.
