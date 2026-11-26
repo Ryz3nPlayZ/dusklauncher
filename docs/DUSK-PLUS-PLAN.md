@@ -61,10 +61,10 @@ Goal: keep OneClient's custom menus and make them look like Dusk.
 - Each module is a subcategory under its Dusk category (HUD, Movement, Render, Utility), with an Enabled switch first.
 - Setting types map to: Bool → switch, Int → slider (decimals and Dusk's own value text kept), Choice → dropdown, Color → colour picker, Text → text box, Action → button. Settings that hide on another's value still hide.
 - Values are read from and written to the Dusk setting directly, and saved to DuskClient's own config shortly after a change. Nothing migrates.
-- Key settings and each module's toggle key are recorded on the page with OneConfig's keybind control (single key, no second Controls row). The PixelGrid setting (the crosshair) isn't on the page yet; two buttons at the top open Dusk's HUD editor and Dusk's full menu for it.
+- Key settings and each module's toggle key are recorded on the page with OneConfig's keybind control (single key, no second Controls row). The PixelGrid setting (the crosshair) is painted on the page too: a drag paints in the pixel colour and one that starts on a painted pixel erases (right click is the row's option menu), with Clear and Undo; a preset picked in the dropdown redraws it. Two buttons at the top open Dusk's HUD editor and Dusk's own menu.
 - Reached by class name, so neither mod needs the other to build. Without DuskClient the page doesn't appear.
 
-Still open: retire `DuskSettingsScreen` once keys and the pixel grid have OneConfig controls, and move right shift over to this page then.
+Still open: every Dusk setting type now has a control here, so `DuskSettingsScreen` can be retired and right shift pointed at this page. That change is in `DuskClient.java`, which has other uncommitted work in it right now.
 
 ## Phase 3: Remove the double-ups (checked 2026-11-26)
 

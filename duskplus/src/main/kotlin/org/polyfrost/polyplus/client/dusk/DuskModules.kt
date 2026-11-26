@@ -32,8 +32,7 @@ import kotlin.math.pow
  * saving goes to DuskClient's config file: OneConfig keeps no copy. Reached by name, like
  * [DuskBridge], so neither mod needs the other to build.
  *
- * Key bindings and toggle keys are recorded here too; the pixel-grid editor stays in DuskClient's
- * own screen.
+ * Key bindings, toggle keys and the crosshair pixel grid are edited here too.
  */
 @OptIn(ExperimentalOneConfigUiApi::class)
 object DuskModules {
@@ -50,6 +49,7 @@ object DuskModules {
     private val textType = type("TextSetting")
     private val actionType = type("ActionSetting")
     private val keyType = type("KeySetting")
+    private val pixelType = type("PixelGridSetting")
 
     @Volatile
     private var registeredCount = -1
@@ -104,10 +104,10 @@ object DuskModules {
         tree.noCache = true
         tree.saveFunction = Runnable { saveNow() }
         val used = HashSet<String>()
-        // what this page can't edit (the pixel grid, the HUD layout) is one click away
+        // the HUD layout is dragged around on its own screen, and Dusk's menu stays one click away
         for ((label, button, screen) in listOf(
             Triple("HUD layout", "Edit HUD", "dev.dusk.client.gui.HudEditorScreen"),
-            Triple("Pixel editor and more", "Open Dusk menu", "dev.dusk.client.gui.DuskSettingsScreen"),
+            Triple("Dusk menu", "Open Dusk menu", "dev.dusk.client.gui.DuskSettingsScreen"),
         )) {
             val prop = Properties.dummy(id = unique(used, "open/$button"), name = label).apply {
                 visualizer = Visualizer.ButtonVisualizer::class.java
@@ -139,7 +139,7 @@ object DuskModules {
             for (setting in (module.call("settings") as? List<*>).orEmpty()) {
                 setting ?: continue
                 val settingId = setting.call("id") as? String ?: continue
-                runCatching { property(setting, unique(used, "$id/$settingId")) }
+                runCatching { property(module, setting, unique(used, "$id/$settingId")) }
                     .onFailure { logger.debug("Dusk: skipped {}/{}", id, settingId, it) }
                     .getOrNull()?.let(props::add)
             }
@@ -166,7 +166,7 @@ object DuskModules {
     private fun category(module: Any): String =
         runCatching { module.call("category")!!.let { it.javaClass.getField("label").get(it) as String } }.getOrDefault("Utility")
 
-    private fun property(setting: Any, id: String): Property<*>? {
+    private fun property(module: Any, setting: Any, id: String): Property<*>? {
         val name = setting.call("name") as? String ?: return null
         val prop: Property<*> = when {
             boolType?.isInstance(setting) == true -> Properties.functional<Boolean>(
@@ -248,11 +248,28 @@ object DuskModules {
                 )
             }
 
-            // the pixel grid stays in DuskClient's own screen
+            pixelType?.isInstance(setting) == true -> pixelGridProperty(module, setting, id, name)
+
             else -> return null
         }
         prop.addDisplayCondition { if (runCatching { setting.call("visible") != false }.getOrDefault(true)) Display.SHOWN else Display.HIDDEN }
         return prop
+    }
+
+    /** The crosshair grid, painted on the page; the module keeps its preset and colour rows. */
+    @Suppress("UNCHECKED_CAST")
+    private fun pixelGridProperty(module: Any, setting: Any, id: String, name: String): Property<*> {
+        val grid = DuskPixelGrid(
+            setting.call("width") as Int, setting.call("height") as Int,
+            grid = { setting.call("get") as Array<IntArray> },
+            replace = { setting.call("setGrid", it) },
+            paintColor = { runCatching { module.call("pixelColor")?.call("argb") as? Int }.getOrNull() ?: -1 },
+            edited = { runCatching { module.call("markCustom") }; save() },
+        )
+        return Properties.dummy(id = id, name = name).apply {
+            addMetadata("visualizer", grid)
+            addMetadata("fullWidth", true)
+        }
     }
 
     /** The key that switches a module on and off: keyboard only, kept in DuskClient's module config. */
