@@ -1,5 +1,8 @@
 package org.polyfrost.polyplus.client.dusk
 
+import com.mojang.blaze3d.platform.InputConstants
+import net.minecraft.client.KeyMapping
+import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.Screen
 import org.apache.logging.log4j.LogManager
 import org.polyfrost.oneconfig.api.config.v1.ConfigManager
@@ -14,6 +17,10 @@ import org.polyfrost.oneconfig.api.config.v1.dsl.noCache
 import org.polyfrost.oneconfig.api.config.v1.dsl.saveFunction
 import org.polyfrost.oneconfig.api.config.v1.dsl.subcategory
 import org.polyfrost.oneconfig.api.config.v1.dsl.visualizer
+import org.polyfrost.oneconfig.api.ui.v1.ExperimentalOneConfigUiApi
+import org.polyfrost.oneconfig.api.ui.v1.keybind.KeyModifiers
+import org.polyfrost.oneconfig.api.ui.v1.keybind.KeybindMetadata
+import org.polyfrost.oneconfig.api.ui.v1.keybind.OneConfigKeybind
 import org.polyfrost.polyplus.client.utils.ClientPlatform
 import java.lang.reflect.Method
 import java.util.concurrent.ConcurrentHashMap
@@ -25,8 +32,10 @@ import kotlin.math.pow
  * saving goes to DuskClient's config file: OneConfig keeps no copy. Reached by name, like
  * [DuskBridge], so neither mod needs the other to build.
  *
- * Key bindings and the pixel-grid editor stay in DuskClient's own screen.
+ * Key bindings and toggle keys are recorded here too; the pixel-grid editor stays in DuskClient's
+ * own screen.
  */
+@OptIn(ExperimentalOneConfigUiApi::class)
 object DuskModules {
     const val TREE_ID = "duskclient"
 
@@ -40,6 +49,7 @@ object DuskModules {
     private val colorType = type("ColorSetting")
     private val textType = type("TextSetting")
     private val actionType = type("ActionSetting")
+    private val keyType = type("KeySetting")
 
     @Volatile
     private var registeredCount = -1
@@ -94,10 +104,10 @@ object DuskModules {
         tree.noCache = true
         tree.saveFunction = Runnable { saveNow() }
         val used = HashSet<String>()
-        // what this page can't edit (key bindings, the pixel grid, the HUD layout) is one click away
+        // what this page can't edit (the pixel grid, the HUD layout) is one click away
         for ((label, button, screen) in listOf(
             Triple("HUD layout", "Edit HUD", "dev.dusk.client.gui.HudEditorScreen"),
-            Triple("Key bindings and more", "Open Dusk menu", "dev.dusk.client.gui.DuskSettingsScreen"),
+            Triple("Pixel editor and more", "Open Dusk menu", "dev.dusk.client.gui.DuskSettingsScreen"),
         )) {
             val prop = Properties.dummy(id = unique(used, "open/$button"), name = label).apply {
                 visualizer = Visualizer.ButtonVisualizer::class.java
@@ -121,6 +131,11 @@ object DuskModules {
                 id = unique(used, "$id/enabled"), type = Boolean::class.javaPrimitiveType,
                 name = "Enabled", description = module.call("description") as? String,
             ).apply { visualizer = Visualizer.SwitchVisualizer::class.java }
+            module.call("toggleKey")?.let { toggle ->
+                runCatching { toggleKeyProperty(toggle, unique(used, "$id/togglekey")) }
+                    .onFailure { logger.debug("Dusk: skipped {}/toggleKey", id, it) }
+                    .getOrNull()?.let(props::add)
+            }
             for (setting in (module.call("settings") as? List<*>).orEmpty()) {
                 setting ?: continue
                 val settingId = setting.call("id") as? String ?: continue
@@ -220,11 +235,73 @@ object DuskModules {
                 addMetadata("runnable", Runnable { runCatching { setting.call("run") } })
             }
 
-            // key bindings, the toggle key and the pixel grid stay in DuskClient's own screen
+            keyType?.isInstance(setting) == true -> {
+                val mapping = setting.call("mapping") as KeyMapping
+                keybindProperty(
+                    id, name, mapping.defaultKey,
+                    { runCatching { InputConstants.getKey(mapping.saveString()) }.getOrDefault(InputConstants.UNKNOWN) },
+                    { key ->
+                        mapping.setKey(key)
+                        KeyMapping.resetMapping()
+                        Minecraft.getInstance().options.save()
+                    },
+                )
+            }
+
+            // the pixel grid stays in DuskClient's own screen
             else -> return null
         }
         prop.addDisplayCondition { if (runCatching { setting.call("visible") != false }.getOrDefault(true)) Display.SHOWN else Display.HIDDEN }
         return prop
+    }
+
+    /** The key that switches a module on and off: keyboard only, kept in DuskClient's module config. */
+    private fun toggleKeyProperty(toggle: Any, id: String): Property<*> = keybindProperty(
+        id, "Toggle key", InputConstants.UNKNOWN,
+        { ((toggle.call("get") as? Int) ?: InputConstants.UNKNOWN.value).let(KEYBOARD::getOrCreate) },
+        { key ->
+            if (key.type != InputConstants.Type.MOUSE) {
+                toggle.call("set", key.value)
+                save()
+            }
+        },
+    )
+
+    /**
+     * A key-binding row. It only edits the key: [KeybindMetadata.NO_MIRROR] keeps OneConfig from
+     * registering it as a live bind or adding a second row to Controls, since DuskClient listens for
+     * the key itself.
+     */
+    private fun keybindProperty(
+        id: String, name: String, default: InputConstants.Key,
+        read: () -> InputConstants.Key, write: (InputConstants.Key) -> Unit,
+    ): Property<*> = Properties.functional<OneConfigKeybind>(
+        { bindOf(read()) },
+        { bind -> keyOf(bind).let { if (it != read()) write(it) } },
+        id = id, type = OneConfigKeybind::class.java, name = name,
+    ).apply {
+        visualizer = Visualizer.KeybindVisualizer::class.java
+        addMetadata("singleKey", true)
+        addMetadata("default", bindOf(default))
+        addMetadata(KeybindMetadata.NO_MIRROR, true)
+    }
+
+    // 26.3 moved to SDL and renamed the keyboard key type
+    //? if >= 26.3 {
+    private val KEYBOARD = InputConstants.Type.KEYBOARD
+    //?} else
+    //private val KEYBOARD = InputConstants.Type.KEYSYM
+
+    private fun bindOf(key: InputConstants.Key): OneConfigKeybind = when {
+        key.value == InputConstants.UNKNOWN.value -> OneConfigKeybind(null, null, KeyModifiers.NONE, 0L) { false }
+        key.type == InputConstants.Type.MOUSE -> OneConfigKeybind(null, intArrayOf(key.value), KeyModifiers.NONE, 0L) { false }
+        else -> OneConfigKeybind(intArrayOf(key.value), null, KeyModifiers.NONE, 0L) { false }
+    }
+
+    private fun keyOf(bind: OneConfigKeybind?): InputConstants.Key = when {
+        bind == null || !bind.isBound -> InputConstants.UNKNOWN
+        bind.isMousePrimary -> InputConstants.Type.MOUSE.getOrCreate(bind.boundCode)
+        else -> KEYBOARD.getOrCreate(bind.boundCode)
     }
 
     /** A setting shown only while another has some value: re-check every option after any change. */
