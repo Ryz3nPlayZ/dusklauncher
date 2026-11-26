@@ -79,6 +79,8 @@ import net.minecraft.client.gui.screens.TitleScreen
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Shape
 import org.polyfrost.compose.backend.drawPoly
 import org.polyfrost.compose.render.FilterQuality
 import org.polyfrost.compose.render.PolyBitmap
@@ -1919,7 +1921,11 @@ private fun StyleCard(option: UiStyleOption, theme: OneConfigUITheme, selected: 
 @Composable
 private fun UiPreview(option: UiStyleOption, theme: OneConfigUITheme) {
     val accent = OneConfigTheme.accent
-    val window = theme.shapes.medium
+    // Dusk: the window and its cards at their real corners, shrunk with the
+    // preview; shapes.medium is the sidebar entry, a pill in Dusk's themes
+    val density = LocalDensity.current
+    val window = previewShape(theme.backgroundShape, Size(480f, 300f), density)
+    val card = previewShape(theme.modCardShape, Size(120f, 100f), density)
     val small = theme.shapes.small
     Box(Modifier.size(STYLE_PREVIEW_WIDTH.dp, STYLE_PREVIEW_HEIGHT.dp).clip(OneConfigTheme.shape(4.dp)).background(StylePreviewBackdrop)) {
         val windowModifier = Modifier.fillMaxSize().padding(8.dp, 7.dp).clip(window)
@@ -1938,7 +1944,7 @@ private fun UiPreview(option: UiStyleOption, theme: OneConfigUITheme) {
                 repeat(2) { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         repeat(3) { column ->
-                            Box(Modifier.size(17.dp, 15.dp).clip(small).background(theme.modCardBackground).border(0.5.dp, theme.borderColor, small)) {
+                            Box(Modifier.size(17.dp, 15.dp).clip(card).background(theme.modCardBackground).border(0.5.dp, theme.borderColor, card)) {
                                 val bar = if (row == 0 && column == 0) accent else theme.textColorSecondary
                                 Box(Modifier.align(Alignment.BottomStart).padding(3.dp).size(9.dp, 2.dp).clip(small).background(bar))
                             }
@@ -1950,6 +1956,16 @@ private fun UiPreview(option: UiStyleOption, theme: OneConfigUITheme) {
         if (option.glass) Box(windowModifier.background(StylePreviewSheen))
     }
 }
+
+/** [shape]'s corner as it is on a [full]-sized (dp) element, scaled down by
+ *  the preview's quarter scale; shapes that aren't rounded corners pass. */
+private fun previewShape(shape: Shape, full: Size, density: Density): Shape {
+    val corner = (shape as? RoundedCornerShape)?.topStart ?: return shape
+    val px = corner.toPx(Size(full.width * density.density, full.height * density.density), density)
+    return RoundedCornerShape((px / density.density * STYLE_PREVIEW_SCALE).dp)
+}
+
+private const val STYLE_PREVIEW_SCALE = 0.25f
 
 @Composable
 private fun BottomNavigation(
