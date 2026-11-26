@@ -31,15 +31,15 @@ The new cosmetics system: **emotes, cosmetics, capes** (and wardrobe/outfits as 
 
 | # | Item | Where |
 |---|---|---|
-| 0.1 | Right shift opens OneConfig, and Dusk's settings key gets wiped to unbound. Most likely cause is OneConfig's keybind conflict detector plus both mods defaulting to right shift. Not proven yet. | `DuskClient.java:191`, OneConfig `oneConfigKeybind` |
-| 0.2 | The fork's configs load twice ("already initialized, skipping" for pause, lobby, party, mainmenu, screens and cosmetics) | fork config registration |
+| 0.1 | **Done:** `client/dusk/DuskKeys` moves OneConfig's key off right shift on first start, so Dusk keeps it. | `DuskClient.java:191`, OneConfig `oneConfigKeybind` |
+| 0.2 | **Done:** the extra `preload()` calls are gone; those configs preload themselves when first touched. | fork config registration |
 | 0.3 | The black square. Still not explained. I removed Polydium, Gnetum and Ixeris from Dusk Essentials on a guess, and the code comment states that guess as fact. Test each one alone in game (you test), then correct the comment. | `launcher/src-tauri/src/mods.rs` ~957 |
 | 0.4 | Slipstream was removed from the macOS list on the same guess. OneClient 1.8.9 runs it fine ("Presenting without OpenGL swapping" in its log). Re-test it. | `mods.rs` `DUSK_ESSENTIALS_MAC` |
 | 0.5 | Dusk Essentials ships `chat-heads` and `held-item-info`, which duplicate Dusk's ChatHeads and HeldItem. Its own comment says duplicates are left out. | `mods.rs` |
 | 0.6 | `dusk-essentials.mrpack` doesn't match the list in code | `launcher/src-tauri/resources/modpacks/` |
-| 0.7 | Party invite button bug | `duskplus/.../gui/lobbyshell/LobbyParty.kt:308` |
-| 0.8 | Voice text still describes Epic Online Services | `duskplus/.../gui/lobbysocial/SocialParty.kt:610` |
-| 0.9 | `duskplus/NOTICE` has claims that are wrong. Rewrite it to say exactly what was taken and changed. | `duskplus/NOTICE` |
+| 0.7 | **Done:** the party invite button is hidden while parties are off. | `duskplus/.../gui/lobbyshell/LobbyParty.kt:308` |
+| 0.8 | **Done:** the voice settings no longer mention Epic. | `duskplus/.../gui/lobbysocial/SocialParty.kt:610` |
+| 0.9 | **Done:** `duskplus/NOTICE` now lists exactly what was taken and changed. | `duskplus/NOTICE` |
 | 0.10 | Check every launcher instance starts. Earlier only the main one launched cleanly, and I never confirmed the others after the fixes. | launcher profiles |
 
 ---
@@ -50,9 +50,9 @@ Goal: keep OneClient's custom menus and make them look like Dusk.
 
 1. **Fork OneConfig** (LGPL-3.0; credit it in NOTICE). Our build replaces the Modrinth OneConfig jar. Its `fabric.mod.json` "breaks polyplus <2.3.0" rule has to keep working with our fork's version.
 2. **Dusk theme.** Done: Dusk Dark and Dusk Light (`client/dusk/DuskTheme.kt`) have the launcher's colours, shapes, font and logo, Dusk Dark is the default, and the choice is kept across starts. Still to do: swap the ~50 hard-coded `Color(0x…)` values for theme tokens.
-3. **Replace Polyfrost art and branding**: logos, the "OneClient" window title (`OneClientWindowTitle.kt`), the client brand, the watermark, the startup splash and the panorama defaults.
+3. **Replace Polyfrost art and branding.** Done for logos, wordmark, window title and menu text, and the menu backgrounds go graphite under a Dusk theme. Polyfrost's bundled lobby scenes are still theirs and still credited to them.
 4. **Polish fixes in the OneConfig fork**: corner radius consistency, text that overflows or gets cut off, and ellipsis and min-widths on buttons and cards. Go screen by screen with screenshots.
-5. **Right shift goes back to Dusk** and OneConfig's own key is turned off by default. This fixes 0.1.
+5. **Right shift goes back to Dusk.** Done (`client/dusk/DuskKeys`), see 0.1.
 
 ## Phase 2: One settings menu (done in v0.7.28)
 
