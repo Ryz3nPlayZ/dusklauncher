@@ -19,8 +19,8 @@ object Parties {
     /** Party voice stays off: Dusk has its own voice chat, and this one needs rooms Dusk doesn't host. */
     const val VOICE = false
 
-    /** Group chats stay off until Dusk's server has them. */
-    const val GROUPS = false
+    /** Group chats, on Dusk's `/v1/groups` routes. */
+    const val GROUPS = true
 
     private val LOGGER = LogManager.getLogger()
 

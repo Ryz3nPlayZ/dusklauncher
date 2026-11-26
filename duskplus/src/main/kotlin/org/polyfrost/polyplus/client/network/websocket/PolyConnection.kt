@@ -14,6 +14,7 @@ import org.polyfrost.polyplus.client.PolyPlusClient
 import org.polyfrost.polyplus.client.cosmetics.outfits.SkinLibrary
 import org.polyfrost.polyplus.client.dusk.DuskBridge
 import org.polyfrost.polyplus.client.dusk.DuskException
+import org.polyfrost.polyplus.client.dusk.DuskGroups
 import org.polyfrost.polyplus.client.dusk.DuskSocial
 import org.polyfrost.polyplus.client.network.http.responses.PlayerStatus
 import org.polyfrost.polyplus.client.network.reconnectDelay
@@ -234,6 +235,7 @@ object PolyConnection {
             delay(OPEN_POLL_MS)
             waited += OPEN_POLL_MS
             friends?.keys?.filter { GroupsRepository.isOpen(DuskSocial.groupId(it)) }?.forEach { readNew(it) }
+            groups { DuskGroups.watch(::post) }
         }
     }
 
@@ -250,6 +252,7 @@ object PolyConnection {
     private suspend fun poll() {
         val states = DuskSocial.states().associateBy { it.uuid }
         val pending = DuskSocial.requests()
+        val groupsChanged = groups { DuskGroups.poll(::post) } == true
         val oldFriends = friends
         val oldRequests = requests
         friends = states
@@ -260,7 +263,15 @@ object PolyConnection {
 
         val unread = states.values.filter { it.unread > (oldFriends[it.uuid]?.unread ?: 0) }
         for (friend in unread.filter { GroupsRepository.isOpen(DuskSocial.groupId(it.uuid)) }) readNew(friend.uuid)
-        if (unread.isNotEmpty() || states.keys != oldFriends.keys) GroupsRepository.syncGroups()
+        if (groupsChanged || unread.isNotEmpty() || states.keys != oldFriends.keys) GroupsRepository.syncGroups()
+    }
+
+    /** Group chats are extra: a server without them (or a hiccup) leaves friends and messages working. */
+    private suspend fun <T> groups(step: suspend () -> T): T? = try {
+        step()
+    } catch (e: DuskException) {
+        LOGGER.debug("Group chats unavailable: {}", e.message)
+        null
     }
 
     private fun presenceChanges(old: Map<String, DuskSocial.FriendState>, new: Map<String, DuskSocial.FriendState>) {

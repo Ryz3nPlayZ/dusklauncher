@@ -32,7 +32,7 @@ use axum::{
     extract::{Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
     Json, Router,
 };
 use rand::RngCore;
@@ -44,6 +44,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+mod groups;
 mod party;
 mod quests;
 mod voice;
@@ -241,6 +242,7 @@ fn open_db(path: &str) -> Connection {
     add_column(&db, "messages", "kind", "TEXT NOT NULL DEFAULT 'text'");
     add_column(&db, "messages", "meta", "TEXT");
     quests::migrate(&db);
+    groups::migrate(&db);
     db
 }
 
@@ -2184,6 +2186,13 @@ async fn main() {
         .route("/v1/friends/requests/{id}/decline", post(decline_friend_request))
         .route("/v1/profile/{uuid}", get(friend_profile))
         .route("/v1/messages/{uuid}", get(get_messages).post(send_message))
+        .route("/v1/groups", get(groups::list_groups).post(groups::create))
+        .route("/v1/groups/{id}", patch(groups::rename))
+        .route("/v1/groups/{id}/members", post(groups::invite))
+        .route("/v1/groups/{id}/members/{uuid}", delete(groups::remove))
+        .route("/v1/groups/{id}/messages", get(groups::messages).post(groups::send))
+        .route("/v1/groups/{id}/messages/{mid}", patch(groups::edit).delete(groups::delete_message))
+        .route("/v1/groups/{id}/read", post(groups::read_up_to))
         .route("/v1/me/privacy", get(get_privacy).put(put_privacy))
         .route(
             "/v1/me/settings",

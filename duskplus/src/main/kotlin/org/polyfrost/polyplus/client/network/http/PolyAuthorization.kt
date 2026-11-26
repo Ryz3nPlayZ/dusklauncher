@@ -1,6 +1,7 @@
 package org.polyfrost.polyplus.client.network.http
 
 import org.polyfrost.polyplus.client.dusk.DuskBridge
+import org.polyfrost.polyplus.client.dusk.DuskGroups
 import org.polyfrost.polyplus.client.dusk.DuskSocial
 import org.polyfrost.polyplus.client.privacy.OnlineServicesDisabledException
 
@@ -18,5 +19,6 @@ object PolyAuthorization {
     fun reset() {
         DuskBridge.forget()
         DuskSocial.reset()
+        DuskGroups.reset()
     }
 }
