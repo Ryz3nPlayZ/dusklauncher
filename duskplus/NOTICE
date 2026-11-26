@@ -21,6 +21,10 @@ Changes in this fork (November 2026), marked "Dusk:" in the source:
 - Dusk Client's modules are listed as a "Dusk Client" page in the settings
   screen (client/dusk/DuskModules); it reads and saves Dusk Client's own
   config. The pause menu stays out of the way while a Dusk replay plays.
+- Dusk Dark and Dusk Light are added as OneConfig themes (client/dusk/
+  DuskTheme), with the launcher's colours, shapes and font, and Dusk Dark is
+  the default. The onboarding's flat style picks them, and the menu
+  backgrounds turn graphite instead of blue while one is in use.
 - Named "Dusk+", with Dusk's logos, wordmark, window title and menu text.
   Package names, mod ids, the built-in lobby scenes and the remaining
   artwork are still Polyfrost's.
@@ -33,5 +37,8 @@ from Modrinth; they are not part of this fork:
 - OneConfig (Polyfrost, LGPL-3.0)
 - polycompose (Polyfrost)
 - Fabric Language Kotlin (FabricMC, Apache-2.0)
+
+Bundled font: Plus Jakarta Sans, by the Plus Jakarta Sans Project Authors, SIL Open
+Font License 1.1, in assets/polyplus/font/dusk (see OFL.txt there).
 
 This fork is distributed under the same licence, GPL-3.0.

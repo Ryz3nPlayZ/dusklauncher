@@ -13,6 +13,7 @@ import net.minecraft.client.Minecraft
 import org.polyfrost.oneconfig.api.ui.v1.ExperimentalOneConfigUiApi
 import org.polyfrost.compose.minecraft.canvas.InlinePolyCanvas
 import org.polyfrost.polyplus.client.PolyPlusMainMenuConfig
+import org.polyfrost.polyplus.client.dusk.DuskTheme
 
 //? if >= 26.1 {
 import net.minecraft.client.gui.GuiGraphicsExtractor
@@ -27,6 +28,11 @@ private const val GLOW_STEPS = 12
 private val PanoramaBlackFlat = Color(0xFF11171C)
 private val PanoramaBlackGradient = Color(0xFF10161B)
 private val PanoramaGlowBlue = Color(0xFF1878F1)
+
+// Dusk: the launcher's background and a soft neutral glow while a Dusk theme is in use
+private val DuskBlack = Color(0xFF0B0B0D)
+private val DuskGlow = Color(0xFFB4B4BB)
+private const val DUSK_GLOW_ALPHA = 0.5f
 
 private class GlowSpot(
     val ax: Float,
@@ -84,21 +90,25 @@ private fun DrawScope.drawPanoramaOverlay() {
 }
 
 private fun DrawScope.drawPanoramaBlackBackground() {
-    drawRect(PanoramaBlackFlat.copy(alpha = 0.10f))
+    val dusk = DuskTheme.isActive
+    drawRect((if (dusk) DuskBlack else PanoramaBlackFlat).copy(alpha = 0.10f))
     drawRect(
         brush = Brush.verticalGradient(
             colorStops = arrayOf(
                 0.199f to Color.Transparent,
-                0.960f to PanoramaBlackGradient.copy(alpha = 0.25f),
+                0.960f to (if (dusk) DuskBlack else PanoramaBlackGradient).copy(alpha = 0.25f),
             ),
         ),
     )
 }
 
 private fun DrawScope.drawPanoramaGlowMask() {
+    val dusk = DuskTheme.isActive
+    val color = if (dusk) DuskGlow else PanoramaGlowBlue
+    val scale = if (dusk) DUSK_GLOW_ALPHA else 1f
     for (g in GlowMask) {
         val center = Offset(size.width * g.ax, size.height * g.ay)
         val radius = size.width * g.radiusF
-        drawCircle(brush = softRadial(PanoramaGlowBlue, g.alpha, center, radius), radius = radius, center = center)
+        drawCircle(brush = softRadial(color, g.alpha * scale, center, radius), radius = radius, center = center)
     }
 }

@@ -1886,7 +1886,7 @@ private fun ChoiceButton(
 private class UiStyleOption(val style: Int, val label: String, val caption: String, val glass: Boolean)
 
 private val UiStyleOptions = listOf(
-    UiStyleOption(OnboardingFeatures.UI_STYLE_POLYFROSTED, "Frosted", "Frosted panels, the OneConfig look", glass = false),
+    UiStyleOption(OnboardingFeatures.UI_STYLE_POLYFROSTED, "Dusk", "Dusk's graphite panels, like the launcher", glass = false),
     UiStyleOption(OnboardingFeatures.UI_STYLE_POLYGLASS, "Glass", "See-through glass over your game", glass = true),
     UiStyleOption(OnboardingFeatures.UI_STYLE_MINECRAFT, "Minecraft", "Blocky, like the vanilla menus", glass = false),
 )

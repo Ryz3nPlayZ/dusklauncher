@@ -18,6 +18,7 @@ import org.polyfrost.oneconfig.api.ui.v1.ExperimentalOneConfigUiApi
 import org.polyfrost.oneconfig.api.ui.v1.theme.OneConfigTheme
 import org.polyfrost.oneconfig.api.ui.v1.theme.OneConfigUITheme
 import org.polyfrost.polyplus.client.PolyPlusConfig
+import org.polyfrost.polyplus.client.dusk.DuskTheme
 import org.polyfrost.polyplus.client.gui.familyVariant
 import org.polyfrost.polyplus.client.gui.isGlassStyle
 import org.polyfrost.polyplus.client.gui.isLightTheme
@@ -391,7 +392,8 @@ object OnboardingFeatures {
     fun uiStyleTheme(style: Int, light: Boolean): OneConfigUITheme = when (style) {
         UI_STYLE_MINECRAFT -> if (light) OneConfigTheme.MINECRAFT_LIGHT else OneConfigTheme.MINECRAFT_DARK
         UI_STYLE_POLYGLASS -> if (light) OneConfigTheme.GLASS_LIGHT else OneConfigTheme.GLASS_DARK
-        else -> if (light) OneConfigTheme.POLYFROSTED_LIGHT else OneConfigTheme.POLYFROSTED_DARK
+        // Dusk: the flat style is Dusk's own theme
+        else -> if (light) DuskTheme.Light else DuskTheme.Dark
     }
 
     fun applyTheme(light: Boolean, style: Int) {

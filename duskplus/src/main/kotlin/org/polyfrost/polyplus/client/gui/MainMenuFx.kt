@@ -32,6 +32,7 @@ import androidx.compose.ui.layout.positionInRoot
 import net.minecraft.client.Minecraft
 import org.polyfrost.oneconfig.api.ui.v1.theme.OneConfigTheme
 import org.polyfrost.polyplus.client.PolyPlusLobbyConfig
+import org.polyfrost.polyplus.client.dusk.DuskTheme
 import org.polyfrost.polyplus.client.lobby.GlassRegistry
 import org.polyfrost.polyplus.client.lobby.LobbyGlass
 import kotlin.math.PI
@@ -61,7 +62,14 @@ private const val PARALLAX_EASE = 0.02f
 private val GlowA = Color(0xFF1878F1)
 private val GlowB = Color(0xFF24D3EE)
 private val GlowC = Color(0xFF6D5EF6)
-private val FxPageBackground = Color(0xFF11171C)
+private val PolyfrostPageBackground = Color(0xFF11171C)
+
+// Dusk: graphite smoke on the launcher's background while a Dusk theme is in use
+private val DuskGlowPalette = arrayOf(Color(0xFF52525B), Color(0xFF3F3F46), Color(0xFF71717A))
+private val DuskPageBackground = Color(0xFF0B0B0D)
+
+private val FxPageBackground: Color
+    get() = if (DuskTheme.isActive) DuskPageBackground else PolyfrostPageBackground
 
 private class Blob(
     val ax: Float, val ay: Float,
@@ -84,14 +92,15 @@ private val Blobs = listOf(
 
 private const val GLOW_STEPS = 12
 
-private val GlowPalette = arrayOf(GlowA, GlowB, GlowC)
+private val PolyfrostGlowPalette = arrayOf(GlowA, GlowB, GlowC)
 
 private inline fun coolGlowLayers(phase: Float, alpha: Float, draw: (Color, Float) -> Unit) {
-    val p = (phase - floor(phase)) * GlowPalette.size
-    val i = p.toInt().coerceAtMost(GlowPalette.size - 1)
+    val palette = if (DuskTheme.isActive) DuskGlowPalette else PolyfrostGlowPalette
+    val p = (phase - floor(phase)) * palette.size
+    val i = p.toInt().coerceAtMost(palette.size - 1)
     val f = p - i
-    if (f < 1f) draw(GlowPalette[i], alpha * (1f - f))
-    if (f > 0f) draw(GlowPalette[(i + 1) % GlowPalette.size], alpha * f)
+    if (f < 1f) draw(palette[i], alpha * (1f - f))
+    if (f > 0f) draw(palette[(i + 1) % palette.size], alpha * f)
 }
 
 private fun DrawScope.drawRadial(stops: Array<Pair<Float, Color>>, center: Offset, radius: Float, alpha: Float) {
@@ -287,10 +296,14 @@ private fun DrawScope.drawParticles(time: Float, mouse: Offset, frost: List<Roun
     punch(0)
 }
 
-private val VignetteStops = Array(GLOW_STEPS + 1) { i ->
+private fun vignetteStops(background: Color) = Array(GLOW_STEPS + 1) { i ->
     val t = i.toFloat() / GLOW_STEPS
     val s = ((t - 0.35f) / 0.65f).coerceIn(0f, 1f)
-    t to FxPageBackground.copy(alpha = 0.55f * s * s * (3f - 2f * s))
+    t to background.copy(alpha = 0.55f * s * s * (3f - 2f * s))
 }
 
-private fun DrawScope.drawVignette() = drawRadial(VignetteStops, center, size.maxDimension * 0.78f, 1f)
+private val PolyfrostVignetteStops = vignetteStops(PolyfrostPageBackground)
+private val DuskVignetteStops = vignetteStops(DuskPageBackground)
+
+private fun DrawScope.drawVignette() =
+    drawRadial(if (DuskTheme.isActive) DuskVignetteStops else PolyfrostVignetteStops, center, size.maxDimension * 0.78f, 1f)

@@ -42,7 +42,8 @@ private val OneConfigUITheme.family: String
     get() = (this as? UITheme)?.palette?.group ?: name.removeSuffix(LIGHT_SUFFIX).removeSuffix(DARK_SUFFIX)
 
 private val familyThemes: List<OneConfigUITheme> by lazy {
-    OneConfigTheme.builtIn() + listOf(CatppuccinLatte, CatppuccinMocha, CatppuccinMacchiato, CatppuccinFrappe, NordDark, NordLight)
+    OneConfigTheme.builtIn() + listOf(CatppuccinLatte, CatppuccinMocha, CatppuccinMacchiato, CatppuccinFrappe, NordDark, NordLight) +
+        org.polyfrost.polyplus.client.dusk.DuskTheme.all
 }
 
 internal fun OneConfigUITheme.familyVariant(light: Boolean): OneConfigUITheme? {

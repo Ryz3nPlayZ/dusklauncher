@@ -49,7 +49,7 @@ The new cosmetics system: **emotes, cosmetics, capes** (and wardrobe/outfits as 
 Goal: keep OneClient's custom menus and make them look like Dusk.
 
 1. **Fork OneConfig** (LGPL-3.0; credit it in NOTICE). Our build replaces the Modrinth OneConfig jar. Its `fabric.mod.json` "breaks polyplus <2.3.0" rule has to keep working with our fork's version.
-2. **Dusk theme.** Register a theme from `OneConfigUITheme` with Dusk's colours, shapes, font and logo, and make it the default. About 126 fork files already read colours from the theme. Swap the ~50 hard-coded `Color(0x…)` values for theme tokens.
+2. **Dusk theme.** Done: Dusk Dark and Dusk Light (`client/dusk/DuskTheme.kt`) have the launcher's colours, shapes, font and logo, Dusk Dark is the default, and the choice is kept across starts. Still to do: swap the ~50 hard-coded `Color(0x…)` values for theme tokens.
 3. **Replace Polyfrost art and branding**: logos, the "OneClient" window title (`OneClientWindowTitle.kt`), the client brand, the watermark, the startup splash and the panorama defaults.
 4. **Polish fixes in the OneConfig fork**: corner radius consistency, text that overflows or gets cut off, and ellipsis and min-widths on buttons and cards. Go screen by screen with screenshots.
 5. **Right shift goes back to Dusk** and OneConfig's own key is turned off by default. This fixes 0.1.

@@ -152,6 +152,7 @@ object PolyPlusClient {
         step("default settings") { DefaultSettings.initialize() }
         step("pixel icons") { registerPolyPlusPixelIcons() }
         step("oneconfig ui") { PolyPlusOneConfigIntegration.register() }
+        step("dusk theme") { org.polyfrost.polyplus.client.dusk.DuskTheme.register() }
         step("sodium settings") { SodiumSettingsPages.register() }
         step("argentum settings") { ArgentumSettingsPages.register() }
         step("oneclient settings") { OneClientSettingsPages.register() }

@@ -208,6 +208,14 @@ object PolyPlusConfig : Config("${PolyPlusConstants.ID}.json", "Dusk Client", Ca
     @JvmStatic @Include
     var onboardingUiStyle = 0
 
+    /** Dusk: the Dusk theme last picked, or "" once another theme was chosen (see DuskTheme). */
+    @JvmStatic @Include
+    var duskTheme = ""
+
+    /** Dusk: set once Dusk's theme was made the theme on first start. */
+    @JvmStatic @Include
+    var duskThemeDefaulted = false
+
     @JvmStatic @Include
     var onboardingToggleSprint = true
 
