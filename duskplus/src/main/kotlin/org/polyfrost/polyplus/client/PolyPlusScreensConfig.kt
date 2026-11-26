@@ -1,0 +1,70 @@
+package org.polyfrost.polyplus.client
+
+import org.polyfrost.oneconfig.api.config.v1.Config
+import org.polyfrost.oneconfig.api.config.v1.annotations.Include
+import org.polyfrost.oneconfig.api.config.v1.annotations.Switch
+import org.polyfrost.polyplus.PolyPlusConstants
+
+object PolyPlusScreensConfig : Config(
+    "${PolyPlusConstants.ID}-screens.json",
+    "Screens",
+    Category.OTHER,
+) {
+    @JvmStatic
+    @Switch(
+        title = "Settings",
+        description = "Uses Dusk Client's settings, controls and resource packs pages.",
+        subcategory = "Screens",
+    )
+    var customSettings = false
+
+    @JvmStatic
+    @Switch(
+        title = "Create and edit world",
+        description = "Uses Dusk Client's screens for making and editing worlds.",
+        subcategory = "Screens",
+    )
+    var customWorlds = true
+
+    @JvmStatic
+    @Switch(
+        title = "Connecting",
+        description = "Uses Dusk Client's screens while joining and leaving servers and worlds.",
+        subcategory = "Screens",
+    )
+    var customConnecting = true
+
+    @JvmStatic
+    //? if > 1.8.9 {
+    @Switch(
+        title = "Realms",
+        description = "Uses Dusk Client's Realms screens.",
+        subcategory = "Screens",
+    )
+    //?} else {
+    /*@Include
+    *///?}
+    var customRealms = true
+
+    @JvmStatic
+    //? if = 1.8.9 {
+    /*@Switch(
+        title = "Modern Options layout",
+        description = "Lays out the vanilla Options screen like newer versions do. Turn it off to keep it centered like 1.8.9.",
+        subcategory = "Screens",
+    )
+    *///?} else {
+    @Include
+    //?}
+    var modernOptionsLayout = true
+
+    @JvmStatic @Include
+    var onboardingAsked = false
+
+    @JvmStatic @Include
+    var vanillaHintShows = 0
+
+    init {
+        preload()
+    }
+}

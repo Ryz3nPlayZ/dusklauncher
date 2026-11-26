@@ -1,0 +1,213 @@
+package org.polyfrost.polyplus.mixin.client;
+
+//? if > 1.8.9 {
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.ConnectScreen;
+import net.minecraft.client.gui.screens.DisconnectedScreen;
+import net.minecraft.client.gui.screens.GenericMessageScreen;
+import net.minecraft.client.gui.screens.ProgressScreen;
+import net.minecraft.client.gui.screens.Screen;
+import org.polyfrost.polyplus.client.gui.MainMenuReplacement;
+import org.polyfrost.polyplus.client.gui.MenuPanorama;
+import org.polyfrost.polyplus.client.gui.PauseMenuPanel;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+//? if >= 26.1 {
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+//?}
+
+//? if < 26.1 {
+/*import net.minecraft.client.gui.GuiGraphics;
+*///?}
+
+@Mixin(Screen.class)
+public class MixinScreen {
+    @Inject(
+        //? if >= 26.1 {
+        method = "extractBackground",
+        //?} else {
+        /*method = "renderBackground",
+        *///?}
+        at = @At("HEAD"),
+        cancellable = true
+    )
+    private void polyplus$darkJoinLeaveBackground(
+        //? if >= 26.1 {
+        GuiGraphicsExtractor graphics,
+        //?} else {
+        /*GuiGraphics graphics,
+        *///?}
+        int mouseX, int mouseY, float tickDelta, CallbackInfo ci
+    ) {
+        Screen self = (Screen) (Object) this;
+        if (!MainMenuReplacement.enabled() || Minecraft.getInstance().level != null) return;
+        if (self instanceof ConnectScreen || self instanceof DisconnectedScreen || self instanceof GenericMessageScreen || self instanceof ProgressScreen) {
+            graphics.fill(0, 0, self.width, self.height, 0xFF0B1013);
+            ci.cancel();
+        }
+    }
+
+    @Inject(
+        //? if >= 26.1 {
+        method = "extractBackground",
+        //?} else {
+        /*method = "renderBackground",
+        *///?}
+        at = @At("HEAD")
+    )
+    private void polyplus$beginBackgroundPass(
+        //? if >= 26.1 {
+        GuiGraphicsExtractor graphics,
+        //?} else {
+        /*GuiGraphics graphics,
+        *///?}
+        int mouseX, int mouseY, float tickDelta, CallbackInfo ci
+    ) {
+        MenuPanorama.beginPass();
+    }
+
+    @Inject(
+        //? if >= 26.1 {
+        method = "extractPanorama",
+        //?} else {
+        /*method = "renderPanorama",
+        *///?}
+        at = @At("HEAD"),
+        cancellable = true
+    )
+    private void polyplus$drawComposeBackdrop(
+        //? if >= 26.1 {
+        GuiGraphicsExtractor graphics,
+        //?} else {
+        /*GuiGraphics graphics,
+        *///?}
+        float tickDelta, CallbackInfo ci
+    ) {
+        if (!MenuPanorama.drawComposeBackdrop(graphics, (Screen) (Object) this)) return;
+        //? if >= 1.21.11
+        graphics.nextStratum();
+        ci.cancel();
+    }
+
+    @Inject(
+        //? if >= 26.1 {
+        method = "extractPanorama",
+        //?} else {
+        /*method = "renderPanorama",
+        *///?}
+        at = @At("TAIL")
+    )
+    private void polyplus$drawBackdrop(
+        //? if >= 26.1 {
+        GuiGraphicsExtractor graphics,
+        //?} else {
+        /*GuiGraphics graphics,
+        *///?}
+        float tickDelta, CallbackInfo ci
+    ) {
+        Screen self = (Screen) (Object) this;
+        if (!MenuPanorama.panoramaPassNeedsBackdrop(self)) return;
+        MenuPanorama.drawBackdrop(graphics, self, true);
+    }
+
+    // PauseScreen doesn't override render on every version, so the vanilla pause menu's player panel hooks in here
+    @Inject(
+        //? if >= 26.1 {
+        method = "extractRenderState",
+        //?} else {
+        /*method = "render",
+        *///?}
+        at = @At("TAIL")
+    )
+    private void polyplus$drawPauseMenuPanel(
+        //? if >= 26.1 {
+        GuiGraphicsExtractor graphics,
+        //?} else {
+        /*GuiGraphics graphics,
+        *///?}
+        int mouseX, int mouseY, float tickDelta, CallbackInfo ci
+    ) {
+        PauseMenuPanel.render(graphics, (Screen) (Object) this);
+    }
+
+    @WrapMethod(
+        //? if >= 26.1 {
+        method = "extractMenuBackground(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIII)V"
+        //?} else {
+        /*method = "renderMenuBackground(Lnet/minecraft/client/gui/GuiGraphics;IIII)V"
+        *///?}
+    )
+    private void polyplus$replaceMenuBackground(
+        //? if >= 26.1 {
+        GuiGraphicsExtractor graphics,
+        //?} else {
+        /*GuiGraphics graphics,
+        *///?}
+        int x, int y, int width, int height, Operation<Void> original
+    ) {
+        Screen self = (Screen) (Object) this;
+        if (MenuPanorama.active(self) && MenuPanorama.drawBackdrop(graphics, self, false)) return;
+        original.call(graphics, x, y, width, height);
+    }
+}
+//?} else {
+/*import net.minecraft.client.gui.GuiElement;
+import net.minecraft.client.gui.screens.ConnectScreen;
+import net.minecraft.client.gui.screens.DisconnectedScreen;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screen.game.inventory.InventoryMenuScreen;
+import net.minecraft.client.gui.screen.menu.multiplayer.DownloadingTerrainScreen;
+import org.polyfrost.polyplus.client.PolyPlusMainMenuConfig;
+import org.polyfrost.polyplus.client.gui.MainMenuReplacement;
+import org.polyfrost.polyplus.client.gui.MenuPanorama;
+import org.polyfrost.polyplus.client.gui.PauseMenuPanel;
+import org.polyfrost.polyplus.mixin.client.access.GuiElementInvoker;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+@Mixin(Screen.class)
+public class MixinScreen {
+    private static final int DARKEN_TOP = 0xC0101010;
+    private static final int DARKEN_BOTTOM = 0xD0101010;
+
+    @Inject(method = "renderBackground(I)V", at = @At("HEAD"))
+    private void polyplus$beginBackgroundPass(int offset, CallbackInfo ci) {
+        MenuPanorama.beginPass();
+    }
+
+    @Inject(method = "render", at = @At("TAIL"))
+    private void polyplus$endBackgroundPass(int mouseX, int mouseY, float tickDelta, CallbackInfo ci) {
+        MenuPanorama.beginPass();
+    }
+
+    @Inject(method = "render", at = @At("TAIL"))
+    private void polyplus$drawPauseMenuPanel(int mouseX, int mouseY, float tickDelta, CallbackInfo ci) {
+        PauseMenuPanel.render((Screen) (Object) this, mouseX, mouseY);
+    }
+
+    @Inject(method = "drawBackgroundTexture", at = @At("HEAD"), cancellable = true)
+    private void polyplus$replaceMenuBackground(int offset, CallbackInfo ci) {
+        Screen self = (Screen) (Object) this;
+        if (MainMenuReplacement.enabled() && (self instanceof ConnectScreen || self instanceof DisconnectedScreen || self instanceof DownloadingTerrainScreen)) {
+            GuiElement.fill(0, 0, self.width, self.height, 0xFF0B1013);
+            ci.cancel();
+            return;
+        }
+        if (MenuPanorama.active(self) && MenuPanorama.drawBackdrop(self, false)) {
+            ci.cancel();
+            return;
+        }
+        if (PolyPlusMainMenuConfig.getModernInGameMenus() && !(self instanceof InventoryMenuScreen)) {
+            ((GuiElementInvoker) self).polyplus$fillGradient(0, 0, self.width, self.height, DARKEN_TOP, DARKEN_BOTTOM);
+            ci.cancel();
+        }
+    }
+}
+*///?}

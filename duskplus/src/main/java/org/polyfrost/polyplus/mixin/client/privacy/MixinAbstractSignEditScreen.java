@@ -1,0 +1,50 @@
+package org.polyfrost.polyplus.mixin.client.privacy;
+
+//? if > 1.8.9 {
+import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.entity.SignText;
+import org.polyfrost.polyplus.client.privacy.RichTextPrivacy;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+//? if >= 26.3 {
+import net.minecraft.world.level.block.entity.SignTextSlot;
+//?}
+
+@Mixin(AbstractSignEditScreen.class)
+public class MixinAbstractSignEditScreen {
+    @Shadow
+    @Final
+    private String[] messages;
+
+    //? if >= 26.3 {
+    @Inject(
+            method = "<init>(Lnet/minecraft/world/level/block/entity/SignBlockEntity;Lnet/minecraft/world/level/block/entity/SignTextSlot;ZLnet/minecraft/network/chat/Component;)V",
+            at = @At("RETURN")
+    )
+    private void polyplus$dontResolveSignText(SignBlockEntity sign, SignTextSlot slot, boolean filtered, Component title, CallbackInfo ci) {
+        SignText text = sign.getText(slot);
+    //?} else {
+    /*@Inject(
+            method = "<init>(Lnet/minecraft/world/level/block/entity/SignBlockEntity;ZZLnet/minecraft/network/chat/Component;)V",
+            at = @At("RETURN")
+    )
+    private void polyplus$dontResolveSignText(SignBlockEntity sign, boolean frontText, boolean filtered, Component title, CallbackInfo ci) {
+        SignText text = sign.getText(frontText);
+    *///?}
+        for (int i = 0; i < this.messages.length; i++) {
+            //? if >= 26.3 {
+            this.messages[i] = RichTextPrivacy.unresolved(text.getMessages(filtered).get(i), this.messages[i]);
+            //?} else {
+            /*this.messages[i] = RichTextPrivacy.unresolved(text.getMessage(i, filtered), this.messages[i]);
+            *///?}
+        }
+    }
+}
+//?}

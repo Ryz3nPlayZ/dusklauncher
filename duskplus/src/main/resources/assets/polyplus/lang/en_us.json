@@ -1,0 +1,19 @@
+{
+  "polyplus.hostWorld": "Host World",
+  "polyplus.mainmenu.switchToOneClient": "Dusk Client Menu",
+  "polyplus.featured.sponsored": "Sponsored",
+  "polyplus.featured.restore": "Restore",
+  "polyplus.reconnect": "Reconnect",
+  "polyplus.serverFolder": "Folder",
+  "polyplus.serverFolder.hint": "Folder (optional)",
+  "polyplus.serverFolder.pick": "Pick an existing folder",
+  "polyplus.serverSort": "Sort: %s",
+  "polyplus.serverSort.custom": "Custom",
+  "polyplus.mmc.debugifyNote": "Dusk Client note: we automatically disable the bannable features from Debugify, so you can keep playing safely.",
+  "polyplus.session.refresh": "Refresh Session",
+  "polyplus.session.refreshing": "Refreshing session...",
+  "polyplus.session.reconnecting": "Reconnecting...",
+  "polyplus.session.refreshFailed": "Refresh failed - click to retry",
+  "polyplus.page.wardrobe": "Wardrobe",
+  "polyplus.sodium.options.view_bobbing.tooltip": "If enabled, the player's view will sway and bob when moving around. Players who experience motion sickness while playing may benefit from disabling this."
+}

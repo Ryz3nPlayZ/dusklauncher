@@ -290,6 +290,19 @@ export default function SettingsView({
                   ]}
                 />
               </Row>
+              <Row
+                label="DUSK+"
+                hint="The Dusk lobby, pause menu, settings screen and chat on supported Fabric versions. Downloads about 35 MB once per version."
+              >
+                <Choice
+                  value={settings.duskPlus ? 'on' : 'off'}
+                  onPick={(v) => set({ duskPlus: v === 'on' })}
+                  options={[
+                    { value: 'off', label: 'OFF' },
+                    { value: 'on', label: 'ON' },
+                  ]}
+                />
+              </Row>
               <Row label="SCENE FPS" hint="The launcher never takes frames the game could use.">
                 <Choice
                   value={settings.fpsCap}

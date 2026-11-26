@@ -1,0 +1,77 @@
+package org.polyfrost.polyplus.mixin.client;
+
+//? if > 1.8.9 {
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import net.minecraft.client.gui.components.ChatComponent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
+import org.polyfrost.polyplus.client.emoji.EmojiRegistry;
+import org.polyfrost.polyplus.client.utils.ServerUtils;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
+
+//? if < 1.21.11 {
+/*import net.minecraft.network.chat.FormattedText;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
+*///?}
+
+@Mixin(ChatComponent.class)
+public class MixinChatComponent {
+    //? if < 1.21.11 {
+    /*// emoji are applied to the display lines only, so the stored message stays comparable for chat compacting mods
+    @ModifyArg(
+        method = "addMessageToDisplayQueue",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/components/ComponentRenderUtils;wrapComponents(Lnet/minecraft/network/chat/FormattedText;ILnet/minecraft/client/gui/Font;)Ljava/util/List;"),
+        index = 0
+    )
+    private FormattedText emojiLines(FormattedText text) {
+        return EmojiRegistry.transformForViewer(text);
+    }
+    *///?}
+
+    @WrapMethod(
+        //? if >= 26.1 {
+        method = "addClientSystemMessage"
+        //?} else {
+        /*method = "addMessage(Lnet/minecraft/network/chat/Component;)V"
+        *///?}
+    )
+    private void hideBobbyUpgradeMessage(Component message, Operation<Void> original) {
+        if (polyplus$isBobbyUpgradeMessage(message) && ServerUtils.isOnHypixel()) {
+            return;
+        }
+        original.call(message);
+    }
+
+    @Unique
+    private static boolean polyplus$isBobbyUpgradeMessage(Component message) {
+        if (!(message.getContents() instanceof TranslatableContents contents)) {
+            return false;
+        }
+        String key = contents.getKey();
+        return "bobby.upgrade.required".equals(key) || "bobby.upgrade.fallback_world".equals(key);
+    }
+}
+//?} else {
+/*import net.minecraft.client.gui.chat.ChatGui;
+import net.minecraft.text.Text;
+import org.polyfrost.polyplus.client.emoji.EmojiRegistry;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
+
+@Mixin(ChatGui.class)
+public class MixinChatComponent {
+    // emoji are applied to the display lines only, so the stored message stays comparable for chat compacting mods
+    @ModifyArg(
+        method = "addMessage(Lnet/minecraft/text/Text;IIZ)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/TextRenderUtils;wrapText(Lnet/minecraft/text/Text;ILnet/minecraft/client/render/TextRenderer;ZZ)Ljava/util/List;"),
+        index = 0
+    )
+    private Text emojiLines(Text text) {
+        return EmojiRegistry.transformLegacy(text);
+    }
+}
+*///?}

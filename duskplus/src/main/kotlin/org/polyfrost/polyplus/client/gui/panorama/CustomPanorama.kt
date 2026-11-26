@@ -1,0 +1,258 @@
+package org.polyfrost.polyplus.client.gui.panorama
+
+//? if >= 1.21.11 {
+import org.polyfrost.polyplus.libs.ktor.client.plugins.timeout
+import org.polyfrost.polyplus.libs.ktor.client.request.get
+import org.polyfrost.polyplus.libs.ktor.client.statement.bodyAsBytes
+import net.minecraft.client.Minecraft
+import net.minecraft.client.renderer.texture.DynamicTexture
+import net.minecraft.resources.Identifier
+import net.minecraft.server.packs.resources.ResourceManager
+import org.apache.logging.log4j.LogManager
+import org.polyfrost.polyplus.PolyPlusConstants
+import org.polyfrost.polyplus.client.PolyPlusClient
+import org.polyfrost.polyplus.client.PolyPlusMainMenuConfig
+import org.polyfrost.polyplus.client.gui.MenuPanorama
+import org.polyfrost.polyplus.client.gui.PolyPlusMainMenuScreen
+import org.polyfrost.polyplus.client.gui.PolyPlusOnboardingScreen
+import org.polyfrost.polyplus.client.render.NativeImage
+import org.polyfrost.polyplus.client.utils.ClientPlatform
+import java.io.ByteArrayInputStream
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.Path
+import java.security.MessageDigest
+import java.util.HexFormat
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.zip.ZipInputStream
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+//?}
+
+private class PanoramaPack(val cacheKey: String, val url: String, val sha1: String)
+
+object CustomPanorama {
+    //? if >= 1.21.11 {
+    private val LOGGER = LogManager.getLogger("${PolyPlusConstants.NAME}/Panorama")
+
+    private const val FACES = 6
+    private const val ENTRY_PREFIX = "assets/minecraft/textures/gui/title/background/"
+    private const val OVERLAY_FILE = "panorama_overlay.png"
+
+    private val CUBE_MAP_ID: Identifier =
+        Identifier.fromNamespaceAndPath(PolyPlusConstants.ID, "textures/gui/title/background/panorama")
+    private val OVERLAY_ID: Identifier =
+        Identifier.fromNamespaceAndPath(PolyPlusConstants.ID, "textures/gui/title/background/panorama_overlay.png")
+
+    private val VANILLA_CUBE_MAP_ID: Identifier =
+        Identifier.withDefaultNamespace("textures/gui/title/background/panorama")
+
+    private val VANILLA_FACE_ID: Identifier =
+        Identifier.withDefaultNamespace("textures/gui/title/background/panorama_0.png")
+
+    private const val VANILLA_PACK_ID = "vanilla"
+
+    private val PACK: PanoramaPack? =
+        //? if >= 26.3 {
+        PanoramaPack(
+            cacheKey = "wilderness-bound-1.0.0",
+            url = "https://cdn.modrinth.com/data/qelvBItP/versions/fgtTJ04S/Wilderness%20Bound%20Panorama.zip",
+            sha1 = "ddc955b5798b02ee431b13a7a97d8d2e58782771",
+        )
+        //?} elif >= 26.2 {
+        /*PanoramaPack(
+            cacheKey = "alt-chaos-cubed-1.1.2",
+            url = "https://cdn.modrinth.com/data/abtyNK6x/versions/VNOEJAJZ/Alt%20Chaos%20Cubed%20Panorama%201.1%20Shader.zip",
+            sha1 = "ea2d2987f2bae1d70f3bab797655508e5eebe419",
+        )
+        *///?} elif >= 26.1 {
+        /*null
+        *///?} else {
+        /*PanoramaPack(
+            cacheKey = "mounts-of-mayhem-1.21.11",
+            url = "https://cdn.modrinth.com/data/zm2Mso0b/versions/11MWbQX8/Shader%20Panorama%20of%201.21.11%EF%BC%9AMounts%20of%20Mayhem.zip",
+            sha1 = "c82dbfa467713065a04161d6396433c7b2d82f80",
+        )
+        *///?}
+
+    private val started = AtomicBoolean(false)
+
+    // spaces out attempts after a failed download, since each one pulls the whole pack into memory again
+    private const val RETRY_DELAY_MS = 5 * 60_000L
+
+    @Volatile
+    private var retryAfterMs = 0L
+
+    private val failedPacks = ConcurrentHashMap.newKeySet<String>()
+
+    @Volatile
+    private var cubeMapReady = false
+
+    @Volatile
+    private var overlayReady = false
+
+    @Volatile
+    private var packOverride: Boolean? = null
+
+    @JvmStatic
+    fun isAvailable(): Boolean = PACK != null
+
+    @JvmStatic
+    fun initialize() {
+        val pack = PACK ?: return
+        if (!PolyPlusMainMenuConfig.customPanorama) return
+        if (cubeMapReady) return
+        if (pack.cacheKey in failedPacks) return
+        if (System.currentTimeMillis() < retryAfterMs) return
+        if (!started.compareAndSet(false, true)) return
+
+        PolyPlusClient.SCOPE.launch(Dispatchers.IO) {
+            try {
+                if (!prepare(pack)) {
+                    failedPacks.add(pack.cacheKey)
+                    LOGGER.warn("Not retrying main menu panorama pack {} again this session", pack.cacheKey)
+                }
+            } catch (t: Throwable) {
+                retryAfterMs = System.currentTimeMillis() + RETRY_DELAY_MS
+                started.set(false)
+                if (t is CancellationException) throw t
+                LOGGER.warn("Failed to prepare the custom main menu panorama", t)
+            }
+        }
+    }
+
+    @JvmStatic
+    fun cubeMapTexture(original: Identifier): Identifier =
+        if (cubeMapReady && original == VANILLA_CUBE_MAP_ID && shouldApply()) CUBE_MAP_ID else original
+
+    @JvmStatic
+    fun overlayTexture(original: Identifier): Identifier =
+        if (overlayReady && shouldApply()) OVERLAY_ID else original
+
+    internal fun refreshPackOverride(manager: ResourceManager) {
+        val overridden = runCatching {
+            val resource = manager.getResource(VANILLA_FACE_ID).orElse(null)
+            resource != null && resource.sourcePackId() != VANILLA_PACK_ID
+        }.getOrDefault(false)
+        if (overridden && packOverride != true) {
+            LOGGER.info("A resource pack supplies its own main menu panorama, leaving it alone")
+        }
+        packOverride = overridden
+    }
+
+    private fun resourcePackOverridesPanorama(): Boolean {
+        packOverride?.let { return it }
+        refreshPackOverride(Minecraft.getInstance().resourceManager)
+        return packOverride == true
+    }
+
+    private fun shouldApply(): Boolean {
+        if (!PolyPlusMainMenuConfig.customPanorama) return false
+        if (MenuPanorama.vanillaPanorama()) return false
+        if (resourcePackOverridesPanorama()) return false
+        val screen =
+            //? if >= 26.2 {
+            Minecraft.getInstance().gui.screen()
+            //?} else {
+            /*Minecraft.getInstance().screen
+            *///?}
+        return when (screen) {
+            is PolyPlusOnboardingScreen -> true
+            is PolyPlusMainMenuScreen -> MenuPanorama.panoramaBackdrop()
+            else -> MenuPanorama.menusActive()
+        }
+    }
+
+    private suspend fun prepare(pack: PanoramaPack): Boolean {
+        val dir = cacheDir(pack)
+        if (!isUnpacked(dir)) {
+            LOGGER.info("Downloading main menu panorama pack {}", pack.cacheKey)
+            val bytes = PolyPlusClient.HTTP.get(pack.url) { timeout { requestTimeoutMillis = 300_000 } }.bodyAsBytes()
+            val digest = sha1Hex(bytes)
+            check(digest == pack.sha1) {
+                "Panorama pack ${pack.cacheKey} checksum mismatch (expected ${pack.sha1}, got $digest)"
+            }
+            unpack(bytes, dir)
+        }
+        return register(dir)
+    }
+
+    private fun cacheDir(pack: PanoramaPack): Path =
+        File(PolyPlusConstants.NAME).resolve("panorama").resolve(pack.cacheKey).toPath()
+
+    private const val COMPLETE_MARKER = ".complete"
+
+    private fun isUnpacked(dir: Path): Boolean =
+        Files.isRegularFile(dir.resolve(COMPLETE_MARKER)) &&
+            (0 until FACES).all { Files.isRegularFile(dir.resolve(faceName(it))) }
+
+    private fun faceName(index: Int): String = "panorama_$index.png"
+
+    private fun unpack(bytes: ByteArray, dir: Path) {
+        val wanted = buildSet {
+            for (face in 0 until FACES) add(faceName(face))
+            add(OVERLAY_FILE)
+        }
+        Files.createDirectories(dir)
+        ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+            var entry = zip.nextEntry
+            while (entry != null) {
+                val name = entry.name.removePrefix(ENTRY_PREFIX)
+                if (!entry.isDirectory && entry.name.startsWith(ENTRY_PREFIX) && name in wanted) {
+                    Files.newOutputStream(dir.resolve(name)).use { out -> zip.copyTo(out) }
+                }
+                zip.closeEntry()
+                entry = zip.nextEntry
+            }
+        }
+        check((0 until FACES).all { Files.isRegularFile(dir.resolve(faceName(it))) }) {
+            "Panorama pack is missing one or more panorama faces"
+        }
+        Files.write(dir.resolve(COMPLETE_MARKER), ByteArray(0))
+    }
+
+    private fun register(dir: Path): Boolean {
+        val loaded = ClientPlatform.runOnMainSync {
+            val textureManager = Minecraft.getInstance().textureManager
+            runCatching {
+                textureManager.registerAndLoad(CUBE_MAP_ID, DiskCubeMapTexture(CUBE_MAP_ID, dir))
+                cubeMapReady = true
+
+                val overlay = dir.resolve(OVERLAY_FILE)
+                if (Files.isRegularFile(overlay)) {
+                    val image = Files.newInputStream(overlay).use(NativeImage::read)
+                    textureManager.register(OVERLAY_ID, DynamicTexture({ OVERLAY_ID.toString() }, image))
+                    overlayReady = true
+                }
+            }.onFailure {
+                // cleared before the release, on this thread, so no frame looks the texture up again and re-registers it
+                cubeMapReady = false
+                overlayReady = false
+                textureManager.release(CUBE_MAP_ID)
+                LOGGER.warn("Discarding unusable main menu panorama pack at {}", dir, it)
+            }.isSuccess
+        }
+
+        if (!loaded) {
+            purge(dir)
+            started.set(false)
+            return false
+        }
+        LOGGER.info("Custom main menu panorama loaded from {}", dir)
+        return true
+    }
+
+    private fun purge(dir: Path) {
+        runCatching {
+            Files.deleteIfExists(dir.resolve(COMPLETE_MARKER))
+            for (face in 0 until FACES) Files.deleteIfExists(dir.resolve(faceName(face)))
+            Files.deleteIfExists(dir.resolve(OVERLAY_FILE))
+        }
+    }
+
+    private fun sha1Hex(bytes: ByteArray): String =
+        HexFormat.of().formatHex(MessageDigest.getInstance("SHA-1").digest(bytes))
+    //?}
+}

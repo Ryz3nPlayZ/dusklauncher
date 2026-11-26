@@ -1,0 +1,259 @@
+@file:OptIn(ExperimentalOneConfigUiApi::class)
+
+package org.polyfrost.polyplus.client.gui
+
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.screens.Screen
+import org.polyfrost.oneconfig.api.ui.v1.ExperimentalOneConfigUiApi
+import org.polyfrost.oneconfig.api.ui.v1.platform.isOneConfigComposeScreen
+import org.polyfrost.polyplus.client.PolyPlusMainMenuConfig
+import org.polyfrost.polyplus.client.lobby.LobbyScene
+
+//? if > 1.8.9 {
+import net.minecraft.client.gui.screens.GenericMessageScreen
+import net.minecraft.client.gui.screens.LevelLoadingScreen
+import net.minecraft.client.gui.screens.ProgressScreen
+//?} else {
+/*import net.minecraft.client.gui.GuiElement
+import net.minecraft.client.gui.screen.menu.multiplayer.DownloadingTerrainScreen
+import net.minecraft.client.gui.screen.ProgressScreen
+import net.minecraft.client.gui.screens.TitleScreen
+import net.minecraft.client.render.platform.GlStateManager
+import org.polyfrost.oneconfig.internal.legacy.LegacyPanoramaTracker
+import org.polyfrost.compose.minecraft.render.gl.StoredGLState
+import org.polyfrost.polyplus.mixin.client.access.GuiElementInvoker
+import org.polyfrost.polyplus.mixin.client.access.TitleScreenInvoker
+*///?}
+
+//? if >= 26.1 {
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.renderer.Panorama
+import net.minecraft.resources.Identifier
+import org.polyfrost.polyplus.client.gui.panorama.CustomPanorama
+//?}
+
+//? if < 26.1 && > 1.8.9 {
+/*import net.minecraft.client.gui.GuiGraphics
+*///?}
+
+//? if < 1.21.10 && > 1.8.9 {
+/*import net.minecraft.client.gui.screens.ReceivingLevelScreen
+*///?}
+
+object MenuPanorama {
+    @JvmField
+    val LIST_TINT: Int = 0x990D1116.toInt()
+
+    @JvmStatic
+    fun menusActive(): Boolean = menusActive(currentScreen())
+
+    private fun menusActive(screen: Any?): Boolean {
+        if (!PolyPlusMainMenuConfig.panoramaInAllMenus) return false
+        //? if > 1.8.9 {
+        if (Minecraft.getInstance().level == null) return true
+        //?} else {
+        /*if (Minecraft.getInstance().world == null) return true
+        *///?}
+        return isLoadingScreen(screen)
+    }
+
+    private fun isLoadingScreen(screen: Any?): Boolean {
+        //? if > 1.8.9 {
+        if (screen is GenericMessageScreen) return true
+        if (screen is LevelLoadingScreen) return true
+        if (screen is ProgressScreen) return true
+        //?} else {
+        /*if (screen is ProgressScreen) return true
+        if (screen is DownloadingTerrainScreen) return true
+        *///?}
+        //? if < 1.21.10 && > 1.8.9 {
+        /*if (screen is ReceivingLevelScreen) return true
+        *///?}
+        return false
+    }
+
+    @JvmStatic
+    fun active(screen: Screen): Boolean = menusActive(screen) && !isOneConfigComposeScreen(screen)
+
+    @JvmStatic
+    fun panoramaPassNeedsBackdrop(screen: Screen): Boolean = isOneConfigComposeScreen(screen)
+
+    private fun backdropWanted(screen: Screen, onPanoramaPass: Boolean): Boolean {
+        if (!PolyPlusMainMenuConfig.panoramaInAllMenus) return false
+        if (LobbyScene.showing()) return false
+        if (!onPanoramaPass && !menusActive(screen)) return false
+        return !MainMenuReplacement.isMenu(screen) && screen !is PolyPlusOnboardingScreen
+    }
+
+    private var drawnThisPass = false
+
+    private fun classicMenuActive(): Boolean =
+        MainMenuReplacement.replacesTitleScreen() && !MainMenuReplacement.enabled()
+
+    @JvmStatic
+    fun panoramaBackdrop(): Boolean = PolyPlusMainMenuConfig.mainMenuBackground != MainMenuBackground.DEFAULT
+
+    @JvmStatic
+    fun vanillaPanorama(): Boolean =
+        classicMenuActive() && PolyPlusMainMenuConfig.mainMenuBackground == MainMenuBackground.VANILLA_PANORAMA
+
+    private fun classicBackdropActive(): Boolean = classicMenuActive() && !panoramaBackdrop()
+
+    @JvmStatic
+    fun beginPass() {
+        drawnThisPass = false
+    }
+
+    @JvmStatic
+    fun backdropDrawn(): Boolean = drawnThisPass
+
+    //? if >= 26.1 {
+    @JvmStatic
+    fun drawBackdrop(ctx: GuiGraphicsExtractor, screen: Screen, onPanoramaPass: Boolean): Boolean {
+        if (!backdropWanted(screen, onPanoramaPass)) return false
+        if (drawnThisPass) return true
+        val drew = MenuBackgroundPass.renderInline(ctx)
+        if (drew) drawnThisPass = true
+        return drew
+    }
+
+    @JvmStatic
+    fun drawComposeBackdrop(ctx: GuiGraphicsExtractor, screen: Screen): Boolean {
+        if (!classicBackdropActive() || !isOneConfigComposeScreen(screen)) return false
+        if (!backdropWanted(screen, true)) return false
+        if (drawnThisPass) return true
+        val drew = MenuFxPass.renderInline(ctx)
+        if (drew) drawnThisPass = true
+        return drew
+    }
+
+    @JvmStatic
+    fun drawMenuPanorama(ctx: GuiGraphicsExtractor, width: Int, height: Int): Boolean {
+        if (!panoramaBackdrop()) return false
+        if (panoramaReady()) {
+            Minecraft.getInstance().gameRenderer
+                //? if >= 26.2 {
+                .panorama()
+                .extractRenderState(ctx, width, height)
+                //?} else {
+                /*.getPanorama()
+                .extractRenderState(ctx, width, height, true)
+                *///?}
+        }
+        if (vanillaPanorama()) return true
+        ctx.blurBeforeThisStratum()
+        MenuBackgroundPass.renderInline(ctx)
+        return true
+    }
+
+    private val CUBE_MAP_ID: Identifier = Identifier.withDefaultNamespace("textures/gui/title/background/panorama")
+
+    @JvmStatic
+    fun panoramaReady(): Boolean = textureLoaded(CustomPanorama.cubeMapTexture(CUBE_MAP_ID)) &&
+        textureLoaded(CustomPanorama.overlayTexture(Panorama.PANORAMA_OVERLAY))
+
+    private fun textureLoaded(id: Identifier): Boolean =
+        runCatching { Minecraft.getInstance().textureManager.getTexture(id).getTextureView() }.isSuccess
+    //?} elif > 1.8.9 {
+    /*@JvmStatic
+    fun drawBackdrop(ctx: GuiGraphics, screen: Screen, onPanoramaPass: Boolean): Boolean {
+        if (!backdropWanted(screen, onPanoramaPass)) return false
+        if (drawnThisPass) return true
+        val drew = MenuBackgroundPass.renderInline(ctx)
+        if (drew) drawnThisPass = true
+        return drew
+    }
+
+    @JvmStatic
+    fun drawComposeBackdrop(ctx: GuiGraphics, screen: Screen): Boolean {
+        if (!classicBackdropActive() || !isOneConfigComposeScreen(screen)) return false
+        if (!backdropWanted(screen, true)) return false
+        if (drawnThisPass) return true
+        val drew = MenuFxPass.renderInline(ctx)
+        if (drew) drawnThisPass = true
+        return drew
+    }
+    *///?} else {
+    /*@JvmStatic
+    fun drawBackdrop(screen: Screen, onPanoramaPass: Boolean): Boolean {
+        if (!backdropWanted(screen, onPanoramaPass)) return false
+        if (drawnThisPass) return true
+        if (!drawLegacyPanorama(screen.width, screen.height)) {
+            GuiElement.fill(0, 0, screen.width, screen.height, BASE_COLOR)
+        }
+        val drew = MenuBackgroundPass.renderInline()
+        if (drew) drawnThisPass = true
+        return drew
+    }
+
+    @JvmStatic
+    fun drawComposeBackdrop(screen: Screen): Boolean {
+        if (!classicBackdropActive()) return drawBackdrop(screen, false)
+        if (!backdropWanted(screen, false)) return false
+        if (drawnThisPass) return true
+        val drew = MenuFxPass.renderInline()
+        if (drew) drawnThisPass = true
+        return drew
+    }
+
+    @JvmStatic
+    fun drawLoadingBackdrop(width: Int, height: Int) {
+        if (!PolyPlusMainMenuConfig.panoramaInAllMenus) return
+        if (!drawLegacyPanorama(width, height)) {
+            GuiElement.fill(0, 0, width, height, BASE_COLOR)
+        }
+        MenuBackgroundPass.renderInline()
+    }
+
+    private const val BASE_COLOR = 0xFF11171C.toInt()
+    private const val WASH_TOP = 0x80FFFFFF.toInt()
+    private const val WASH_BOTTOM = 0x00FFFFFF
+    private const val SHADE_TOP = 0x00000000
+    private const val SHADE_BOTTOM = 0x80000000.toInt()
+
+    private val panoramaGlState = StoredGLState()
+    private var lastPanoramaTick = 0L
+
+    @JvmStatic
+    fun legacyPanorama(): TitleScreen? {
+        LegacyPanoramaTracker.current()?.let { return it }
+        val mc = Minecraft.getInstance()
+        val title = runCatching {
+            TitleScreen().also { it.init(mc, mc.window.guiScaledWidth, mc.window.guiScaledHeight) }
+        }.getOrNull() ?: return null
+        LegacyPanoramaTracker.capture(title)
+        return title
+    }
+
+    private fun drawLegacyPanorama(width: Int, height: Int): Boolean {
+        val title = legacyPanorama() ?: return false
+        val now = System.currentTimeMillis()
+        if (now - lastPanoramaTick > 1000L) lastPanoramaTick = now
+        while (now - lastPanoramaTick >= 50L) {
+            title.tick()
+            lastPanoramaTick += 50L
+        }
+        title.width = width
+        title.height = height
+        panoramaGlState.capture()
+        try {
+            GlStateManager.disableAlphaTest()
+            (title as TitleScreenInvoker).`polyplus$drawBackground`(0, 0, (now - lastPanoramaTick) / 50f)
+            GlStateManager.enableAlphaTest()
+            val gradients = title as GuiElementInvoker
+            gradients.`polyplus$fillGradient`(0, 0, width, height, WASH_TOP, WASH_BOTTOM)
+            gradients.`polyplus$fillGradient`(0, 0, width, height, SHADE_TOP, SHADE_BOTTOM)
+        } finally {
+            panoramaGlState.restore()
+        }
+        return true
+    }
+    *///?}
+
+    private fun currentScreen() =
+        //? if >= 26.2 {
+        Minecraft.getInstance().gui.screen()
+        //?} else {
+        /*Minecraft.getInstance().screen
+        *///?}
+}

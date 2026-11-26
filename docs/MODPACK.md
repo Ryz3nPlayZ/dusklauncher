@@ -6,8 +6,19 @@ version by `mods::install_dusk_essentials` (lineup in `DUSK_ESSENTIALS`).
 Each mod takes its newest **release** build for the version; a beta/alpha
 only when the mod has no release there at all (`modrinth::newest_preferring_release`).
 A mod with no build for that version is skipped. Required dependencies
-(Cloth Config, Text Placeholder API, …) are pulled in afterwards, and the
-instance gets the tuned video defaults (`modpacks::seed_dusk_defaults`).
+(Cloth Config, Text Placeholder API, OneConfig, Kotlin, …) are pulled in
+afterwards, and the instance gets the tuned video defaults
+(`modpacks::seed_dusk_defaults`).
+
+Newest builds don't always load together: on 26.3, Sodium 0.9.3 declares
+it breaks every Iris build there is for 26.3. After the install,
+`mods::step_back_clashes` looks for mods it just added whose `breaks`
+rules out another mod present, and steps each back to the newest older
+build that loads with the rest (releases first, up to four tries). Mods the
+player already had are never touched; a clash it can't fix shows on the
+instance's mods page as usual.
+
+On macOS, `DUSK_ESSENTIALS_MAC` can add mods for that OS only. It is empty for now: Slipstream is out until it's re-tested beside DuskClient.
 
 The DuskClient jar is **not** part of the set — the launcher force-loads it
 into every Fabric profile at launch wherever a build exists (1.21 – 26.3).
@@ -18,8 +29,9 @@ into every Fabric profile at launch wherever a build exists (1.21 – 26.3).
 lineup pinned to **1.21.11**, used only when first run can't resolve the
 lineup through Modrinth's API. It holds the list and file hashes, not the
 jars: the files still download from Modrinth's CDN, so it covers an API
-outage, not a machine with no internet. Rebuild it whenever the lineup
-changes or the mods update (last rebuilt October 2026):
+outage, not a machine with no internet. It can't hold macOS-only mods, since an
+.mrpack can't say "macOS only". Rebuild it whenever the lineup changes or the
+mods update (last rebuilt November 2026, pack 2.2.0):
 
 ```
 node tools/build-default-pack.mjs
@@ -37,7 +49,7 @@ crosshair and background FPS are all modules. The set carries the
 **performance** mods we could never maintain ourselves and a few QoL mods
 that DuskClient doesn't cover.
 
-## The lineup (16 + auto-deps)
+## The lineup (23, plus chat-heads below 1.21.9, plus auto-deps)
 
 ### Performance core — depend, never fork
 
@@ -56,13 +68,35 @@ that DuskClient doesn't cover.
 | badoptimizations | MIT | Micro frame/render checks. |
 | krypton | LGPL-3.0 | Network-stack optimization. |
 
+### From OneClient's performance set — depend
+
+OneClient (Polyfrost) ships these alongside the Sodium stack. Only the
+client-side ones came over: ServerCore, VMP, C2ME, zfastnoise and
+structure-layout-optimizer only help a server or world generation.
+
+| Mod | License | Why |
+|---|---|---|
+| modernfix-mvus | LGPL-3.0 | Faster startup and lower memory (dynamic resources, model loading fixes). |
+| particle-core | MIT | Particle culling and batching. Brings Fzzy Config. |
+| obe | LGPL-3.0+ | Block entities (chests, signs, beds) drawn as baked models when still. |
+| scalablelux | LGPL-3.0 | Faster light engine (Starlight's successor on Fabric). |
+| language-reload | MIT | Fast language switching. |
+| quick-pack | MIT | Faster resource pack reloads. |
+| asynclogger | LGPL-3.0 | Logging off the game thread. |
+| fastserverpings | MIT | Faster server list pings. |
+
+Kept out for now: **Polydium** (PolyForm Shield; a Dusk-written replacement is
+in progress), **Gnetum** and **Ixeris** (both reroute HUD or input; they were
+dropped while chasing a black box next to DuskClient, not yet confirmed as
+the cause) and **Slipstream** (macOS; same).
+
 ### QoL — depend
 
 | Mod | License | Role |
 |---|---|---|
 | modmenu | MIT | Mod list + config screens. |
 | betterf3 | MIT | Replacement F3 screen. |
-| chat-heads | MPL-2.0 | Player heads in chat. DuskClient's Chat Heads module only covers 1.21.9+ and steps aside when this mod is present, so the mod stays for every version. |
+| chat-heads | MPL-2.0 | Player heads in chat, **below 1.21.9 only**: from 1.21.9 DuskClient's Chat Heads module covers it. Not in the 1.21.11 offline pack. |
 | held-item-info | LGPL-3.0 | Held-item tooltip. |
 
 ### Dropped in v2 (DuskClient covers them)

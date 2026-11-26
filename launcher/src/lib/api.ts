@@ -805,6 +805,8 @@ export interface Settings {
   clock24h: boolean;
   warnOnLinks: boolean;
   syncClientSettings: boolean;
+  /** Dusk+ (lobby, menus, settings screen, chat UI) beside DuskClient */
+  duskPlus: boolean;
   /** offline play's username; '' while offline play is locked */
   offlineName: string;
 }
@@ -1339,6 +1341,7 @@ const fixtures: Record<string, unknown> = {
     clock24h: false,
     warnOnLinks: true,
     syncClientSettings: true,
+    duskPlus: true,
     offlineName: '',
   } satisfies Settings,
 };
@@ -1576,7 +1579,7 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
   if (sideEffects.has(cmd)) {
     throw new Error(`"${cmd}" needs the desktop app — this is the browser preview.`);
   }
-  if (cmd === 'install_dusk_essentials') return 16 as T;
+  if (cmd === 'install_dusk_essentials') return 27 as T;
   if (cmd === 'release_art') {
     const art = (version: string, fill: string, blurb: string): ReleaseArt => ({
       version,

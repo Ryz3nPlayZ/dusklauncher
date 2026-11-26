@@ -1,0 +1,147 @@
+package org.polyfrost.polyplus.client.gui
+
+import net.minecraft.client.gui.screens.Screen
+import net.minecraft.client.gui.screens.TitleScreen
+//? if > 1.8.9
+import com.mojang.realmsclient.RealmsMainScreen
+import org.polyfrost.polyplus.client.MainMenuChoice
+import org.polyfrost.polyplus.client.PolyPlusConfig
+import org.polyfrost.polyplus.client.PolyPlusMainMenuConfig
+import org.polyfrost.polyplus.client.PolyPlusPauseConfig
+import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen
+import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen
+import org.polyfrost.polyplus.client.gui.lobbyshell.LobbyPage
+import org.polyfrost.polyplus.client.gui.lobbyshell.onboardingPending
+import org.polyfrost.polyplus.client.gui.pausescreen.PauseScreenStyle
+import org.polyfrost.polyplus.client.lobby.LOBBY_LOGGER
+import org.polyfrost.polyplus.client.lobby.LobbyScene
+import org.polyfrost.polyplus.client.utils.ClientPlatform
+
+object MainMenuReplacement {
+    private var playing = false
+    private var lobbyFailed = false
+    private var vanillaServerList = false
+
+    internal fun choice(): MainMenuChoice {
+        val chosen = PolyPlusMainMenuConfig.mainMenu
+        return if (chosen == MainMenuChoice.LOBBY && lobbyFailed) MainMenuChoice.VANILLA else chosen
+    }
+
+    @JvmStatic
+    fun enabled(): Boolean = choice() == MainMenuChoice.LOBBY
+
+    @JvmStatic
+    fun replacesTitleScreen(): Boolean = choice() != MainMenuChoice.VANILLA
+
+    @JvmStatic
+    fun isMenu(screen: Screen?): Boolean = screen is PolyPlusLobbyScreen || screen is PolyPlusMainMenuScreen
+
+    @JvmStatic
+    fun alreadyOpen(): Boolean = ClientPlatform.currentScreen().let { isMenu(it) || it is PolyPlusOnboardingScreen }
+
+    @JvmStatic
+    fun create(): Screen = when {
+        choice() != MainMenuChoice.POLYPLUS -> PolyPlusLobbyScreen()
+        onboardingPending() -> PolyPlusOnboardingScreen()
+        else -> PolyPlusMainMenuScreen()
+    }
+
+    @JvmStatic
+    fun open() = ClientPlatform.setScreen(create())
+
+    fun dismissVanillaOffer() {
+        PolyPlusConfig.vanillaOfferDismissed = true
+        PolyPlusConfig.save()
+    }
+
+    fun useVanillaOffer() {
+        PolyPlusConfig.brandedStartup = false
+        PolyPlusPauseConfig.pauseScreenStyle = PauseScreenStyle.VANILLA
+        PolyPlusPauseConfig.save()
+        dismissVanillaOffer()
+        switchTo(MainMenuChoice.POLYPLUS)
+    }
+
+    @JvmStatic
+    fun switchToLobby() = switchTo(MainMenuChoice.LOBBY)
+
+    @JvmStatic
+    fun switchToPolyPlusMenu() = switchTo(MainMenuChoice.POLYPLUS)
+
+    @JvmStatic
+    fun switchToVanilla() = switchTo(MainMenuChoice.VANILLA)
+
+    private fun switchTo(choice: MainMenuChoice) {
+        PolyPlusMainMenuConfig.mainMenu = choice
+        PolyPlusMainMenuConfig.save()
+        if (choice != MainMenuChoice.LOBBY) LobbyScene.stop()
+        ClientPlatform.setScreen(if (replacesTitleScreen()) create() else TitleScreen())
+    }
+
+    fun fallBackToVanilla() {
+        LOBBY_LOGGER.warn("The lobby can't run, using the vanilla title screen until the next launch")
+        lobbyFailed = true
+        LobbyScene.stop()
+        ClientPlatform.setScreen(
+            when {
+                ClientPlatform.inWorld() -> null
+                onboardingPending() -> PolyPlusOnboardingScreen()
+                else -> TitleScreen()
+            },
+        )
+    }
+
+    fun openVanillaServerList(screen: JoinMultiplayerScreen) {
+        vanillaServerList = true
+        try {
+            ClientPlatform.setScreen(screen)
+        } finally {
+            vanillaServerList = false
+        }
+    }
+
+    private fun keepsVanillaServerList(): Boolean =
+        vanillaServerList || ClientPlatform.currentScreen() is JoinMultiplayerScreen
+
+    @JvmStatic
+    fun replaceLists(screen: Screen?): Screen? {
+        val inWorld = ClientPlatform.inWorld() && !LobbyScene.terrainActive()
+        if (inWorld) playing = true
+        val left = playing && !inWorld
+        if (left && screen is TitleScreen) playing = false
+        if (!enabled()) {
+            if (inWorld || screen !is PolyPlusLobbyScreen) return screen
+            playing = false
+            LobbyScene.stop()
+            return TitleScreen()
+        }
+        if (left && screen is PolyPlusLobbyScreen) {
+            playing = false
+            screen.showPage(LobbyPage.Home)
+            return screen
+        }
+        if (inWorld) return screen
+        //? if > 1.8.9 {
+        if (left && screen is RealmsMainScreen) {
+            playing = false
+            return lobbyPage(LobbyPage.Home)
+        }
+        //?}
+        when (screen?.javaClass) {
+            JoinMultiplayerScreen::class.java -> {
+                if (!left && keepsVanillaServerList()) return screen
+                if (!left) return lobbyPage(LobbyPage.Multiplayer)
+                playing = false
+                return lobbyPage(LobbyPage.Home)
+            }
+            SelectWorldScreen::class.java -> return lobbyPage(LobbyPage.Singleplayer)
+        }
+        return screen
+    }
+
+    private fun lobbyPage(page: LobbyPage): Screen {
+        val open = ClientPlatform.currentScreen() as? PolyPlusLobbyScreen ?: return PolyPlusLobbyScreen(page)
+        open.showPage(page)
+        return open
+    }
+}

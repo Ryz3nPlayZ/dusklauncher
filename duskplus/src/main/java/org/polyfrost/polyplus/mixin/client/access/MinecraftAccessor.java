@@ -1,0 +1,91 @@
+package org.polyfrost.polyplus.mixin.client.access;
+
+//? if > 1.8.9 {
+import com.mojang.authlib.minecraft.UserApiService;
+import net.minecraft.client.User;
+import net.minecraft.client.multiplayer.ProfileKeyPairManager;
+//?} else {
+/*import com.mojang.authlib.properties.PropertyMap;
+import net.minecraft.client.Session;
+import net.minecraft.network.Connection;
+import net.minecraft.client.render.pipeline.RenderTarget;
+*///?}
+import net.minecraft.client.Minecraft;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Mutable;
+import org.spongepowered.asm.mixin.gen.Accessor;
+import java.util.concurrent.CompletableFuture;
+
+//? if >= 26.3 {
+import com.mojang.authlib.services.ProfileResult;
+//?}
+
+//? if < 26.3 && > 1.8.9 {
+/*import com.mojang.authlib.yggdrasil.ProfileResult;
+*///?}
+
+//? if >= 1.21.10
+import net.minecraft.client.particle.ParticleEngine;
+
+//? if < 1.21.8 && > 1.8.9 {
+/*import com.mojang.blaze3d.pipeline.RenderTarget;
+*///?}
+
+@Mixin(Minecraft.class)
+public interface MinecraftAccessor {
+    //? if > 1.8.9 {
+    @Accessor("missTime")
+    void polyplus$setAttackDelay(int ticks);
+    //?} else {
+    /*@Accessor("attackCooldown")
+    void polyplus$setAttackDelay(int ticks);
+    *///?}
+
+    //? if > 1.8.9 {
+    @Mutable
+    @Accessor("user")
+    void polyplus$setUser(User user);
+
+    @Mutable
+    @Accessor("profileFuture")
+    void polyplus$setProfileFuture(CompletableFuture<ProfileResult> profileFuture);
+
+    @Mutable
+    @Accessor("userApiService")
+    void polyplus$setUserApiService(UserApiService userApiService);
+
+    @Mutable
+    @Accessor("userPropertiesFuture")
+    void polyplus$setUserPropertiesFuture(CompletableFuture<UserApiService.UserProperties> userPropertiesFuture);
+
+    @Mutable
+    @Accessor("profileKeyPairManager")
+    void polyplus$setProfileKeyPairManager(ProfileKeyPairManager profileKeyPairManager);
+
+    //?} else {
+    /*@Mutable
+    @Accessor("session")
+    void polyplus$setSession(Session session);
+
+    @Accessor("profileProperties")
+    PropertyMap polyplus$getProfileProperties();
+
+    @Accessor("renderTarget")
+    void polyplus$setMainRenderTarget(RenderTarget target);
+
+    @Accessor("connection")
+    Connection polyplus$getConnection();
+    *///?}
+
+    //? if >= 1.21.10 {
+    @Mutable
+    @Accessor("particleEngine")
+    void polyplus$setParticleEngine(ParticleEngine engine);
+    //?}
+
+    //? if < 1.21.8 && > 1.8.9 {
+    /*@Mutable
+    @Accessor("mainRenderTarget")
+    void polyplus$setMainRenderTarget(RenderTarget target);
+    *///?}
+}

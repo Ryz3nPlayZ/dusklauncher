@@ -1,0 +1,140 @@
+package org.polyfrost.polyplus.client.cosmetics.render
+
+//? if > 1.8.9 {
+import net.minecraft.client.renderer.entity.LivingEntityRenderer
+//?}
+import org.polyfrost.polyplus.client.bedrock.playback.BedrockAnimationPlayback
+import org.polyfrost.polyplus.client.bedrock.render.BedrockAttachedModelRenderer
+import org.polyfrost.polyplus.client.cosmetics.CosmeticEquipment
+import org.polyfrost.polyplus.client.cosmetics.assets.RemoteTextures
+import org.polyfrost.polyplus.client.cosmetics.playback.CosmeticPlayback
+import org.polyfrost.polyplus.client.network.http.responses.BodySlot
+import org.polyfrost.polyplus.client.render.PlayerRenderContext
+import org.polyfrost.polyplus.client.render.PolyPlayerModel as PlayerModel
+import org.polyfrost.polyplus.client.render.PoseStack
+
+//? if >= 1.21.10 {
+import net.minecraft.client.renderer.SubmitNodeCollector
+import net.minecraft.client.renderer.entity.state.AvatarRenderState
+//?}
+
+//? if >= 1.21.4 && < 1.21.10 {
+/*import net.minecraft.client.renderer.entity.state.PlayerRenderState
+*///?}
+
+//? if < 1.21.10 && > 1.8.9 {
+/*import net.minecraft.client.renderer.MultiBufferSource
+*///?}
+
+//? if = 1.21.1 {
+/*import net.minecraft.client.player.AbstractClientPlayer
+*///?}
+
+object CosmeticRenderer {
+    private const val CHESTPLATE_BACK_OFFSET = 1.5f / 16f
+    private const val TICKS_PER_TEXTURE_FRAME = 4f
+
+    //? if >= 1.21.10 {
+    fun submit(
+        poseStack: PoseStack,
+        submitNodeCollector: SubmitNodeCollector,
+        lightCoords: Int,
+        state: AvatarRenderState,
+        playerModel: PlayerModel,
+        equipment: CosmeticEquipment,
+        particleColor: Int?,
+        chestplateEquipped: Boolean,
+        hiddenSlots: Set<BodySlot>,
+    ) {
+        val renderContext = PlayerRenderContext.from(state)
+        if (renderContext.isInvisible) return
+        val overlay = LivingEntityRenderer.getOverlayCoords(state, 0f)
+        val draws = draws(equipment, renderContext, particleColor, chestplateEquipped, hiddenSlots)
+        BedrockAttachedModelRenderer.submit(poseStack, submitNodeCollector, lightCoords, overlay, playerModel, draws)
+    }
+    //?} elif >= 1.21.4 {
+    /*fun render(
+        poseStack: PoseStack,
+        bufferSource: MultiBufferSource,
+        lightCoords: Int,
+        state: PlayerRenderState,
+        playerModel: PlayerModel,
+        equipment: CosmeticEquipment,
+        particleColor: Int?,
+        chestplateEquipped: Boolean,
+        hiddenSlots: Set<BodySlot>,
+    ) {
+        val renderContext = PlayerRenderContext.from(state)
+        if (renderContext.isInvisible) return
+        val overlay = LivingEntityRenderer.getOverlayCoords(state, 0f)
+        val draws = draws(equipment, renderContext, particleColor, chestplateEquipped, hiddenSlots)
+        BedrockAttachedModelRenderer.render(poseStack, bufferSource, lightCoords, overlay, playerModel, draws)
+    }
+    *///?} elif > 1.8.9 {
+    /*fun render(
+        poseStack: PoseStack,
+        bufferSource: MultiBufferSource,
+        lightCoords: Int,
+        player: AbstractClientPlayer,
+        renderContext: PlayerRenderContext,
+        playerModel: PlayerModel,
+        equipment: CosmeticEquipment,
+        particleColor: Int?,
+        chestplateEquipped: Boolean,
+        hiddenSlots: Set<BodySlot>,
+    ) {
+        if (renderContext.isInvisible) return
+        val overlay = LivingEntityRenderer.getOverlayCoords(player, 0f)
+        val draws = draws(equipment, renderContext, particleColor, chestplateEquipped, hiddenSlots)
+        BedrockAttachedModelRenderer.render(poseStack, bufferSource, lightCoords, overlay, playerModel, draws)
+    }
+    *///?} else {
+    /*fun render(
+        poseStack: PoseStack,
+        lightCoords: Int,
+        renderContext: PlayerRenderContext,
+        playerModel: PlayerModel,
+        equipment: CosmeticEquipment,
+        particleColor: Int?,
+        chestplateEquipped: Boolean,
+        hiddenSlots: Set<BodySlot>,
+    ) {
+        if (renderContext.isInvisible) return
+        val draws = draws(equipment, renderContext, particleColor, chestplateEquipped, hiddenSlots)
+        BedrockAttachedModelRenderer.render(poseStack, lightCoords, 0, playerModel, draws)
+    }
+    *///?}
+
+    private fun draws(
+        equipment: CosmeticEquipment,
+        renderContext: PlayerRenderContext,
+        particleColor: Int?,
+        chestplateEquipped: Boolean,
+        hiddenSlots: Set<BodySlot>,
+    ): List<BedrockAttachedModelRenderer.DrawCall> =
+        equipment.equipped().filter { it.cosmetic.slot !in hiddenSlots && RemoteTextures.isRegistered(it.cosmetic.texture) }.map { entry ->
+            val tinted = entry.cosmetic.slot == BodySlot.Aura && particleColor != null
+            val color = if (tinted) particleColor!! else -1
+            val translucent = tinted && (color ushr 24) != 0xFF
+            val backOffset = if (chestplateEquipped && entry.cosmetic.slot == BodySlot.Backpack) CHESTPLATE_BACK_OFFSET else 0f
+            val frameCount = entry.cosmetic.textureFrameCount
+            val textureFrame = if (frameCount > 1) {
+                val step = (BedrockAnimationPlayback.elapsedTicksSince(entry.startTimeMs) / TICKS_PER_TEXTURE_FRAME).toInt()
+                Math.floorMod(step, frameCount)
+            } else {
+                0
+            }
+            BedrockAttachedModelRenderer.DrawCall(
+                model = entry.cosmetic.model,
+                texture = entry.cosmetic.texture,
+                sample = CosmeticPlayback.sample(entry.cosmetic, entry.startTimeMs, renderContext),
+                poseWeight = 1f,
+                color = color,
+                translucent = translucent,
+                backOffset = backOffset,
+                scale = entry.cosmetic.scale,
+                textureVScale = 1f / frameCount,
+                textureVOffset = textureFrame.toFloat() / frameCount,
+            )
+        }
+}

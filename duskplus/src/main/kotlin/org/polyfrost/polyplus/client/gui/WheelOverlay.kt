@@ -1,0 +1,197 @@
+@file:OptIn(ExperimentalOneConfigUiApi::class)
+
+package org.polyfrost.polyplus.client.gui
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.mojang.blaze3d.platform.InputConstants
+import net.minecraft.client.Minecraft
+//? if > 1.8.9 {
+import org.lwjgl.system.Platform
+import org.lwjgl.system.windows.User32
+//?}
+import org.polyfrost.oneconfig.api.event.v1.eventHandler
+import org.polyfrost.oneconfig.api.event.v1.events.TickEvent
+import org.polyfrost.oneconfig.api.ui.v1.ExperimentalOneConfigUiApi
+import org.polyfrost.oneconfig.api.ui.v1.a11y.Motion
+import org.polyfrost.oneconfig.api.ui.v1.components.RadialMenu
+import org.polyfrost.oneconfig.api.ui.v1.components.RadialMenuDefaults
+import org.polyfrost.oneconfig.api.ui.v1.components.RadialMenuInput
+import org.polyfrost.oneconfig.api.ui.v1.components.RadialMenuItem
+import org.polyfrost.oneconfig.api.ui.v1.components.RadialMenuState
+import org.polyfrost.compose.minecraft.hud.HudLayer
+import org.polyfrost.oneconfig.api.ui.v1.platform.OneConfigComposeOptions
+import org.polyfrost.polyplus.client.ping.PingGraphics
+import org.polyfrost.polyplus.client.ping.PingInput
+import org.polyfrost.polyplus.client.utils.ClientPlatform
+import kotlin.math.abs
+
+class WheelSession(
+    val held: () -> Boolean,
+    val onPick: (Int) -> Unit,
+    val onScroll: ((Int) -> Unit)? = null,
+    val content: @Composable (WheelSession) -> Unit,
+) {
+    val state = RadialMenuState()
+}
+
+private const val WHEEL_SURFACE_ALPHA = 0.78f
+private const val WHEEL_HUB_ALPHA = 0.88f
+
+@Composable
+fun HudRadialMenu(
+    items: List<RadialMenuItem>,
+    session: WheelSession,
+    title: String,
+    subtitle: String?,
+    below: (@Composable () -> Unit)? = null,
+) {
+    RadialMenu(
+        items = items,
+        state = session.state,
+        title = title,
+        subtitle = subtitle,
+        input = RadialMenuInput.Steered,
+        glass = liquidGlassTheme && hudBackdropGlass,
+        surfaceAlpha = WHEEL_SURFACE_ALPHA,
+        hubAlpha = WHEEL_HUB_ALPHA,
+        sounds = RadialMenuDefaults.silent,
+        pixelRatio = hudPixelRatio,
+        below = below,
+    )
+}
+
+object WheelOverlay {
+    private const val SCROLL_NOTCH = 1.0
+    private const val PULL_GAIN = 1.9
+
+    private var session: WheelSession? = null
+    private var shown by mutableStateOf<WheelSession?>(null)
+    private var fadeEndsAt = 0L
+    private var scrollAccum = 0.0
+    private var started = false
+
+    private val layer = HudLayer("radial_wheel", OneConfigComposeOptions) { Content() }.apply { acceptsInput = false }
+
+    val isOpen: Boolean get() = session != null
+
+    fun open(next: WheelSession): Boolean {
+        if (session != null || ClientPlatform.currentScreen() != null) return false
+        if (Minecraft.getInstance().player == null) return false
+        ensureStarted()
+        scrollAccum = 0.0
+        session = next
+        shown = next
+        return true
+    }
+
+    fun cancel() = finish(false)
+
+    @JvmStatic
+    fun consumeLook(dx: Double, dy: Double): Boolean {
+        val current = session ?: return PingInput.consumePendingLook(dx, dy)
+        val scale = PULL_GAIN * sensitivityGain() / layer.density.coerceAtLeast(0.01f)
+        current.state.steer((dx * scale).toFloat(), (dy * scale).toFloat())
+        return true
+    }
+
+    private fun sensitivityGain(): Double = runCatching {
+        val options = Minecraft.getInstance().options
+        //? if > 1.8.9 {
+        val sensitivity = options.sensitivity().get()
+        //?} else {
+        /*val sensitivity = options.mouseSensitivity.toDouble()
+        *///?}
+        val f = sensitivity * 0.6 + 0.2
+        f * f * f * 8.0
+    }.getOrDefault(1.0)
+
+    @JvmStatic
+    fun consumeButton(button: Int, pressed: Boolean): Boolean {
+        val current = session ?: return false
+        if (button != InputConstants.MOUSE_BUTTON_LEFT && button != InputConstants.MOUSE_BUTTON_RIGHT) return false
+        if (!pressed) return false
+        finish(isPhysicalLeft(button))
+        return true
+    }
+
+    private fun isPhysicalLeft(button: Int): Boolean {
+        val left = button == InputConstants.MOUSE_BUTTON_LEFT
+        //? if > 1.8.9 {
+        val swapped = runCatching {
+            Platform.get() == Platform.WINDOWS && User32.GetSystemMetrics(User32.SM_SWAPBUTTON) != 0
+        }.getOrDefault(false)
+        return left != swapped
+        //?} else {
+        /*return left
+        *///?}
+    }
+
+    @JvmStatic
+    fun consumeScroll(amount: Double): Boolean {
+        val current = session ?: return false
+        val scroll = current.onScroll ?: return true
+        scrollAccum += amount
+        while (abs(scrollAccum) >= SCROLL_NOTCH) {
+            val up = scrollAccum > 0
+            scroll(if (up) -1 else 1)
+            scrollAccum -= if (up) SCROLL_NOTCH else -SCROLL_NOTCH
+        }
+        return true
+    }
+
+    @JvmStatic
+    fun consumeEscape(): Boolean {
+        if (session == null) return false
+        cancel()
+        return true
+    }
+
+    @JvmStatic
+    fun render(graphics: PingGraphics?) {
+        update()
+        if (session == null && shown != null && System.currentTimeMillis() >= fadeEndsAt) shown = null
+        if (shown == null) return
+        //? if > 1.8.9 {
+        if (graphics != null) layer.draw(graphics)
+        //?} else {
+        /*layer.draw()
+        *///?}
+    }
+
+    private fun update() {
+        val current = session ?: return
+        if (Minecraft.getInstance().player == null || ClientPlatform.currentScreen() != null) {
+            cancel()
+            return
+        }
+        if (!current.held()) finish(true)
+    }
+
+    private fun finish(pick: Boolean) {
+        val current = session ?: return
+        session = null
+        fadeEndsAt = System.currentTimeMillis() + if (Motion.reduced) 0L else RadialMenuDefaults.fadeMillis.toLong()
+        if (!pick) {
+            current.state.dismiss()
+            return
+        }
+        val chosen = current.state.select()
+        if (chosen >= 0) current.onPick(chosen)
+    }
+
+    private fun ensureStarted() {
+        if (started) return
+        started = true
+        eventHandler<TickEvent.End> { update() }
+    }
+
+    @Composable
+    private fun Content() {
+        val current = shown ?: return
+        key(current) { current.content(current) }
+    }
+}

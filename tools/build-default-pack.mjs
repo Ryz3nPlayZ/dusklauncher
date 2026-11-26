@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 const MC = '1.21.11';
 const LOADER = 'fabric';
 const PACK_NAME = 'Dusk Essentials';
-const PACK_VERSION = '2.0.0';
+const PACK_VERSION = '2.2.0';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -41,11 +41,23 @@ const MODS = [
   'moreculling',
   'badoptimizations',
   'krypton',
+  // from OneClient's performance set (client side only). Polydium, Gnetum
+  // and Ixeris stay out, as in mods.rs
+  'modernfix-mvus',
+  'particle-core',
+  'obe',
+  'scalablelux',
+  'language-reload',
+  'quick-pack',
+  'asynclogger',
+  'fastserverpings',
+  // Slipstream is macOS-only, so it isn't in this cross-platform pack: the
+  // launcher adds it on macOS when it installs the lineup live
   // QoL that DuskClient doesn't cover (zoom, freelook, fullbright, ping,
-  // hunger, container previews, crosshair and background FPS are modules)
+  // hunger, container previews, crosshair, chat heads and background FPS
+  // are modules; mods.rs adds chat-heads below 1.21.9, and this pack is 1.21.11)
   'modmenu',
   'betterf3',
-  'chat-heads',
   'held-item-info',
 ];
 

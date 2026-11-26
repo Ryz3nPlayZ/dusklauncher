@@ -1,0 +1,473 @@
+{
+  "package": "org.polyfrost.polyplus.mixin",
+  "required": true,
+  "compatibilityLevel": "JAVA_21",
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "conformVisibility": true,
+    "requireAnnotations": true
+  },
+  "minVersion": "0.8",
+  "plugin": "org.polyfrost.polyplus.mixin.PolyPlusMixinPlugin",
+  "client": [
+    //? if > 1.8.9
+    "client.access.ConnectionConnectScreenAccessor",
+    //? if > 1.8.9
+    "client.access.ConnectionDisconnectedScreenAccessor",
+    //? if > 1.8.9
+    "client.access.PackEntryAccessor",
+    //? if > 1.8.9
+    "client.access.PackResourcesAccessor",
+    //? if > 1.8.9
+    "client.access.PackPathSupplierAccessor",
+    //? if > 1.8.9
+    "client.access.PackFileSupplierAccessor",
+    //? if > 1.8.9
+    "client.access.PackModelAccessor",
+    //? if > 1.8.9
+    "client.access.PackSelectionScreenAccessor",
+    //? if > 1.8.9
+    "client.access.RealmsMainScreenAccessor",
+    //? if > 1.8.9
+    "client.access.RealmsVisitUrlAccessor",
+    //? if = 1.8.9
+    //"client.access.LegacyConnectScreenAccessor",
+    //? if = 1.8.9
+    //"client.access.LegacyDisconnectedScreenAccessor",
+    //? if = 1.8.9
+    //"client.PackResourcePacksMixin",
+    //? if = 1.8.9
+    //"client.PackUnopenedPackMixin",
+    //? if = 1.8.9
+    //"client.access.PackResourcePacksScreenAccessor",
+    //? if = 1.8.9
+    //"client.access.PackUnopenedPackAccessor",
+    //? if = 1.8.9
+    //"client.access.WorldLegacyCreateAccessor",
+    //? if = 1.8.9
+    //"client.access.WorldLegacyEditAccessor",
+    //? if = 1.8.9
+    //"client.access.SettingsLegacyOptionsAccessor",
+    //? if = 1.8.9
+    //"client.access.SettingsLegacyVideoAccessor",
+    //? if > 1.8.9
+    "client.access.SettingsGeneralChatAccessor",
+    //? if > 1.8.9 && < 26.1
+    //"client.access.SettingsOptionsScreenAccessor",
+    //? if > 1.8.9
+    "client.access.SettingsGeneralMouseAccessor",
+    //? if >= 26.2
+    "client.access.SettingsGeneralOnlineAccessor",
+    //? if > 1.8.9
+    "client.access.SettingsInputAccessibilityAccessor",
+    //? if > 1.8.9
+    "client.access.SettingsInputControlsAccessor",
+    //? if > 1.8.9
+    "client.access.SettingsInputFontAccessor",
+    //? if > 1.8.9
+    "client.access.SettingsOptionInstanceAccessor",
+    //? if > 1.8.9
+    "client.access.SettingsOptionsSubScreenAccessor",
+    //? if > 1.8.9
+    "client.access.SettingsTooltipAccessor",
+    //? if > 1.8.9
+    "client.access.SettingsVideoAccessor",
+    //? if > 1.8.9
+    "client.access.WorldAlertAccessor",
+    //? if > 1.8.9
+    "client.access.WorldConfirmAccessor",
+    //? if > 1.8.9
+    "client.access.WorldCreateScreenAccessor",
+    //? if > 1.8.9
+    "client.access.WorldDirectJoinAccessor",
+    //? if > 1.8.9
+    "client.access.WorldEditScreenAccessor",
+    "client.MixinAbstractSelectionList",
+    //? if > 1.8.9
+    "client.PackFolderRepositorySourceMixin",
+    "client.MixinChatComponent",
+    //? if > 1.8.9
+    "client.MixinChatListener",
+    "client.MixinChatScreen",
+    "client.MixinClientBrandRetriever",
+    "client.MixinClientHandshakePacketListenerImpl",
+    //? if > 1.8.9
+    "client.MixinClientLanguage",
+    //? if > 1.8.9
+    "client.MixinClientLanguageServerPacks",
+    "client.MixinClientPacketListener",
+    "client.MixinConnectScreen",
+    //? if = 1.8.9
+    //"client.MixinControlsListWidget",
+    //? if = 1.8.9
+    //"client.MixinControlsOptionsScreen",
+    //? if = 1.8.9
+    //"client.MixinKeyBindCaptureKeyboard",
+    //? if = 1.8.9
+    //"client.MixinKeyBindCaptureMouse",
+    //? if > 1.8.9 && < 26.1
+    //"client.MixinKeyBindCaptureChar",
+    //? if > 1.8.9
+    "client.MixinRealmsConnect",
+    //? if > 1.8.9
+    "client.MixinCubeMap",
+    "client.MixinDisconnectedScreen",
+    //? if = 1.8.9
+    //"client.MixinEffect",
+    "client.MixinEntityRenderer",
+    "client.MixinFramerateLimitTracker",
+    //? if > 1.8.9
+    "client.MixinGameNarrator",
+    //? if > 1.8.9
+    "client.MixinGenericMessageScreen",
+    "client.MixinLevelLoadingScreen",
+    "client.MixinGameRendererShellScene",
+    "client.MixinMinecraftWorldLoad",
+    //? if < 1.21.9 && > 1.8.9
+    //"client.MixinLevelLoadingProgress",
+    //? if = 1.8.9
+    //"client.MixinGameOptions",
+    "client.MixinGameRenderer",
+    "client.MixinGui",
+    //? if >= 1.21.11
+    "client.MixinGuiMessage",
+    "client.MixinIntegratedServer",
+    "client.MixinManageServerScreen",
+    //? if = 1.8.9
+    //"client.MixinIntegratedServerStop",
+    "client.MixinMinecraft",
+    //? if = 1.8.9
+    //"client.MixinMinecraftStartGame",
+    "client.MixinMinecraftSystemReport",
+    "client.MixinMinecraftTitle",
+    //? if > 1.8.9
+    "client.MixinMouseHandler",
+    "client.MixinJoinMultiplayerScreen",
+    //? if >= 26.3
+    "client.MixinWorldOptionsScreen",
+    //? if = 1.8.9
+    //"client.MixinInventoryMenuScreen",
+    //? if = 1.8.9
+    //"client.MixinOptionsScreen",
+    //? if = 1.8.9
+    //"client.MixinOptionsScreenButton",
+    "client.MixinOnlineServerEntry",
+    "client.ping.MixinPingHud",
+    "client.ping.MixinPingPick",
+    "client.ping.MixinPingWheelKeys",
+    "client.ping.MixinPingWheelMouse",
+    "client.ping.PingPickInvoker",
+    //? if = 1.8.9
+    //"client.ping.PingFovInvoker",
+    //? if > 1.8.9
+    "client.MixinPanorama",
+    //? if <26.3
+    //"client.MixinPauseScreen",
+    "client.MixinPlayerTabOverlay",
+    //? if = 1.8.9
+    //"client.MixinProgressRenderer",
+    "client.MixinRenderTarget",
+    "client.MixinScreen",
+    "client.MixinScreenWatermark",
+    //? if > 1.8.9
+    "client.MixinWatermarkMouse",
+    "client.MixinServerSelectionList",
+    //? if = 1.8.9
+    //"client.MixinSession",
+    //? if > 1.8.9
+    "client.MixinTabButton",
+    "client.MixinTitleScreen",
+    //? if = 1.8.9
+    //"client.MixinUnopenedPack",
+    //? if > 1.8.9
+    "client.access.AbstractSelectionListAccessor",
+    //? if > 1.8.9
+    "client.access.JoinMultiplayerScreenAccessor",
+    //? if > 1.8.9
+    "client.access.AbstractWidgetAccessor",
+    //? if > 1.8.9
+    "client.access.ButtonAccessor",
+    //? if > 1.8.9
+    "client.access.PauseScreenAccessor",
+    //? if > 1.8.9
+    "client.access.CameraAccessor",
+    //? if > 1.8.9
+    "client.access.ChannelAccessor",
+    //? if > 1.8.9
+    "client.access.ChannelHandleAccessor",
+    "client.access.ClientCommonPacketListenerAccessor",
+    "client.access.ClientHandshakePacketListenerAccessor",
+    "client.access.ClientPacketListenerAccessor",
+    "client.access.ConnectionAccessor",
+    "client.access.GameRendererAccessor",
+    //? if = 1.8.9
+    //"client.access.GuiElementInvoker",
+    //? if = 1.8.9
+    //"client.access.LevelChunkInvoker",
+    //? if > 1.8.9
+    "client.access.ImageButtonAccessor",
+    //? if >= 1.21.8
+    "client.access.LightingInvoker",
+    "client.access.MinecraftAccessor",
+    //? if > 1.8.9
+    "client.access.MinecraftRealmsAccessor",
+    //? if > 1.8.9
+    "client.access.SimplePreparableReloadListenerInvoker",
+    //? if = 1.8.9
+    //"client.access.MinecraftServerAccessor",
+    //? if > 1.8.9 && < 26.2
+    //"client.access.PrimaryLevelDataAccessor",
+    "client.access.OnlineServerEntryInvoker",
+    //? if > 1.8.9
+    "client.access.OptionsAccessor",
+    //? if >= 1.21.10
+    "client.access.ParticleEngineAccessor",
+    //? if = 1.8.9
+    //"client.access.ParticleAccessor",
+    //? if >= 1.21.8 || < 1.21.5
+    "client.access.PostChainAccessor",
+    //? if >= 1.21.8 || = 1.21.4
+    "client.access.PostPassAccessor",
+    //? if > 1.8.9
+    "client.access.RealmsAvailabilityAccessor",
+    //? if >= 1.21.5
+    "client.access.RealmsClientAccessor",
+    //? if >= 1.21.5
+    "client.access.RenderPipelinesAccessor",
+    "client.access.ScreenAccessor",
+    //? if > 1.8.9 && < 1.21.11
+    //"client.access.ScreenBindAccessor",
+    //? if > 1.8.9
+    "client.access.SoundEngineAccessor",
+    //? if > 1.8.9
+    "client.access.SoundManagerAccessor",
+    //? if > 1.8.9
+    "client.access.SpriteIconButtonAccessor",
+    //? if = 1.8.9
+    //"client.access.TitleScreenInvoker",
+    //? if > 1.8.9
+    "client.access.TooltipAccessor",
+    //? if > 1.8.9
+    "client.access.UserAccessor",
+    //? if = 1.8.9
+    //"client.access.WorldRendererAccessor",
+    //? if <1.21.8
+    //"client.cosmetics.EntityRenderDispatcherAccessor",
+    "client.cosmetics.LivingEntityRendererInvoker",
+    "client.cosmetics.MixinAbstractClientPlayer",
+    "client.cosmetics.MixinAvatarRenderer",
+    //? if >= 1.21.4
+    "client.cosmetics.MixinAvatarRenderState",
+    //? if >= 1.21.4
+    "client.cosmetics.MixinCapeLayer",
+    //? if = 1.21.1 || = 1.8.9
+    //"client.cosmetics.MixinLivingEntityRenderer",
+    "client.cosmetics.MixinPlayerModel",
+    //? if > 1.8.9
+    "client.lobby.MixinCamera",
+    //? if > 1.8.9
+    "client.lobby.MixinLobbyCamera",
+    //? if > 1.8.9
+    "client.lobby.MixinChannel",
+    //? if >= 1.21.8
+    "client.lobby.MixinChunkSectionLayer",
+    //? if < 1.21.11 && > 1.8.9
+    //"client.lobby.MixinClientLevel",
+    //? if = 1.8.9
+    //"client.lobby.MixinClientWorld",
+    //? if < 1.21.11 && >= 1.21.5
+    //"client.lobby.MixinCompositeRenderType",
+    //? if >= 1.21.11
+    "client.lobby.MixinRenderTypeHologram",
+    //? if < 1.21.5 && > 1.8.9
+    //"client.lobby.MixinRenderStateShard",
+    //? if > 1.8.9
+    "client.lobby.MixinDebugRenderer",
+    //? if >= 1.21.8 && < 26.2
+    //"client.lobby.MixinDebugScreenOverlay",
+    //? if < 26.1 && > 1.8.9
+    //"client.lobby.MixinDeltaTrackerTimer",
+    //? if < 1.21.10
+    //"client.lobby.MixinEntityRenderDispatcher",
+    "client.lobby.MixinEntityRenderer",
+    //? if >= 1.21.11
+    "client.lobby.MixinEnvironmentAttributeSystem",
+    //? if < 26.1 && > 1.8.9
+    //"client.lobby.MixinFogRenderer",
+    //? if = 1.8.9
+    //"client.lobby.MixinGameGui",
+    "client.lobby.MixinGameRenderer",
+    "client.lobby.MixinLobbyHand",
+    //? if < 26.1 && > 1.8.9
+    //"client.lobby.MixinLevelRenderer",
+    //? if < 1.21.8 && > 1.8.9
+    //"client.lobby.MixinLevelRendererSections",
+    //? if < 1.21.11 && > 1.8.9
+    //"client.lobby.MixinLightTexture",
+    //? if > 1.8.9
+    "client.lobby.MixinInitialScreens",
+    //? if > 1.8.9
+    "client.lobby.MixinLoadingOverlay",
+    "client.lobby.MixinMinecraft",
+    //? if = 1.8.9
+    //"client.lobby.MixinMinecraftStartup",
+    "client.lobby.MixinMinecraftServer",
+    "client.lobby.MixinMusicManager",
+    //? if = 1.8.9
+    //"client.lobby.MixinPlayerRenderer",
+    //? if < 1.21.5 && > 1.8.9
+    //"client.lobby.MixinRenderSystem",
+    //? if > 1.8.9
+    "client.lobby.MixinScreen",
+    //? if >= 26.2
+    "client.lobby.MixinShaderConfigsLobby",
+    //? if >= 1.21.4
+    "client.lobby.MixinShaderManagerLobby",
+    //? if = 1.8.9
+    //"client.lobby.MixinWorld",
+    //? if = 1.8.9
+    //"client.lobby.MixinWorldRenderer",
+    //? if >= 1.21.4
+    "compat.renderscale.MixinRenderScaleLobby",
+    //? if > 1.8.9
+    "compat.spatialgui.MixinSpatialGUIClient",
+    //? if > 1.8.9
+    "compat.fabric.MixinClientPlayNetworkAddon",
+    //? if >= 26.3
+    "compat.polytime.MixinPolyTimeClockInstance",
+    //? if >= 26.1 && < 26.3
+    //"compat.polytime.MixinPolyTimeClockManager",
+    //? if >= 26.1 && < 26.3
+    //"compat.polytime.PolyTimeClockInstanceAccessor",
+    //? if < 26.1 && > 1.8.9
+    //"compat.polytime.MixinPolyTimeLevelData",
+    //? if = 1.8.9
+    //"compat.polytime.MixinPolyTimeWorldData",
+    //? if > 1.8.9
+    "client.pause.MixinPauseCamera",
+    "client.pause.MixinPauseHand",
+    "client.pause.MixinPauseCulling",
+    "client.pause.MixinPauseRenderer",
+    //? if > 1.8.9
+    "client.privacy.MixinAbstractSignEditScreen",
+    //? if > 1.8.9
+    "client.privacy.MixinClientLanguage",
+    //? if > 1.8.9
+    "client.privacy.MixinAnvilScreen",
+    //? if = 1.8.9
+    //"client.MixinEmojiTextRenderer",
+    "client.network.MixinClientCommonPacketListenerImpl",
+  ],
+  "mixins": [
+    //? if > 1.8.9
+    "MixinSystemReport",
+    //? if > 1.8.9
+    "client.access.HolderReferenceInvoker",
+    "client.access.MappedRegistryAccessor",
+    //? if > 1.8.9
+    "client.access.TranslatableContentsInvoker",
+    "client.network.MixinConnection",
+    "client.network.MixinServerConnectionListener",
+    "client.network.MixinServerGamePacketListenerImpl",
+    //? if = 1.8.9
+    //"compat.argentum.MixinArgentumOptionPages",
+    //? if = 1.8.9
+    //"compat.argentum.MixinCeleritasBlockEntityLobby",
+    //? if = 1.8.9
+    //"compat.argentum.MixinCeleritasShaderChunkRendererLobby",
+    //? if = 1.8.9
+    //"compat.argentum.MixinCeleritasShaderLoaderLobby",
+    //? if = 1.8.9
+    //"compat.blur.MixinBlurRenderer",
+    //? if = 1.8.9
+    //"compat.fullbright.MixinLegacyLight",
+    //? if = 1.8.9
+    //"compat.argentum.MixinTextBatcher",
+    //? if dh {
+    "compat.distanthorizons.MixinDhClientApi",
+    "compat.distanthorizons.MixinDhClientWorlds",
+    "compat.distanthorizons.MixinDhSharedApi",
+    "compat.distanthorizons.MixinDhVanillaFog",
+    //?}
+    //? if >= 1.21.10
+    "compat.betterf3.MixinBetterF3Bossbar",
+    //? if > 1.8.9
+    "compat.clothconfig.MixinGsonConfigSerializer",
+    //? if > 1.8.9
+    "compat.confirmdisconnect.MixinConfirmDisconnectPauseScreen",
+    //? if < 1.21.8 && > 1.8.9
+    //"compat.confirmdisconnect.MixinConfirmDisconnectScreen",
+    "compat.dynamicfps.MixinDynamicFPSMod",
+    //? if > 1.8.9
+    "compat.essential.MixinEssentialPartner",
+    //? if > 1.8.9
+    "compat.essential.MixinModalManager",
+    //? if > 1.8.9
+    "compat.essential.MixinPartnerModConfig",
+    //? if > 1.8.9
+    "compat.entityculling.MixinNMSCullingHelper",
+    //? if > 1.8.9
+    "compat.euphoria.MixinSodiumConsole",
+    "compat.evergreenhud.MixinEvergreenMediaHud",
+    //? if iris {
+    "compat.iris.MixinIrisCommonUniforms",
+    "compat.iris.MixinIrisDHCompat",
+    "compat.iris.MixinIrisFinalPass",
+    "compat.iris.MixinIrisPipelineManager",
+    "compat.iris.MixinIrisTransformPatcher",
+    //?}
+    //? if > 1.8.9
+    "compat.lambdynlights.MixinLambDynLights",
+    //? if > 1.8.9
+    "compat.mountopacity.MixinEntityHook",
+    //? if = 1.8.9
+    //"compat.oneconfig.MixinComposeScreen",
+    "compat.oneconfig.MixinCommunityTranslations",
+    "compat.oneconfig.MixinEventManager",
+    "compat.oneconfig.MixinExternalSounds",
+    "compat.oneconfig.MixinThirdPartyModCategories",
+    "compat.oneconfig.MixinUiSounds",
+    "compat.oneconfig.MixinGlHost",
+    "compat.polyblur.MixinPolyBlurConfigLobby",
+    "compat.polyhitbox.MixinPolyHitboxRenderer",
+    //? if > 1.8.9
+    "compat.polytone.MixinPolytoneFabric",
+    //? if >= 26.2
+    "compat.sodium.MixinDefaultChunkRendererLobby",
+    //? if > 1.8.9
+    "compat.sodium.MixinRenderSectionManager",
+    //? if sodium && < 26.2
+    //"compat.sodium.MixinShaderChunkRendererLobby",
+    //? if sodium && < 26.2
+    //"compat.sodium.MixinShaderLoaderLobby",
+    //? if >= 26.2
+    "compat.sodium.MixinShaderChunkRendererPipelineLobby",
+    //? if > 1.8.9
+    "compat.sodium.MixinSodiumConfigBuilder",
+    //? if sodium && >= 1.21.10 && < 26.1
+    //"compat.sodium.MixinSodiumWorldRendererLobby",
+    //? if > 1.8.9
+    "compat.waveycapes.MixinCustomCapeRenderer",
+    //? if > 1.8.9
+    "compat.waveycapes.MixinCustomCapeRenderLayer",
+    //? if > 1.8.9
+    "compat.waveycapes.MixinPlayerWrapper",
+    //? if > 1.8.9
+    "compat.wwaypoints.MixinLocalPlayer",
+    //? if > 1.8.9
+    "compat.wwaypoints.MixinServerFeaturePolicy",
+    //? if > 1.8.9
+    "compat.wwaypoints.ServerFeaturePolicyInvoker",
+    //? if > 1.8.9
+    "compat.wwaypoints.MixinSharingLiveConnection",
+    //? if > 1.8.9
+    "compat.wwaypoints.MixinToggleSneakService",
+    //? if > 1.8.9
+    "compat.wwaypoints.MixinUiToast",
+    //? if = 1.8.9
+    //"client.network.MixinPlayerManager",
+    "client.network.ServerCommonPacketListenerAccessor"
+  ]
+}

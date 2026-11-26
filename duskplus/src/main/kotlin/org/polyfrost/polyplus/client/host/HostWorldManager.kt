@@ -1,0 +1,342 @@
+package org.polyfrost.polyplus.client.host
+
+//? if > 1.8.9
+import net.minecraft.SharedConstants
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.screens.Screen
+import net.minecraft.network.chat.Component
+import net.minecraft.server.MinecraftServer
+//? if > 1.8.9 {
+import net.minecraft.util.HttpUtil
+import net.minecraft.world.level.GameType
+import net.minecraft.world.level.storage.LevelSummary
+//?} else {
+/*import org.polyfrost.polyplus.client.social.execute
+import org.polyfrost.polyplus.client.social.singleplayerServer
+import org.polyfrost.oneconfig.api.event.v1.eventHandler
+import org.polyfrost.oneconfig.api.event.v1.events.TickEvent
+*///?}
+import org.apache.logging.log4j.LogManager
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withContext
+
+//? if fabric {
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
+import org.polyfrost.polyplus.client.PolyPlusClient
+import org.polyfrost.polyplus.client.network.http.responses.SessionResponse
+import org.polyfrost.polyplus.client.network.p2p.P2PListenContext
+import org.polyfrost.polyplus.client.network.p2p.P2PSessionManager
+//?}
+//? if ornithe {
+/*import net.minecraft.world.WorldSettings.GameMode as GameType
+import org.polyfrost.polyplus.client.PolyPlusClient
+import org.polyfrost.polyplus.client.network.http.responses.SessionResponse
+import org.polyfrost.polyplus.client.network.p2p.P2PListenContext
+import org.polyfrost.polyplus.client.network.p2p.P2PSessionManager
+*///?}
+
+object HostWorldManager {
+    private val LOGGER = LogManager.getLogger("PolyPlus/HostWorld")
+
+    val clientVersionName: String by lazy {
+        //? if = 1.8.9 {
+        /*"1.8.9"
+        *///?} else if <1.21.6 {
+        /*SharedConstants.getCurrentVersion().name
+        *///?} else
+        SharedConstants.getCurrentVersion().name()
+    }
+
+    enum class Compat {
+        CURRENT,
+
+        OLDER,
+
+        NEWER,
+
+        INCOMPATIBLE,
+    }
+
+    data class HostWorldEntry(
+        val id: String,
+        val name: String,
+        val iconBytes: ByteArray?,
+        val gameMode: GameType,
+        val lastPlayed: Long,
+        val requiresConversion: Boolean,
+        val versionName: String,
+        val compat: Compat,
+    )
+
+    private data class PendingHost(
+        val gameMode: GameType,
+        val allowCheats: Boolean,
+        val port: Int? = null,
+        val onPublished: () -> Unit = {},
+    )
+
+    @Volatile
+    private var pending: PendingHost? = null
+
+    @Volatile
+    var worldOpener: (() -> Unit) -> Unit = { it() }
+
+    //? if = 1.8.9 {
+    /*suspend fun loadWorlds(): List<HostWorldEntry> = withContext(Dispatchers.IO) {
+        val source = Minecraft.getInstance().worldStorageSource
+        val saves = try {
+            source.all
+        } catch (e: Exception) {
+            LOGGER.error("Failed to enumerate singleplayer worlds", e)
+            return@withContext emptyList()
+        }
+        saves.map { save ->
+            HostWorldEntry(
+                id = save.saveName,
+                name = save.name,
+                iconBytes = null,
+                gameMode = save.gameMode,
+                lastPlayed = save.lastPlayed,
+                requiresConversion = save.isSameVersion,
+                versionName = clientVersionName,
+                compat = if (save.isSameVersion) Compat.OLDER else Compat.CURRENT,
+            )
+        }.sortedByDescending { it.lastPlayed }
+    }
+
+    fun openWorld(id: String) {
+        val mc = Minecraft.getInstance()
+        val name = mc.worldStorageSource.getData(id)?.name ?: id
+        mc.startGame(id, name, null)
+    }
+    *///?} else {
+    suspend fun loadWorlds(): List<HostWorldEntry> = withContext(Dispatchers.IO) {
+        val source = Minecraft.getInstance().levelSource
+        val summaries = try {
+            val candidates = source.findLevelCandidates()
+            source.loadLevelSummaries(candidates).get()
+        } catch (e: Exception) {
+            LOGGER.error("Failed to enumerate singleplayer worlds", e)
+            return@withContext emptyList()
+        }
+
+        summaries
+            .asSequence()
+            // placeholders for corrupted/symlinked worlds aren't disabled but have no settings or version to read
+            .filterNot { it.isDisabled || it is LevelSummary.CorruptedLevelSummary || it is LevelSummary.SymlinkLevelSummary }
+            .map { summary ->
+                val compat = when {
+                    !summary.isCompatible -> Compat.INCOMPATIBLE
+                    summary.isDowngrade -> Compat.NEWER
+                    summary.shouldBackup() -> Compat.OLDER
+                    else -> Compat.CURRENT
+                }
+                HostWorldEntry(
+                    id = summary.levelId,
+                    name = summary.levelName,
+                    iconBytes = readIcon(summary.icon),
+                    gameMode = summary.gameMode,
+                    lastPlayed = summary.lastPlayed,
+                    requiresConversion = summary.requiresManualConversion(),
+                    versionName = summary.worldVersionName.string,
+                    compat = compat,
+                )
+            }
+            .sortedByDescending { it.lastPlayed }
+            .toList()
+    }
+
+    private fun readIcon(icon: Path?): ByteArray? {
+        if (icon == null || !Files.isRegularFile(icon)) return null
+        return runCatching { Files.readAllBytes(icon) }.getOrNull()
+    }
+    //?}
+
+    fun host(returnScreen: Screen, entry: HostWorldEntry, gameMode: GameType, allowCheats: Boolean, port: Int? = null) {
+        val mc = Minecraft.getInstance()
+        pending = PendingHost(gameMode, allowCheats, port)
+        //? if = 1.8.9 {
+        /*openWorld(entry.id)
+        *///?} else {
+        worldOpener {
+            mc.createWorldOpenFlows().openWorld(entry.id) {
+                pending = null
+                //? if >= 26.2 {
+                mc.gui.setScreen(returnScreen)
+                //?} else {
+                /*mc.setScreen(returnScreen)
+                *///?}
+            }
+        }
+        //?}
+    }
+
+    suspend fun hostViaP2P(
+        returnScreen: Screen,
+        entry: HostWorldEntry,
+        gameMode: GameType,
+        allowCheats: Boolean,
+        privateRelay: Boolean = true,
+        autoShareResourcePack: Boolean = false,
+        onHosted: (String) -> Unit = {},
+        proceed: () -> Boolean = { true },
+    ): Result<Unit> = beginP2PSession(privateRelay, autoShareResourcePack) { mc, session ->
+        if (!proceed()) {
+            abandonP2PHost()
+            return@beginP2PSession
+        }
+        pending = PendingHost(gameMode, allowCheats, onPublished = { onHosted(session.id) })
+        //? if = 1.8.9 {
+        /*openWorld(entry.id)
+        *///?} else {
+        worldOpener {
+            mc.createWorldOpenFlows().openWorld(entry.id) {
+                abandonP2PHost()
+                //? if >= 26.2 {
+                mc.gui.setScreen(returnScreen)
+                //?} else {
+                /*mc.setScreen(returnScreen)
+                *///?}
+            }
+        }
+        //?}
+        LOGGER.info("Hosting {} as session {}", entry.name, session.id)
+    }
+
+    suspend fun hostCurrentWorldViaP2P(
+        gameMode: GameType,
+        allowCheats: Boolean,
+        privateRelay: Boolean = true,
+        autoShareResourcePack: Boolean = false,
+        onHosted: (String) -> Unit = {},
+    ): Result<Unit> {
+        if (Minecraft.getInstance().singleplayerServer == null) {
+            return Result.failure(IllegalStateException("Not currently in a singleplayer world"))
+        }
+        return beginP2PSession(privateRelay, autoShareResourcePack) { mc, session ->
+            // the world may have been left while the session was being created
+            if (mc.singleplayerServer == null) {
+                abandonP2PHost()
+            } else {
+                pending = PendingHost(gameMode, allowCheats, onPublished = { onHosted(session.id) })
+            }
+        }
+    }
+
+    // runs in SCOPE so a caller cancelled midway can't leave a created session without its world
+    private suspend fun beginP2PSession(
+        privateRelay: Boolean,
+        autoShareResourcePack: Boolean,
+        onCreated: (Minecraft, SessionResponse) -> Unit,
+    ): Result<Unit> = PolyPlusClient.SCOPE.async {
+        P2PSessionManager.beginHostingSession(privateRelay, autoShareResourcePack)
+            .onFailure { LOGGER.error("Failed to create a P2P hosting session", it) }
+            .map { session ->
+                val mc = Minecraft.getInstance()
+                mc.execute { onCreated(mc, session) }
+            }
+    }.await()
+
+    private fun abandonP2PHost() {
+        pending = null
+        P2PListenContext.clearPendingListen()
+        P2PSessionManager.stopHosting()
+    }
+
+    fun hostCurrentWorldLan(gameMode: GameType, allowCheats: Boolean, port: Int? = null) {
+        val mc = Minecraft.getInstance()
+        if (mc.singleplayerServer == null) return
+        pending = PendingHost(gameMode, allowCheats, port)
+    }
+
+    fun registerLanPublishHook() {
+        //? if fabric {
+        ClientTickEvents.END_CLIENT_TICK.register(ClientTickEvents.EndTick { mc -> tick(mc) })
+        //?}
+        //? if ornithe
+        //eventHandler<TickEvent.End> { tick(Minecraft.getInstance()) }.register()
+    }
+
+    private fun tick(mc: Minecraft) {
+        val request = pending ?: return
+        val server = mc.singleplayerServer ?: return
+        //? if = 1.8.9 {
+        /*if (!server.isLoading) return
+        if (mc.networkHandler == null) return
+        *///?} else {
+        if (!server.isReady) return
+        if (mc.connection == null) return
+        //?}
+        if (server.isPublished) {
+            pending = null
+            //? if >= 26.2
+            if (request.allowCheats) server.setWorldAllowCommands(true)
+            bindPendingP2PListener(server)
+            request.onPublished()
+            return
+        }
+
+        //? if = 1.8.9 {
+        /*val address = server.publish(request.gameMode, request.allowCheats)
+        val published = address != null
+        val port: Any = address ?: "(none)"
+        *///?} else {
+        val port = request.port ?: HttpUtil.getAvailablePort()
+        val published =
+            //? if >= 26.3 {
+            run {
+                server.setWorldGameType(request.gameMode)
+                // guest command access is ignored unless the world itself allows commands
+                if (request.allowCheats) server.setWorldAllowCommands(true)
+                server.publishServer(MinecraftServer.MultiplayerScope.LAN, request.allowCheats, port)
+            }
+            //?} elif >= 26.2 {
+            /*server.publishServer(MinecraftServer.MultiplayerScope.LAN, request.gameMode, request.allowCheats, port)
+            *///?} else {
+            /*server.publishServer(request.gameMode, request.allowCheats, port)
+            *///?}
+        //?}
+        pending = null
+
+        if (published) {
+            LOGGER.info("Opened world to LAN on port {}", port)
+            //? if >= 26.2
+            if (request.allowCheats) server.setWorldAllowCommands(true)
+            announce(mc, Component.translatable(PUBLISH_STARTED_KEY, port))
+            request.onPublished()
+        } else {
+            LOGGER.warn("publishServer returned false — world was not opened to LAN on port {}", port)
+            announce(mc, Component.translatable("commands.publish.failed"))
+            abandonP2PHost()
+        }
+    }
+
+    private val PUBLISH_STARTED_KEY =
+        //? if >= 26.2 {
+        "commands.publish.started.lan"
+        //?} else
+        //"commands.publish.started"
+
+    private fun announce(mc: Minecraft, message: Component) {
+        //? if >= 26.2 {
+        mc.gui.hud.chat.addClientSystemMessage(message)
+        //?} else if >= 26.1 {
+        /*mc.gui.chat.addClientSystemMessage(message)
+        *///?} else {
+        /*mc.gui.chat.addMessage(message)
+        *///?}
+    }
+
+    private fun bindPendingP2PListener(server: MinecraftServer) {
+        if (!P2PListenContext.hasPendingListen()) return
+        //? if = 1.8.9 {
+        /*runCatching { server.getConnection().bind(null, 0) }
+        *///?} else
+        runCatching { server.connection.startTcpServerListener(null, HttpUtil.getAvailablePort()) }
+            .onSuccess { LOGGER.info("Bound an extra EOS P2P listener for the new session") }
+            .onFailure { LOGGER.error("Failed to bind the EOS P2P listener for the new session", it) }
+    }
+}

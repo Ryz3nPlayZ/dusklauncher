@@ -1,0 +1,34 @@
+Dusk+ is a modified version of PolyPlus.
+
+- PolyPlus 2.3.1 - https://github.com/Polyfrost/PolyPlus (commit c65c58b)
+  By Polyfrost and contributors. GPL-3.0, see LICENSE.md.
+
+Changes in this fork (November 2026), marked "Dusk:" in the source:
+
+- Polyfrost's backend is not contacted. Accounts, the store, news, crash
+  reporting and Epic Online Services are removed; the Epic classes left in
+  network/eos are empty stand-ins so the rest of the code still compiles.
+- Friends, messages, blocks, privacy, outfits and world hosting go through
+  Dusk Client and its server (client/dusk: DuskBridge, DuskSocial,
+  DuskHosting). Hosting uses e4mc.
+- Parties, party voice, group chat and global chat are hidden until Dusk's
+  server supports them. Voice settings no longer mention Epic.
+- Right shift is left to Dusk Client's settings key: OneConfig's own key is
+  moved off it on first start (client/dusk/DuskKeys).
+- Config loading and the main-menu config hash were changed so a fresh
+  install starts cleanly.
+- The party invite button no longer shows while parties are off.
+- Named "Dusk+", with Dusk's logos, wordmark, window title and menu text.
+  Package names, mod ids, the built-in lobby scenes and the remaining
+  artwork are still Polyfrost's.
+
+Not affiliated with or endorsed by Polyfrost.
+
+Dusk+ needs these at runtime. The Dusk launcher downloads them unmodified
+from Modrinth; they are not part of this fork:
+
+- OneConfig (Polyfrost, LGPL-3.0)
+- polycompose (Polyfrost)
+- Fabric Language Kotlin (FabricMC, Apache-2.0)
+
+This fork is distributed under the same licence, GPL-3.0.

@@ -910,6 +910,16 @@ pub async fn install_and_launch(
     } else {
         None
     };
+    // Dusk+ rides on DuskClient: only where DuskClient goes in this launch
+    let dusk_plus = if injects_client
+        && fabric_api_ok
+        && state.settings.lock().unwrap().dusk_plus
+        && crate::duskplus::loader_ok(profile.loader_version.as_deref())
+    {
+        crate::duskplus::jars(&state, &profile.game_version, &dirs.mods).await
+    } else {
+        Vec::new()
+    };
     let profile = {
         let mut p = profile;
         p.jvm_args.retain(|a| {
@@ -954,7 +964,10 @@ pub async fn install_and_launch(
                     Some(_) if !in_mods && !fabric_api_ok => {
                         tracing::warn!("Fabric API is missing and couldn't be downloaded; launching without DuskClient")
                     }
-                    Some(jar) if !in_mods => add_mods.insert(0, jar),
+                    Some(jar) if !in_mods => {
+                        add_mods.insert(0, jar);
+                        add_mods.extend(dusk_plus);
+                    }
                     Some(_) => {}
                     None => tracing::warn!("bundled client mod {name} not found; launching without it"),
                 },

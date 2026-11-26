@@ -1,0 +1,72 @@
+package org.polyfrost.polyplus.mixin.client;
+
+//? if > 1.8.9
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import net.minecraft.client.Minecraft;
+import org.objectweb.asm.Opcodes;
+import org.polyfrost.polyplus.client.features.DefaultSettings;
+import org.polyfrost.polyplus.client.gui.MenuPanorama;
+import org.polyfrost.polyplus.client.utils.ClientPlatform;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+//? if = 1.8.9 {
+/*import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import net.minecraft.client.options.GameOptions;
+import org.polyfrost.polyplus.PolyPlusEntrypoint;
+*///?}
+
+@Mixin(value = Minecraft.class, priority = 1500)
+public class MixinMinecraft {
+    //? if > 1.8.9 {
+    @Inject(method = "<init>", at = @At(value = "FIELD", target = "Lnet/minecraft/client/Minecraft;options:Lnet/minecraft/client/Options;", opcode = Opcodes.PUTFIELD, shift = At.Shift.AFTER))
+    private void polyplus$applyVsyncDefaultBeforeWindow(CallbackInfo ci) {
+        DefaultSettings.applyVsyncBeforeWindow();
+    }
+
+    @Inject(method = "runTick", at = @At("HEAD"))
+    private void polyplus$beginMenuBackdropFrame(boolean renderLevel, CallbackInfo ci) {
+        MenuPanorama.beginPass();
+    }
+    //?} else {
+    /*@Inject(method = "runGame", at = @At("HEAD"))
+    private void polyplus$beginMenuBackdropFrame(CallbackInfo ci) {
+        MenuPanorama.beginPass();
+    }
+
+    @ModifyExpressionValue(method = "tick", at = @At(value = "CONSTANT", args = "intValue=59"))
+    private int polyplus$hideScreenKey(int key) {
+        return PolyPlusEntrypoint.remap(PolyPlusEntrypoint.hideScreen, key);
+    }
+
+    @ModifyExpressionValue(method = "tick", at = @At(value = "CONSTANT", args = "intValue=61"))
+    private int polyplus$customDebugKey(int key) {
+        return PolyPlusEntrypoint.remap(PolyPlusEntrypoint.customDebug, key);
+    }
+
+    @ModifyExpressionValue(method = "tick", at = @At(value = "CONSTANT", args = "intValue=62"))
+    private int polyplus$clearShadersKey(int key) {
+        return PolyPlusEntrypoint.remap(PolyPlusEntrypoint.clearShaders, key);
+    }
+
+    @ModifyExpressionValue(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screen/Screen;isControlDown()Z"))
+    private boolean polyplus$dropStackModifier(boolean controlDown) {
+        return controlDown || GameOptions.isPressed(PolyPlusEntrypoint.dropModifier);
+    }
+    *///?}
+
+    //? if >= 26.1 {
+    @ModifyExpressionValue(method = "renderFrame", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/platform/FramerateLimitTracker;getFramerateLimit()I"))
+    //?} elif >= 1.21.4 {
+    /*@ModifyExpressionValue(method = "runTick", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/platform/FramerateLimitTracker;getFramerateLimit()I"))
+    *///?} elif > 1.8.9 {
+    /*@ModifyExpressionValue(method = "runTick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;getFramerateLimit()I"))
+    *///?} else {
+    /*@ModifyExpressionValue(method = {"runGame", "isFramerateValid"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;getMaxFramerate()I"))
+    *///?}
+    private int polyplus$throttleMinimizedMenu(int limit) {
+        return ClientPlatform.INSTANCE.menuFrameLimit(limit);
+    }
+}

@@ -81,6 +81,54 @@ jobs:
           path: launcher/src-tauri/resources/*.jar
           if-no-files-found: error
 
+  # Dusk+ (duskplus/, a GPL-3.0 fork of PolyPlus): one jar per game line,
+  # attached to the release as duskplus-<mc>.jar. Too big to bundle all of
+  # them in the installer, so the launcher downloads the one an instance
+  # needs (launcher/src-tauri/src/duskplus.rs).
+  duskplus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build the Dusk+ jars
+        working-directory: duskplus
+        run: |
+          set -eu
+          tasks=""
+          for mc in $DUSK_PLUS_TARGETS; do tasks="$tasks :$mc-fabric:build"; done
+          ./gradlew $tasks -x test -x detektMain -x detekt --console=plain
+          mkdir -p out
+          for mc in $DUSK_PLUS_TARGETS; do
+            jar="$(ls versions/$mc-fabric/build/libs/polyplus-*+$mc.jar)"
+            cp "$jar" "out/duskplus-$mc.jar"
+          done
+          ls -la out
+        env:
+          DUSK_PLUS_TARGETS: 1.21.1 1.21.4 1.21.5 1.21.8 1.21.10 1.21.11 26.1 26.2 26.3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: duskplus-jars
+          path: duskplus/out/*.jar
+          if-no-files-found: error
+
+  # onto the draft the build job made
+  duskplus-upload:
+    needs: [build, duskplus]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: duskplus-jars
+          path: out
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" out/*.jar --clobber --repo "$GITHUB_REPOSITORY"
+
   # Boots each client with its gametests (mixin audit, HUD, cosmetics, server API)
   # under a virtual display. A mixin that no longer matches its target only
   # crashes once the class loads, which a compile never sees: the 26.x particle

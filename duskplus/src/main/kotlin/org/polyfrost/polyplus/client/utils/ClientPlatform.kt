@@ -1,0 +1,210 @@
+package org.polyfrost.polyplus.client.utils
+
+//? if > 1.8.9 {
+import com.google.gson.JsonPrimitive
+import com.mojang.blaze3d.vertex.PoseStack
+import com.mojang.serialization.JsonOps
+//?}
+//? if = 1.8.9 {
+/*import net.minecraft.client.options.GameOptions
+*///?}
+//? if = 1.8.9
+//import org.polyfrost.polyplus.client.render.PoseStack
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.screens.Screen
+import org.joml.Quaternionf
+import org.polyfrost.oneconfig.api.platform.v1.DesktopHelper
+import org.polyfrost.oneconfig.utils.v1.Multithreading
+import java.net.URI
+import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+
+//? if >= 1.21.10 {
+import net.minecraft.world.entity.player.PlayerModelType
+//?}
+
+//? if < 1.21.10 && > 1.8.9 {
+/*import net.minecraft.client.resources.PlayerSkin
+*///?}
+
+//? if < 1.21.4 && > 1.8.9 {
+/*import org.lwjgl.glfw.GLFW
+*///?} elif = 1.8.9 {
+/*import org.lwjgl.opengl.Display
+*///?}
+
+object ClientPlatform {
+    private const val MAIN_SYNC_TIMEOUT_SECONDS = 30L
+    private const val VANILLA_UNLIMITED_FRAMERATE = 260
+    private const val MAX_UNLIMITED_FRAMERATE = 10_000
+    private const val MINIMIZED_FRAME_LIMIT = 10
+
+    val isWindows: Boolean
+        get() = System.getProperty("os.name").lowercase().contains("windows")
+
+    val isMac: Boolean
+        get() = System.getProperty("os.name").lowercase().contains("mac")
+
+    val unlimitedFramerate: Int by lazy {
+        //? if > 1.8.9 {
+        val codec = Minecraft.getInstance().options.framerateLimit().codec()
+        highestAccepted(VANILLA_UNLIMITED_FRAMERATE, MAX_UNLIMITED_FRAMERATE) { codec.parse(JsonOps.INSTANCE, JsonPrimitive(it)).result().isPresent }
+        //?} else {
+        /*// Mods like Argentum raise the slider's top, and with it the value that means Unlimited, above vanilla's 260
+        maxOf(VANILLA_UNLIMITED_FRAMERATE, GameOptions.Option.FRAMERATE_LIMIT.getMax().toInt())
+        *///?}
+    }
+
+    internal fun highestAccepted(floor: Int, ceiling: Int, accepts: (Int) -> Boolean): Int {
+        var low = floor
+        var high = ceiling
+        while (low < high) {
+            val mid = low + (high - low + 1) / 2
+            if (accepts(mid)) low = mid else high = mid - 1
+        }
+        return low
+    }
+
+    fun monitorRefreshRate(): Int =
+        //? if >= 26.3 {
+        Minecraft.getInstance().window.activeVideoMode?.refreshRate?.toInt() ?: 0
+        //?} else {
+        /*Minecraft.getInstance().window.refreshRate
+        *///?}
+
+    fun windowMinimized(): Boolean =
+        //? if >= 1.21.4 {
+        Minecraft.getInstance().window.isIconified
+        //?} elif > 1.8.9 {
+        /*GLFW.glfwGetWindowAttrib(Minecraft.getInstance().window.window, GLFW.GLFW_ICONIFIED) == GLFW.GLFW_TRUE
+        *///?} else {
+        /*!Display.isVisible()
+        *///?}
+
+    fun menuFrameLimit(limit: Int): Int =
+        if (!inWorld() && windowMinimized()) minOf(limit, MINIMIZED_FRAME_LIMIT) else limit
+
+    fun inWorld(): Boolean =
+        //? if > 1.8.9 {
+        Minecraft.getInstance().level != null
+        //?} else {
+        /*Minecraft.getInstance().world != null
+        *///?}
+
+    fun runOnMain(action: () -> Unit) {
+        val client = Minecraft.getInstance()
+        if (client.isSameThread) {
+            action()
+        } else {
+            client.execute(action)
+        }
+    }
+
+    fun <T> runOnMainSync(action: () -> T): T {
+        val client = Minecraft.getInstance()
+        if (client.isSameThread) {
+            return action()
+        }
+        val result = AtomicReference<T>()
+        val error = AtomicReference<Throwable>()
+        // whichever side claims it first decides, so a task never runs after its caller has given up on it
+        val claimed = AtomicBoolean()
+        val latch = CountDownLatch(1)
+        client.execute {
+            if (!claimed.compareAndSet(false, true)) return@execute
+            try {
+                result.set(action())
+            } catch (t: Throwable) {
+                error.set(t)
+            } finally {
+                latch.countDown()
+            }
+        }
+        // Minecraft#disconnect drops queued tasks, which would otherwise leave this waiting forever
+        if (!latch.await(MAIN_SYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+            if (claimed.compareAndSet(false, true)) {
+                throw IllegalStateException("Main thread did not run the task within $MAIN_SYNC_TIMEOUT_SECONDS seconds")
+            }
+            latch.await()
+        }
+        error.get()?.let { throw it }
+        return result.get()
+    }
+
+    fun windowFocused(): Boolean = runCatching {
+        //? if > 1.8.9 {
+        Minecraft.getInstance().isWindowActive
+        //?} else {
+        /*Display.isActive()
+        *///?}
+    }.getOrDefault(true)
+
+    fun currentScreen(): Screen? {
+        val mc = Minecraft.getInstance()
+        //? if >= 26.2 {
+        return mc.gui.screen()
+        //?} else {
+        /*return mc.screen
+        *///?}
+    }
+
+    fun setScreen(screen: Screen?) {
+        val mc = Minecraft.getInstance()
+        //? if >= 26.2 {
+        mc.gui.setScreen(screen)
+        //?} else {
+        /*mc.setScreen(screen)
+        *///?}
+    }
+
+    fun openUri(uri: String) {
+        Multithreading.submit { DesktopHelper.browse(URI(uri)) }
+    }
+
+    @Volatile
+    private var offlineUuid: Pair<String, UUID>? = null
+
+    fun localPlayerUuid(): UUID {
+        val user = Minecraft.getInstance().user
+        val id: UUID? = user.profileId
+        return id ?: offlineUuidFor(user.name)
+    }
+
+    private fun offlineUuidFor(name: String): UUID {
+        offlineUuid?.let { (cachedName, uuid) -> if (cachedName == name) return uuid }
+        return UUID.nameUUIDFromBytes("OfflinePlayer:$name".toByteArray(Charsets.UTF_8))
+            .also { offlineUuid = name to it }
+    }
+
+    fun localPlayerName(): String = Minecraft.getInstance().user.name
+
+    fun localSkinSlim(): Boolean =
+        //? if >= 1.21.10 {
+        Minecraft.getInstance().player?.skin?.model() == PlayerModelType.SLIM
+        //?} elif > 1.8.9 {
+        /*Minecraft.getInstance().player?.skin?.model() == PlayerSkin.Model.SLIM
+        *///?} else {
+        /*Minecraft.getInstance().player?.modelType == "slim"
+        *///?}
+}
+
+//? if = 1.8.9 {
+/*private val Minecraft.isSameThread: Boolean get() = isOnSameThread
+private fun Minecraft.execute(task: () -> Unit) { executeTask(Runnable(task)) }
+private fun Minecraft.setScreen(screen: Screen?) = openScreen(screen)
+*///?}
+
+//? if > 1.8.9 {
+fun PoseStack.rotateBy(rotation: Quaternionf) {
+    //? if >= 26.3 {
+    rotate(rotation)
+    //?} else {
+    /*mulPose(rotation)
+    *///?}
+}
+//?} else {
+/*fun PoseStack.rotateBy(rotation: Quaternionf) = mulPose(rotation)
+*///?}

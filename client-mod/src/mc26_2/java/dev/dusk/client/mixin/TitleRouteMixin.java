@@ -28,7 +28,9 @@ public abstract class TitleRouteMixin {
     private void duskclient$routeTitle(Screen screen, CallbackInfo ci) {
         Gui self = (Gui) (Object) this;
         if ((screen instanceof TitleScreen || screen == null) && Minecraft.getInstance().level == null && !duskclient$GAMETEST
-                && DuskConfig.get().duskTitle) {
+                && DuskConfig.get().duskTitle
+                // Dusk+ brings its own lobby and title screen
+                && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("polyplus")) {
             ci.cancel();
             self.setScreen(new DuskTitleScreen());
         }

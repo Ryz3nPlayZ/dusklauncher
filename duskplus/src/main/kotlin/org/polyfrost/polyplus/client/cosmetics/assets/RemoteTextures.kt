@@ -1,0 +1,96 @@
+package org.polyfrost.polyplus.client.cosmetics.assets
+
+import net.minecraft.client.Minecraft
+//? if > 1.8.9 {
+import net.minecraft.client.renderer.texture.DynamicTexture
+import org.polyfrost.polyplus.client.render.NativeImage
+//?} else {
+/*import net.minecraft.client.render.texture.DynamicTexture
+import net.minecraft.client.render.texture.TextureManager
+import javax.imageio.ImageIO
+*///?}
+import net.minecraft.resources.Identifier
+import org.polyfrost.polyplus.client.utils.ClientPlatform
+import org.slf4j.LoggerFactory
+import java.nio.file.Files
+import java.nio.file.Path
+
+internal object RemoteTextures {
+    private val logger = LoggerFactory.getLogger("polyplus/textures")
+    private val registered = LinkedHashMap<Identifier, DynamicTexture>()
+    private val persistent = HashSet<Identifier>()
+
+    fun register(textureId: Identifier, pngFile: Path, keepOnReset: Boolean = false): Identifier {
+        //? if > 1.8.9 {
+        val nativeImage = Files.newInputStream(pngFile).use(NativeImage::read)
+        var adopted = false
+        try {
+            return ClientPlatform.runOnMainSync {
+                release(textureId)
+                val dynamicTexture = DynamicTexture(
+                    //? if >= 1.21.5 {
+                    { textureId.toString() },
+                    //?}
+                    nativeImage,
+                )
+                adopted = true
+                Minecraft.getInstance().textureManager.register(textureId, dynamicTexture)
+                registered[textureId] = dynamicTexture
+                if (keepOnReset) persistent.add(textureId)
+                logger.debug("Registered remote texture {}", textureId)
+                textureId
+            }
+        } finally {
+            // the texture closes the image once it has one, until then nothing else will
+            if (!adopted) nativeImage.close()
+        }
+        //?} else {
+        /*val image = Files.newInputStream(pngFile).use(ImageIO::read) ?: error("Could not decode texture $pngFile")
+        return ClientPlatform.runOnMainSync {
+            release(textureId)
+            val dynamicTexture = DynamicTexture(image)
+            Minecraft.getInstance().textureManager.register(textureId, dynamicTexture)
+            registered[textureId] = dynamicTexture
+            if (keepOnReset) persistent.add(textureId)
+            logger.debug("Registered remote texture {}", textureId)
+            textureId
+        }
+        *///?}
+    }
+
+    fun findTexture(root: Path, baseName: String): Path? {
+        val candidates = listOf(
+            root.resolve("textures/$baseName.png"),
+            root.resolve("$baseName.png"),
+            root.resolve("textures/emotes/$baseName.png"),
+            root.resolve("textures/cosmetics/$baseName.png"),
+        )
+        return candidates.firstOrNull { Files.isRegularFile(it) }
+    }
+
+    fun isRegistered(textureId: Identifier): Boolean = textureId in registered
+
+    fun releaseAll() {
+        ClientPlatform.runOnMainSync {
+            val client = Minecraft.getInstance()
+            for (id in registered.keys.toList()) {
+                if (id in persistent) continue
+                client.textureManager.release(id)
+                registered.remove(id)
+            }
+        }
+    }
+
+    fun release(textureId: Identifier) {
+        persistent.remove(textureId)
+        if (!registered.containsKey(textureId)) {
+            return
+        }
+        Minecraft.getInstance().textureManager.release(textureId)
+        registered.remove(textureId)
+    }
+}
+
+//? if = 1.8.9 {
+/*private fun TextureManager.release(id: Identifier) = close(id)
+*///?}

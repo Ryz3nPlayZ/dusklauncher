@@ -885,9 +885,10 @@ pub async fn ensure_fabric_api(app: &AppHandle, profile: &Profile, dir: &std::pa
 }
 
 /// Dusk Essentials — what every Dusk profile is built from (docs/MODPACK.md):
-/// the performance core plus a few utilities DuskClient doesn't cover.
-/// Zoom, freelook, fullbright, ping, crosshair, food and container previews
-/// and the background frame cap are DuskClient modules, so their third-party
+/// the performance core, the client-side part of OneClient's performance
+/// set, and a few utilities DuskClient doesn't cover. Zoom, freelook,
+/// fullbright, ping, crosshair, chat heads (1.21.9+), food and container
+/// previews and the background frame cap are DuskClient modules, so their third-party
 /// equivalents are left out to avoid doubling up.
 const DUSK_ESSENTIALS: &[(&str, &str)] = &[
     FABRIC_API,
@@ -902,11 +903,50 @@ const DUSK_ESSENTIALS: &[(&str, &str)] = &[
     ("moreculling", "moreculling"),
     ("badoptimizations", "badoptimizations"),
     ("krypton", "krypton"),
+    // from OneClient. Kept off: Polydium, Gnetum and Ixeris, dropped while
+    // chasing a black box next to DuskClient (reported 2026-11-24); which of
+    // them, if any, causes it isn't confirmed yet
+    ("modernfix-mvus", "modernfix"),
+    ("particle-core", "particle_core"),
+    ("obe", "obe"),
+    ("scalablelux", "scalablelux"),
+    // faster language and resource pack reloads, logging off the game thread
+    ("language-reload", "languagereload"),
+    ("quick-pack", "quick-pack"),
+    ("asynclogger", "asynclogger"),
+    ("fastserverpings", "fastserverpings"),
     ("modmenu", "modmenu"),
     ("betterf3", "betterf3"),
-    ("chat-heads", "chat_heads"),
     ("held-item-info", "held-item-info"),
 ];
+
+/// Added below 1.21.9 only: DuskClient's Chat Heads draws the head as a text
+/// glyph, which the game has from 1.21.9 on.
+const CHAT_HEADS: (&str, &str) = ("chat-heads", "chat_heads");
+
+/// Added on macOS only: Slipstream presents frames through the macOS
+/// compositor, which nothing else has.
+const DUSK_ESSENTIALS_MAC: &[(&str, &str)] = &[];
+
+/// The Dusk Essentials lineup for the OS the launcher runs on.
+fn dusk_essentials(game_version: &str) -> Vec<(&'static str, &'static str)> {
+    let mut mods = DUSK_ESSENTIALS.to_vec();
+    if !glyph_heads(game_version) {
+        mods.push(CHAT_HEADS);
+    }
+    if cfg!(target_os = "macos") {
+        mods.extend_from_slice(DUSK_ESSENTIALS_MAC);
+    }
+    mods
+}
+
+/// Whether the game draws text glyphs DuskClient's Chat Heads needs (1.21.9+,
+/// and every 26.x).
+fn glyph_heads(game_version: &str) -> bool {
+    let mut parts = game_version.split(['.', '-']).map(|p| p.parse::<u32>().unwrap_or(0));
+    let (major, minor, patch) = (parts.next().unwrap_or(0), parts.next().unwrap_or(0), parts.next().unwrap_or(0));
+    major > 1 || minor > 21 || (minor == 21 && patch >= 9)
+}
 
 /// Fill a Fabric profile with Dusk Essentials for its game version: each
 /// mod's newest release (or its newest build when it has no release), plus
@@ -923,7 +963,7 @@ pub async fn install_dusk_essentials(
         return Err("Dusk Essentials is for Fabric instances.".into());
     }
     let held = fabric_mod_ids(&dir);
-    let added = install_missing(&app, &profile, &dir, DUSK_ESSENTIALS).await;
+    let added = install_missing(&app, &profile, &dir, &dusk_essentials(&profile.game_version)).await;
     let deps: Vec<_> = added.iter().flatten().cloned().collect();
     let added = added.len();
     // nothing resolved on a fresh instance: Modrinth is unreachable, and the

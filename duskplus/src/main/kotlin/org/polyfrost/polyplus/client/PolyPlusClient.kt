@@ -1,0 +1,285 @@
+package org.polyfrost.polyplus.client
+
+import org.polyfrost.polyplus.client.lobby.StartupSounds
+import org.polyfrost.polyplus.libs.ktor.client.HttpClient
+import org.polyfrost.polyplus.libs.ktor.client.engine.cio.CIO
+import org.polyfrost.polyplus.libs.ktor.client.plugins.HttpRequestRetry
+import org.polyfrost.polyplus.libs.ktor.client.plugins.HttpTimeout
+import org.polyfrost.polyplus.libs.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import org.polyfrost.polyplus.libs.ktor.client.plugins.defaultRequest
+import org.polyfrost.polyplus.libs.ktor.client.plugins.websocket.WebSockets
+import org.polyfrost.polyplus.libs.ktor.client.statement.request
+import org.polyfrost.polyplus.libs.ktor.http.HttpMethod
+import org.polyfrost.polyplus.libs.ktor.http.userAgent
+import org.polyfrost.polyplus.libs.ktor.serialization.kotlinx.json.json
+import net.minecraft.client.Minecraft
+import org.apache.logging.log4j.LogManager
+import org.polyfrost.polyplus.PolyPlusConstants
+import org.polyfrost.polyplus.client.cosmetics.CosmeticAssetCache
+import org.polyfrost.polyplus.client.cosmetics.CosmeticCatalog
+import org.polyfrost.polyplus.client.cosmetics.CosmeticLoadProgress
+import org.polyfrost.polyplus.client.cosmetics.CosmeticService
+import org.polyfrost.polyplus.client.cosmetics.CosmeticSync
+import org.polyfrost.polyplus.client.features.AdaptiveBlurDefaults
+import org.polyfrost.polyplus.client.features.AdvancedModCards
+import org.polyfrost.polyplus.client.features.DefaultModOrder
+import org.polyfrost.polyplus.client.features.PylonRawInput
+import org.polyfrost.polyplus.client.features.DefaultSettings
+import org.polyfrost.polyplus.client.features.GenericModNames
+import org.polyfrost.polyplus.client.features.JvmAdvisor
+import org.polyfrost.polyplus.client.features.StartupTimeNotice
+import org.polyfrost.polyplus.client.features.OnboardingFeatures
+import org.polyfrost.polyplus.client.gui.PauseMenuPanel
+import org.polyfrost.polyplus.client.gui.VanillaMenuButton
+import org.polyfrost.polyplus.client.gui.preview.PlayerPreviewRenderer
+import org.polyfrost.polyplus.client.host.HostWorldManager
+import org.polyfrost.polyplus.client.launcher.SessionRefresh
+import org.polyfrost.polyplus.client.network.http.MinecraftLoginGate
+import org.polyfrost.polyplus.client.network.http.PolyAuthorization
+import org.polyfrost.polyplus.client.network.p2p.P2PSessionManager
+import org.polyfrost.polyplus.client.network.websocket.PolyConnection
+import org.polyfrost.polyplus.client.network.websocket.ServerboundPacket
+//? if > 1.8.9
+import org.polyfrost.polyplus.client.pets.PetEntities
+import org.polyfrost.polyplus.client.privacy.PrivacyEnforcement
+import org.polyfrost.polyplus.client.privacy.PrivacyGate
+import org.polyfrost.polyplus.client.privacy.RichTextPrivacy
+import org.polyfrost.polyplus.client.social.FriendsRepository
+import org.polyfrost.polyplus.client.social.GroupsRepository
+import org.polyfrost.polyplus.client.serverapi.OneClientServerApi
+import org.polyfrost.polyplus.client.social.SessionsRepository
+import org.polyfrost.polyplus.client.stats.PlaySessions
+import org.polyfrost.polyplus.client.utils.ClientPlatform
+import org.polyfrost.polyplus.client.utils.runSuspendCatching
+import org.polyfrost.polyplus.privacy.PrivacyConsent
+import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import org.polyfrost.polyplus.client.gui.PolyPlusOneConfigIntegration
+import org.polyfrost.polyplus.client.gui.registerPolyPlusPixelIcons
+import org.polyfrost.polyplus.client.gui.screens.settings.OneClientSettingsPages
+import org.polyfrost.polyplus.client.gui.screens.settings.ArgentumSettingsPages
+import org.polyfrost.polyplus.client.gui.screens.settings.SodiumSettingsPages
+import org.polyfrost.polyplus.client.gui.widgets.ShellWidgetRegistry
+
+//? if wwaypoints
+import org.polyfrost.polyplus.compat.WWaypointsCompat
+
+//? if >= 1.21.11 {
+import org.polyfrost.polyplus.client.gui.panorama.CustomPanorama
+//?}
+
+//? if < 1.21.4 && > 1.8.9
+/*import org.polyfrost.polyplus.client.lobby.LobbyPipelines*/
+
+object PolyPlusClient {
+    private val LOGGER = LogManager.getLogger(PolyPlusConstants.NAME)
+    private val cosmeticsRefreshInProgress = AtomicBoolean(false)
+    private val cosmeticsRefreshQueued = AtomicBoolean(false)
+
+    private val EXCEPTION_HANDLER = CoroutineExceptionHandler { _, throwable ->
+        LOGGER.error("Uncaught exception in PolyPlus coroutine", throwable)
+    }
+
+    @JvmField val SCOPE = CoroutineScope(SupervisorJob() + Dispatchers.Default + EXCEPTION_HANDLER)
+
+    @JvmField val JSON = Json {
+        prettyPrint = true
+        isLenient = true
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
+
+    @JvmField val HTTP = HttpClient(CIO) {
+        defaultRequest {
+            userAgent("${PolyPlusConstants.NAME}/${PolyPlusConstants.VERSION}")
+        }
+
+        install(ContentNegotiation) {
+            json(JSON)
+        }
+
+        install(HttpTimeout) {
+            connectTimeoutMillis = 15_000
+            socketTimeoutMillis = 30_000
+        }
+
+        install(HttpRequestRetry) {
+            maxRetries = 2
+            retryIf { _, _ -> false }
+            retryOnExceptionIf { request, cause ->
+                cause is IOException && (request.method == HttpMethod.Get || request.method == HttpMethod.Head)
+            }
+            constantDelay(millis = 250, randomizationMs = 250)
+        }
+
+        install(WebSockets) {
+            pingIntervalMillis = 15_000
+        }
+
+        install(PrivacyGate)
+
+    }
+
+    private inline fun step(name: String, block: () -> Unit) {
+        runCatching(block).onFailure { error ->
+            LOGGER.error("PolyPlus init step '{}' failed; continuing without it", name, error)
+        }
+    }
+
+    /** Dusk: these configs preload themselves when first touched, so a second preload() only logs "already initialized". */
+    @Suppress("UNUSED_PARAMETER")
+    private fun loadConfig(config: Any) = Unit
+
+    fun initialize() {
+        step("pause screen config preload") { loadConfig(PolyPlusPauseConfig) }
+        step("lobby config preload") { loadConfig(PolyPlusLobbyConfig) }
+        step("party config preload") { loadConfig(PolyPlusPartyConfig) }
+        step("config preload") { PolyPlusConfig.preload() }
+        step("main menu config preload") { loadConfig(PolyPlusMainMenuConfig) }
+        step("screens config preload") { loadConfig(PolyPlusScreensConfig) }
+        step("startup sounds") { StartupSounds.prepare() }
+        step("cosmetics config preload") { loadConfig(PolyPlusCosmeticsConfig) }
+        step("dusk keys") { org.polyfrost.polyplus.client.dusk.DuskKeys.initialize() }
+        step("pylon raw input") { PylonRawInput.initialize() }
+        step("privacy enforcement") { PrivacyEnforcement.syncConfig() }
+        step("rich text privacy") { RichTextPrivacy.warmUp() }
+        step("default settings") { DefaultSettings.initialize() }
+        step("pixel icons") { registerPolyPlusPixelIcons() }
+        step("oneconfig ui") { PolyPlusOneConfigIntegration.register() }
+        step("sodium settings") { SodiumSettingsPages.register() }
+        step("argentum settings") { ArgentumSettingsPages.register() }
+        step("oneclient settings") { OneClientSettingsPages.register() }
+        step("widgets") { ShellWidgetRegistry.registerBuiltIns() }
+        step("default mod order") { DefaultModOrder.initialize() }
+        step("advanced mod cards") { AdvancedModCards.initialize() }
+        step("generic mod names") { GenericModNames.initialize() }
+        step("onboarding") { OnboardingFeatures.initialize() }
+        //? if < 1.21.4 && > 1.8.9
+        /*step("lobby shaders") { LobbyPipelines.register() }*/
+        step("adaptive blur") { AdaptiveBlurDefaults.initialize() }
+        step("jvm advisor") { JvmAdvisor.initialize() }
+        step("startup time notice") { StartupTimeNotice.register() }
+        step("login gate") { MinecraftLoginGate.register() }
+        step("session refresh") { SessionRefresh.register() }
+        step("oneclient server api") { OneClientServerApi.initialize() }
+        //? if wwaypoints
+        step("wwaypoints compat") { WWaypointsCompat.initialize() }
+
+        //? if >= 1.21.1 || = 1.8.9
+        step("early init CosmeticSync") { CosmeticSync.earlyInitialize() }
+        step("early init FriendsRepository") { FriendsRepository.earlyInitialize() }
+        step("early init GroupsRepository") { GroupsRepository.earlyInitialize() }
+        step("early init SessionsRepository") { SessionsRepository.earlyInitialize() }
+        step("early init P2PSessionManager") { P2PSessionManager.earlyInitialize() }
+
+        //? if >= 1.21.1
+        step("pet entities") { PetEntities.register() }
+        //? if = 1.21.1 || >= 1.21.8
+        step("player preview") { PlayerPreviewRenderer.initialize() }
+        step("vanilla menu button") { VanillaMenuButton.register() }
+        step("pause menu panel") { PauseMenuPanel.register() }
+
+        step("websocket") {
+            PolyConnection.initialize {
+                LOGGER.info("Connected to the Dusk service.")
+
+                SCOPE.launch {
+                    PolyConnection.sendPacket(ServerboundPacket.GetActiveCosmetics(ClientPlatform.localPlayerUuid().toString()))
+                    //? if >= 1.21.1 || = 1.8.9
+                    CosmeticSync.resubscribeVisiblePlayers()
+                    if (Minecraft.getInstance().player != null) {
+                        refreshCosmetics()
+                    }
+
+                    FriendsRepository.refreshAll()
+                    GroupsRepository.refreshGroups()
+                    SessionsRepository.refreshIncoming()
+                }
+            }
+        }
+
+        step("play sessions") { PlaySessions.initialize() }
+
+        step("cosmetics prefetch") { refreshCosmetics() }
+        step("commands") { PolyPlusCommands.register() }
+        step("host world") { HostWorldManager.registerLanPublishHook() }
+        //? if >= 1.21.11
+        step("panorama") { CustomPanorama.initialize() }
+    }
+
+    // Full reset of auth caches and API data
+    fun refresh() {
+        if (!PrivacyConsent.allowsOnlineServices()) return
+        LOGGER.info("Refreshing PolyPlus Client...")
+
+        SCOPE.launch {
+            runSuspendCatching { PolyAuthorization.reset() }
+
+            runCatching {
+                CosmeticCatalog.reset()
+                CosmeticAssetCache.reset()
+            }
+
+            runCatching { PolyConnection.reconnect() }
+            runCatching { P2PSessionManager.reconnect() }
+
+            refreshCosmeticsInternal()
+        }
+    }
+
+    // Refetches cosmetics without wiping auth or caches
+    fun refreshCosmetics() {
+        if (!PrivacyConsent.allowsOnlineServices()) return
+        if (!cosmeticsRefreshInProgress.compareAndSet(false, true)) {
+            cosmeticsRefreshQueued.set(true)
+            return
+        }
+
+        SCOPE.launch {
+            try {
+                do refreshCosmeticsInternal() while (cosmeticsRefreshQueued.getAndSet(false))
+            } finally {
+                cosmeticsRefreshInProgress.set(false)
+            }
+            if (cosmeticsRefreshQueued.get()) refreshCosmetics()
+        }
+    }
+
+    // Covers a command running before the join refresh finishes
+    fun refreshCosmeticsIfNeeded() {
+        if (!PrivacyConsent.allowsOnlineServices()) return
+        if (CosmeticCatalog.ownedIds().isNotEmpty() || CosmeticCatalog.allDefinitions().isNotEmpty()) {
+            CosmeticLoadProgress.markLoaded()
+            return
+        }
+        refreshCosmetics()
+    }
+
+    private suspend fun refreshCosmeticsInternal() {
+        LOGGER.info("Refreshing cosmetics catalog and player data...")
+        CosmeticLoadProgress.beginRefresh()
+
+        try {
+            runSuspendCatching { CosmeticCatalog.refreshCatalog() }
+                .onFailure { LOGGER.error("Cosmetic catalog refresh failed", it) }
+            runSuspendCatching { CosmeticCatalog.refreshPlayer() }
+                .onFailure { LOGGER.error("Player cosmetics refresh failed", it) }
+            //? if >= 1.21.1 {
+            runSuspendCatching { CosmeticService.syncLocalActive() }
+                .onFailure { LOGGER.error("Local active cosmetics sync failed", it) }
+            //?} else {
+            /*CosmeticCatalog.applyRemoteEquipped(ClientPlatform.localPlayerUuid(), CosmeticCatalog.localEquipped().equipped)
+            runCatching { CosmeticSync.applyLocalActiveFromCatalog() }
+                .onFailure { LOGGER.error("Local active cosmetics apply failed", it) }
+            *///?}
+        } finally {
+            CosmeticLoadProgress.onMetadataComplete()
+        }
+    }
+}

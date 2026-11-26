@@ -1,0 +1,155 @@
+package org.polyfrost.polyplus.client.features
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.screens.Screen
+import org.apache.logging.log4j.LogManager
+import org.polyfrost.oneconfig.api.event.v1.eventHandler
+import org.polyfrost.oneconfig.api.event.v1.events.FramebufferRenderEvent
+import org.polyfrost.oneconfig.api.event.v1.events.MainMenuFpsEvent
+import org.polyfrost.oneconfig.api.event.v1.invoke.EventHandler
+import org.polyfrost.oneconfig.api.platform.v1.Platform
+import org.polyfrost.polyplus.client.PolyPlusConfig
+import org.polyfrost.polyplus.client.utils.ClientPlatform
+
+object AdaptiveBlurDefaults {
+    private val logger = LogManager.getLogger("PolyPlus/AdaptiveBlur")
+
+    private const val POLYPLUS_PACKAGE = "org.polyfrost.polyplus."
+    private const val FALLBACK_REFRESH_RATE = 60
+    private const val WINDOW_MILLIS = 5_000L
+    private const val WARMUP_MILLIS = 1_000L
+
+    private const val LOW_FPS_MARGIN = 10
+    private const val HEADROOM_MARGIN = 30
+    private const val HEADROOM_MARGIN_HI = 75
+    private const val UNITY_BLUR_TYPE = 1
+    private const val REDUCED_SAMPLES = 8f
+    private const val MEDIUM_SAMPLES = 12f
+
+    var sampled by mutableStateOf(false)
+        private set
+
+    var recommendedMode by mutableStateOf(OnboardingFeatures.MOTION_BLUR_QUALITY)
+        private set
+
+    private var windowStartNanos = 0L
+    private var fpsSum = 0L
+    private var frameCount = 0
+
+    @Volatile
+    private var sampling = false
+
+    @JvmStatic
+    fun isSampling(): Boolean = sampling
+
+    fun initialize() {
+        eventHandler { event: MainMenuFpsEvent ->
+            onSample(event.averageFps)
+        }
+        EventHandler.ofRemoving(FramebufferRenderEvent.End::class.java) {
+            tickSample()
+            sampled
+        }.register()
+    }
+
+    private fun tickSample() {
+        if (sampled) return
+        val mc = Minecraft.getInstance()
+        val screen = currentScreen(mc)
+        val onMenu = mc.player == null && screen != null && screen.javaClass.name.startsWith(POLYPLUS_PACKAGE)
+        if (!onMenu) {
+            abortWindow()
+            return
+        }
+
+        if (!sampling) {
+            sampling = true
+            windowStartNanos = System.nanoTime()
+            fpsSum = 0L
+            frameCount = 0
+        }
+
+        val elapsedMillis = (System.nanoTime() - windowStartNanos) / 1_000_000L
+        if (elapsedMillis >= WARMUP_MILLIS) {
+            fpsSum += Platform.compatibility().fps().coerceAtLeast(0)
+            frameCount++
+        }
+        if (elapsedMillis >= WARMUP_MILLIS + WINDOW_MILLIS) {
+            sampling = false
+            onSample(if (frameCount > 0) fpsSum.toFloat() / frameCount else 0f)
+        }
+    }
+
+    private fun abortWindow() {
+        if (sampling) {
+            sampling = false
+            fpsSum = 0L
+            frameCount = 0
+        }
+    }
+
+    private fun currentScreen(mc: Minecraft): Screen? =
+        //? if >= 26.2 {
+        mc.gui.screen()
+        //?} else
+        //mc.screen
+
+    private fun onSample(averageFps: Float) {
+        abortWindow()
+        if (sampled) return
+        val refreshRate = refreshRate()
+        recommendedMode = when {
+            averageFps < refreshRate - LOW_FPS_MARGIN -> OnboardingFeatures.MOTION_BLUR_DISABLED
+            averageFps < refreshRate + HEADROOM_MARGIN -> OnboardingFeatures.MOTION_BLUR_PERFORMANCE
+            else -> OnboardingFeatures.MOTION_BLUR_QUALITY
+        }
+        if (!PolyPlusConfig.adaptiveBlurApplied && !OnboardingFeatures.needsMotionBlurChoice()) {
+            apply(averageFps, refreshRate)
+        }
+        sampled = true
+    }
+
+    private fun apply(averageFps: Float, refreshRate: Int) {
+        val instance = polyBlurInstance() ?: return
+
+        runCatching {
+            when {
+                averageFps < refreshRate + HEADROOM_MARGIN -> {
+                    OnboardingFeatures.setInt(instance, "setBlurType", UNITY_BLUR_TYPE)
+                    OnboardingFeatures.setFloat(instance, "setMotionBlurSamples", REDUCED_SAMPLES)
+                    OnboardingFeatures.setBoolean(instance, "setBlurHand", false)
+                    logger.info(
+                        "Avg main-menu FPS {} below refresh {} + {}; Unity blur, hand blur off, {} samples",
+                        averageFps, refreshRate, HEADROOM_MARGIN, REDUCED_SAMPLES.toInt(),
+                    )
+                }
+                averageFps < refreshRate + HEADROOM_MARGIN_HI -> {
+                    OnboardingFeatures.setFloat(instance, "setMotionBlurSamples", MEDIUM_SAMPLES)
+                    logger.info(
+                        "Avg main-menu FPS {} below refresh {} + {}; {} samples",
+                        averageFps, refreshRate, HEADROOM_MARGIN_HI, MEDIUM_SAMPLES.toInt(),
+                    )
+                }
+                else -> logger.info(
+                    "Avg main-menu FPS {} has headroom over refresh {}; keeping PolyBlur defaults",
+                    averageFps, refreshRate,
+                )
+            }
+            instance.javaClass.getMethod("save").invoke(instance)
+        }.onFailure { logger.warn("Could not apply adaptive blur defaults", it) }
+
+        PolyPlusConfig.adaptiveBlurApplied = true
+        PolyPlusConfig.save()
+    }
+
+    private fun refreshRate(): Int = runCatching {
+        ClientPlatform.monitorRefreshRate().takeIf { it > 0 } ?: FALLBACK_REFRESH_RATE
+    }.getOrDefault(FALLBACK_REFRESH_RATE)
+
+    private fun polyBlurInstance(): Any? = runCatching {
+        Class.forName(OnboardingFeatures.POLYBLUR_CONFIG).getField("INSTANCE").get(null)
+    }.getOrNull()
+}

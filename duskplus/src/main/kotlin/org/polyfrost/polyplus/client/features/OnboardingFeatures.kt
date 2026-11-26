@@ -1,0 +1,949 @@
+@file:OptIn(ExperimentalOneConfigUiApi::class)
+
+package org.polyfrost.polyplus.client.features
+
+import com.mojang.blaze3d.platform.InputConstants
+//? if > 1.8.9 {
+import net.minecraft.client.KeyMapping
+//?} else {
+/*import net.minecraft.client.options.GameOptions
+import net.minecraft.client.options.KeyBinding as KeyMapping
+import net.minecraft.client.render.Window
+*///?}
+import net.minecraft.client.Minecraft
+import org.apache.logging.log4j.LogManager
+import org.polyfrost.oneconfig.api.event.v1.eventHandler
+import org.polyfrost.oneconfig.api.event.v1.events.TickEvent
+import org.polyfrost.oneconfig.api.ui.v1.ExperimentalOneConfigUiApi
+import org.polyfrost.oneconfig.api.ui.v1.theme.OneConfigTheme
+import org.polyfrost.oneconfig.api.ui.v1.theme.OneConfigUITheme
+import org.polyfrost.polyplus.client.PolyPlusConfig
+import org.polyfrost.polyplus.client.gui.familyVariant
+import org.polyfrost.polyplus.client.gui.isGlassStyle
+import org.polyfrost.polyplus.client.gui.isLightTheme
+import org.polyfrost.polyplus.client.gui.isMinecraftStyle
+import org.polyfrost.polyplus.compat.Mods
+import java.util.concurrent.ConcurrentHashMap
+
+object OnboardingFeatures {
+    private val logger = LogManager.getLogger("PolyPlus/Onboarding")
+    private val warnedModApplyFailures = ConcurrentHashMap.newKeySet<String>()
+
+    @Volatile
+    private var nextModApplyAttemptMs = 0L
+
+    @Volatile
+    private var modApplyRetryDelayMs = MOD_APPLY_RETRY_INITIAL_MS
+
+    @Volatile
+    private var modApplyAttempts = 0
+
+    val polySprintAvailable: Boolean by lazy { classExists(POLYSPRINT_CONFIG) }
+    val polyBlurAvailable: Boolean by lazy { classExists(POLYBLUR_CONFIG) }
+    val betterGrassAvailable: Boolean by lazy { classExists(LBG_MOD) }
+    val fireOverlayAvailable: Boolean by lazy { hasFloatingField(OVERLAY_TWEAKS_CONFIG, FIRE_OVERLAY_HEIGHT) }
+    private val fireOverlayOpacityField: String? by lazy {
+        listOf(FIRE_OVERLAY_OPACITY, FIRE_OVERLAY_OPACITY_LEGACY).firstOrNull { hasFloatingField(OVERLAY_TWEAKS_CONFIG, it) }
+    }
+    val fireOverlayOpacityAvailable: Boolean get() = fireOverlayOpacityField != null
+    val mountOpacityAvailable: Boolean by lazy { classExists(MOUNT_OPACITY_CONFIG) }
+    val waveyCapesAvailable: Boolean by lazy {
+        classExists(WAVEY_MOD_BASE) || classExists(LEGACY_WAVEY_CONFIG)
+    }
+    val skinLayersAvailable: Boolean by lazy {
+        classExists(SKIN_LAYERS_MOD_BASE) || classExists(LEGACY_SKIN_LAYERS_CONFIG)
+    }
+    val gammaUtilsAvailable: Boolean by lazy { classExists(GAMMA_UTILS) }
+    val dynamicLightsAvailable: Boolean by lazy { classExists(LDL_MOD) }
+    val shieldHeightAvailable: Boolean by lazy {
+        hasFloatingField(OVERLAY_TWEAKS_CONFIG, SHIELD_HEIGHT)
+    }
+
+    enum class ModCard(val introducedIn: Int) {
+        GRASS(6),
+        FIRE_OVERLAY(1),
+        SHIELD_HEIGHT(1),
+        MOUNT(1),
+        CAPES(6),
+        SKIN_LAYERS(6),
+        GAMMA(2),
+        // 5: re-offered, onboarding used to seed it with CBH's own defaults instead of vanilla
+        BLOCK_HIGHLIGHT(5),
+        DYNAMIC_LIGHTS(4),
+    }
+
+    val ModCard.available: Boolean
+        get() = when (this) {
+            ModCard.GRASS -> betterGrassAvailable
+            ModCard.FIRE_OVERLAY -> fireOverlayAvailable
+            ModCard.SHIELD_HEIGHT -> shieldHeightAvailable
+            ModCard.MOUNT -> mountOpacityAvailable
+            ModCard.CAPES -> waveyCapesAvailable
+            ModCard.SKIN_LAYERS -> skinLayersAvailable
+            ModCard.GAMMA -> gammaUtilsAvailable && currentGamma() != null
+            ModCard.BLOCK_HIGHLIGHT -> BlockHighlightPresets.available
+            ModCard.DYNAMIC_LIGHTS -> dynamicLightsAvailable
+        }
+
+    val modsPageAvailable: Boolean
+        get() = polySprintAvailable || modCardCount > 0
+
+    val availableCards: List<ModCard>
+        get() = ModCard.entries.filter { it.available }
+
+    val modCardCount: Int
+        get() = availableCards.size
+
+    @JvmStatic
+    fun needsModSettingsChoice(): Boolean =
+        newModCards(PolyPlusConfig.onboardingModSettingsVersion, availableCards).isNotEmpty()
+
+    internal fun newModCards(completedVersion: Int, available: List<ModCard>): List<ModCard> =
+        available.filter { it.introducedIn > completedVersion }
+
+    internal fun settledAfterRun(
+        card: ModCard,
+        offered: List<ModCard>,
+        available: List<ModCard>,
+        touched: Set<ModCard>,
+        current: Boolean,
+        completedVersion: Int,
+    ): Boolean = when {
+        card in offered -> card !in touched
+        card !in available -> true
+        card.introducedIn > completedVersion -> true
+        else -> current
+    }
+
+    internal fun completedModSettingsVersion(completedVersion: Int, available: List<ModCard>): Int =
+        maxOf(completedVersion, available.maxOfOrNull { it.introducedIn } ?: completedVersion)
+
+    private val ModCard.settled: Boolean
+        get() = when (this) {
+            ModCard.GRASS -> PolyPlusConfig.onboardingBetterGrassSettled
+            ModCard.FIRE_OVERLAY -> PolyPlusConfig.onboardingFireOverlaySettled
+            ModCard.SHIELD_HEIGHT -> PolyPlusConfig.onboardingShieldHeightSettled
+            ModCard.MOUNT -> PolyPlusConfig.onboardingMountOpacitySettled
+            ModCard.CAPES -> PolyPlusConfig.onboardingWaveyCapesSettled
+            ModCard.SKIN_LAYERS -> PolyPlusConfig.onboardingSkinLayersSettled
+            ModCard.GAMMA -> PolyPlusConfig.onboardingGammaSettled
+            ModCard.BLOCK_HIGHLIGHT -> PolyPlusConfig.onboardingBlockHighlightSettled
+            ModCard.DYNAMIC_LIGHTS -> PolyPlusConfig.onboardingDynamicLightsSettled
+        }
+
+    private val ModCard.pending: Boolean
+        get() = !settled && PolyPlusConfig.onboardingModSettingsVersion >= introducedIn && available
+
+    val guidedCards: List<ModCard> = listOf(
+        ModCard.GRASS,
+        ModCard.FIRE_OVERLAY,
+        ModCard.SHIELD_HEIGHT,
+        ModCard.MOUNT,
+        ModCard.BLOCK_HIGHLIGHT
+    )
+
+    internal fun guideFlag(card: ModCard): Int = guidedCards.indexOf(card).let { if (it < 0) 0 else 1 shl it }
+
+    @JvmStatic
+    fun pendingGuides(): List<ModCard> {
+        if (!PolyPlusConfig.onboardingCompleted) return emptyList()
+        return guidedCards.filter { card ->
+            guideNeeded(
+                card,
+                shown = PolyPlusConfig.onboardingGuidesShown,
+                completedVersion = PolyPlusConfig.onboardingModSettingsVersion,
+                available = card.available,
+                movedFromDefault = card.movedFromDefault(),
+            )
+        }
+    }
+
+    internal fun guideNeeded(
+        card: ModCard,
+        shown: Int,
+        completedVersion: Int,
+        available: Boolean,
+        movedFromDefault: Boolean,
+    ): Boolean = card in guidedCards &&
+        shown and guideFlag(card) == 0 &&
+        available &&
+        completedVersion >= card.introducedIn &&
+        movedFromDefault
+
+    @JvmStatic
+    fun needsGuides(): Boolean = pendingGuides().isNotEmpty()
+
+    fun markGuidesShown(cards: Collection<ModCard>) {
+        PolyPlusConfig.onboardingGuidesShown = cards.fold(PolyPlusConfig.onboardingGuidesShown) { mask, card ->
+            mask or guideFlag(card)
+        }
+    }
+
+    private fun ModCard.movedFromDefault(): Boolean = when (this) {
+        ModCard.GRASS -> (currentBetterGrassMode() ?: BETTER_GRASS_FANCY) != BETTER_GRASS_FANCY
+        ModCard.FIRE_OVERLAY ->
+            (currentFireOverlayHeight() ?: FIRE_OVERLAY_MAX) < FIRE_OVERLAY_MAX - 0.001 ||
+                (currentFireOverlayOpacity() ?: FIRE_OPACITY_VANILLA) < FIRE_OPACITY_VANILLA - 0.5f
+        ModCard.SHIELD_HEIGHT -> (currentShieldHeight() ?: SHIELD_HEIGHT_MAX) < SHIELD_HEIGHT_MAX - 0.001f
+        ModCard.MOUNT -> (currentHorseOpacity() ?: HORSE_OPACITY_MAX) < HORSE_OPACITY_MAX - 0.001f
+        else -> false
+    }
+
+    @JvmStatic
+    fun needsMotionBlurChoice(): Boolean =
+        polyBlurAvailable && PolyPlusConfig.onboardingMotionBlurMode == MOTION_BLUR_UNSET
+
+    fun initialize() {
+        eventHandler { _: TickEvent.End ->
+            if (!PolyPlusConfig.animatiumItemPositionReset) resetAnimatiumItemPosition()
+            if (!PolyPlusConfig.itemPhysicDefaultApplied) disableItemPhysicByDefault()
+            if (!PolyPlusConfig.onboardingCompleted) return@eventHandler
+            var changed = false
+            if (!PolyPlusConfig.onboardingFeaturesApplied) {
+                applyCoreSettings()
+                changed = true
+            }
+            if (polySprintAvailable && !PolyPlusConfig.onboardingSprintApplied) {
+                applyToggleSprint(PolyPlusConfig.onboardingToggleSprint)
+                PolyPlusConfig.onboardingSprintApplied = true
+                changed = true
+            }
+            if (polyBlurAvailable && !PolyPlusConfig.onboardingPolyBlurApplied) {
+                if (applyMotionBlur(PolyPlusConfig.onboardingMotionBlurMode, PolyPlusConfig.onboardingMotionBlur)) {
+                    PolyPlusConfig.onboardingPolyBlurApplied = true
+                    changed = true
+                }
+            }
+            if (applyPendingModOptions()) {
+                changed = true
+            }
+            if (changed) PolyPlusConfig.save()
+        }
+    }
+
+    fun applySavedSettings() {
+        applyCoreSettings()
+        if (polySprintAvailable) {
+            applyToggleSprint(PolyPlusConfig.onboardingToggleSprint)
+            PolyPlusConfig.onboardingSprintApplied = true
+        }
+        if (applyMotionBlur(PolyPlusConfig.onboardingMotionBlurMode, PolyPlusConfig.onboardingMotionBlur)) {
+            PolyPlusConfig.onboardingPolyBlurApplied = true
+        }
+        applyPendingModOptions(force = true)
+        PolyPlusConfig.save()
+    }
+
+    fun applySavedModSettings() {
+        applyPendingModOptions(force = true)
+        PolyPlusConfig.save()
+    }
+
+    private fun applyPendingModOptions(force: Boolean = false): Boolean {
+        val now = System.currentTimeMillis()
+        if (force) {
+            modApplyAttempts = 0
+            modApplyRetryDelayMs = MOD_APPLY_RETRY_INITIAL_MS
+        } else if (now < nextModApplyAttemptMs || modApplyAttempts >= MOD_APPLY_MAX_ATTEMPTS) {
+            return false
+        }
+        if (!hasPendingModOptions()) return false
+
+        var changed = false
+        if (ModCard.GRASS.pending) {
+            if (applyBetterGrass(PolyPlusConfig.onboardingBetterGrassMode)) {
+                PolyPlusConfig.onboardingBetterGrassSettled = true
+                changed = true
+            }
+        }
+        val fireOverlayPending = ModCard.FIRE_OVERLAY.pending
+        val shieldHeightPending = ModCard.SHIELD_HEIGHT.pending
+        if (fireOverlayPending || shieldHeightPending) {
+            val applied = applyFireOverlay(
+                PolyPlusConfig.onboardingFireOverlayHeight,
+                PolyPlusConfig.onboardingFireOverlayOpacity,
+                PolyPlusConfig.onboardingShieldHeight,
+                applyFireSettings = fireOverlayPending,
+                applyShieldHeight = shieldHeightPending,
+            )
+            if (applied) {
+                if (fireOverlayPending) PolyPlusConfig.onboardingFireOverlaySettled = true
+                if (shieldHeightPending) PolyPlusConfig.onboardingShieldHeightSettled = true
+                changed = true
+            }
+        }
+        if (ModCard.MOUNT.pending) {
+            if (applyHorseOpacity(PolyPlusConfig.onboardingHorseOpacity)) {
+                PolyPlusConfig.onboardingMountOpacitySettled = true
+                changed = true
+            }
+        }
+        if (ModCard.CAPES.pending) {
+            if (applyWaveyCapes(PolyPlusConfig.onboardingWaveyCapes)) {
+                PolyPlusConfig.onboardingWaveyCapesSettled = true
+                changed = true
+            }
+        }
+        if (ModCard.SKIN_LAYERS.pending) {
+            if (applySkinLayers(PolyPlusConfig.onboardingSkinLayers)) {
+                PolyPlusConfig.onboardingSkinLayersSettled = true
+                changed = true
+            }
+        }
+        if (ModCard.GAMMA.pending) {
+            if (applyGamma(
+                    PolyPlusConfig.onboardingGamma,
+                    PolyPlusConfig.onboardingGammaToggled,
+                    PolyPlusConfig.onboardingGammaSmooth,
+                )
+            ) {
+                PolyPlusConfig.onboardingGammaSettled = true
+                changed = true
+            }
+        }
+        if (ModCard.BLOCK_HIGHLIGHT.pending) {
+            if (applyBlockHighlight(PolyPlusConfig.onboardingBlockHighlightConfig)) {
+                PolyPlusConfig.onboardingBlockHighlightSettled = true
+                changed = true
+            }
+        }
+        if (ModCard.DYNAMIC_LIGHTS.pending) {
+            if (applyDynamicLights(PolyPlusConfig.onboardingDynamicLightsMode)) {
+                PolyPlusConfig.onboardingDynamicLightsSettled = true
+                changed = true
+            }
+        }
+        if (hasPendingModOptions()) {
+            modApplyAttempts++
+            nextModApplyAttemptMs = now + modApplyRetryDelayMs
+            modApplyRetryDelayMs = (modApplyRetryDelayMs * 2).coerceAtMost(MOD_APPLY_RETRY_MAX_MS)
+            if (modApplyAttempts >= MOD_APPLY_MAX_ATTEMPTS) {
+                logger.warn("Giving up on the optional-mod settings after {} attempts", modApplyAttempts)
+            }
+        } else {
+            modApplyAttempts = 0
+            nextModApplyAttemptMs = 0L
+            modApplyRetryDelayMs = MOD_APPLY_RETRY_INITIAL_MS
+        }
+        return changed
+    }
+
+    private fun hasPendingModOptions(): Boolean = ModCard.entries.any { it.pending }
+
+    private fun logModApplyFailure(key: String, message: String, error: Throwable) {
+        if (error is ClassNotFoundException) return
+        if (warnedModApplyFailures.add(key)) logger.warn(message, error) else logger.debug(message, error)
+    }
+
+    fun applySavedMotionBlur() {
+        if (applyMotionBlur(PolyPlusConfig.onboardingMotionBlurMode, PolyPlusConfig.onboardingMotionBlur)) {
+            PolyPlusConfig.onboardingPolyBlurApplied = true
+            PolyPlusConfig.save()
+        }
+    }
+
+    private fun applyCoreSettings() {
+        applyTheme(PolyPlusConfig.onboardingLightTheme, PolyPlusConfig.onboardingUiStyle)
+        applyGuiScale(PolyPlusConfig.onboardingGuiScale)
+        PolyPlusConfig.onboardingFeaturesApplied = true
+    }
+
+    fun applyGuiScale(value: Int, persist: Boolean = true) {
+        if (Mods.guiSlider) return
+        runCatching {
+            val mc = Minecraft.getInstance()
+            //? if > 1.8.9 {
+            mc.options.guiScale().set(value.coerceAtLeast(0))
+            //?} else {
+            /*mc.options.guiScale = value.coerceAtLeast(0)
+            *///?}
+            if (persist) mc.options.save()
+            //? if >= 26.1 {
+            mc.resizeGui()
+            //?} elif > 1.8.9 {
+            /*mc.resizeDisplay()
+            *///?} else {
+            /*val window = Window(mc)
+            mc.screen?.init(mc, window.width, window.height)
+            *///?}
+        }.onFailure { logger.warn("Could not apply GUI scale preference", it) }
+    }
+
+    fun maxGuiScale(): Int = runCatching {
+        val mc = Minecraft.getInstance()
+        //? if > 1.8.9 {
+        mc.window.calculateScale(0, mc.isEnforceUnicode)
+        //?} else {
+        /*var scale = 1
+        while (mc.width / (scale + 1) >= 320 && mc.height / (scale + 1) >= 240) scale++
+        if (mc.isUnicode && scale % 2 != 0 && scale != 1) scale--
+        scale
+        *///?}
+    }.getOrDefault(4).coerceAtLeast(1)
+
+    fun uiStyleOf(theme: OneConfigUITheme?): Int = when {
+        theme == null -> UI_STYLE_POLYFROSTED
+        theme.isMinecraftStyle -> UI_STYLE_MINECRAFT
+        theme.isGlassStyle -> UI_STYLE_POLYGLASS
+        else -> UI_STYLE_POLYFROSTED
+    }
+
+    fun uiStyleTheme(style: Int, light: Boolean): OneConfigUITheme = when (style) {
+        UI_STYLE_MINECRAFT -> if (light) OneConfigTheme.MINECRAFT_LIGHT else OneConfigTheme.MINECRAFT_DARK
+        UI_STYLE_POLYGLASS -> if (light) OneConfigTheme.GLASS_LIGHT else OneConfigTheme.GLASS_DARK
+        else -> if (light) OneConfigTheme.POLYFROSTED_LIGHT else OneConfigTheme.POLYFROSTED_DARK
+    }
+
+    fun applyTheme(light: Boolean, style: Int) {
+        val active = OneConfigTheme.active
+        if (active != null && uiStyleOf(active) == style && active.isLightTheme == light) return
+        val sameFamily = active?.takeIf { uiStyleOf(it) == style }?.familyVariant(light)
+        OneConfigTheme.activate(sameFamily ?: uiStyleTheme(style, light))
+    }
+
+    fun themeVariant(light: Boolean): OneConfigUITheme? {
+        val active = OneConfigTheme.active ?: return uiStyleTheme(UI_STYLE_POLYFROSTED, light)
+        return active.familyVariant(light)
+    }
+
+    private fun applyToggleSprint(enabled: Boolean) {
+        runCatching {
+            //? if > 1.8.9 {
+            Minecraft.getInstance().options.toggleSprint().set(enabled)
+            Minecraft.getInstance().options.save()
+            //?} else {
+            /*val config = Class.forName(POLYSPRINT_CONFIG)
+            val instance = config.getField("INSTANCE").get(null)
+            setBoolean(instance, "setToggleSprint", enabled)
+            config.getMethod("save").invoke(instance)
+            *///?}
+        }.onFailure { logger.warn("Could not apply toggle sprint preference", it) }
+    }
+
+    fun applyMotionBlur(mode: Int, strength: Int): Boolean {
+        if (mode == MOTION_BLUR_UNSET) return false
+        return runCatching {
+            val config = Class.forName(POLYBLUR_CONFIG)
+            val instance = config.getField("INSTANCE").get(null)
+            val performance = mode == MOTION_BLUR_PERFORMANCE
+            setBoolean(instance, "setEnabled", mode != MOTION_BLUR_DISABLED)
+            if (mode != MOTION_BLUR_DISABLED) {
+                setFloat(instance, "setStrength", strength.coerceIn(1, 10).toFloat())
+                setInt(instance, "setBlurType", if (performance) UNITY_BLUR_TYPE else HYBRID_BLUR_TYPE)
+                setFloat(instance, "setMotionBlurSamples", if (performance) PERFORMANCE_SAMPLES else QUALITY_SAMPLES)
+                setBoolean(instance, "setBlurHand", !performance) // >= 1.21.5 only skipped if absent
+            }
+            config.getMethod("save").invoke(instance)
+            true
+        }.onFailure {
+            if (it !is ClassNotFoundException) logger.warn("Could not apply PolyBlur preference", it)
+        }.getOrDefault(false)
+    }
+
+    private fun betterGrassConfig(): Any {
+        val modClass = Class.forName(LBG_MOD)
+        val mod = modClass.getMethod("get").invoke(null) ?: error("LambdaBetterGrass is not initialised yet")
+        return modClass.getField("config").get(mod) ?: error("LambdaBetterGrass has no config")
+    }
+
+    private fun modToggle(modId: String): Any? = runCatching {
+        Class.forName(MOD_TOGGLES).getMethod("toggleFor", String::class.java).invoke(null, modId)
+    }.getOrNull()
+
+    private fun modToggledOff(modId: String): Boolean = runCatching {
+        modToggle(modId)?.let { Class.forName(MOD_TOGGLE).getMethod("isEnabled").invoke(it) } == false
+    }.getOrDefault(false)
+
+    private fun setModToggle(modId: String, enabled: Boolean): Boolean = runCatching {
+        val toggle = modToggle(modId) ?: return false
+        Class.forName(MOD_TOGGLE).getMethod("setEnabled", Boolean::class.javaPrimitiveType).invoke(toggle, enabled)
+        true
+    }.getOrDefault(false)
+
+    fun currentBetterGrassMode(): Int? = runCatching {
+        if (modToggledOff(LBG_ID)) return BETTER_GRASS_OFF
+        val mode = betterGrassConfig().let { it.javaClass.getMethod("getMode").invoke(it) } as Enum<*>
+        BETTER_GRASS_MODES.indexOf(mode.name).takeIf { it >= 0 } ?: BETTER_GRASS_FANCY
+    }.getOrNull()
+
+    fun applyBetterGrass(mode: Int): Boolean = runCatching {
+        val on = mode != BETTER_GRASS_OFF
+        if (!on && setModToggle(LBG_ID, false)) return true
+        val config = betterGrassConfig()
+        val modeClass = Class.forName(LBG_MODE)
+        val name = BETTER_GRASS_MODES.getOrElse(mode) { BETTER_GRASS_MODES[BETTER_GRASS_FANCY] }
+        @Suppress("UNCHECKED_CAST")
+        val constant = java.lang.Enum.valueOf(modeClass as Class<out Enum<*>>, name)
+        config.javaClass.getMethod("setMode", modeClass).invoke(config, constant)
+        config.javaClass.getMethod("setBetterLayer", Boolean::class.javaPrimitiveType).invoke(config, on)
+        config.javaClass.getMethod("save").invoke(config)
+        if (on) setModToggle(LBG_ID, true)
+        true
+    }.onFailure {
+        logModApplyFailure("better-grass", "Could not apply the LambdaBetterGrass preference", it)
+    }.getOrDefault(false)
+
+    private fun handlerAccess(configClass: Class<*>): Pair<Any, () -> Unit> {
+        val handler = configClass.getField("CONFIG").get(null)
+            ?: error("${configClass.simpleName} has no config handler")
+        val instance = handler.javaClass.getMethod("instance").invoke(handler)
+            ?: error("${configClass.simpleName} config is unavailable")
+        val save: () -> Unit = { handler.javaClass.getMethod("save").invoke(handler) }
+        return instance to save
+    }
+
+    internal fun overlayTweaksAccess(
+        configClass: Class<*> = Class.forName(OVERLAY_TWEAKS_CONFIG),
+    ): Pair<Any, () -> Unit> {
+        if (runCatching { configClass.getField("CONFIG") }.isSuccess) return handlerAccess(configClass)
+
+        val instance = configClass.getField("INSTANCE").get(null)
+            ?: error("Overlay Tweaks config is unavailable")
+        val save: () -> Unit = { configClass.getMethod("save").invoke(instance) }
+        return instance to save
+    }
+
+    internal fun readFloatingField(instance: Any, name: String): Double {
+        val value = instance.javaClass.getField(name).get(instance)
+        return (value as? Number)?.toDouble() ?: error("Overlay Tweaks option '$name' is not numeric")
+    }
+
+    internal fun writeFloatingField(instance: Any, name: String, value: Double) {
+        val field = instance.javaClass.getField(name)
+        when (field.type) {
+            java.lang.Double.TYPE -> field.setDouble(instance, value)
+            java.lang.Float.TYPE -> field.setFloat(instance, value.toFloat())
+            else -> error("Overlay Tweaks option '$name' is not floating-point")
+        }
+    }
+
+    fun currentFireOverlayHeight(): Double? = runCatching {
+        val instance = overlayTweaksAccess().first
+        readFloatingField(instance, FIRE_OVERLAY_HEIGHT)
+    }.getOrNull()
+
+    fun currentFireOverlayOpacity(): Float? = runCatching {
+        val instance = overlayTweaksAccess().first
+        readFloatingField(instance, fireOverlayOpacityField!!).toFloat()
+    }.getOrNull()
+
+    fun currentShieldHeight(): Float? = runCatching {
+        val instance = overlayTweaksAccess().first
+        readFloatingField(instance, SHIELD_HEIGHT).toFloat()
+    }.getOrNull()
+
+    fun applyFireOverlay(
+        height: Double,
+        opacity: Float,
+        shieldHeight: Float,
+        applyFireSettings: Boolean = true,
+        applyShieldHeight: Boolean = true,
+    ): Boolean = runCatching {
+        val (instance, save) = overlayTweaksAccess()
+        if (applyFireSettings && fireOverlayAvailable) {
+            writeFloatingField(instance, FIRE_OVERLAY_HEIGHT, height.coerceIn(FIRE_OVERLAY_MIN, FIRE_OVERLAY_MAX))
+        }
+        val opacityField = fireOverlayOpacityField
+        if (applyFireSettings && opacityField != null) {
+            writeFloatingField(
+                instance,
+                opacityField,
+                opacity.coerceIn(FIRE_OPACITY_MIN, FIRE_OPACITY_MAX).toDouble(),
+            )
+        }
+        if (applyShieldHeight && shieldHeightAvailable) {
+            writeFloatingField(
+                instance,
+                SHIELD_HEIGHT,
+                shieldHeight.coerceIn(SHIELD_HEIGHT_MIN, SHIELD_HEIGHT_MAX).toDouble(),
+            )
+        }
+        save()
+        true
+    }.onFailure {
+        logModApplyFailure("overlay-tweaks", "Could not apply the Overlay Tweaks preference", it)
+    }.getOrDefault(false)
+
+    private fun mountOpacityAccess(): Pair<Any, () -> Unit> = handlerAccess(Class.forName(MOUNT_OPACITY_CONFIG))
+
+    fun currentHorseOpacity(): Float? = runCatching {
+        val instance = mountOpacityAccess().first
+        instance.javaClass.getField(HORSE_OPACITY).getFloat(instance)
+    }.getOrNull()
+
+    fun applyHorseOpacity(opacity: Float): Boolean = runCatching {
+        val (instance, save) = mountOpacityAccess()
+        val value = opacity.coerceIn(HORSE_OPACITY_MIN, HORSE_OPACITY_MAX)
+        var applied = false
+        for (field in MOUNT_OPACITY_FIELDS) {
+            runCatching { instance.javaClass.getField(field).setFloat(instance, value) }
+                .onSuccess { applied = true }
+        }
+        if (!applied) error("Mount Opacity has no opacity fields")
+        save()
+        true
+    }.onFailure {
+        logModApplyFailure("mount-opacity", "Could not apply the Mount Opacity preference", it)
+    }.getOrDefault(false)
+
+    private fun waveyConfig(): Any =
+        Class.forName(WAVEY_MOD_BASE).getField("config").get(null) ?: error("WaveyCapes is not initialised yet")
+
+    private fun waveySave() {
+        val base = Class.forName(WAVEY_MOD_BASE)
+        val instance = base.getField("INSTANCE").get(null) ?: error("WaveyCapes is not initialised yet")
+        base.getMethod("writeConfig").invoke(instance)
+    }
+
+    private fun legacyWaveyMovementOption(): Any? =
+        runCatching { loadWithoutInit(LEGACY_WAVEY_CONFIG) }.getOrNull()?.getField("INSTANCE")?.get(null)
+            ?.let { it.javaClass.getMethod("getCapeMovement").invoke(it) }
+
+    private fun legacyWaveyMovement(option: Any): String =
+        (option.javaClass.getMethod("get").invoke(option) as Enum<*>).name
+
+    fun currentWaveyCapes(): Boolean? = runCatching {
+        legacyWaveyMovementOption()?.let {
+            if (modToggledOff(LEGACY_WAVEY_ID)) return false
+            return@runCatching legacyWaveyMovement(it) != CAPE_MOVEMENT_VANILLA
+        }
+        if (modToggledOff(WAVEY_ID)) return false
+        val movement = waveyConfig().let { it.javaClass.getField(CAPE_MOVEMENT).get(it) } as Enum<*>
+        movement.name != CAPE_MOVEMENT_VANILLA
+    }.getOrNull()
+
+    fun applyWaveyCapes(enabled: Boolean): Boolean = runCatching {
+        legacyWaveyMovementOption()?.let { option ->
+            if (setModToggle(LEGACY_WAVEY_ID, enabled) && !enabled) return true
+            waveyCapeMovementWrite(enabled, legacyWaveyMovement(option))
+                ?.let { option.javaClass.getMethod("setByName", String::class.java).invoke(option, it) }
+            val config = loadWithoutInit(LEGACY_WAVEY_CONFIG).getField("INSTANCE").get(null)
+            Class.forName(OSL_CONFIG_MANAGER).getMethod("save", Class.forName(OSL_CONFIG)).invoke(null, config)
+            return@runCatching true
+        }
+        if (setModToggle(WAVEY_ID, enabled) && !enabled) return true
+        val config = waveyConfig()
+        waveyCapeMovementWrite(enabled, currentEnumName(config, CAPE_MOVEMENT))
+            ?.let { setEnum(config, CAPE_MOVEMENT, CAPE_MOVEMENT_ENUM, it) }
+        waveySave()
+        true
+    }.onFailure {
+        logModApplyFailure("wavey-capes", "Could not apply the WaveyCapes preference", it)
+    }.getOrDefault(false)
+
+    internal fun waveyCapeMovementWrite(enabled: Boolean, movement: String?): String? = when {
+        !enabled -> CAPE_MOVEMENT_VANILLA
+        movement == CAPE_MOVEMENT_VANILLA -> CAPE_MOVEMENT_WAVEY
+        else -> null
+    }
+
+    private fun currentEnumName(target: Any, field: String): String? =
+        (target.javaClass.getField(field).get(target) as? Enum<*>)?.name
+
+    private fun setEnum(target: Any, field: String, enumClass: String, name: String) {
+        @Suppress("UNCHECKED_CAST")
+        val type = Class.forName(enumClass) as Class<out Enum<*>>
+        target.javaClass.getField(field).set(target, java.lang.Enum.valueOf(type, name))
+    }
+
+    private fun skinLayersConfig(): Any =
+        Class.forName(SKIN_LAYERS_MOD_BASE).getField("config").get(null)
+            ?: error("3D Skin Layers is not initialised yet")
+
+    private fun legacySkinLayersConfig(): Any? =
+        runCatching { loadWithoutInit(LEGACY_SKIN_LAYERS_CONFIG) }.getOrNull()?.getField("INSTANCE")?.get(null)
+
+    private fun legacySkinLayerOptions(config: Any): List<Any> = SKIN_LAYERS.map {
+        config.javaClass.getMethod("get" + it.replaceFirstChar(Char::uppercaseChar)).invoke(config)
+    }
+
+    fun currentSkinLayers(): Boolean? = runCatching {
+        legacySkinLayersConfig()?.let { legacy ->
+            if (modToggledOff(LEGACY_SKIN_LAYERS_ID)) return false
+            val option = legacySkinLayerOptions(legacy).first()
+            return@runCatching option.javaClass.getMethod("get").invoke(option) as Boolean
+        }
+        if (modToggledOff(SKIN_LAYERS_ID)) return false
+        val config = skinLayersConfig()
+        config.javaClass.getField(SKIN_LAYERS.first()).getBoolean(config)
+    }.getOrNull()
+
+    fun applySkinLayers(enabled: Boolean): Boolean = runCatching {
+        legacySkinLayersConfig()?.let { legacy ->
+            if (setModToggle(LEGACY_SKIN_LAYERS_ID, enabled) && !enabled) return true
+            legacySkinLayerOptions(legacy).forEach {
+                it.javaClass.getMethod("set", Any::class.java).invoke(it, enabled)
+            }
+            Class.forName(OSL_CONFIG_MANAGER).getMethod("save", Class.forName(OSL_CONFIG)).invoke(null, legacy)
+            return@runCatching true
+        }
+        if (setModToggle(SKIN_LAYERS_ID, enabled) && !enabled) return true
+        val config = skinLayersConfig()
+        SKIN_LAYERS.forEach { config.javaClass.getField(it).setBoolean(config, enabled) }
+        val base = Class.forName(SKIN_LAYERS_MOD_BASE)
+        val instance = base.getField("instance").get(null) ?: error("3D Skin Layers is not initialised yet")
+        base.getMethod("writeConfig").invoke(instance)
+        true
+    }.onFailure {
+        logModApplyFailure("skin-layers", "Could not apply the 3D Skin Layers preference", it)
+    }.getOrDefault(false)
+
+    private fun gammaSettings(): Any {
+        val config = Class.forName(GAMMA_UTILS).getMethod("getConfig").invoke(null)
+            ?: error("Gamma Utils is not initialised yet")
+        return config.javaClass.getField("gamma").get(config) ?: error("Gamma Utils has no gamma settings")
+    }
+
+    fun currentGamma(): Float? = runCatching {
+        val gamma = gammaSettings()
+        if (gamma.javaClass.getMethod("isDynamicEnabled").invoke(gamma) as Boolean) {
+            error("Gamma Utils is running dynamic gamma")
+        }
+        ((gamma.javaClass.getMethod("getValue").invoke(gamma) as Double) * 100.0).toFloat()
+    }.getOrNull()
+
+    fun currentGammaToggled(): Float? = runCatching {
+        val gamma = gammaSettings()
+        ((gamma.javaClass.getMethod("getToggledValue").invoke(gamma) as Double) * 100.0).toFloat()
+    }.getOrNull()
+
+    fun currentGammaSmooth(): Boolean? = runCatching {
+        val gamma = gammaSettings()
+        gamma.javaClass.getMethod("isSmoothTransitionEnabled").invoke(gamma) as Boolean
+    }.getOrNull()
+
+    fun gammaToggleKey(): KeyMapping? = runCatching {
+        //? if > 1.8.9 {
+        Minecraft.getInstance().options.keyMappings.firstOrNull { it.name == GAMMA_TOGGLE_KEY }
+        //?} else {
+        /*Minecraft.getInstance().options.keyBindings.firstOrNull { it.name == GAMMA_TOGGLE_KEY }
+        *///?}
+    }.getOrNull()
+
+    fun gammaToggleKeyLabel(): String? = runCatching {
+        //? if > 1.8.9 {
+        gammaToggleKey()?.translatedKeyMessage?.string
+        //?} else {
+        /*gammaToggleKey()?.let { GameOptions.getKeyName(it.keyCode) }
+        *///?}
+    }.getOrNull()
+
+    fun bindGammaToggleKey(key: InputConstants.Key): Boolean = runCatching {
+        val mapping = gammaToggleKey() ?: error("Gamma Utils has no toggle binding")
+        mapping.setKey(key)
+        KeyMapping.resetMapping()
+        Minecraft.getInstance().options.save()
+        true
+    }.onFailure {
+        logModApplyFailure("gamma-utils-key", "Could not rebind the Gamma Utils toggle key", it)
+    }.getOrDefault(false)
+
+    fun applyGamma(percent: Float, toggled: Float, smooth: Boolean): Boolean = runCatching {
+        val gamma = gammaSettings()
+        gamma.javaClass.getMethod("setSmoothTransitionStatus", Boolean::class.javaPrimitiveType)
+            .invoke(gamma, smooth)
+        Class.forName(GAMMA_MANAGER).getMethod(
+            "setGamma",
+            Double::class.javaPrimitiveType,
+            Boolean::class.javaPrimitiveType,
+            Boolean::class.javaPrimitiveType,
+        ).invoke(null, (percent.coerceIn(GAMMA_MIN, GAMMA_MAX) / 100f).toDouble(), false, false)
+        gamma.javaClass.getMethod("setToggledValue", Double::class.javaPrimitiveType)
+            .invoke(gamma, (toggled.coerceIn(GAMMA_MIN, GAMMA_MAX) / 100f).toDouble())
+        Class.forName(GAMMA_UTILS).getMethod("saveConfig").invoke(null)
+        true
+    }.onFailure {
+        logModApplyFailure("gamma-utils", "Could not apply the Gamma Utils preference", it)
+    }.getOrDefault(false)
+
+    fun applyBlockHighlight(json: String): Boolean = runCatching {
+        if (json.isNotBlank()) BlockHighlightPresets.applyJson(json)
+        true
+    }.onFailure {
+        logModApplyFailure("block-highlight", "Could not apply the Custom Block Highlight preset", it)
+    }.getOrDefault(false)
+
+    private fun dynamicLightsConfig(): Any {
+        val mod = Class.forName(LDL_MOD).getMethod("get").invoke(null) ?: error("LambDynamicLights is not initialised yet")
+        return mod.javaClass.getField("config").get(mod) ?: error("LambDynamicLights has no config")
+    }
+
+    fun currentDynamicLightsMode(): Int? = runCatching {
+        val mode = dynamicLightsConfig().let { it.javaClass.getMethod("getDynamicLightsMode").invoke(it) } as Enum<*>
+        DYNAMIC_LIGHTS_MODES.indexOf(mode.name).takeIf { it >= 0 } ?: DYNAMIC_LIGHTS_FANCY
+    }.getOrNull()
+
+    fun applyDynamicLights(mode: Int): Boolean = runCatching {
+        val config = dynamicLightsConfig()
+        val modeClass = Class.forName(LDL_MODE)
+        val name = DYNAMIC_LIGHTS_MODES.getOrElse(mode) { DYNAMIC_LIGHTS_MODES[DYNAMIC_LIGHTS_OFF] }
+        @Suppress("UNCHECKED_CAST")
+        val constant = java.lang.Enum.valueOf(modeClass as Class<out Enum<*>>, name)
+        config.javaClass.getMethod("setDynamicLightsMode", modeClass).invoke(config, constant)
+        config.javaClass.getMethod("save").invoke(config)
+        true
+    }.onFailure {
+        logModApplyFailure("dynamic-lights", "Could not apply the LambDynamicLights preference", it)
+    }.getOrDefault(false)
+
+    private fun resetAnimatiumItemPosition() {
+        runCatching {
+            val config = Class.forName(OVERFLOW_ANIMATIONS_CONFIG).getMethod("instance").invoke(null)
+                ?: error("OverflowAnimations config is unavailable")
+            val items = config.javaClass.getField("items").get(config) ?: error("OverflowAnimations has no items category")
+            ITEM_DEFAULTS.forEach { (name, value) ->
+                runCatching { items.javaClass.getField(name) }.getOrNull()?.setFloat(items, value)
+            }
+            config.javaClass.getMethod("save").invoke(config)
+        }.onFailure {
+            if (it !is ClassNotFoundException) {
+                logModApplyFailure("animatium-item-reset", "Could not reset the OverflowAnimations item position", it)
+            }
+        }
+        PolyPlusConfig.animatiumItemPositionReset = true
+        PolyPlusConfig.save()
+    }
+
+    private fun disableItemPhysicByDefault() {
+        if (!PolyPlusConfig.onboardingCompleted) {
+            runCatching {
+                val toggled = Class.forName(ITEM_PHYSIC_CONFIG).getField("toggled").get(null)
+                toggled.javaClass.getMethod("set", Any::class.java).invoke(toggled, false) // OSL saves it on shutdown
+            }.onFailure {
+                if (it !is ClassNotFoundException) {
+                    logModApplyFailure("item-physic-default", "Could not disable ItemPhysicLite by default", it)
+                }
+            }
+        }
+        PolyPlusConfig.itemPhysicDefaultApplied = true
+        PolyPlusConfig.save()
+    }
+
+    internal fun setBoolean(instance: Any, method: String, value: Boolean) {
+        val fn = runCatching { instance.javaClass.getMethod(method, Boolean::class.javaPrimitiveType) }.getOrNull()
+        if (fn == null) {
+            logger.debug("PolyBlur has no {}, skipping", method)
+            return
+        }
+        fn.invoke(instance, value)
+    }
+
+    internal fun setInt(instance: Any, method: String, value: Int) {
+        instance.javaClass.getMethod(method, Int::class.javaPrimitiveType).invoke(instance, value)
+    }
+
+    internal fun setFloat(instance: Any, method: String, value: Float) {
+        instance.javaClass.getMethod(method, Float::class.javaPrimitiveType).invoke(instance, value)
+    }
+
+    private fun loadWithoutInit(name: String): Class<*> = Class.forName(name, false, javaClass.classLoader)
+
+    private fun classExists(name: String) = runCatching { loadWithoutInit(name) }.isSuccess
+
+    internal fun hasFloatingField(className: String, fieldName: String): Boolean = runCatching {
+        loadWithoutInit(className).getField(fieldName).type
+    }.getOrNull().let { it == java.lang.Double.TYPE || it == java.lang.Float.TYPE }
+
+    const val MOD_SETTINGS_VERSION = 6
+    const val UI_STYLE_POLYFROSTED = 0
+    const val UI_STYLE_MINECRAFT = 1
+    const val UI_STYLE_POLYGLASS = 2
+
+    private const val MOD_APPLY_RETRY_INITIAL_MS = 1_000L
+    private const val MOD_APPLY_RETRY_MAX_MS = 60_000L
+    private const val MOD_APPLY_MAX_ATTEMPTS = 10
+
+    const val MOTION_BLUR_UNSET = -1
+    const val MOTION_BLUR_DISABLED = 0
+    const val MOTION_BLUR_PERFORMANCE = 1
+    const val MOTION_BLUR_QUALITY = 2
+
+    private const val UNITY_BLUR_TYPE = 1  // blurType dropdown 0 Phosphor 1 Unity 2 Hybrid
+    private const val HYBRID_BLUR_TYPE = 2
+    private const val PERFORMANCE_SAMPLES = 8f // motionBlurSamples slider range 4..32
+    private const val QUALITY_SAMPLES = 16f
+    private const val POLYSPRINT_CONFIG = "org.polyfrost.polysprint.client.PolySprintConfig"
+    internal const val POLYBLUR_CONFIG = "org.polyfrost.polyblur.client.PolyBlurConfig"
+
+    private const val MOD_TOGGLES = "org.polyfrost.oneconfig.api.ui.v1.ModToggles"
+    private const val MOD_TOGGLE = "org.polyfrost.oneconfig.api.ui.v1.ModToggle"
+    private const val LBG_ID = "lambdabettergrass"
+    private const val WAVEY_ID = "waveycapes"
+    private const val SKIN_LAYERS_ID = "skinlayers3d"
+    private const val LEGACY_WAVEY_ID = "legacy-waveycapes"
+    private const val LEGACY_SKIN_LAYERS_ID = "legacy-skin-layers"
+    private const val LBG_MOD = "dev.lambdaurora.lambdabettergrass.LambdaBetterGrass"
+    private const val LBG_MODE = "dev.lambdaurora.lambdabettergrass.LBGMode"
+    val BETTER_GRASS_MODES = listOf("OFF", "FASTEST", "FAST", "FANCY")
+    const val BETTER_GRASS_OFF = 0
+    const val BETTER_GRASS_FASTEST = 1
+    const val BETTER_GRASS_FANCY = 3
+
+    private const val OVERLAY_TWEAKS_CONFIG = "dev.microcontrollers.overlaytweaks.config.OverlayTweaksConfig"
+    private const val FIRE_OVERLAY_HEIGHT = "fireOverlayHeight"
+    const val FIRE_OVERLAY_MIN = -0.5
+    const val FIRE_OVERLAY_MAX = 0.0
+
+    private const val FIRE_OVERLAY_OPACITY = "fireOverlayOpacity"
+    private const val FIRE_OVERLAY_OPACITY_LEGACY = "customFireOverlayOpacity"
+    const val FIRE_OPACITY_MIN = 0f
+    const val FIRE_OPACITY_MAX = 100f
+    const val FIRE_OPACITY_VANILLA = 90f
+
+    private const val SHIELD_HEIGHT = "customShieldHeight"
+    const val SHIELD_HEIGHT_MIN = -0.5f
+    const val SHIELD_HEIGHT_MAX = 0f
+
+    private const val MOUNT_OPACITY_CONFIG = "dev.microcontrollers.mountopacity.config.MountOpacityConfig"
+    private const val HORSE_OPACITY = "horseOpacity"
+    private val MOUNT_OPACITY_FIELDS = listOf(
+        HORSE_OPACITY,
+        "pigOpacity",
+        "llamaOpacity",
+        "striderOpacity",
+        "camelOpacity",
+        "nautilusOpacity",
+        "happyGhastOpacity",
+        "defaultOpacity",
+    )
+    const val HORSE_OPACITY_MIN = 0f
+    const val HORSE_OPACITY_MAX = 100f
+
+    private const val WAVEY_MOD_BASE = "dev.tr7zw.waveycapes.versionless.ModBase"
+    private const val LEGACY_WAVEY_CONFIG = "org.polyfrost.waveycapes.config.WaveyCapesConfig"
+    private const val CAPE_MOVEMENT = "capeMovement"
+    private const val CAPE_MOVEMENT_ENUM = "dev.tr7zw.waveycapes.versionless.CapeMovement"
+    private const val CAPE_MOVEMENT_VANILLA = "VANILLA"
+    private const val CAPE_MOVEMENT_WAVEY = "BASIC_SIMULATION_3D"
+
+    private const val SKIN_LAYERS_MOD_BASE = "dev.tr7zw.skinlayers.SkinLayersModBase"
+    private const val LEGACY_SKIN_LAYERS_CONFIG = "org.polyfrost.skinlayers.config.SkinLayersConfig"
+    private const val OSL_CONFIG_MANAGER = "net.ornithemc.osl.config.api.ConfigManager"
+    private const val OSL_CONFIG = "net.ornithemc.osl.config.api.config.Config"
+    private val SKIN_LAYERS = listOf(
+        "enableHat",
+        "enableJacket",
+        "enableLeftSleeve",
+        "enableRightSleeve",
+        "enableLeftPants",
+        "enableRightPants",
+    )
+
+    private const val GAMMA_UTILS = "io.github.sjouwer.gammautils.GammaUtils"
+    private const val GAMMA_MANAGER = "io.github.sjouwer.gammautils.GammaManager"
+    private const val GAMMA_TOGGLE_KEY = "key.gammautils.gammaToggle"
+    const val GAMMA_MIN = 100f
+    const val GAMMA_MAX = 1500f
+
+    private const val LDL_MOD = "dev.lambdaurora.lambdynlights.LambDynLights"
+    private const val LDL_MODE = "dev.lambdaurora.lambdynlights.DynamicLightsMode"
+    val DYNAMIC_LIGHTS_MODES = listOf("OFF", "FASTEST", "FAST", "FANCY")
+    const val DYNAMIC_LIGHTS_OFF = 0
+    const val DYNAMIC_LIGHTS_FANCY = 3
+
+    private const val ITEM_PHYSIC_CONFIG = "xyz.tryfle.oitemphysic.config.OSLConfig"
+    private const val OVERFLOW_ANIMATIONS_CONFIG = "org.polyfrost.overflowanimations.config.OverflowAnimationsConfig"
+    private val ITEM_DEFAULTS = listOf("X", "Y", "Z").flatMap {
+        listOf("itemOffset$it" to 0f, "itemScale$it" to 1f, "itemRotation$it" to 0f)
+    }
+}

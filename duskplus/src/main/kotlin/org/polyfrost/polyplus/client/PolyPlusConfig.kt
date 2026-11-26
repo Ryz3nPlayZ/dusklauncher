@@ -1,0 +1,602 @@
+package org.polyfrost.polyplus.client
+
+import com.mojang.blaze3d.platform.InputConstants
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.Logger
+import org.polyfrost.oneconfig.api.config.v1.Config
+import org.polyfrost.oneconfig.api.config.v1.ConfigManager
+import org.polyfrost.oneconfig.api.config.v1.Tree
+import org.polyfrost.compose.render.PolyColor
+import org.polyfrost.oneconfig.api.config.v1.annotations.Color
+import org.polyfrost.oneconfig.api.config.v1.annotations.Dropdown
+import org.polyfrost.oneconfig.api.config.v1.annotations.Include
+import org.polyfrost.oneconfig.api.config.v1.annotations.Keybind
+import org.polyfrost.oneconfig.api.config.v1.annotations.Slider
+import org.polyfrost.oneconfig.api.config.v1.annotations.Switch
+import org.polyfrost.oneconfig.api.ui.v1.keybind.KeyModifiers
+import org.polyfrost.oneconfig.api.ui.v1.keybind.OneConfigKeybind
+import org.polyfrost.polyplus.client.party.Parties
+import org.polyfrost.polyplus.PolyPlusConstants
+import org.polyfrost.polyplus.client.emotes.EmoteWheelKeybind
+import org.polyfrost.polyplus.client.features.OnboardingFeatures
+import org.polyfrost.polyplus.client.gui.ClientWatermark
+import org.polyfrost.polyplus.client.gui.PolyPlusOneConfigIntegration
+import org.polyfrost.polyplus.client.party.PartyVoice
+import org.polyfrost.polyplus.client.party.VoiceInputMode
+import org.polyfrost.polyplus.client.ping.PingInput
+import org.polyfrost.polyplus.client.privacy.PrivacyEnforcement
+import org.polyfrost.polyplus.client.social.SocialOverlay
+import org.polyfrost.polyplus.privacy.LauncherEnvironment
+import java.nio.file.Files
+import java.nio.file.Path
+
+object PolyPlusConfig : Config("${PolyPlusConstants.ID}.json", "Dusk Client", Category.OTHER) {
+    @Transient
+    private val LOGGER = LogManager.getLogger()
+
+    @JvmStatic @Include
+    var defaultSettingsApplied = false
+
+    @JvmStatic @Include
+    var appliedDefaults = ""
+
+    @JvmStatic @Include
+    var modOrderSeed = ""
+
+    @JvmStatic @Include
+    var pylonRawInput: Boolean? = null
+
+    @JvmStatic @Include
+    var alphabeticalModOrder = false
+
+    @JvmStatic @Include
+    var modSortModeSynced = false
+
+    @JvmStatic @Include
+    var onboardingCompleted = false
+
+    @JvmStatic @Include
+    var onboardingFeaturesApplied = false
+
+    @JvmStatic @Include
+    var onboardingSprintApplied = false
+
+    @JvmStatic @Include
+    var onboardingPolyBlurApplied = false
+
+    @JvmStatic @Include
+    var onboardingModSettingsVersion = 0
+
+    @JvmStatic @Include
+    var adaptiveBlurApplied = false
+
+    @JvmStatic @Include
+    var animatiumItemPositionReset = false
+
+    @JvmStatic @Include
+    var itemPhysicDefaultApplied = false
+
+    @JvmStatic @Include
+    var jvmAdviceShownAt = 0L
+
+    @JvmStatic @Include
+    var ignoredBadMods = ""
+
+    @JvmStatic
+    @Switch(
+        title = "RAM Analysis Notifications",
+        description = "Check how much memory this pack actually needs and suggest a change when the current allocation is hurting performance. Shown at most once every two days.",
+    )
+    var ramAdviceNotifications = true
+
+    @JvmStatic
+    @Switch(
+        title = "Problematic Mod Warnings",
+        description = "Warn on startup when an installed mod is on Dusk Client's list of mods known to cause crashes or conflicts.",
+    )
+    var badModWarnings = true
+
+    @JvmStatic
+    @Switch(
+        title = "Dusk Client Startup Screen",
+        description = "Show Dusk Client's loading screen and first launch card when the game starts. Turn this off to use Minecraft's own loading and accessibility screens.",
+    )
+    var brandedStartup = true
+
+    @JvmStatic
+    @Switch(
+        title = "Startup Time Notification",
+        description = "Show how long the game took to load once it finishes starting.",
+    )
+    var startupTimeNotification = false
+
+    @JvmStatic
+    @Switch(
+        title = "Resource Pack Version Warnings",
+        description = "Ask for confirmation before enabling a resource pack made for a different Minecraft version. Turn this off to enable such packs right away.",
+    )
+    var packVersionWarnings = true
+
+    @JvmStatic
+    @Switch(
+        title = "Dusk Client Section in OneConfig",
+        description = "Show the Dusk Client pages in the OneConfig sidebar. These settings stay available from the Mods tab and Minecraft's options.",
+    )
+    var oneConfigSection = true
+
+    @JvmStatic @Include
+    var vanillaOfferDismissed = false
+
+    @JvmStatic @Include
+    var watermarkAsked = false
+
+    @JvmStatic
+    @Switch(
+        title = "Dusk Client Watermark",
+        description = "Show the Dusk Client logo in inventories and options screens.",
+        subcategory = "Watermark",
+    )
+    var watermarkEnabled = false
+
+    @JvmStatic
+    @Dropdown(
+        title = "Position",
+        description = "Where the watermark sits on your screen.",
+        options = [
+            "Top Left", "Top Right", "Bottom Left", "Bottom Right",
+            "Top Center", "Bottom Center", "Left Center", "Right Center",
+        ],
+        subcategory = "Watermark",
+    )
+    var watermarkPosition = ClientWatermark.POSITION_BOTTOM_RIGHT
+
+    @JvmStatic
+    @Slider(
+        title = "Scale",
+        description = "Watermark size, as a percentage of normal.",
+        min = 50f,
+        max = 400f,
+        step = 5f,
+        subcategory = "Watermark",
+    )
+    var watermarkScale = 100f
+
+    @JvmStatic
+    @Slider(
+        title = "Horizontal Offset",
+        description = "How far the watermark sits from the left or right edge of the screen.",
+        min = 0f,
+        max = 200f,
+        step = 1f,
+        subcategory = "Watermark",
+    )
+    var watermarkOffsetX = 6f
+
+    @JvmStatic
+    @Slider(
+        title = "Vertical Offset",
+        description = "How far the watermark sits from the top or bottom edge of the screen.",
+        min = 0f,
+        max = 200f,
+        step = 1f,
+        subcategory = "Watermark",
+    )
+    var watermarkOffsetY = 6f
+
+    @JvmStatic
+    @Switch(
+        title = "Use Accent Color",
+        description = "Draw the watermark in your OneConfig accent color.",
+        subcategory = "Watermark",
+    )
+    var watermarkAccentColor = true
+
+    @JvmStatic
+    @Color(
+        title = "Color",
+        description = "Color of the watermark logo and text.",
+        subcategory = "Watermark",
+    )
+    var watermarkColor: PolyColor = PolyColor.WHITE
+
+    @JvmStatic @Include
+    var dynamicFov = true
+
+    @JvmStatic @Include
+    var onboardingLightTheme = false
+
+    @JvmStatic @Include
+    var onboardingUiStyle = 0
+
+    @JvmStatic @Include
+    var onboardingToggleSprint = true
+
+    @JvmStatic @Include
+    var onboardingMotionBlurMode = -1
+
+    @JvmStatic @Include
+    var onboardingMotionBlur = 3
+
+    @JvmStatic @Include
+    var onboardingGuiScale = 0
+
+    @JvmStatic @Include
+    var onboardingBetterGrassMode = 0
+
+    @JvmStatic @Include
+    var onboardingBetterGrassSettled = false
+
+    @JvmStatic @Include
+    var onboardingFireOverlayHeight = 0.0
+
+    @JvmStatic @Include
+    var onboardingFireOverlayOpacity = OnboardingFeatures.FIRE_OPACITY_VANILLA
+
+    @JvmStatic @Include
+    var onboardingShieldHeight = 0f
+
+    @JvmStatic @Include
+    var onboardingFireOverlaySettled = false
+
+    @JvmStatic @Include
+    var onboardingShieldHeightSettled = false
+
+    @JvmStatic @Include
+    var onboardingHorseOpacity = 100f
+
+    @JvmStatic @Include
+    var onboardingMountOpacitySettled = false
+
+    @JvmStatic @Include
+    var onboardingWaveyCapes = false
+
+    @JvmStatic @Include
+    var onboardingWaveyCapesSettled = false
+
+    @JvmStatic @Include
+    var onboardingSkinLayers = false
+
+    @JvmStatic @Include
+    var onboardingSkinLayersSettled = false
+
+    @JvmStatic @Include
+    var onboardingDynamicLightsMode = 0
+
+    @JvmStatic @Include
+    var onboardingDynamicLightsSettled = false
+
+    @JvmStatic @Include
+    var onboardingGuidesShown = 0
+
+    /** Gamma Utils' brightness as the mod stores it, where 100 is vanilla maximum. */
+    @JvmStatic @Include
+    var onboardingGamma = 100f
+
+    @JvmStatic @Include
+    var onboardingGammaToggled = 1500f
+
+    @JvmStatic @Include
+    var onboardingGammaSmooth = false
+
+    @JvmStatic @Include
+    var onboardingGammaSettled = false
+
+    @JvmStatic @Include
+    var onboardingBlockHighlightConfig = ""
+
+    @JvmStatic @Include
+    var onboardingBlockHighlightSettled = false
+
+    @JvmStatic
+    @Switch(
+        title = "Dusk Client User Indicators",
+        description = "Show a badge on the nametag and tab list of players who are using Dusk Client.",
+    )
+    var showPolyPlusIndicator = true
+
+    @JvmStatic
+    @Switch(
+        title = "Chat Emoji",
+        description = "Render :shortcode: and unicode emoji (e.g. :sob:) as Twemoji images in chat, and suggest them as you type.",
+    )
+    var showChatEmoji = true
+
+    @JvmStatic
+    @Switch(
+        title = "Disable Narrator While Muted",
+        description = "Skip the narrator entirely while Master or Voice/Speech volume is 0% to prevent lagspikes.",
+    )
+    var disableNarratorWhileMuted = true
+
+    @JvmStatic
+    @Switch(
+        title = "Automatically Refresh Session",
+        description = "Automatically refresh your Microsoft account session when it expires.",
+    )
+    var autoRefreshSession = true
+
+    @JvmStatic
+    @Switch(
+        title = "Enable Party Voice",
+        description = "Talk with your party. Changing this needs a restart.",
+        category = "Multiplayer",
+        subcategory = "Voice",
+    )
+    var voiceEnabled = true
+
+    @JvmStatic
+    @Switch(
+        title = "Join Party Voice Automatically",
+        description = "Join voice as soon as you join a party.",
+        category = "Multiplayer",
+        subcategory = "Voice",
+    )
+    var voiceAutoJoin = false
+
+    @JvmStatic
+    @Dropdown(
+        title = "Input Mode",
+        description = "Send your voice when you speak, or only while you hold a key.",
+        options = ["Voice activity", "Push to talk"],
+        category = "Multiplayer",
+        subcategory = "Voice",
+    )
+    var voiceInputMode: VoiceInputMode = VoiceInputMode.VOICE_ACTIVITY
+
+    @Keybind(
+        title = "Push to Talk",
+        description = "Hold to talk when Input Mode is Push to talk.",
+        category = "Multiplayer",
+        subcategory = "Voice",
+    )
+    var voicePushToTalkKeybind = OneConfigKeybind(intArrayOf(InputConstants.KEY_V), null, KeyModifiers.NONE, 0L) { state ->
+        PartyVoice.onPushToTalk(state)
+        true
+    }
+
+    @JvmStatic
+    @Slider(
+        title = "Voice Activity Threshold",
+        description = "How loud you need to be before your voice is sent.",
+        min = 0f,
+        max = 100f,
+        step = 1f,
+        category = "Multiplayer",
+        subcategory = "Voice",
+    )
+    var voiceActivityThreshold = 50f
+
+    @JvmStatic
+    @Slider(
+        title = "Input Volume",
+        description = "Microphone volume, in percent.",
+        min = 0f,
+        max = 200f,
+        step = 5f,
+        category = "Multiplayer",
+        subcategory = "Voice",
+    )
+    var voiceInputVolume = 100f
+
+    @JvmStatic
+    @Slider(
+        title = "Output Volume",
+        description = "Party voice volume, in percent.",
+        min = 0f,
+        max = 200f,
+        step = 5f,
+        category = "Multiplayer",
+        subcategory = "Voice",
+    )
+    var voiceOutputVolume = 100f
+
+    @JvmStatic
+    @Slider(
+        title = "Proximity Range",
+        description = "In proximity mode, how far away in blocks you can still hear a party member.",
+        min = 16f,
+        max = 128f,
+        step = 1f,
+        category = "Multiplayer",
+        subcategory = "Voice",
+    )
+    var voiceProximityRange = 48f
+
+    @JvmStatic
+    @Switch(
+        title = "Use Java Sound for Voice",
+        description = "Use Java's own audio for peer-to-peer voice instead of OpenAL. Try this if your microphone or speaker doesn't work.",
+        category = "Multiplayer",
+        subcategory = "Voice",
+    )
+    var voiceJavaSound = false
+
+    @JvmStatic
+    @Switch(
+        // Dusk: no Epic services ship with Dusk+; kept so saved configs still load, hidden below
+        title = "Voice Rooms on Linux (Experimental)",
+        description = "Use hosted voice rooms on Linux. If they fail, voice falls back to peer-to-peer. Changing this needs a restart.",
+        category = "Multiplayer",
+        subcategory = "Voice",
+    )
+    var voiceLinuxRtc = false
+
+    @JvmStatic
+    @Switch(
+        title = "Hide My IP in Voice",
+        description = "Send voice through a relay so party members never see your IP.",
+        category = "Multiplayer",
+        subcategory = "Voice",
+    )
+    var voiceHideIp = true
+
+    @JvmStatic @Include
+    var voiceInputDevice = ""
+
+    @JvmStatic @Include
+    var voiceOutputDevice = ""
+
+    @JvmStatic @Include
+    var voiceNoticeAccepted = false
+
+    @JvmStatic @Include
+    var voiceMemberVolumes = ""
+
+    @JvmStatic @Include
+    var voiceMemberMutes = ""
+
+    @JvmStatic
+    @Switch(
+        title = "Accept Terms of Service & Privacy Policy",
+        description = "Required for crash reporting and online features (cosmetics, client indicator, etc.). ",
+        category = "Privacy",
+    )
+    var acceptedLegalTerms = true
+
+    @Keybind(
+        title = "Socials Menu",
+        subcategory = "Keybinds",
+        description = "Open the Dusk Client Socials menu",
+    )
+    var socialsMenuKeybind = OneConfigKeybind(intArrayOf(InputConstants.KEY_GRAVE), null, KeyModifiers.SHIFT, 0L) { state ->
+        if (state) {
+            SocialOverlay.toggle()
+        }
+        true
+    }
+
+    @Keybind(
+        title = "Emote Wheel",
+        subcategory = "Keybinds",
+        description = "Open the Dusk Client Emote Wheel",
+    )
+    var emoteWheelKeybind = OneConfigKeybind(null, null, KeyModifiers.NONE, 0L) { state ->
+        EmoteWheelKeybind.onKeybindState(state)
+        true
+    }
+
+    @Keybind(
+        title = "Open Wardrobe",
+        subcategory = "Keybinds",
+        description = "Open the Dusk Client wardrobe",
+    )
+    var wardrobeKeybind = OneConfigKeybind(null, null, KeyModifiers.NONE, 0L) { state ->
+        if (state) {
+            PolyPlusOneConfigIntegration.openCosmeticsFromKeybind()
+        }
+        true
+    }
+
+    @Keybind(
+        title = "Toggle Mute",
+        subcategory = "Keybinds",
+        description = "Mute or unmute your microphone in party voice",
+    )
+    var toggleMuteKeybind = OneConfigKeybind(null, null, KeyModifiers.NONE, 0L) { state ->
+        if (state) {
+            PartyVoice.onToggleMuteKey()
+        }
+        true
+    }
+
+    @Keybind(
+        title = "Toggle Deafen",
+        subcategory = "Keybinds",
+        description = "Deafen or undeafen yourself in party voice",
+    )
+    var toggleDeafenKeybind = OneConfigKeybind(null, null, KeyModifiers.NONE, 0L) { state ->
+        if (state) {
+            PartyVoice.onToggleDeafenKey()
+        }
+        true
+    }
+
+    @Keybind(
+        title = "Join/Leave Voice",
+        subcategory = "Keybinds",
+        description = "Join or leave party voice",
+    )
+    var joinLeaveVoiceKeybind = OneConfigKeybind(null, null, KeyModifiers.NONE, 0L) { state ->
+        if (state) {
+            PartyVoice.onJoinLeaveKey()
+        }
+        true
+    }
+
+    @Keybind(
+        title = "Ping",
+        subcategory = "Keybinds",
+        description = "Tap to ping what you're looking at. Hold to choose a ping.",
+    )
+    var pingKeybind = OneConfigKeybind(null, intArrayOf(InputConstants.MOUSE_BUTTON_MIDDLE), KeyModifiers.NONE, 0L) { state ->
+        PingInput.onKeybindState(state)
+        true
+    }
+
+    private val VOICE_OPTIONS
+        get() = listOf(
+            "voiceEnabled", "voiceAutoJoin", "voiceInputMode", "voicePushToTalkKeybind", "voiceActivityThreshold",
+            "voiceInputVolume", "voiceOutputVolume", "voiceProximityRange", "voiceJavaSound", "voiceLinuxRtc",
+            "voiceHideIp", "toggleMuteKeybind", "toggleDeafenKeybind", "joinLeaveVoiceKeybind",
+        )
+
+    init {
+        hideIf("watermarkEnabled") { !LauncherEnvironment.isOneClient }
+        for (option in listOf("watermarkPosition", "watermarkScale", "watermarkAccentColor")) {
+            hideIf(option) { !watermarkShown() }
+        }
+        hideIf("watermarkOffsetX") {
+            !watermarkShown() ||
+                watermarkPosition == ClientWatermark.POSITION_TOP_CENTER ||
+                watermarkPosition == ClientWatermark.POSITION_BOTTOM_CENTER
+        }
+        hideIf("watermarkOffsetY") {
+            !watermarkShown() ||
+                watermarkPosition == ClientWatermark.POSITION_LEFT_CENTER ||
+                watermarkPosition == ClientWatermark.POSITION_RIGHT_CENTER
+        }
+        hideIf("watermarkColor") { !watermarkShown() || watermarkAccentColor }
+
+        addCallback("acceptedLegalTerms") {
+            PrivacyEnforcement.onConfigChanged(acceptedLegalTerms)
+        }
+
+        addCallback<Boolean>("oneConfigSection") { shown ->
+            PolyPlusOneConfigIntegration.showSection(shown)
+            false
+        }
+
+        if (Parties.ENABLED) {
+            // Dusk: there are no hosted voice rooms, so this switch never shows
+            hideIf("voiceLinuxRtc") { true }
+        } else {
+            VOICE_OPTIONS.forEach { hideIf(it) { true } }
+        }
+
+        addCallback("voiceJavaSound") { PartyVoice.onSettingsChanged(restartAudio = true) }
+
+        for (option in listOf("voiceInputVolume", "voiceOutputVolume", "voiceProximityRange", "voiceHideIp", "voiceInputMode")) {
+            addCallback(option) { PartyVoice.onSettingsChanged() }
+        }
+    }
+
+    private fun watermarkShown(): Boolean = LauncherEnvironment.isOneClient && watermarkEnabled
+}
+
+/** Folds the pre-split polyplus.json into one of the configs made out of it. */
+internal fun loadLegacyPolyPlusOptions(label: String, logger: Logger, load: (Path) -> Unit) =
+    loadPolyPlusOptions("${PolyPlusConstants.ID}.json", label, logger, load)
+
+internal fun loadPolyPlusOptions(fileName: String, label: String, logger: Logger, load: (Path) -> Unit) {
+    runCatching {
+        val file = ConfigManager.active().folder.resolve(fileName)
+        if (!Files.exists(file)) return
+        Tree.beginFailureCollection()
+        try {
+            load(file)
+        } finally {
+            val failed = Tree.endFailureCollection()
+            if (failed.isNotEmpty()) logger.warn("Left {} $label option(s) from {} at their default", failed, fileName)
+        }
+    }.onFailure { logger.warn("Could not migrate $label options from {}", fileName, it) }
+}

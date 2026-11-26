@@ -69,6 +69,10 @@ pub struct Settings {
     /// across instances and machines (client_settings.rs).
     #[serde(default = "yes")]
     pub sync_client_settings: bool,
+    /// Load Dusk+ (the lobby, menus, settings screen and chat UI) beside
+    /// DuskClient on Fabric instances it supports (duskplus.rs).
+    #[serde(default = "yes")]
+    pub dusk_plus: bool,
     /// Offline play's username. Empty = locked: it only gets a value from the
     /// redeem code that unlocks offline play (dusk::redeem_code), and then
     /// lets PLAY launch with no Microsoft account (commands::launch_session).
@@ -137,6 +141,7 @@ impl Default for Settings {
             clock_24h: false,
             warn_on_links: true,
             sync_client_settings: true,
+            dusk_plus: true,
             offline_name: String::new(),
             on_play: default_on_play(),
             auto_backups: default_auto_backups(),

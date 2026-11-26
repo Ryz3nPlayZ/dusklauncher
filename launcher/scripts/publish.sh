@@ -41,6 +41,10 @@ need=(
   '_x64.dmg$'      'x64.app.tar.gz$'      'x64.app.tar.gz.sig$'
   '-setup.exe$'    '-setup.exe.sig$'
   '_amd64.deb$'    '\.AppImage$'          '\.AppImage.sig$'
+  # Dusk+, which the launcher downloads per game version
+  '^duskplus-1\.21\.1\.jar$'  '^duskplus-1\.21\.4\.jar$'  '^duskplus-1\.21\.5\.jar$'
+  '^duskplus-1\.21\.8\.jar$'  '^duskplus-1\.21\.10\.jar$' '^duskplus-1\.21\.11\.jar$'
+  '^duskplus-26\.1\.jar$'      '^duskplus-26\.2\.jar$'      '^duskplus-26\.3\.jar$'
 )
 missing=0
 for pat in "${need[@]}"; do
