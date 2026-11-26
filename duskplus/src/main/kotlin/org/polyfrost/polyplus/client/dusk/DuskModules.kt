@@ -1,7 +1,9 @@
 package org.polyfrost.polyplus.client.dusk
 
+//? if > 1.8.9 {
 import com.mojang.blaze3d.platform.InputConstants
 import net.minecraft.client.KeyMapping
+//?}
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.Screen
 import org.apache.logging.log4j.LogManager
@@ -131,11 +133,14 @@ object DuskModules {
                 id = unique(used, "$id/enabled"), type = Boolean::class.javaPrimitiveType,
                 name = "Enabled", description = module.call("description") as? String,
             ).apply { visualizer = Visualizer.SwitchVisualizer::class.java }
+            // key rows need modern input classes; on 1.8.9 Dusk Client is a Forge mod anyway
+            //? if > 1.8.9 {
             module.call("toggleKey")?.let { toggle ->
                 runCatching { toggleKeyProperty(toggle, unique(used, "$id/togglekey")) }
                     .onFailure { logger.debug("Dusk: skipped {}/toggleKey", id, it) }
                     .getOrNull()?.let(props::add)
             }
+            //?}
             for (setting in (module.call("settings") as? List<*>).orEmpty()) {
                 setting ?: continue
                 val settingId = setting.call("id") as? String ?: continue
@@ -235,6 +240,7 @@ object DuskModules {
                 addMetadata("runnable", Runnable { runCatching { setting.call("run") } })
             }
 
+            //? if > 1.8.9 {
             keyType?.isInstance(setting) == true -> {
                 val mapping = setting.call("mapping") as KeyMapping
                 keybindProperty(
@@ -247,6 +253,7 @@ object DuskModules {
                     },
                 )
             }
+            //?}
 
             pixelType?.isInstance(setting) == true -> pixelGridProperty(module, setting, id, name)
 
@@ -272,6 +279,7 @@ object DuskModules {
         }
     }
 
+    //? if > 1.8.9 {
     /** The key that switches a module on and off: keyboard only, kept in DuskClient's module config. */
     private fun toggleKeyProperty(toggle: Any, id: String): Property<*> = keybindProperty(
         id, "Toggle key", InputConstants.UNKNOWN,
@@ -320,6 +328,7 @@ object DuskModules {
         bind.isMousePrimary -> InputConstants.Type.MOUSE.getOrCreate(bind.boundCode)
         else -> KEYBOARD.getOrCreate(bind.boundCode)
     }
+    //?}
 
     /** A setting shown only while another has some value: re-check every option after any change. */
     @Suppress("UNCHECKED_CAST")
