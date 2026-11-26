@@ -972,6 +972,9 @@ pub async fn install_and_launch(
                     None => tracing::warn!("bundled client mod {name} not found; launching without it"),
                 },
             }
+            // a host launch brings e4mc and so does Dusk+: one copy each
+            let mut seen = std::collections::HashSet::new();
+            add_mods.retain(|jar| seen.insert(jar.clone()));
             if let Ok(list) = std::env::join_paths(&add_mods) {
                 if !add_mods.is_empty() {
                     p.jvm_args.push(format!("-Dfabric.addMods={}", list.to_string_lossy()));
