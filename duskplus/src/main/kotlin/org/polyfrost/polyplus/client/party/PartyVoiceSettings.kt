@@ -55,7 +55,7 @@ object PartyVoiceSettings {
         return Math.pow(10.0, db / 20.0).toFloat()
     }
 
-    fun voiceAvailable(): Boolean = PolyPlusConfig.voiceEnabled && EosNativeSupport.unsupportedReason == null
+    fun voiceAvailable(): Boolean = Parties.VOICE && PolyPlusConfig.voiceEnabled && EosNativeSupport.unsupportedReason == null
 
     fun volumeOf(player: String): Float = memberVolumes[player.lowercase()] ?: DEFAULT_VOLUME
 

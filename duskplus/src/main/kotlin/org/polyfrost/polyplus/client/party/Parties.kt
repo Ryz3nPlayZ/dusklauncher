@@ -13,8 +13,14 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 
 object Parties {
-    /** Off until Dusk's server has parties and group chats; hides their UI and stops every party call. */
-    const val ENABLED = false
+    /** Parties, their invites, pings, the locator and Play together, on Dusk's `/v1/party` routes. */
+    const val ENABLED = true
+
+    /** Party voice stays off: Dusk has its own voice chat, and this one needs rooms Dusk doesn't host. */
+    const val VOICE = false
+
+    /** Group chats stay off until Dusk's server has them. */
+    const val GROUPS = false
 
     private val LOGGER = LogManager.getLogger()
 
@@ -43,7 +49,7 @@ object Parties {
         PlayTogether.earlyInitialize()
         LeaderFollow.earlyInitialize()
         HostJoinRequests.earlyInitialize()
-        HudManager.register(PartyVoiceHud(), PolyPlusConstants.ID, "assets/polyplus/brand/oneclient.svg")
+        if (VOICE) HudManager.register(PartyVoiceHud(), PolyPlusConstants.ID, "assets/polyplus/brand/oneclient.svg")
         PartyRepository.refreshed.onEach { PartyPresence.forceSend() }.launchIn(PolyPlusClient.SCOPE)
         PolyConnection.onClosed { ClientPlatform.runOnMain(::resetSession) }
         eventHandler<TickEvent.End> {

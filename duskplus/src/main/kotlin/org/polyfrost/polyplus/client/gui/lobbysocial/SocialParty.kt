@@ -55,6 +55,7 @@ import org.polyfrost.polyplus.client.party.PartyAudio
 import org.polyfrost.polyplus.client.party.PartyJoin
 import org.polyfrost.polyplus.client.party.PartyPresence
 import org.polyfrost.polyplus.client.party.PartyRepository
+import org.polyfrost.polyplus.client.party.Parties
 import org.polyfrost.polyplus.client.party.PartyScene
 import org.polyfrost.polyplus.client.party.PartyVoice
 import org.polyfrost.polyplus.client.party.PartyVoiceSettings
@@ -401,8 +402,10 @@ internal fun PartyMenu(party: Party, onVoice: (() -> Unit)? = null, onClose: () 
             DevicePicker(input = picking) { devices = null }
             return@Column
         }
-        PartyMenuHeading("Voice")
-        VoiceModeChips(party)
+        if (Parties.VOICE) {
+            PartyMenuHeading("Voice")
+            VoiceModeChips(party)
+        }
         if (leader) {
             PartyMenuHeading("Who can invite")
             val tabs = listOf(TabItem(PartyInvitePolicy.Leader, "Only me"), TabItem(PartyInvitePolicy.Members, "Everyone"))
@@ -410,7 +413,9 @@ internal fun PartyMenu(party: Party, onVoice: (() -> Unit)? = null, onClose: () 
             TabRow(tabs, policy, { PartyRepository.setInvitePolicy(it) }, style = TabStyle.Chips, size = ChipDefaults.size, fill = false)
         }
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            if (onVoice != null) {
+            if (!Parties.VOICE) {
+                // Dusk voice chat has its own settings
+            } else if (onVoice != null) {
                 MenuItem(
                     "Voice and devices",
                     {

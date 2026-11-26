@@ -457,7 +457,7 @@ impl Hub {
 }
 
 /// Name, friends and blocks (either way) for `uuid`.
-fn social(db: &Connection, uuid: &str) -> Result<(String, HashSet<String>, HashSet<String>), rusqlite::Error> {
+pub(crate) fn social(db: &Connection, uuid: &str) -> Result<(String, HashSet<String>, HashSet<String>), rusqlite::Error> {
     let name: String = db.query_row("SELECT username FROM accounts WHERE uuid = ?1", params![uuid], |r| r.get(0))?;
     let mut friends = HashSet::new();
     let mut q = db.prepare("SELECT CASE WHEN a = ?1 THEN b ELSE a END FROM friendships WHERE a = ?1 OR b = ?1")?;

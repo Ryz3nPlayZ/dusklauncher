@@ -23,6 +23,7 @@ mod mods;
 mod native_game;
 mod packfix;
 mod packmods;
+mod party;
 mod recordings;
 mod quickplay;
 mod release_art;
@@ -211,6 +212,16 @@ pub fn run() {
             friends::send_friend_request,
             friends::accept_friend_request,
             friends::decline_friend_request,
+            party::get_party,
+            party::list_party_invites,
+            party::invite_to_party,
+            party::accept_party_invite,
+            party::decline_party_invite,
+            party::cancel_party_invite,
+            party::leave_party,
+            party::disband_party,
+            party::kick_party_member,
+            party::make_party_leader,
             friends::get_friend_profile,
             friends::get_messages,
             friends::send_message,

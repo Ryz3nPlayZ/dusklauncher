@@ -54,6 +54,7 @@ import org.polyfrost.polyplus.client.network.http.responses.Party
 import org.polyfrost.polyplus.client.party.PartyPresence
 import org.polyfrost.polyplus.client.party.PartyRepository
 import org.polyfrost.polyplus.client.party.PartyVoice
+import org.polyfrost.polyplus.client.party.Parties
 import org.polyfrost.polyplus.client.party.PlayTogether
 import org.polyfrost.polyplus.client.social.GroupsRepository
 import org.polyfrost.oneconfig.api.ui.v1.components.Divider
@@ -85,7 +86,7 @@ internal fun PartyPane(
             Box(Modifier.padding(start = Edge, end = Edge, top = 16.dp)) {
                 PartySeats(host, party, if (narrow) NARROW_SEAT_COLUMNS else SEAT_COLUMNS, inviteSeat = true)
             }
-            RoomVoice(window, party)
+            if (Parties.VOICE) RoomVoice(window, party)
             Divider()
             RoomChat(thread?.id, snapshot, reconnecting)
         }

@@ -298,7 +298,7 @@ private fun WorldChip(window: SocialWindowState, snapshot: SocialSnapshot, modif
 
 @Composable
 private fun Tabs(list: SocialListState, snapshot: SocialSnapshot, tab: LeftTab, modifier: Modifier, onSelect: (LeftTab) -> Unit) {
-    val tabs = LeftTab.entries.filter { (it != LeftTab.Special || snapshot.specialTarget) && (it != LeftTab.Groups || Parties.ENABLED) }.map { entry ->
+    val tabs = LeftTab.entries.filter { (it != LeftTab.Special || snapshot.specialTarget) && (it != LeftTab.Groups || Parties.GROUPS) }.map { entry ->
         val count = when (entry) {
             LeftTab.Chats -> list.unread(snapshot)
             LeftTab.Friends -> snapshot.requests.count { it.incoming }

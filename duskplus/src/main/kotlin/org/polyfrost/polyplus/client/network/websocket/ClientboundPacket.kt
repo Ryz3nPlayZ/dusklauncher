@@ -150,6 +150,9 @@ sealed interface ClientboundPacket {
         @SerialName("invite_id") val inviteId: Int,
         @SerialName("session_id") val sessionId: String,
         val sender: String,
+        // Dusk: where the hosted world can be reached, for invites from a party host
+        val server: String? = null,
+        @SerialName("minecraft_version") val minecraftVersion: String? = null,
     ) : ClientboundPacket
 
     @Serializable

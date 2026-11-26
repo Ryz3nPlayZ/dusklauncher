@@ -273,6 +273,47 @@ export interface FriendRequests {
   outgoing: FriendRequest[];
 }
 
+/** a party member's location as the game reports it (GET /v1/party) */
+export interface PartyLocation {
+  kind: 'menu' | 'singleplayer' | 'server' | 'hosted_world' | 'unknown';
+  key?: string | null;
+  /** the server address, when they share it */
+  display?: string | null;
+}
+
+export interface PartyMember {
+  player: string;
+  joined_at: string;
+  /** in game with the party socket open */
+  online: boolean;
+  state?: { location?: PartyLocation } | null;
+}
+
+export interface Party {
+  id: string;
+  leader: string;
+  created_at: string;
+  /** invite_policy: leader (only the leader invites) | members */
+  settings?: { invite_policy?: string };
+  members: PartyMember[];
+}
+
+export interface PartyInvite {
+  id: string;
+  party_id: string;
+  sender: string;
+  recipient: string;
+  status: string;
+  created_at: string;
+  expires_at: string;
+  party_size: number;
+}
+
+export interface PartyInvites {
+  incoming: PartyInvite[];
+  outgoing: PartyInvite[];
+}
+
 /** a friend's profile (GET /v1/profile/:uuid) — friends-only, never a stranger's */
 export interface FriendProfile {
   uuid: string;
@@ -1853,6 +1894,25 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
     return structuredClone(previewFriends) as T;
   }
   if (cmd === 'list_friend_requests') return structuredClone(previewFriendRequests) as T;
+  if (cmd === 'get_party') {
+    const at = new Date().toISOString();
+    return {
+      id: 'preview',
+      leader: '',
+      created_at: at,
+      members: [
+        { player: '', joined_at: at, online: true, state: { location: { kind: 'menu' } } },
+        { player: 'friend-nocturne', joined_at: at, online: true, state: { location: { kind: 'server', display: 'play.dusk-smp.net' } } },
+      ],
+    } satisfies Party as T;
+  }
+  if (cmd === 'list_party_invites') {
+    const at = new Date().toISOString();
+    return {
+      incoming: [{ id: 'a1', party_id: 'p2', sender: 'friend-ashen', recipient: '', status: 'pending', created_at: at, expires_at: at, party_size: 3 }],
+      outgoing: [],
+    } satisfies PartyInvites as T;
+  }
   if (cmd === 'send_friend_request') {
     const username = String(args?.username ?? '').trim();
     if (!username) throw new Error('Enter a username first.');
@@ -2350,6 +2410,18 @@ export const api = {
   sendFriendRequest: (username: string) => invoke<FriendRequests>('send_friend_request', { username }),
   acceptFriendRequest: (id: number) => invoke<FriendRequests>('accept_friend_request', { id }),
   declineFriendRequest: (id: number) => invoke<FriendRequests>('decline_friend_request', { id }),
+  // ── party ──
+  getParty: () => invoke<Party | null>('get_party'),
+  listPartyInvites: () => invoke<PartyInvites>('list_party_invites'),
+  /** inviting with no party starts one */
+  inviteToParty: (uuid: string) => invoke<void>('invite_to_party', { uuid }),
+  acceptPartyInvite: (invite: string, leaveCurrent: boolean) => invoke<void>('accept_party_invite', { invite, leaveCurrent }),
+  declinePartyInvite: (invite: string) => invoke<void>('decline_party_invite', { invite }),
+  cancelPartyInvite: (invite: string) => invoke<void>('cancel_party_invite', { invite }),
+  leaveParty: () => invoke<void>('leave_party'),
+  disbandParty: () => invoke<void>('disband_party'),
+  kickPartyMember: (uuid: string) => invoke<void>('kick_party_member', { uuid }),
+  makePartyLeader: (uuid: string) => invoke<void>('make_party_leader', { uuid }),
   getFriendProfile: (uuid: string) => invoke<FriendProfile>('get_friend_profile', { uuid }),
   /** poll for messages newer than `afterId` (0 = the whole history, capped at 200) */
   getMessages: (uuid: string, afterId = 0) => invoke<ChatMessage[]>('get_messages', { uuid, afterId }),

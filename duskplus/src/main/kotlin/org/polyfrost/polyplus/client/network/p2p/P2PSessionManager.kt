@@ -1,5 +1,7 @@
 package org.polyfrost.polyplus.client.network.p2p
 
+import org.polyfrost.polyplus.client.network.http.PartyApi
+import org.polyfrost.polyplus.client.party.Parties
 //? if > 1.8.9
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
 import net.minecraft.client.Minecraft
@@ -150,6 +152,7 @@ object P2PSessionManager {
         val session = _currentSessionId.value ?: return
         _currentSessionId.value = null
         SessionsRepository.close(session)
+        if (Parties.ENABLED) PolyPlusClient.SCOPE.launch { PartyApi.closeSession(session) }
     }
 
     private fun join(invite: SessionInvite) {

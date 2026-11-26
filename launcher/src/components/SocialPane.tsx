@@ -31,6 +31,9 @@ import {
   type FriendProfile,
   type FriendRequests,
   type GameActivity,
+  type Party,
+  type PartyInvites,
+  type PartyMember,
   type Screenshot,
   type SocialSummary,
   type StoreItem,
@@ -229,6 +232,7 @@ export function FriendHead({ uuid, online, size }: { uuid: string; online?: bool
 type View =
   | { kind: 'list' }
   | { kind: 'requests' }
+  | { kind: 'party' }
   | { kind: 'chat'; uuid: string }
   | { kind: 'profile'; uuid: string; from: 'list' | 'chat' };
 
@@ -262,6 +266,9 @@ export default function SocialPane({
   const [summary, setSummary] = useState<SocialSummary | null>(null);
   const [friends, setFriends] = useState<Friend[] | null>(null);
   const [requests, setRequests] = useState<FriendRequests>({ incoming: [], outgoing: [] });
+  // undefined until the first answer; null when not in a party
+  const [party, setParty] = useState<Party | null | undefined>(undefined);
+  const [partyInvites, setPartyInvites] = useState<PartyInvites>({ incoming: [], outgoing: [] });
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -333,6 +340,7 @@ export default function SocialPane({
         // offline or the service is down — the next beat tries again, and
         // the pill just keeps its last counts
       });
+    void api.listPartyInvites().then(setPartyInvites).catch(() => {});
     // `server` isn't sent from here (the backend reads it) but a change of
     // server should reach friends at once, like a change of version
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -347,6 +355,16 @@ export default function SocialPane({
     return () => clearInterval(id);
   }, [signedIn, heartbeat]);
 
+  const refreshParty = useCallback(async () => {
+    try {
+      const [p, i] = await Promise.all([api.getParty(), api.listPartyInvites()]);
+      setParty(p ?? null);
+      setPartyInvites(i);
+    } catch {
+      // keeps the last party; the next poll tries again
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     try {
       const [f, r] = await Promise.all([api.listFriends(), api.listFriendRequests()]);
@@ -354,6 +372,8 @@ export default function SocialPane({
       setRequests(r);
       setLoadError(null);
       noticeFriends(f);
+      // a party failure (an older service) must not hide the friends list
+      void refreshParty();
       // the lists are fresher than the last beat — keep the pill in step
       setSummary({
         requests: r.incoming.length,
@@ -363,7 +383,7 @@ export default function SocialPane({
     } catch (e) {
       setLoadError(errText(e));
     }
-  }, [noticeFriends]);
+  }, [noticeFriends, refreshParty]);
 
   useEffect(() => {
     if (!open || !signedIn) return;
@@ -433,7 +453,8 @@ export default function SocialPane({
 
   const pending = summary?.requests ?? 0;
   const unread = summary?.unread ?? 0;
-  const badge = pending + unread;
+  const partyPending = partyInvites.incoming.length;
+  const badge = pending + unread + partyPending;
   const onlineCount = summary?.online ?? 0;
   const byUuid = (uuid: string) => friends?.find((f) => f.uuid === uuid);
 
@@ -446,6 +467,7 @@ export default function SocialPane({
   const badgeTitle = [
     pending > 0 && `${pending} friend request${pending === 1 ? '' : 's'}`,
     unread > 0 && `${unread} unread message${unread === 1 ? '' : 's'}`,
+    partyPending > 0 && `${partyPending} party invite${partyPending === 1 ? '' : 's'}`,
   ]
     .filter(Boolean)
     .join(', ');
@@ -572,6 +594,17 @@ export default function SocialPane({
                   active={view.kind === 'requests'}
                   onClick={() => setView({ kind: 'requests' })}
                 />
+                <NavCell
+                  label={
+                    partyPending > 0
+                      ? `PARTY ${partyPending}`
+                      : party
+                        ? `PARTY ${party.members.length}`
+                        : 'PARTY'
+                  }
+                  active={view.kind === 'party'}
+                  onClick={() => setView({ kind: 'party' })}
+                />
                 <div className="win__fill" />
                 <NavCell label="+ ADD" onClick={() => setAdding(true)} />
               </div>
@@ -609,7 +642,18 @@ export default function SocialPane({
                     </PxButton>
                   </PxBox>
                 )}
-                {view.kind === 'requests' ? (
+                {view.kind === 'party' ? (
+                  <PartyView
+                    party={party}
+                    invites={partyInvites}
+                    friends={friends ?? []}
+                    me={account?.uuid ?? ''}
+                    myName={account?.username ?? 'You'}
+                    gameRunning={gameRunning}
+                    onJoin={onJoin}
+                    onChanged={() => void refreshParty()}
+                  />
+                ) : view.kind === 'requests' ? (
                   <RequestsList requests={requests} onChange={setRequests} onAccepted={() => void refresh()} />
                 ) : friends === null ? (
                   !loadError && (
@@ -908,6 +952,243 @@ function FriendsList({
           </PersonRow>
         );
       })}
+    </>
+  );
+}
+
+/** uuids arrive dashed from the party service and either way elsewhere */
+const sameId = (a: string, b: string) => a.replace(/-/g, '').toLowerCase() === b.replace(/-/g, '').toLowerCase();
+
+/** where a member is, from the state their game reports */
+function whereText(m: PartyMember): { text: string; server: string | null } {
+  if (!m.online) return { text: 'Not in game', server: null };
+  const at = m.state?.location;
+  switch (at?.kind) {
+    case 'server':
+      return at.display ? { text: `On ${at.display}`, server: at.display } : { text: 'On a server', server: null };
+    case 'singleplayer':
+      return { text: 'In singleplayer', server: null };
+    case 'hosted_world':
+      return { text: 'In a hosted world', server: null };
+    default:
+      return { text: 'In the menus', server: null };
+  }
+}
+
+/** The party: who's in it and where they are, invites both ways, and
+    friends to invite. The game holds the live party (pings, play together,
+    hosted worlds); this pane reads it and answers invites. */
+function PartyView({
+  party,
+  invites,
+  friends,
+  me,
+  myName,
+  gameRunning,
+  onJoin,
+  onChanged,
+}: {
+  party: Party | null | undefined;
+  invites: PartyInvites;
+  friends: Friend[];
+  me: string;
+  myName: string;
+  gameRunning: boolean;
+  onJoin: (server: string, version: string | null) => void;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const act = (key: string, call: () => Promise<unknown>) => {
+    if (busy !== null) return;
+    setBusy(key);
+    setError(null);
+    call()
+      .then(onChanged)
+      .catch((e) => setError(errText(e)))
+      .finally(() => setBusy(null));
+  };
+
+  const nameOf = (uuid: string) =>
+    sameId(uuid, me) ? myName : (friends.find((f) => sameId(f.uuid, uuid))?.username ?? 'Unknown player');
+
+  if (party === undefined) {
+    return (
+      <PxBox family="panel" className="empty">
+        <span className="meta">Loading party…</span>
+      </PxBox>
+    );
+  }
+
+  const leader = party !== null && sameId(party.leader, me);
+  const inParty = (uuid: string) => party?.members.some((m) => sameId(m.player, uuid)) ?? false;
+  const invited = (uuid: string) => invites.outgoing.some((i) => sameId(i.recipient, uuid));
+  const full = party !== null && party.members.length >= 8;
+  // by default only the leader invites
+  const canInvite = !full && (party === null || leader || party.settings?.invite_policy === 'members');
+  const invitable = friends
+    .filter((f) => !inParty(f.uuid) && !invited(f.uuid))
+    .sort((a, b) => Number(b.online) - Number(a.online));
+
+  return (
+    <>
+      {error && (
+        <PxBox family="red" height="md" className="social__notice" role="alert">
+          <span className="meta">{error}</span>
+        </PxBox>
+      )}
+
+      {invites.incoming.length > 0 && (
+        <div className="social__section">
+          <TT size={16} tone="dim">
+            INVITES
+          </TT>
+        </div>
+      )}
+      {invites.incoming.map((i) => (
+        <PersonRow
+          key={i.id}
+          uuid={i.sender}
+          name={nameOf(i.sender)}
+          meta={`Party of ${i.party_size}${party ? ' · accepting leaves your party' : ''}`}
+        >
+          <PxButton
+            family="green"
+            height="md"
+            disabled={busy !== null}
+            onClick={() => act(i.id, () => api.acceptPartyInvite(i.id, party !== null))}
+          >
+            <TT size={16} tone="green">
+              {party ? 'SWITCH' : 'JOIN'}
+            </TT>
+          </PxButton>
+          <PxButton family="grey" height="md" disabled={busy !== null} onClick={() => act(i.id, () => api.declinePartyInvite(i.id))}>
+            <TT size={16}>DECLINE</TT>
+          </PxButton>
+        </PersonRow>
+      ))}
+
+      {party ? (
+        <>
+          <div className="social__section">
+            <TT size={16} tone="dim">
+              {`PARTY ${party.members.length}/8`}
+            </TT>
+          </div>
+          {party.members.map((m) => {
+            const self = sameId(m.player, me);
+            const isLeader = sameId(m.player, party.leader);
+            const where = whereText(m);
+            return (
+              <PersonRow
+                key={m.player}
+                uuid={m.player}
+                name={self ? (myName === 'You' ? 'You' : `${myName} (you)`) : nameOf(m.player)}
+                online={m.online}
+                meta={isLeader ? `Leader · ${where.text}` : where.text}
+                metaOnline={m.online}
+                dim={!m.online}
+              >
+                {!self && where.server && (
+                  <JoinButton server={where.server} version={null} gameRunning={gameRunning} onJoin={onJoin} />
+                )}
+                {leader && !self && (
+                  <>
+                    <PxButton
+                      family="grey"
+                      height="md"
+                      disabled={busy !== null}
+                      title="Make them the party leader"
+                      onClick={() => act(`lead${m.player}`, () => api.makePartyLeader(m.player))}
+                    >
+                      <TT size={16}>LEAD</TT>
+                    </PxButton>
+                    <PxButton
+                      family="grey"
+                      height="md"
+                      disabled={busy !== null}
+                      onClick={() => act(`kick${m.player}`, () => api.kickPartyMember(m.player))}
+                    >
+                      <TT size={16}>KICK</TT>
+                    </PxButton>
+                  </>
+                )}
+              </PersonRow>
+            );
+          })}
+          <div className="modal__row">
+            <PxButton family="grey" height="md" disabled={busy !== null} onClick={() => act('leave', api.leaveParty)}>
+              <TT size={16}>LEAVE PARTY</TT>
+            </PxButton>
+            {leader && party.members.length > 1 && (
+              <PxButton family="red" height="md" disabled={busy !== null} onClick={() => act('disband', api.disbandParty)}>
+                <TT size={16} tone="red">
+                  DISBAND
+                </TT>
+              </PxButton>
+            )}
+          </div>
+        </>
+      ) : (
+        invites.incoming.length === 0 && (
+          <PxBox family="panel" className="empty">
+            <TT size={20} tone="dim">
+              NOT IN A PARTY
+            </TT>
+            <span className="meta">
+              Invite a friend and the party starts. In game, party members see where everyone is, can ping spots
+              in the world, and follow the leader onto servers and hosted worlds.
+            </span>
+          </PxBox>
+        )
+      )}
+
+      {invites.outgoing.length > 0 && (
+        <div className="social__section">
+          <TT size={16} tone="dim">
+            SENT
+          </TT>
+        </div>
+      )}
+      {invites.outgoing.map((i) => (
+        <PersonRow key={i.id} uuid={i.recipient} name={nameOf(i.recipient)} dim meta="Invited · waiting for them">
+          <PxButton family="grey" height="md" disabled={busy !== null} onClick={() => act(i.id, () => api.cancelPartyInvite(i.id))}>
+            <TT size={16}>CANCEL</TT>
+          </PxButton>
+        </PersonRow>
+      ))}
+
+      {invitable.length > 0 && canInvite && (
+        <div className="social__section">
+          <TT size={16} tone="dim">
+            INVITE FRIENDS
+          </TT>
+        </div>
+      )}
+      {canInvite &&
+        invitable.map((f) => (
+          <PersonRow
+            key={f.uuid}
+            uuid={f.uuid}
+            name={f.username}
+            online={f.online}
+            meta={statusLine(f).text}
+            metaOnline={f.online}
+            dim={!f.online}
+          >
+            <PxButton
+              family="accent"
+              height="md"
+              disabled={busy !== null}
+              onClick={() => act(`inv${f.uuid}`, () => api.inviteToParty(f.uuid))}
+            >
+              <TT size={16} tone="accent">
+                INVITE
+              </TT>
+            </PxButton>
+          </PersonRow>
+        ))}
     </>
   );
 }

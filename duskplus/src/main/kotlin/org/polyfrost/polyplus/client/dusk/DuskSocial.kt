@@ -159,6 +159,11 @@ object DuskSocial {
         return invites.values.filter { it.status == "pending" && it.createdAt > oldest && it.sender != ChatIdentity.localId() }
     }
 
+    /** An invite into a party member's hosted world, which arrives over the party socket rather than as a message. */
+    fun rememberSessionInvite(invite: SessionInvite) {
+        invites.putIfAbsent(invite.id, invite)
+    }
+
     fun answerInvite(id: Int, status: String): SessionInvite? = invites.computeIfPresent(id) { _, invite -> invite.copy(status = status) }
 
     /** Another account signed in. */

@@ -69,6 +69,7 @@ object PartyVoice {
     }
 
     fun join() {
+        if (!Parties.VOICE) return
         val party = PartyRepository.party.value ?: return
         if (!PolyPlusConfig.voiceEnabled) return
         if (!PolyPlusConfig.voiceNoticeAccepted) {

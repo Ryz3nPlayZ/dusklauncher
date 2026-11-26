@@ -28,6 +28,12 @@ object DuskBridge {
     private val canSignIn: MethodHandle? = handle("canSignIn", Boolean::class.javaPrimitiveType!!)
     private val forget: MethodHandle? = handle("forget", Void.TYPE)
     private val dataDir: MethodHandle? = handle("dataDir", Path::class.java)
+    private val bearer: MethodHandle? = handle("bearer", String::class.java, Boolean::class.javaPrimitiveType!!)
+
+    private val apiBase: MethodHandle? = runCatching {
+        val provider = Class.forName("dev.dusk.client.cosmetics.DuskProvider", false, DuskBridge::class.java.classLoader)
+        MethodHandles.publicLookup().findStatic(provider, "apiBase", MethodType.methodType(String::class.java))
+    }.getOrNull()
 
     private fun handle(name: String, returns: Class<*>, vararg params: Class<*>): MethodHandle? = runCatching {
         MethodHandles.publicLookup().findStatic(account ?: return null, name, MethodType.methodType(returns, params))
@@ -49,6 +55,21 @@ object DuskBridge {
 
     /** The launcher's data directory; null outside the launcher. */
     fun dataDir(): Path? = runCatching { dataDir?.invokeWithArguments() as Path? }.getOrNull()
+
+    /** Where the Dusk service is, without a trailing slash. */
+    fun apiBase(): String? = runCatching { (apiBase?.invokeWithArguments() as String?)?.trimEnd('/') }.getOrNull()
+
+    /** The session token, for calls made here rather than through DuskClient; [fresh] signs in again. Throws [DuskException]. */
+    suspend fun bearer(fresh: Boolean = false): String = withContext(Dispatchers.IO) {
+        if (!PrivacyConsent.allowsOnlineServices()) throw DuskException("Online features are turned off")
+        val handle = bearer ?: throw DuskException("Dusk Client isn't installed")
+        if (!available) throw DuskException("Sign in to use Dusk's online features")
+        try {
+            handle.invokeWithArguments(fresh) as String
+        } catch (e: IOException) {
+            throw DuskException(e.message ?: "Couldn't reach Dusk", e)
+        }
+    }
 
     fun forget() {
         runCatching { forget?.invokeWithArguments() }

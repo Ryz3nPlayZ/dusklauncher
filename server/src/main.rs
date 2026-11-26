@@ -44,6 +44,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+mod party;
 mod quests;
 mod voice;
 
@@ -152,6 +153,7 @@ struct App {
     codes: BTreeMap<String, i64>,
     dev_auth: bool,
     voice: Mutex<voice::Hub>,
+    party: Mutex<party::Hub>,
 }
 
 type Shared = Arc<App>;
@@ -2149,6 +2151,7 @@ async fn main() {
         codes,
         dev_auth: std::env::var("DUSK_DEV_AUTH").as_deref() == Ok("1"),
         voice: Mutex::new(voice::Hub::default()),
+        party: Mutex::new(party::Hub::default()),
     });
     tracing::info!("catalog: {} items, {} code(s), db {db_path}", app.catalog.len(), app.codes.len());
     if app.dev_auth {
@@ -2208,6 +2211,26 @@ async fn main() {
         )
         .route("/v1/packs/{code}", get(get_pack))
         .route("/v1/voice", get(voice::voice_ws))
+        .route("/v1/party", get(party::current).post(party::create).delete(party::disband))
+        .route("/v1/party/ws", get(party::party_ws))
+        .route("/v1/party/settings", put(party::update_settings))
+        .route("/v1/party/leave", post(party::leave))
+        .route("/v1/party/leader", post(party::transfer))
+        .route("/v1/party/members/{player}", delete(party::kick))
+        .route("/v1/party/members/{player}/voice", put(party::hard_mute))
+        .route("/v1/party/invites", post(party::invite))
+        .route("/v1/party/invites/incoming", get(party::incoming))
+        .route("/v1/party/invites/outgoing", get(party::outgoing))
+        .route("/v1/party/invites/{id}", delete(party::cancel))
+        .route("/v1/party/invites/{id}/accept", post(party::accept))
+        .route("/v1/party/invites/{id}/decline", post(party::decline))
+        .route("/v1/party/voice/token", post(party::no_voice))
+        .route("/v1/party/voice/pass", post(party::no_voice))
+        .route("/v1/party/sessions/{id}", delete(party::close_session))
+        .route("/v1/party/sessions/{id}/invite", post(party::invite_session))
+        .route("/v1/party/sessions/{id}/join-requests", post(party::request_join))
+        .route("/v1/party/join-requests/{id}/allow", post(party::allow_join))
+        .route("/v1/party/join-requests/{id}/deny", post(party::deny_join))
         .layer(axum::extract::DefaultBodyLimit::max(16 * 1024))
         .with_state(app);
 

@@ -49,7 +49,7 @@ internal class SocialListState(private val hideParty: Boolean = false) {
         chosen.takeUnless { it == ThreadFilter.Special && !snapshot.specialTarget } ?: ThreadFilter.All
 
     fun tabs(snapshot: SocialSnapshot): List<ThreadFilter> =
-        ThreadFilter.entries.filter { (it != ThreadFilter.Special || snapshot.specialTarget) && (it != ThreadFilter.Groups || Parties.ENABLED) }
+        ThreadFilter.entries.filter { (it != ThreadFilter.Special || snapshot.specialTarget) && (it != ThreadFilter.Groups || Parties.GROUPS) }
 
     fun badged(tab: ThreadFilter, snapshot: SocialSnapshot): Boolean =
         tab == ThreadFilter.Special && snapshot.threads.any { it.special && it.unread }

@@ -574,7 +574,7 @@ object PolyPlusConfig : Config("${PolyPlusConstants.ID}.json", "Dusk Client", Ca
             false
         }
 
-        if (Parties.ENABLED) {
+        if (Parties.ENABLED && Parties.VOICE) {
             // Dusk: there are no hosted voice rooms, so this switch never shows
             hideIf("voiceLinuxRtc") { true }
         } else {

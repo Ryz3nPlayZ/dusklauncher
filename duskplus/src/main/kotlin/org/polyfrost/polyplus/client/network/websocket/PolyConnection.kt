@@ -20,11 +20,22 @@ import org.polyfrost.polyplus.client.network.reconnectDelay
 import org.polyfrost.polyplus.client.social.GroupsRepository
 import org.polyfrost.polyplus.events.WebSocketMessage
 import org.polyfrost.polyplus.privacy.PrivacyConsent
+import kotlinx.serialization.json.Json
+import org.polyfrost.polyplus.client.network.http.responses.SessionInvite
+import org.polyfrost.polyplus.client.party.Parties
+import org.polyfrost.polyplus.client.party.PartyRepository
+import org.polyfrost.polyplus.libs.ktor.client.plugins.websocket.DefaultClientWebSocketSession
+import org.polyfrost.polyplus.libs.ktor.client.plugins.websocket.webSocket
+import org.polyfrost.polyplus.libs.ktor.client.request.bearerAuth
+import org.polyfrost.polyplus.libs.ktor.websocket.Frame
+import org.polyfrost.polyplus.libs.ktor.websocket.readText
+import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * What's new on Dusk, asked for every few seconds and handed on as the packets the rest of the mod
- * already listens for. Dusk has no push channel, so nothing can be sent this way.
+ * already listens for. Parties also keep a socket open (`/v1/party/ws`): the party, its invites,
+ * pings and Play together come down it as they happen, and the party packets go up it.
  */
 object PolyConnection {
     private val LOGGER = LogManager.getLogger()
@@ -51,6 +62,25 @@ object PolyConnection {
 
     @Volatile
     private var disconnectedSinceMs = 0L
+
+    @Volatile
+    private var partyJob: Job? = null
+
+    @Volatile
+    private var party: DefaultClientWebSocketSession? = null
+
+    private val WIRE = Json(PolyPlusClient.JSON) { prettyPrint = false }
+
+    /** What the party socket carries up; the rest (cosmetics, emotes) has nowhere to go on Dusk. */
+    private val PARTY_PACKETS = setOf(
+        ServerboundPacket.SetPartyState::class,
+        ServerboundPacket.StartPlayTogether::class,
+        ServerboundPacket.CancelPlayTogether::class,
+        ServerboundPacket.PlayTogetherResponse::class,
+        ServerboundPacket.SendPing::class,
+        ServerboundPacket.ClearPing::class,
+        ServerboundPacket.ReplyPing::class,
+    )
 
     private var friends: Map<String, DuskSocial.FriendState>? = null
     private var requests: DuskSocial.Requests? = null
@@ -87,6 +117,9 @@ object PolyConnection {
         synchronized(this) {
             job?.cancel()
             job = null
+            partyJob?.cancel()
+            partyJob = null
+            party = null
             connected = false
         }
         if (wasRunning) {
@@ -96,9 +129,15 @@ object PolyConnection {
         }
     }
 
-    /** Parties, pings and worn cosmetics had packets of their own; Dusk has nowhere to send them. */
-    @Suppress("UnusedParameter")
-    fun sendPacket(packet: ServerboundPacket): Result<Unit> = Result.failure(DuskException("Dusk doesn't have this yet"))
+    /** Party packets go up the party socket; worn cosmetics and emotes have nowhere to go on Dusk. */
+    fun sendPacket(packet: ServerboundPacket): Result<Unit> {
+        if (packet::class !in PARTY_PACKETS) return Result.failure(DuskException("Dusk doesn't have this yet"))
+        val socket = party ?: return Result.failure(DuskException("Not connected to Dusk"))
+        val text = WIRE.encodeToString(ServerboundPacket.serializer(), packet)
+        return socket.outgoing.trySend(Frame.Text(text)).let { sent ->
+            if (sent.isSuccess) Result.success(Unit) else Result.failure(DuskException("Not connected to Dusk"))
+        }
+    }
 
     private fun start() {
         if (!PrivacyConsent.allowsOnlineServices()) return
@@ -108,7 +147,60 @@ object PolyConnection {
             friends = null
             requests = null
             job = PolyPlusClient.SCOPE.launch { loop() }
+            partyJob?.cancel()
+            party = null
+            partyJob = if (Parties.ENABLED) PolyPlusClient.SCOPE.launch { partyLoop() } else null
         }
+    }
+
+    /** Keeps the party socket open while signed in, reconnecting after it drops. */
+    private suspend fun partyLoop() {
+        var attempt = 0
+        while (currentCoroutineContext().isActive) {
+            try {
+                val base = DuskBridge.apiBase() ?: throw DuskException("Dusk Client isn't installed")
+                // every third try signs in again, in case the service no longer takes the token
+                val token = DuskBridge.bearer(fresh = attempt % 3 == 2)
+                val url = base.replaceFirst(Regex("^http"), "ws") + "/v1/party/ws"
+                PolyPlusClient.HTTP.webSocket(urlString = url, request = { bearerAuth(token) }) {
+                    party = this
+                    attempt = 0
+                    // anything missed while away, and our whereabouts sent again
+                    PartyRepository.refresh()
+                    for (frame in incoming) {
+                        if (frame is Frame.Text) receive(frame.readText())
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                LOGGER.debug("Party socket closed: {}", e.message)
+            } finally {
+                party = null
+            }
+            delay(reconnectDelay(++attempt))
+        }
+    }
+
+    private fun receive(text: String) {
+        val packet = runCatching { WIRE.decodeFromString(ClientboundPacket.serializer(), text) }.getOrElse {
+            LOGGER.debug("Skipped a party message Dusk sent: {}", it.message)
+            return
+        }
+        // a hosted world's address only comes with the packet, so keep it where invites are looked up
+        if (packet is ClientboundPacket.SessionInviteReceived && packet.server != null) {
+            DuskSocial.rememberSessionInvite(
+                SessionInvite(
+                    id = packet.inviteId,
+                    sessionId = packet.sessionId,
+                    sender = DuskSocial.dashed(packet.sender),
+                    createdAt = Instant.now().toString(),
+                    minecraftVersion = packet.minecraftVersion,
+                    server = packet.server,
+                ),
+            )
+        }
+        post(packet)
     }
 
     private suspend fun loop() {
