@@ -12,6 +12,7 @@ import org.polyfrost.polyplus.client.gui.screens.Routed;
 import org.polyfrost.polyplus.client.gui.screens.ScreenRouter;
 import org.polyfrost.polyplus.client.gui.screens.settings.SettingsMemory;
 import org.polyfrost.polyplus.client.lobby.LobbyScene;
+import org.polyfrost.polyplus.client.lobby.LocalJoin;
 import org.polyfrost.polyplus.mixin.client.access.MinecraftAccessor;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -66,6 +67,8 @@ public class MixinGui {
             return;
         }
         *///?}
+        // leaving the world loading screen for the menu would drop the join with its server still running
+        if ((screen == null || screen instanceof TitleScreen) && LocalJoin.holdsLoading()) return;
         if (screen == null) screen = SettingsMemory.returning();
         screen = PauseRouter.replace(screen);
         PauseStage.onScreen(screen);
@@ -74,6 +77,7 @@ public class MixinGui {
         if (routed.getConsumed()) return;
         screen = routed.getScreen();
         if (MainMenuReplacement.enabled() && polyplus$opensTitleScreen(screen)) {
+            if (LocalJoin.holdsLoading()) return;
             if (!MainMenuReplacement.alreadyOpen()) {
                 original.call(MainMenuReplacement.create());
             }

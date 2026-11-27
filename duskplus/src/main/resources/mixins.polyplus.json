@@ -125,6 +125,8 @@
     "client.MixinLevelLoadingScreen",
     "client.MixinGameRendererShellScene",
     "client.MixinMinecraftWorldLoad",
+    //? if > 1.8.9
+    "client.MixinWorldOpenFlows",
     //? if < 1.21.9 && > 1.8.9
     //"client.MixinLevelLoadingProgress",
     //? if = 1.8.9

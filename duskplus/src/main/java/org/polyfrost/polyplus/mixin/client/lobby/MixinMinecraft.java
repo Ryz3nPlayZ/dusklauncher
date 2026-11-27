@@ -8,6 +8,7 @@ import net.minecraft.client.main.GameConfig;
 import net.minecraft.client.multiplayer.ClientLevel;
 import org.polyfrost.polyplus.client.lobby.LobbyCapture;
 import org.polyfrost.polyplus.client.lobby.LobbyScene;
+import org.polyfrost.polyplus.client.lobby.LocalJoin;
 import org.polyfrost.polyplus.client.lobby.StartupOverlay;
 import org.polyfrost.polyplus.client.gui.pausescreen.PauseRouter;
 import org.spongepowered.asm.mixin.Mixin;
@@ -57,6 +58,7 @@ public class MixinMinecraft {
     //? if >= 1.21.11 {
     @Inject(method = "disconnect(Lnet/minecraft/client/gui/screens/Screen;ZZ)V", at = @At("HEAD"))
     private void polyplus$captureOnLeave(Screen screen, boolean keepResourcePacks, boolean stopSound, CallbackInfo ci) {
+        LocalJoin.dropUnfinished((Minecraft) (Object) this);
         if (((Minecraft) (Object) this).isRunning()) LobbyCapture.onLeave();
     }
 
@@ -67,6 +69,7 @@ public class MixinMinecraft {
     //?} else {
     /*@Inject(method = "disconnect(Lnet/minecraft/client/gui/screens/Screen;Z)V", at = @At("HEAD"))
     private void polyplus$captureOnLeave(Screen screen, boolean keepResourcePacks, CallbackInfo ci) {
+        LocalJoin.dropUnfinished((Minecraft) (Object) this);
         if (((Minecraft) (Object) this).isRunning()) LobbyCapture.onLeave();
     }
 

@@ -4,6 +4,7 @@ package org.polyfrost.polyplus.mixin.client.access;
 import com.mojang.authlib.minecraft.UserApiService;
 import net.minecraft.client.User;
 import net.minecraft.client.multiplayer.ProfileKeyPairManager;
+import net.minecraft.network.Connection;
 //?} else {
 /*import com.mojang.authlib.properties.PropertyMap;
 import net.minecraft.client.Session;
@@ -61,6 +62,12 @@ public interface MinecraftAccessor {
     @Mutable
     @Accessor("profileKeyPairManager")
     void polyplus$setProfileKeyPairManager(ProfileKeyPairManager profileKeyPairManager);
+
+    @Accessor("pendingConnection")
+    Connection polyplus$getPendingConnection();
+
+    @Accessor("pendingConnection")
+    void polyplus$setPendingConnection(Connection connection);
 
     //?} else {
     /*@Mutable
