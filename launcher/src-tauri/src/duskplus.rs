@@ -54,9 +54,11 @@ pub fn loader_ok(loader_version: Option<&str>) -> bool {
 pub async fn jars(state: &AppState, game_version: &str, mods_dir: &Path) -> Vec<PathBuf> {
     let Some(target) = target_for(game_version) else { return Vec::new() };
     let mods = mods_dir.to_path_buf();
-    let have = tokio::task::spawn_blocking(move || crate::mods::fabric_mod_ids(&mods)).await.unwrap_or_default();
+    let theirs = tokio::task::spawn_blocking(move || metas(&jars_in(&mods))).await.unwrap_or_default();
+    let have = mod_set(&theirs);
+    let have = |id: &str| have.contains_key(id);
     // the player installed PolyPlus (or Dusk+) themselves: theirs runs
-    if have.contains(MOD_ID) {
+    if have(MOD_ID) {
         return Vec::new();
     }
     let Some(fork) = fork_jar(state, target).await else {
@@ -65,7 +67,7 @@ pub async fn jars(state: &AppState, game_version: &str, mods_dir: &Path) -> Vec<
     };
     let mut out = vec![fork];
     for (mod_id, project) in LIBS {
-        if have.contains(mod_id) {
+        if have(mod_id) {
             continue;
         }
         match library_jar(state, project, game_version).await {
@@ -78,7 +80,7 @@ pub async fn jars(state: &AppState, game_version: &str, mods_dir: &Path) -> Vec<
     }
     // e4mc, so a world hosted from the social screen gets an address friends
     // can join. It sits idle until a world is opened to LAN.
-    if !have.contains(crate::hosting::E4MC_MOD_ID) {
+    if !have(crate::hosting::E4MC_MOD_ID) {
         match crate::hosting::relay_jar(state, game_version).await {
             Some(jar) => out.push(jar),
             None => tracing::warn!("could not get e4mc for {game_version}; in-game hosting will have no address"),
@@ -87,7 +89,178 @@ pub async fn jars(state: &AppState, game_version: &str, mods_dir: &Path) -> Vec<
     // No Polydium here: added to every instance it moved the game onto its
     // Vulkan backend, which crashed with Astra and Iris shaders, and its
     // OpenGL mode cost frames. An instance that wants it has it in its mods.
+    //
+    // The instance's own copies of the libraries stand in for ours, and its
+    // other mods sit next to them: an old Kotlin or a mod that breaks
+    // OneConfig stops the loader before the game opens. Then this launch
+    // goes without Dusk+ rather than not at all.
+    let added = out.clone();
+    let ours = tokio::task::spawn_blocking(move || metas(&added)).await.unwrap_or_default();
+    if let Some(why) = clash(&theirs, &ours) {
+        tracing::warn!("launching without Dusk+: {why}");
+        return Vec::new();
+    }
     out
+}
+
+/// fabric.mod.json of each jar that has one.
+fn metas(jars: &[PathBuf]) -> Vec<serde_json::Value> {
+    jars.iter().filter_map(|p| crate::mods::fabric_meta(p)).collect()
+}
+
+fn text<'a>(meta: &'a serde_json::Value, key: &str) -> &'a str {
+    meta.get(key).and_then(|v| v.as_str()).unwrap_or("")
+}
+
+/// Every id the jars answer to, its own and what it provides, with its version.
+fn mod_set(metas: &[serde_json::Value]) -> std::collections::HashMap<String, String> {
+    let mut set = std::collections::HashMap::new();
+    for m in metas {
+        let version = text(m, "version").to_string();
+        let provides = m.get("provides").and_then(|v| v.as_array()).into_iter().flatten().filter_map(|v| v.as_str());
+        for id in std::iter::once(text(m, "id")).chain(provides).filter(|id| !id.is_empty()) {
+            set.insert(id.to_string(), version.clone());
+        }
+    }
+    set
+}
+
+/// A depends/breaks table: id to the version ranges, any of which counts.
+fn ranges(meta: &serde_json::Value, key: &str) -> Vec<(String, Vec<String>)> {
+    let Some(table) = meta.get(key).and_then(|v| v.as_object()) else { return Vec::new() };
+    table
+        .iter()
+        .map(|(id, v)| {
+            let any = match v {
+                serde_json::Value::Array(a) => a.iter().filter_map(|s| s.as_str().map(str::to_string)).collect(),
+                v => vec![v.as_str().unwrap_or("*").to_string()],
+            };
+            (id.clone(), any)
+        })
+        .collect()
+}
+
+/// Why the jars we add can't load next to the instance's mods, when the
+/// loader would refuse them: something ours needs is missing or too old, or
+/// one side's `breaks` names the other. (`conflicts` only warns, so it's left.)
+fn clash(theirs: &[serde_json::Value], ours: &[serde_json::Value]) -> Option<String> {
+    // the loader, the game, Java and Fabric API are the launcher's to get right
+    const SKIP: [&str; 5] = ["minecraft", "java", "fabricloader", "fabric-api", "fabric"];
+    let their_set = mod_set(theirs);
+    let our_set = mod_set(ours);
+    let mut all = their_set.clone();
+    all.extend(our_set.clone());
+    for m in ours {
+        let name = text(m, "id");
+        for (dep, any) in ranges(m, "depends") {
+            if SKIP.contains(&dep.as_str()) {
+                continue;
+            }
+            match all.get(&dep) {
+                None => return Some(format!("{name} needs {dep}, which isn't there")),
+                Some(v) if !in_ranges(&any, v) => {
+                    return Some(format!("{name} needs {dep} {}, the instance has {v}", any.join(" or ")));
+                }
+                _ => {}
+            }
+        }
+        for (other, any) in ranges(m, "breaks") {
+            if let Some(v) = their_set.get(&other).filter(|v| in_ranges(&any, v)) {
+                return Some(format!("{name} can't run with {other} {v} from the instance's mods"));
+            }
+        }
+    }
+    for m in theirs {
+        for (other, any) in ranges(m, "breaks") {
+            if let Some(v) = our_set.get(&other).filter(|v| in_ranges(&any, v)) {
+                return Some(format!("{} in the instance's mods can't run with {other} {v}", text(m, "id")));
+            }
+        }
+    }
+    None
+}
+
+/// Fabric's version ranges: any of the alternatives, each a space-separated
+/// list of terms that all hold (`>=1.2`, `<2`, `~1.4`, `^3.0`, `1.21.x`, `*`).
+fn in_ranges(any: &[String], version: &str) -> bool {
+    any.is_empty() || any.iter().any(|r| r.split_whitespace().all(|term| holds(term, version)))
+}
+
+fn holds(term: &str, version: &str) -> bool {
+    use std::cmp::Ordering::*;
+    if term == "*" {
+        return true;
+    }
+    let (op, want) = ["^", "~", ">=", "<=", ">", "<", "="]
+        .iter()
+        .find_map(|op| term.strip_prefix(op).map(|rest| (*op, rest)))
+        .unwrap_or(("=", term));
+    let (Some(have), Some(want_v)) = (Ver::parse(version), Ver::parse(want)) else {
+        // a version we can't read (a placeholder, a date) isn't ours to block on
+        return true;
+    };
+    let ord = have.cmp(&want_v);
+    let same = |k: usize| have.prefix(k) == want_v.prefix(k);
+    match op {
+        ">=" => ord != Less,
+        "<=" => ord != Greater,
+        ">" => ord == Greater,
+        "<" => ord == Less,
+        // ~1.4.2 keeps 1.4, ~1 keeps 1; ^3.0 keeps 3
+        "~" => ord != Less && same(want_v.core.len().clamp(1, 2)),
+        "^" => ord != Less && same(1),
+        _ if want.split('.').any(|p| matches!(p, "x" | "X" | "*")) => {
+            same(want.split('.').take_while(|p| !matches!(*p, "x" | "X" | "*")).count())
+        }
+        _ => ord == Equal,
+    }
+}
+
+/// A version as Fabric compares it: numeric core, then a pre-release that
+/// sorts below the plain release; build metadata after `+` doesn't count.
+#[derive(PartialEq, Eq)]
+struct Ver {
+    core: Vec<u64>,
+    pre: Option<String>,
+}
+
+impl Ver {
+    fn parse(s: &str) -> Option<Ver> {
+        let s = s.split('+').next()?.trim();
+        let (core, pre) = match s.split_once('-') {
+            Some((c, p)) => (c, Some(p.to_string())),
+            None => (s, None),
+        };
+        let core = core
+            .split('.')
+            .map(|p| if matches!(p, "x" | "X" | "*") { Some(0) } else { p.parse().ok() })
+            .collect::<Option<Vec<u64>>>()?;
+        (!core.is_empty()).then_some(Ver { core, pre })
+    }
+
+    /// The first `k` parts, missing ones as 0.
+    fn prefix(&self, k: usize) -> Vec<u64> {
+        (0..k).map(|i| self.core.get(i).copied().unwrap_or(0)).collect()
+    }
+}
+
+impl Ord for Ver {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let n = self.core.len().max(other.core.len());
+        let at = |v: &Ver, i: usize| v.core.get(i).copied().unwrap_or(0);
+        (0..n).map(|i| at(self, i).cmp(&at(other, i))).find(|o| o.is_ne()).unwrap_or_else(|| match (&self.pre, &other.pre) {
+            (None, None) => std::cmp::Ordering::Equal,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (Some(a), Some(b)) => a.cmp(b),
+        })
+    }
+}
+
+impl PartialOrd for Ver {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 fn safe(name: &str) -> String {
@@ -217,6 +390,43 @@ mod tests {
         assert_eq!(target_for("26.1.2"), Some("26.1"));
         assert_eq!(target_for("26.10"), None);
         assert_eq!(target_for("1.8.9"), None);
+    }
+
+    #[test]
+    fn reads_fabric_version_ranges() {
+        let r = |s: &str| vec![s.to_string()];
+        assert!(in_ranges(&r(">=1.14.1+kotlin.2.4.20"), "1.14.2+kotlin.2.4.21"));
+        assert!(!in_ranges(&r(">=1.14.1+kotlin.2.4.20"), "1.13.4+kotlin.2.2.0"));
+        assert!(in_ranges(&r("<0.8.12-beta.1"), "0.8.11"));
+        assert!(!in_ranges(&r("<0.8.12-beta.1"), "0.8.12"));
+        assert!(in_ranges(&r(">=1.21.11 <=1.21.11"), "1.21.11"));
+        assert!(!in_ranges(&r(">=1.21.11 <=1.21.11"), "1.21.10"));
+        assert!(in_ranges(&r("~1.4.2"), "1.4.9"));
+        assert!(!in_ranges(&r("~1.4.2"), "1.5.0"));
+        assert!(in_ranges(&r("^3.0.7"), "3.9.0"));
+        assert!(!in_ranges(&r("^3.0.7"), "4.0.0"));
+        assert!(in_ranges(&r("1.21.x"), "1.21.4"));
+        assert!(in_ranges(&r("*"), "anything"));
+        assert!(in_ranges(&[], "1.0"));
+        assert!(in_ranges(&r(">=1.0"), "${version}"));
+        assert!(in_ranges(&["<1".to_string(), ">=2".to_string()], "2.1"));
+    }
+
+    #[test]
+    fn spots_instances_our_jars_cannot_join() {
+        use serde_json::json;
+        let ours = vec![
+            json!({"id": "polyplus", "version": "2.4.1", "depends": {"minecraft": "1.21.11", "fabric-language-kotlin": ">=1.14.1", "oneconfigv1": ">=1.9.0"}, "breaks": {"auto-reauth": "*"}}),
+            json!({"id": "oneconfig", "version": "1.9.5", "provides": ["oneconfigv1"], "depends": {"fabric-language-kotlin": ">=1.14.1+kotlin.2.4.20"}}),
+        ];
+        let kotlin = |v: &str| json!({"id": "fabric-language-kotlin", "version": v});
+        assert_eq!(clash(&[kotlin("1.14.2+kotlin.2.4.21")], &ours), None);
+        assert!(clash(&[kotlin("1.13.4+kotlin.2.2.0")], &ours).unwrap().contains("fabric-language-kotlin"));
+        assert!(clash(&[], &ours).unwrap().contains("isn't there"));
+        let reauth = json!({"id": "auto-reauth", "version": "1.0"});
+        assert!(clash(&[kotlin("1.14.2"), reauth], &ours).unwrap().contains("auto-reauth"));
+        let old_hud = json!({"id": "vanillahud", "version": "2.0", "breaks": {"oneconfig": "<2"}});
+        assert!(clash(&[kotlin("1.14.2"), old_hud], &ours).unwrap().contains("vanillahud"));
     }
 
     #[test]
