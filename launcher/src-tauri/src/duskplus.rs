@@ -84,45 +84,10 @@ pub async fn jars(state: &AppState, game_version: &str, mods_dir: &Path) -> Vec<
             None => tracing::warn!("could not get e4mc for {game_version}; in-game hosting will have no address"),
         }
     }
-    // Polydium, Polyfrost's renderer, from Modrinth unchanged. Optional: the
-    // game starts without it when it can't be had or would clash.
-    if polydium_fits(&have, mods_dir) {
-        if let Some(jar) = library_jar(state, POLYDIUM, game_version).await {
-            out.push(jar);
-        }
-    }
+    // No Polydium here: added to every instance it moved the game onto its
+    // Vulkan backend, which crashed with Astra and Iris shaders, and its
+    // OpenGL mode cost frames. An instance that wants it has it in its mods.
     out
-}
-
-const POLYDIUM: &str = "polydium";
-
-/// Polydium stops the game next to another renderer, or a Sodium older than
-/// 0.8.12; then it stays out.
-fn polydium_fits(have: &std::collections::HashSet<String>, mods_dir: &Path) -> bool {
-    if ["polydium", "vulkanmod", "gpu_booster", "duskmetal"].iter().any(|id| have.contains(*id)) {
-        return false;
-    }
-    if !have.contains("sodium") {
-        return true;
-    }
-    jars_in(mods_dir).iter().filter_map(|p| crate::mods::fabric_meta(p)).any(|m| {
-        m.get("id").and_then(|v| v.as_str()) == Some("sodium")
-            && m.get("version").and_then(|v| v.as_str()).is_some_and(sodium_new_enough)
-    })
-}
-
-/// 0.8.12 or newer, prereleases of 0.8.12 excluded (Polydium breaks below
-/// 0.8.12-beta.1, so a beta counts as old: the safe side).
-fn sodium_new_enough(version: &str) -> bool {
-    let core = version.split(['+', '-']).next().unwrap_or("");
-    let mut have = [0u32; 3];
-    for (slot, part) in have.iter_mut().zip(core.split('.')) {
-        match part.parse() {
-            Ok(n) => *slot = n,
-            Err(_) => return false,
-        }
-    }
-    have > [0, 8, 12] || (have == [0, 8, 12] && !version.contains('-'))
 }
 
 fn safe(name: &str) -> String {
@@ -242,15 +207,6 @@ fn jars_in(dir: &Path) -> Vec<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn polydium_needs_sodium_0_8_12() {
-        assert!(sodium_new_enough("0.8.12+mc1.21.11"));
-        assert!(sodium_new_enough("0.9.0"));
-        assert!(!sodium_new_enough("0.8.12-beta.1+mc1.21.11"));
-        assert!(!sodium_new_enough("0.6.13+mc1.21.4"));
-        assert!(!sodium_new_enough("weird"));
-    }
 
     #[test]
     fn picks_the_fork_build_for_a_game_version() {
