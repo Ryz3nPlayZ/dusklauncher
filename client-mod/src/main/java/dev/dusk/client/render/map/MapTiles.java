@@ -32,7 +32,7 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
  * results. Everything but the bake jobs runs on the client thread.
  */
 public final class MapTiles {
-    private static final int BAKERS = 2;
+    private static final int BAKERS = 1;
     private static final int SNAPSHOTS_PER_TICK = 2;
     private static final int UPLOADS_PER_TICK = 2;
     private static final int POLL_EVERY_TICKS = 4;
@@ -46,6 +46,8 @@ public final class MapTiles {
     /** How far hills can shift a column up or down the map. */
     private static final int HEIGHT_SHIFT = 33;
     private static final long REBAKE_GAP_MS = 750;
+    /** A tile that already shows something waits this long between refreshes. */
+    private static final long REFRESH_GAP_MS = 4000;
     /** How long the old cave slice stays while the next one bakes. */
     private static final long LAYER_HOLD_MS = 3000;
     /** How many blocks of rock above the player count as underground; a house roof is thinner. */
@@ -432,13 +434,18 @@ public final class MapTiles {
     }
 
     private void startBakes(double u, double v) {
-        if (inFlight > BAKERS) {
+        if (inFlight > BAKERS || Minecraft.getInstance().isPaused()) {
             return;
         }
         long now = System.currentTimeMillis();
         List<Tile> stale = new ArrayList<>();
         for (Tile tile : tiles.values()) {
-            if (!tile.baking && tile.bakedVersion != tile.version && now - tile.lastBake >= REBAKE_GAP_MS) {
+            if (tile.baking || tile.bakedVersion == tile.version) {
+                continue;
+            }
+            // Holes fill fast; a tile already on screen refreshes now and then, and only while in view.
+            boolean hole = tile.texture == null;
+            if (hole ? now - tile.lastBake >= REBAKE_GAP_MS : inView(tile.key) && now - tile.lastBake >= REFRESH_GAP_MS) {
                 stale.add(tile);
             }
         }
@@ -455,6 +462,10 @@ public final class MapTiles {
         }
     }
 
+    private boolean inView(TileKey key) {
+        return key.tileU() >= viewU0 && key.tileU() <= viewU1 && key.tileV() >= viewV0 && key.tileV() <= viewV1;
+    }
+
     private static double distance(TileKey key, double u, double v) {
         double du = key.minU() + MapProjection.TILE_UNITS / 2.0 - u;
         double dv = key.minV() + MapProjection.TILE_UNITS / 2.0 - v;
@@ -465,8 +476,10 @@ public final class MapTiles {
         int version = tile.version;
         MapChunks source = chunks;
         BlockLooks blocks = looks;
+        boolean refresh = tile.texture != null;
         bakers.execute(() -> {
             int[] pixels = null;
+            long start = System.nanoTime();
             try {
                 pixels = new TileBaker(tile.key, source, blocks).bake();
             } catch (RuntimeException e) {
@@ -476,6 +489,14 @@ public final class MapTiles {
                 }
             }
             done.add(new Baked(tile, pixels, version));
+            if (refresh) {
+                // Refreshes use at most half a core, so the map never eats the frame budget on a laptop.
+                try {
+                    Thread.sleep((System.nanoTime() - start) / 1_000_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
         });
     }
 }
