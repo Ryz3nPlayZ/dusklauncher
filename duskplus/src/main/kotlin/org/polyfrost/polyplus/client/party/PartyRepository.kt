@@ -3,6 +3,7 @@ package org.polyfrost.polyplus.client.party
 import org.apache.logging.log4j.LogManager
 import org.polyfrost.oneconfig.api.event.v1.eventHandler
 import org.polyfrost.oneconfig.api.notifications.v1.Notification
+import org.polyfrost.oneconfig.api.notifications.v1.Notifications
 import org.polyfrost.polyplus.client.PolyPlusClient
 import org.polyfrost.polyplus.client.network.http.PartyApi
 import org.polyfrost.polyplus.client.network.http.PartyApiException
@@ -181,8 +182,25 @@ object PartyRepository {
 
     private fun applyParty(party: Party?, since: Long? = null) {
         val accepted = party?.takeIf { it.members.any { member -> isSelf(member.player) } }
+        val previous = _party.value
         if (!updateParty(since) { accepted }) return
         accepted?.let { PlayerNamesRepository.resolve(it.members.map(PartyMember::player)) }
+        if (previous != null && accepted != null && previous.id == accepted.id) noticeMembers(previous, accepted)
+    }
+
+    /** A toast for each player who came or went, so the party isn't news only on the social page. */
+    private fun noticeMembers(before: Party, after: Party) {
+        if (SocialOverlay.isShowing()) return
+        fun gone(from: Party, to: Party) = from.members.filter { old -> !isSelf(old.player) && to.members.none { samePlayer(it.player, old.player) } }
+        gone(after, before).forEach { notifyMember(after.id, it.player, "joined") }
+        gone(before, after).forEach { notifyMember(after.id, it.player, "left") }
+    }
+
+    private fun notifyMember(partyId: String, player: String, verb: String) {
+        if (!NotificationDedup.shouldNotify("party_$verb:$partyId:$player")) return
+        val text = { name: String -> "$name $verb the party" }
+        val notice = Notifications.info("Dusk Client", text(PlayerNamesRepository.nameOr(player)))
+        PlayerNamesRepository.whenResolved(player) { notice.update(message = text(it)) }
     }
 
     private fun applyMemberState(partyId: String, player: String, state: MemberState) {

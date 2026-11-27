@@ -18,3 +18,5 @@ enchant.EnchantScreenMixin
 # Minimap: block colours from sprites, and rebaking tiles when a block changes
 minimap.SpriteContentsAccessor
 minimap.MapBlockUpdateMixin
+# Hosted worlds: friends on offline accounts may join, on every version
+host.HostedOfflineLoginMixin
