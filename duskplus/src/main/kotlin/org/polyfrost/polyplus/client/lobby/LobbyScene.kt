@@ -701,6 +701,9 @@ object LobbyScene {
         //? if = 1.8.9
         /*if (LobbyCompat.joiningWorld(Minecraft.getInstance())) return*/
         if (Minecraft.getInstance().level != null) return
+        // a singleplayer join still loading must not have a lobby world built underneath it
+        //? if > 1.8.9
+        if (LocalJoin.inFlight()) return
         loadGeneration++
         session = LobbySession(LobbyMode.STANDALONE, null)
         attempts.clear()

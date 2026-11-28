@@ -5,13 +5,15 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import net.minecraft.client.gui.screens.TitleScreen;
 import org.polyfrost.polyplus.client.gui.MainMenuReplacement;
+import org.polyfrost.polyplus.client.lobby.LocalJoin;
 import org.spongepowered.asm.mixin.Mixin;
 
 @Mixin(TitleScreen.class)
 public class MixinTitleScreen {
     @WrapMethod(method = "init")
     private void polyplus$replaceMainMenu(Operation<Void> original) {
-        if (MainMenuReplacement.replacesTitleScreen() && !MainMenuReplacement.alreadyOpen()) {
+        // a title screen built while a singleplayer join loads must not pull the menu over the loading screen
+        if (MainMenuReplacement.replacesTitleScreen() && !MainMenuReplacement.alreadyOpen() && !LocalJoin.onLoadingScreen()) {
             MainMenuReplacement.open();
             return;
         }

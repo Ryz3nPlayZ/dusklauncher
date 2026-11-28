@@ -5,9 +5,14 @@ import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.GenericMessageScreen
 import net.minecraft.client.gui.screens.LevelLoadingScreen
 import net.minecraft.client.gui.screens.Screen
+import net.minecraft.client.gui.screens.TitleScreen
+import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen
+import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen
 import net.minecraft.network.chat.Component
 //? if < 1.21.9
 /*import net.minecraft.client.gui.screens.ReceivingLevelScreen*/
+import org.polyfrost.polyplus.client.gui.MainMenuReplacement
+import org.polyfrost.polyplus.client.gui.PolyPlusOnboardingScreen
 import org.polyfrost.polyplus.client.utils.ClientPlatform
 import org.polyfrost.polyplus.mixin.client.access.MinecraftAccessor
 
@@ -39,14 +44,21 @@ object LocalJoin {
         return mc.level == null && !server.isShutdown && !onLoadingScreen()
     }
 
-    /** The world loading screen is up for a join that is still going; something asked to swap it for the menu. */
+    /**
+     * The world loading screen is up for a join that is still going and [screen] would swap it for a menu. Refuse it:
+     * the join would carry on behind the menu with its server holding the world, and never finish.
+     */
     @JvmStatic
-    fun holdsLoading(): Boolean {
-        if (!onLoadingScreen()) return false
+    fun holdsLoading(screen: Screen?): Boolean {
+        if (!leavesForMenu(screen) || !onLoadingScreen()) return false
         val server = Minecraft.getInstance().singleplayerServer
         if (warnedFor !== server) {
             warnedFor = server
-            LOBBY_LOGGER.warn("Kept the world loading screen: something tried to leave a singleplayer join for the menu", Throwable("caller"))
+            LOBBY_LOGGER.warn(
+                "Kept the world loading screen: something tried to leave a singleplayer join for {}",
+                screen?.javaClass?.name ?: "the menu",
+                Throwable("caller"),
+            )
         }
         return true
     }
@@ -80,6 +92,10 @@ object LocalJoin {
         mc.disconnect(ClientPlatform.currentScreen() ?: GenericMessageScreen(Component.translatable("menu.savingLevel")), false)
     }
 
+    private fun leavesForMenu(screen: Screen?): Boolean =
+        screen == null || screen is TitleScreen || screen is SelectWorldScreen || screen is JoinMultiplayerScreen ||
+            screen is PolyPlusOnboardingScreen || MainMenuReplacement.isMenu(screen)
+
     private fun loading(screen: Screen?): Boolean {
         //? if >= 1.21.9 {
         return screen is LevelLoadingScreen
@@ -91,6 +107,6 @@ object LocalJoin {
 //?} else {
 /*object LocalJoin {
     @JvmStatic
-    fun holdsLoading(): Boolean = false
+    fun holdsLoading(screen: Any?): Boolean = false
 }
 *///?}

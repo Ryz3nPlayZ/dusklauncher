@@ -68,7 +68,7 @@ public class MixinGui {
         }
         *///?}
         // leaving the world loading screen for the menu would drop the join with its server still running
-        if ((screen == null || screen instanceof TitleScreen) && LocalJoin.holdsLoading()) return;
+        if (LocalJoin.holdsLoading(screen)) return;
         if (screen == null) screen = SettingsMemory.returning();
         screen = PauseRouter.replace(screen);
         PauseStage.onScreen(screen);
@@ -76,8 +76,8 @@ public class MixinGui {
         Routed routed = ScreenRouter.route(screen);
         if (routed.getConsumed()) return;
         screen = routed.getScreen();
+        if (LocalJoin.holdsLoading(screen)) return;
         if (MainMenuReplacement.enabled() && polyplus$opensTitleScreen(screen)) {
-            if (LocalJoin.holdsLoading()) return;
             if (!MainMenuReplacement.alreadyOpen()) {
                 original.call(MainMenuReplacement.create());
             }
