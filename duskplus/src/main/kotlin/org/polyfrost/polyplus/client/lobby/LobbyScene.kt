@@ -925,7 +925,13 @@ object LobbyScene {
             overlayDelay = -OVERLAY_FADE_SECONDS
             skipPending = quietSwitch
         }
-        if (mc.level != null && !embedded) {
+        // a world opened (or a singleplayer join started) while the scene loaded: it must not be built under the join
+        //? if > 1.8.9 {
+        val joining = LocalJoin.inFlight()
+        //?} else {
+        /*val joining = false
+        *///?}
+        if ((mc.level != null || joining) && !embedded) {
             reloadAfterLoad = false
             phase = Phase.IDLE
             session?.finish(LobbyPhase.IDLE)

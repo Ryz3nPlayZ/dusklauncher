@@ -48,6 +48,9 @@ class DisconnectedShellScreen(shell: ScreenShell, val vanilla: DisconnectedScree
     private var canRejoin by mutableStateOf(P2PSessionManager.canRejoin())
 
     init {
+        // vanilla keeps the reason only on screen (and the cause at debug level); put it in the log
+        org.apache.logging.log4j.LogManager.getLogger("PolyPlus")
+            .info("Disconnected{}: {}", serverName?.let { " from $it" } ?: "", details.reason().string)
         if (prompt != null && promptButton != null) prompt.attach(promptButton, this)
         syncPrompt()
     }

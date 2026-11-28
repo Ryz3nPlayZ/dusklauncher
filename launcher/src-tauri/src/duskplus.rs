@@ -100,7 +100,34 @@ pub async fn jars(state: &AppState, game_version: &str, mods_dir: &Path) -> Vec<
         tracing::warn!("launching without Dusk+: {why}");
         return Vec::new();
     }
+    let mods = mods_dir.to_path_buf();
+    for off in tokio::task::spawn_blocking(move || turn_off_for_relay(&jars_in(&mods))).await.unwrap_or_default() {
+        tracing::warn!("turned off {} for this instance: it drops singleplayer joins next to e4mc", off.display());
+    }
     out
+}
+
+/// Mods that stop a singleplayer world from opening once e4mc is in. With
+/// Krypton and e4mc both rewriting the server's login handler, the join to
+/// the game's own world dies at login every time (an instance with Krypton
+/// turned off joins fine). Krypton does next to nothing on a client, so it is
+/// turned off the way the player would: renamed to `.jar.disabled`.
+const BREAKS_WITH_RELAY: [&str; 1] = ["krypton"];
+
+fn turn_off_for_relay(jars: &[PathBuf]) -> Vec<PathBuf> {
+    let mut off = Vec::new();
+    for jar in jars {
+        let Some(meta) = crate::mods::fabric_meta(jar) else { continue };
+        if !BREAKS_WITH_RELAY.contains(&text(&meta, "id")) {
+            continue;
+        }
+        let to = PathBuf::from(format!("{}.disabled", jar.display()));
+        match std::fs::rename(jar, &to) {
+            Ok(()) => off.push(to),
+            Err(e) => tracing::warn!("could not turn off {}: {e}", jar.display()),
+        }
+    }
+    off
 }
 
 /// fabric.mod.json of each jar that has one.
@@ -427,6 +454,27 @@ mod tests {
         assert!(clash(&[kotlin("1.14.2"), reauth], &ours).unwrap().contains("auto-reauth"));
         let old_hud = json!({"id": "vanillahud", "version": "2.0", "breaks": {"oneconfig": "<2"}});
         assert!(clash(&[kotlin("1.14.2"), old_hud], &ours).unwrap().contains("vanillahud"));
+    }
+
+    #[test]
+    fn turns_off_krypton_next_to_e4mc() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("duskplus-relay-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let jar = |name: &str, id: &str| {
+            let mut zip = zip::ZipWriter::new(std::fs::File::create(dir.join(name)).unwrap());
+            zip.start_file("fabric.mod.json", zip::write::SimpleFileOptions::default()).unwrap();
+            write!(zip, r#"{{"schemaVersion":1,"id":"{id}","version":"1"}}"#).unwrap();
+            zip.finish().unwrap();
+        };
+        jar("krypton-0.2.10.jar", "krypton");
+        jar("sodium.jar", "sodium");
+        let off = turn_off_for_relay(&jars_in(&dir));
+        assert_eq!(off, vec![dir.join("krypton-0.2.10.jar.disabled")]);
+        assert!(!dir.join("krypton-0.2.10.jar").exists());
+        assert!(dir.join("sodium.jar").exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
